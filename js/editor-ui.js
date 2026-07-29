@@ -40,6 +40,7 @@ let activeGutterBlock = null;
 
 function initBlockTools(){
   const ed=bodyEl();
+  const scrollHost=document.getElementById('editorScroll')||ed;
   const gutter=document.getElementById('blockGutter');
   const slashMenu=document.getElementById('blockCommandMenu');
   if(!ed || !gutter) return;
@@ -51,12 +52,12 @@ function initBlockTools(){
     stopAutoScroll();
     const scrollZone=56; // px from top/bottom edge
     const maxSpeed=14;   // px per frame
-    const rect=ed.getBoundingClientRect();
+    const rect=scrollHost.getBoundingClientRect();
     const step=()=>{
       let dy=0;
       if(clientY < rect.top + scrollZone) dy=-(1-(clientY-rect.top)/scrollZone)*maxSpeed;
       else if(clientY > rect.bottom - scrollZone) dy=((clientY-(rect.bottom-scrollZone))/scrollZone)*maxSpeed;
-      if(dy!==0) ed.scrollTop+=dy;
+      if(dy!==0) scrollHost.scrollTop+=dy;
       autoScrollRaf=requestAnimationFrame(step);
     };
     autoScrollRaf=requestAnimationFrame(step);
@@ -66,8 +67,10 @@ function initBlockTools(){
     const target=e.target.closest('p, h1, h2, h3, h4, ul, ol, blockquote, pre, .media-card, div[data-media-id]');
     if(target && ed.contains(target) && target !== ed){
       activeGutterBlock = target;
-      // Position the gutter in the left margin of the editor, not overlapping text
-      const gutterLeft = Math.max(-36, target.offsetLeft ? (target.offsetLeft - 42) : 6);
+      // Use the control's real width so it ends before the text instead of
+      // relying on a fixed offset that can overlap the first few letters.
+      const gutterWidth=gutter.offsetWidth||60;
+      const gutterLeft=target.offsetLeft-gutterWidth-8;
       gutter.style.top = `${target.offsetTop + 2}px`;
       gutter.style.left = `${gutterLeft}px`;
       gutter.classList.add('show');
@@ -79,6 +82,7 @@ function initBlockTools(){
       if(!gutter.matches(':hover')) gutter.classList.remove('show');
     }, 150);
   });
+  scrollHost.addEventListener('scroll',()=>gutter.classList.remove('show'),{passive:true});
   gutter.addEventListener('mouseleave', ()=>gutter.classList.remove('show'));
 
   // Keep the insert-block menu inside the visible viewport. It flips above

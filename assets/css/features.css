@@ -92,14 +92,27 @@
 
 /* --- Notebook Cover Header --- */
 .note-cover-header{
-  position:relative;width:100%;height:180px;border-radius:14px;
-  overflow:hidden;margin-bottom:20px;background:var(--subtle);
-  border:1px solid var(--border);box-shadow:0 4px 16px rgba(0,0,0,.15);
+  position:relative;width:100%;height:180px;flex-shrink:0;border-radius:0;
+  overflow:hidden;margin:0;background:var(--subtle);
+  border:0;border-bottom:1px solid var(--border);box-shadow:0 4px 16px rgba(0,0,0,.15);
 }
 .note-cover-header img{
   width:100%;height:100%;object-fit:cover;display:block;
   transition:object-position .1s ease;
 }
+.note-cover-header.is-repositioning{
+  cursor:ns-resize;touch-action:none;
+}
+.note-cover-header.is-repositioning img{
+  pointer-events:none;user-select:none;
+}
+.note-cover-header.is-repositioning::after{
+  content:"Drag image up or down";position:absolute;left:50%;top:50%;
+  transform:translate(-50%,-50%);padding:6px 10px;border-radius:8px;
+  color:#fff;background:rgba(0,0,0,.68);font-size:12px;font-weight:600;
+  pointer-events:none;z-index:4;
+}
+.note-cover-header.is-dragging img{transition:none}
 .cover-btn-overlay{
   position:absolute;bottom:10px;right:10px;display:flex;gap:6px;z-index:5;
   background:rgba(0,0,0,.65);backdrop-filter:blur(8px);padding:4px;border-radius:8px;
@@ -554,10 +567,16 @@
 .table-wrapper {
   width: 100%;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
   margin: 14px 0;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--canvas);
+}
+.table-wrapper.table-moving{
+  opacity:.48;
+  pointer-events:none;
 }
 .note-editor table{
   border-collapse:collapse;width:100%;margin:0;font-size:14px;
@@ -590,9 +609,14 @@
 .note-editor td.tbl-selected,.note-editor th.tbl-selected{
   outline:2px solid var(--accent);outline-offset:-2px;background-color:var(--selection)!important;
 }
+.note-editor table.table-selection-mode{
+  touch-action:none;
+  user-select:none;
+  -webkit-user-select:none;
+  -webkit-touch-callout:none;
+}
 .note-editor table.alt-shading tbody tr:nth-child(even) td{background:var(--subtle)}
-.note-editor table.tbl-mobile-wrap{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
-.note-editor table.tbl-mobile-wrap table{min-width:480px}
+.note-editor table.tbl-mobile-wrap{min-width:480px}
 /* Row resize affordance (desktop/tablet) */
 .note-editor table:not(.tbl-mobile-wrap) tbody tr[data-rh-resize]::after{
   content:'';display:table-row;height:6px;cursor:row-resize;opacity:0;
@@ -652,6 +676,25 @@
 .tbl-tools button.active{background:var(--accent-soft);color:var(--accent)}
 .tbl-tools button.danger:hover{background:rgba(239,68,68,.12);color:var(--danger)}
 .tbl-tools .tbl-sep{width:1px;height:18px;background:var(--border);margin:0 3px;flex-shrink:0}
+.tbl-tools .tbl-move-handle{
+  cursor:grab;
+  touch-action:none;
+  color:var(--fg-muted);
+}
+.tbl-tools .tbl-move-handle:active,
+.table-block-moving .tbl-tools .tbl-move-handle{
+  cursor:grabbing;
+  color:var(--accent);
+  background:var(--accent-soft);
+}
+.table-move-placeholder{
+  height:7px;
+  margin:8px 0;
+  border-radius:999px;
+  background:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-soft);
+  pointer-events:none;
+}
 
 /* Color swatches dropdown within table tools */
 .tbl-color-dropdown {
@@ -688,6 +731,9 @@
   border:1px solid var(--border);box-shadow:0 4px 12px rgba(0,0,0,.25);
 }
 .block-gutter.show{display:flex}
+@media (max-width:640px){
+  .block-gutter.show{display:none}
+}
 .block-gutter-btn{
   width:24px;height:24px;border-radius:6px;display:inline-flex;align-items:center;
   justify-content:center;color:var(--fg-secondary);cursor:pointer;

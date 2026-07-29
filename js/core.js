@@ -126,7 +126,9 @@ async function renderStorageStats(){
   const label = total>=1024*1024 ? (total/1024/1024).toFixed(2)+' MB' : kb+' KB';
   const el=document.getElementById('storageText');
   const cloudEnabled=typeof currentSession==='object' && currentSession?.mode==='auth';
-  if(el) el.textContent=`${notes.length} note${notes.length!==1?'s':''} · ${label} · ${cloudEnabled?'cloud sync on':'local only'}`;
+  const liveCount=notes.filter(n=>!n.deletedAt).length;
+  const trashCount=notes.length-liveCount;
+  if(el) el.textContent=`${liveCount} note${liveCount!==1?'s':''}${trashCount?` · ${trashCount} in Trash`:''} · ${label} · ${cloudEnabled?'cloud sync on':'local only'}`;
   const fill=document.getElementById('storageFill');
   if(fill) fill.style.width=Math.min(100,(total/(50*1024*1024))*100)+'%';
 }
@@ -328,18 +330,15 @@ function isEditorEmpty(html){
 const bodyEl = () => document.getElementById('noteBody');
 
 function renderSidebar(){
-  document.getElementById('countAll').textContent = notes.length;
-  document.getElementById('countPinned').textContent = notes.filter(n=>n.pinned).length;
-  document.getElementById('countArchived').textContent = notes.filter(n=>n.archived).length;
-  const calendarCount = notes.filter(n=>(n.tags||[]).includes('calendar')||(n.tags||[]).some(t=>t==='meeting'||t==='deadline')).length;
+  const liveNotes=notes.filter(n=>!n.deletedAt);
+  document.getElementById('countAll').textContent = liveNotes.filter(n=>!n.archived).length;
+  document.getElementById('countPinned').textContent = liveNotes.filter(n=>n.pinned&&!n.archived).length;
+  document.getElementById('countArchived').textContent = liveNotes.filter(n=>n.archived).length;
+  const trashEl=document.getElementById('countTrash');
+  if(trashEl) trashEl.textContent=notes.filter(n=>n.deletedAt).length;
+  const calendarCount = liveNotes.filter(n=>(n.tags||[]).includes('calendar')||(n.tags||[]).some(t=>t==='meeting'||t==='deadline')).length;
   const calEl=document.getElementById('countCalendar');
   if(calEl) calEl.textContent = calendarCount;
-  const tagMap={};
-  notes.forEach(n=>(n.tags||[]).forEach(t=>tagMap[t]=(tagMap[t]||0)+1));
-  const tl=document.getElementById('tagList');
-  const tags=Object.keys(tagMap).sort();
-  if(!tags.length){ tl.innerHTML='<div style="padding:4px 8px;font-size:12px;color:var(--fg-muted)">No tags yet</div>'; }
-  else tl.innerHTML=tags.map(t=>`<button class="tag-btn ${state.tag===t?'active':''}" data-tag="${esc(t)}"><span class="tag-dot"></span><span>${esc(t)}</span><span class="count" style="margin-left:auto">${tagMap[t]}</span></button>`).join('');
   renderStorageStats();
   updateMediaCount();
   updateTasksCount();
@@ -350,7 +349,7 @@ function renderSidebar(){
 function updateTasksCount(){
   let count=0;
   notes.forEach(n=>{
-    if(!n.content) return;
+    if(n.deletedAt||!n.content) return;
     const matches=n.content.match(/type=["']?checkbox["']?/gi)||[];
     count += matches.length;
   });
@@ -385,6 +384,9 @@ async function updateMediaCount(){
 
 function filteredNotes(){
   let arr=notes.filter(n=>{
+    if(state.filter==='trash'){
+      if(!n.deletedAt) return false;
+    }else if(n.deletedAt) return false;
     if(state.filter==='all' && n.archived) return false;
     if(state.filter==='pinned' && (!n.pinned || n.archived)) return false;
     if(state.filter==='archived' && !n.archived) return false;
@@ -416,7 +418,7 @@ function renderList(){
   }
   const c=document.getElementById('notesContainer');
   let arr=filteredNotes();
-  let titleText=state.tag?('#'+state.tag) : ({all:'All Notes',pinned:'Pinned',archived:'Archived',calendar:'Events / Planner',tasks:'Tasks & Todos',settings:'Settings'}[state.filter]);
+  let titleText=state.tag?('#'+state.tag) : ({all:'All Notes',pinned:'Pinned',archived:'Archived',trash:'Trash',calendar:'Events / Planner',tasks:'Tasks & Todos',settings:'Settings'}[state.filter]);
   document.getElementById('listTitle').textContent = titleText || 'All Notes';
 
   if(state.filter==='settings'){
@@ -428,7 +430,9 @@ function renderList(){
     arr = arr.filter(n=>n.content && /type=["']?checkbox["']?/i.test(n.content));
   }
   if(!arr.length){
-    c.innerHTML=`<div class="list-empty">No notes match.<br>Try a different filter or create a new note.</div>`;
+    c.innerHTML=state.filter==='trash'
+      ? `<div class="list-empty"><i data-lucide="trash-2" style="width:30px;height:30px;margin:0 auto 10px;opacity:.45"></i>Trash is empty.<br>Deleted notes will appear here.</div>`
+      : `<div class="list-empty">No notes match.<br>Try a different filter or create a new note.</div>`;
     refreshIcons();
     return;
   }
@@ -453,8 +457,8 @@ function renderList(){
       </div>
       <div class="note-preview">${prev?esc(prev):'<span style="color:var(--fg-muted)">Empty note</span>'}</div>
       <div class="note-meta">
-        ${n.archived?'<span class="archived">Archived</span>':''}
-        <span>${timeAgo(n.updatedAt)}</span>
+        ${n.deletedAt?'<span class="archived">In Trash</span>':(n.archived?'<span class="archived">Archived</span>':'')}
+        <span>${n.deletedAt?'Deleted '+timeAgo(n.deletedAt):timeAgo(n.updatedAt)}</span>
         ${mediaCount?`<span class="media-badge" title="${mediaCount} attachment${mediaCount!==1?'s':''}">
           <i data-lucide="paperclip" class="w-3 h-3"></i>${mediaCount}</span>`:''}
         ${(n.tags||[]).slice(0,2).map(t=>'<span class="chip">'+esc(t)+'</span>').join('')}
@@ -521,10 +525,14 @@ function renderEditor(){
   const printBtn=document.getElementById('printBtn');
   const isSpecialPage = ['media','calendar','tasks','settings'].includes(state.filter);
   const activeNote = getNote(state.currentId);
-  const isNoteEditable = !isSpecialPage && activeNote;
+  const isNoteEditable = !isSpecialPage && activeNote && !activeNote.deletedAt;
 
   if(shareBtn) shareBtn.style.display = isNoteEditable ? 'inline-flex' : 'none';
   if(printBtn) printBtn.style.display = isNoteEditable ? 'inline-flex' : 'none';
+  const moreShareBtn=document.getElementById('moreShareBtn');
+  const morePrintBtn=document.getElementById('morePrintBtn');
+  if(moreShareBtn) moreShareBtn.style.display=isNoteEditable?'':'none';
+  if(morePrintBtn) morePrintBtn.style.display=isNoteEditable?'':'none';
 
   if(mhView) mhView.classList.remove('show');
   if(calView) calView.classList.remove('show');
@@ -567,12 +575,35 @@ function renderEditor(){
   }
 
   const n=getNote(state.currentId);
-  if(!n){ empty.style.display='flex'; content.classList.remove('show'); revokeCachedURLs(); return; }
+  if(!n){
+    const trashEmpty=state.filter==='trash';
+    const emptyTitle=empty.querySelector('h2');
+    const emptyText=empty.querySelector('p');
+    const emptyCreate=empty.querySelector('button');
+    if(emptyTitle) emptyTitle.textContent=trashEmpty?'Trash is empty':'No note selected';
+    if(emptyText) emptyText.textContent=trashEmpty
+      ? 'Notes moved to Trash can be restored before they are permanently deleted.'
+      : 'Pick a note from the list, or create a new one to start writing.';
+    if(emptyCreate) emptyCreate.style.display=trashEmpty?'none':'inline-flex';
+    empty.style.display='flex';
+    content.classList.remove('show','trash-preview');
+    revokeCachedURLs();
+    return;
+  }
+  const emptyCreate=empty.querySelector('button');
+  if(emptyCreate) emptyCreate.style.display='inline-flex';
   empty.style.display='none'; content.classList.add('show');
-  document.getElementById('noteTitle').value=n.title||'';
+  const trashMode=state.filter==='trash'&&!!n.deletedAt;
+  content.classList.toggle('trash-preview',trashMode);
+  const titleInput=document.getElementById('noteTitle');
+  titleInput.value=n.title||'';
+  titleInput.readOnly=trashMode;
   state.suppressInput=true;
   revokeCachedURLs();
   const ed=bodyEl();
+  ed.setAttribute('contenteditable',trashMode?'false':'true');
+  const tagInput=document.getElementById('tagInput');
+  if(tagInput) tagInput.disabled=trashMode;
   const fontStyle = n.fontStyle || 'sans';
   ed.setAttribute('data-fontstyle', fontStyle);
   const fsLabel = document.getElementById('fontStyleLabel');
@@ -582,17 +613,48 @@ function renderEditor(){
     opt.classList.toggle('active', opt.dataset.fontstyle === fontStyle);
   });
   ed.innerHTML = n.content || '';
+  if(typeof normalizeEditorTables==='function') normalizeEditorTables();
+  if(trashMode){
+    ed.querySelectorAll('input,button,select,textarea').forEach(control=>{ control.disabled=true; });
+    ed.querySelectorAll('table').forEach(table=>table.setAttribute('contenteditable','false'));
+  }
   state.suppressInput=false;
   hydrateMediaInEditor();
   if(typeof renderNotebookCover==='function') renderNotebookCover();
   if(typeof normalizeEditorImages==='function') normalizeEditorImages();
   if(typeof clearImageSelection==='function') clearImageSelection();
+  if(trashMode&&typeof clearCellSelection==='function'){
+    clearCellSelection();
+    activeCell=null;
+    positionTableTools();
+  }
   renderTags(n);
   renderStats(n);
-  document.getElementById('pinBtn').style.color = n.pinned?'var(--attention)':'';
-  document.getElementById('archiveBtn').style.color = n.archived?'var(--attention)':'';
+  const pinBtn=document.getElementById('pinBtn');
+  const archiveBtn=document.getElementById('archiveBtn');
+  const restoreBtn=document.getElementById('restoreBtn');
+  const deleteBtn=document.getElementById('deleteBtn');
+  pinBtn.style.display=trashMode?'none':'';
+  archiveBtn.style.display=trashMode?'none':'';
+  restoreBtn.style.display=trashMode?'inline-flex':'none';
+  pinBtn.style.color = n.pinned?'var(--attention)':'';
+  archiveBtn.style.color = n.archived?'var(--attention)':'';
+  deleteBtn.title=trashMode?'Delete permanently':'Move to Trash';
+  deleteBtn.setAttribute('aria-label',deleteBtn.title);
+  const morePinBtn=document.getElementById('morePinBtn');
+  const moreArchiveBtn=document.getElementById('moreArchiveBtn');
+  const moreDeleteBtn=document.getElementById('moreDeleteBtn');
+  if(morePinBtn) morePinBtn.style.display=trashMode?'none':'';
+  if(moreArchiveBtn) moreArchiveBtn.innerHTML=trashMode
+    ? '<i data-lucide="rotate-ccw" class="w-4 h-4"></i> Restore note'
+    : '<i data-lucide="archive" class="w-4 h-4"></i> Archive / Restore';
+  if(moreDeleteBtn) moreDeleteBtn.innerHTML=trashMode
+    ? '<i data-lucide="trash-2" class="w-4 h-4"></i> Delete permanently'
+    : '<i data-lucide="trash-2" class="w-4 h-4"></i> Move to Trash';
   document.getElementById('saveStatus').className='save-status';
-  document.getElementById('saveStatus').innerHTML='<span class="dot"></span><span>Saved '+timeAgo(n.updatedAt)+'</span>';
+  document.getElementById('saveStatus').innerHTML=trashMode
+    ? '<span class="dot"></span><span>Deleted '+timeAgo(n.deletedAt)+'</span>'
+    : '<span class="dot"></span><span>Saved '+timeAgo(n.updatedAt)+'</span>';
   updateToolbarState();
   refreshIcons();
 }
@@ -781,4 +843,17 @@ function renderStats(n){
   document.getElementById('updatedTime').textContent='Edited '+fullDate(n.updatedAt);
 }
 
-function renderAll(){ renderSidebar(); renderList(); renderEditor(); }
+function reconcileCurrentNote(){
+  if(!['all','pinned','archived','trash'].includes(state.filter)) return;
+  const visible=filteredNotes();
+  if(!state.currentId||!visible.some(n=>n.id===state.currentId)){
+    state.currentId=visible[0]?.id||null;
+  }
+}
+
+function renderAll(){
+  reconcileCurrentNote();
+  renderSidebar();
+  renderList();
+  renderEditor();
+}

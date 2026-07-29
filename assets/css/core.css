@@ -95,6 +95,10 @@ svg{display:block;flex-shrink:0}
   background:var(--subtle);border:1px solid var(--border);border-radius:5px;padding:1px 6px;
 }
 .header-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+.header-actions #importBtn,
+.header-actions #exportBtn,
+.header-actions #themeToggle,
+.header-actions #installBtn{display:none}
 .menu-toggle{display:none}
 
 .layout{display:flex;flex:1;overflow:hidden}
@@ -186,6 +190,13 @@ svg{display:block;flex-shrink:0}
 .editor-empty p{font-size:13.5px;max-width:300px;color:var(--fg-secondary)}
 .editor-content{display:none;flex-direction:column;height:100%;overflow:hidden}
 .editor-content.show{display:flex}
+.editor-content.trash-preview .editor-meta,
+.editor-content.trash-preview .editor-toolbar,
+.editor-content.trash-preview .toolbar-collapse-toggle{display:none!important}
+.editor-content.trash-preview .note-editor{cursor:default}
+.editor-content.trash-preview .cover-btn-overlay{display:none}
+.editor-content.trash-preview .note-editor img,
+.editor-content.trash-preview .note-editor table{pointer-events:none}
 
 .editor-topbar{display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid var(--border)}
 #noteTitle{
@@ -223,12 +234,20 @@ svg{display:block;flex-shrink:0}
 .tool-sep{width:1px;height:16px;background:var(--border);margin:0 4px}
 
 /* WYSIWYG surface */
+.editor-scroll{
+  flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  background:var(--canvas);
+}
 .note-editor{
-  flex:1;overflow-y:auto;outline:none;padding:32px clamp(24px,8%,90px) 80px;
-  font-size:15px;line-height:1.7;color:var(--fg);word-wrap:break-word;min-height:0;
+  overflow:visible;outline:none;padding:32px clamp(24px,8%,90px) 80px;
+  font-size:15px;line-height:1.7;color:var(--fg);word-wrap:break-word;min-height:100%;
   /* Automatic measure: grows with the viewport but stays inside a readable range. */
   max-width:clamp(680px,72vw,1100px);width:100%;margin:0 auto;
   overscroll-behavior:contain;
+}
+/* Reserve a stable interaction lane for the add/drag block controls. */
+@media (min-width:641px){
+  .note-editor{padding-left:max(76px,clamp(24px,8%,90px))}
 }
 @media (max-width:1024px){ .note-editor{max-width:none} }
 .note-editor:empty:before{

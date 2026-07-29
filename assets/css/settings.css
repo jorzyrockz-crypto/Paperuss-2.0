@@ -238,21 +238,18 @@
 }
 .profile-menu-item:hover{background:var(--hover)}
 .profile-menu-item.danger:hover{background:rgba(239,68,68,.12);color:var(--danger)}
-.mobile-profile-tools,.mobile-sidebar-brand{display:none}
-.mobile-actions-wrap{display:none;position:relative}
-.mobile-actions-panel{
-  display:none;position:fixed;top:54px;right:48px;z-index:140;
-  width:190px;background:var(--overlay);border:1px solid var(--border);border-radius:12px;
-  padding:6px;box-shadow:0 16px 40px rgba(0,0,0,.4)
-}
-.mobile-actions-panel.show{display:block}
-.editor-more-wrap{display:none;position:relative}
+.mobile-sidebar-brand{display:none}
+.profile-tools{display:block}
+.editor-more-wrap{display:block;position:relative}
 .editor-more-panel{
   display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:200;
   width:190px;background:var(--overlay);border:1px solid var(--border);border-radius:12px;
   padding:6px;box-shadow:0 16px 40px rgba(0,0,0,.4)
 }
 .editor-more-panel.show{display:block}
+.editor-more-panel .compact-note-action{display:none}
+.editor-content.trash-preview .editor-more-wrap{display:none}
+.editor-content.trash-preview #morePinBtn{display:none!important}
 
 /* ============ ACCENT THEME SWATCHES ============ */
 .accent-swatch-row{display:flex;gap:8px;flex-wrap:wrap}

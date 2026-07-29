@@ -11,12 +11,12 @@ function bind(){
     document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
     b.classList.add('active');
     if(!['media','calendar','tasks','settings'].includes(state.filter)){
-      state.currentId = filteredNotes()[0]?.id || state.currentId;
+      state.currentId = filteredNotes()[0]?.id || null;
     }
     renderAll();
     if(window.innerWidth<=640){
       // Notes pages always open on the list. Utility pages render their full view.
-      if(['all','pinned','archived'].includes(state.filter)) showMobileList();
+      if(['all','pinned','archived','trash'].includes(state.filter)) showMobileList();
       else showMobileEditor();
     }
     closeSidebarMobile();
@@ -163,6 +163,7 @@ function bind(){
 
   document.getElementById('pinBtn').onclick=togglePin;
   document.getElementById('archiveBtn').onclick=toggleArchive;
+  document.getElementById('restoreBtn').onclick=()=>restoreNote(state.currentId);
   document.getElementById('deleteBtn').onclick=()=>deleteNote(state.currentId);
 
   // Mobile editor "More" panel — pin/archive/delete consolidated
@@ -174,7 +175,14 @@ function bind(){
     editorMorePanel?.classList.toggle('show');
   };
   document.getElementById('morePinBtn').onclick=()=>{ closeEditorMore(); togglePin(); };
-  document.getElementById('moreArchiveBtn').onclick=()=>{ closeEditorMore(); toggleArchive(); };
+  document.getElementById('moreShareBtn').onclick=()=>{ closeEditorMore(); shareCurrentNote(); };
+  document.getElementById('morePrintBtn').onclick=()=>{ closeEditorMore(); printCurrentNote(); };
+  document.getElementById('moreArchiveBtn').onclick=()=>{
+    closeEditorMore();
+    const n=getNote(state.currentId);
+    if(n?.deletedAt) restoreNote(n.id);
+    else toggleArchive();
+  };
   document.getElementById('moreDeleteBtn').onclick=()=>{ closeEditorMore(); deleteNote(state.currentId); };
   document.addEventListener('click',e=>{
     if(!e.target.closest('#editorMoreWrap')) closeEditorMore();
@@ -268,16 +276,6 @@ function bind(){
     if(dl){ e.preventDefault(); downloadMediaById(dl.dataset.mcDownload, dl.dataset.mcName); return; }
   });
 
-  document.getElementById('tagList').onclick=e=>{
-    const b=e.target.closest('[data-tag]'); if(!b) return;
-    state.tag = state.tag===b.dataset.tag?null:b.dataset.tag;
-    if(state.tag){ state.filter='all'; document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active')); }
-    state.currentId = filteredNotes()[0]?.id || state.currentId;
-    renderAll();
-    if(window.innerWidth<=640) showMobileList();
-    closeSidebarMobile();
-  };
-
   document.getElementById('themeToggle').onclick=()=>{
     const cur=document.documentElement.getAttribute('data-theme');
     setTheme(cur==='dark'?'light':'dark');
@@ -294,7 +292,7 @@ function bind(){
   document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
   document.getElementById('importFile').onchange=e=>{ if(e.target.files[0]) importNotes(e.target.files[0]); e.target.value=''; };
 
-  // Mobile profile utilities mirror the hidden top-bar controls.
+  // Profile utilities replace duplicate top-bar controls on every device.
   const profileImportBtn=document.getElementById('profileImportBtn');
   const profileExportBtn=document.getElementById('profileExportBtn');
   const profileThemeBtn=document.getElementById('profileThemeBtn');
@@ -317,31 +315,6 @@ function bind(){
     closeProfilePanel();
     installPwa();
   };
-
-  // Compact mobile app-actions dropdown (profile remains a separate control).
-  const mobileActionsBtn=document.getElementById('mobileActionsBtn');
-  const mobileActionsPanel=document.getElementById('mobileActionsPanel');
-  const closeMobileActions=()=>mobileActionsPanel?.classList.remove('show');
-  if(mobileActionsBtn) mobileActionsBtn.onclick=e=>{
-    e.stopPropagation();
-    closeProfilePanel();
-    mobileActionsPanel?.classList.toggle('show');
-  };
-  const mobileShareBtn=document.getElementById('mobileShareBtn');
-  if(mobileShareBtn) mobileShareBtn.onclick=()=>{ closeMobileActions(); shareCurrentNote(); };
-  const mobilePrintBtn=document.getElementById('mobilePrintBtn');
-  if(mobilePrintBtn) mobilePrintBtn.onclick=()=>{ closeMobileActions(); printCurrentNote(); };
-  const mobileNotifBtn=document.getElementById('mobileNotifBtn');
-  if(mobileNotifBtn) mobileNotifBtn.onclick=e=>{
-    e.stopPropagation();
-    closeMobileActions();
-    const panel=document.getElementById('notifPanel');
-    panel?.classList.add('show');
-    renderNotifPanel();
-  };
-  document.addEventListener('click',e=>{
-    if(!e.target.closest('#mobileActionsWrap')) closeMobileActions();
-  });
 
   /* ---------- COLLAPSE / TOGGLE BUTTONS (all devices) ---------- */
   // Hamburger — opens drawer on phone, toggles rail on tablet/desktop
@@ -576,7 +549,7 @@ function bind(){
   bindSettings();
   initAuthAndSync();
   // Schedule event notifications for any existing notes that have them
-  notes.forEach(n=>{ if(n.calendarNotify && n.calendarStart) scheduleEventNotification(n); });
+  notes.forEach(n=>{ if(!n.deletedAt && n.calendarNotify && n.calendarStart) scheduleEventNotification(n); });
   state.currentId = filteredNotes()[0]?.id || null;
   renderAll();
   updateNotifBar();

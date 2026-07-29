@@ -1,6 +1,6 @@
 /* ============================================================
-   TABLE TOOLS (fix #7 & formatting enhancements)
-   Contextual toolbar + column drag-resize. No changes to insertTable().
+   TABLE TOOLS
+   Contextual toolbar, range selection, resizing, and block movement.
    ============================================================ */
 let activeCell=null;
 let selectedCells=new Set();  // multi-cell selection
@@ -9,18 +9,56 @@ let selAnchor=null;            // shift-click / drag anchor
 /* Return all cells inside a table in row-then-column order */
 function tableCells(tbl){ return tbl?Array.from(tbl.querySelectorAll('td,th')):[] ; }
 
-/* Get rectangular range between two cells (inclusive) */
+/*
+ * Build a logical grid so selections continue to work after cells have been
+ * merged with rowspan/colspan. Each cell records the rectangle it occupies.
+ */
+function tableCellLayout(tbl){
+  const grid=[];
+  const positions=new Map();
+  Array.from(tbl?.rows||[]).forEach((row,rowIndex)=>{
+    if(!grid[rowIndex]) grid[rowIndex]=[];
+    let columnIndex=0;
+    Array.from(row.cells).forEach(cell=>{
+      while(grid[rowIndex][columnIndex]) columnIndex++;
+      const rowSpan=Math.max(1,Number(cell.rowSpan)||1);
+      const colSpan=Math.max(1,Number(cell.colSpan)||1);
+      const position={
+        rowStart:rowIndex,
+        rowEnd:rowIndex+rowSpan-1,
+        colStart:columnIndex,
+        colEnd:columnIndex+colSpan-1
+      };
+      positions.set(cell,position);
+      for(let r=position.rowStart;r<=position.rowEnd;r++){
+        if(!grid[r]) grid[r]=[];
+        for(let c=position.colStart;c<=position.colEnd;c++) grid[r][c]=cell;
+      }
+      columnIndex+=colSpan;
+    });
+  });
+  return positions;
+}
+
+/* Get the rectangular logical range between two cells (inclusive). */
 function cellRange(tbl,a,b){
   if(!tbl||!a||!b) return new Set([a].filter(Boolean));
-  const rows=Array.from(tbl.rows);
-  const allCells=rows.map(r=>Array.from(r.cells));
-  let r1=a.parentElement,r2=b.parentElement;
-  let ri1=rows.indexOf(r1),ri2=rows.indexOf(r2);
-  let ci1=Array.from(r1.cells).indexOf(a),ci2=Array.from(r2.cells).indexOf(b);
-  if(ri1>ri2)[ri1,ri2]=[ri2,ri1];
-  if(ci1>ci2)[ci1,ci2]=[ci2,ci1];
+  if(a.closest('table')!==tbl||b.closest('table')!==tbl) return new Set([b]);
+  const positions=tableCellLayout(tbl);
+  const start=positions.get(a);
+  const end=positions.get(b);
+  if(!start||!end) return new Set([b]);
+  const rowStart=Math.min(start.rowStart,end.rowStart);
+  const rowEnd=Math.max(start.rowEnd,end.rowEnd);
+  const colStart=Math.min(start.colStart,end.colStart);
+  const colEnd=Math.max(start.colEnd,end.colEnd);
   const out=new Set();
-  for(let r=ri1;r<=ri2;r++) for(let c=ci1;c<=ci2;c++) if(allCells[r]&&allCells[r][c]) out.add(allCells[r][c]);
+  positions.forEach((position,cell)=>{
+    const intersects=
+      position.rowEnd>=rowStart&&position.rowStart<=rowEnd&&
+      position.colEnd>=colStart&&position.colStart<=colEnd;
+    if(intersects) out.add(cell);
+  });
   return out;
 }
 
@@ -33,12 +71,41 @@ function clearCellSelection(){
   selectedCells.forEach(c=>c.classList.remove('tbl-selected'));
   selectedCells=new Set();
   selAnchor=null;
+  bodyEl()?.querySelectorAll('table.table-selection-mode').forEach(tbl=>tbl.classList.remove('table-selection-mode'));
 }
 
 /* Apply a fn to every selected cell (falls back to activeCell) */
 function onSelected(fn){ if(selectedCells.size>0) selectedCells.forEach(fn); else if(activeCell) fn(activeCell); }
 
 function currentTable(){ return activeCell ? activeCell.closest('table') : null; }
+
+/*
+ * The enclosure keeps wide tables from widening the editor and supplies one
+ * stable block boundary for movement and deletion. Normalize imported tables
+ * so old and pasted content receives the same behavior as newly inserted data.
+ */
+function ensureTableWrapper(tbl){
+  if(!tbl||tbl.closest('table')!==tbl) return null;
+  let wrapper=tbl.parentElement?.classList?.contains('table-wrapper')?tbl.parentElement:null;
+  if(!wrapper){
+    wrapper=document.createElement('div');
+    wrapper.className='table-wrapper';
+    tbl.parentNode?.insertBefore(wrapper,tbl);
+    wrapper.appendChild(tbl);
+  }
+  wrapper.setAttribute('contenteditable','false');
+  wrapper.setAttribute('data-table-wrapper','1');
+  tbl.setAttribute('contenteditable','true');
+  return wrapper;
+}
+
+function normalizeEditorTables(){
+  const ed=bodyEl();
+  if(!ed) return;
+  Array.from(ed.querySelectorAll('table')).forEach(tbl=>{
+    if(!tbl.parentElement?.closest('table')) ensureTableWrapper(tbl);
+  });
+}
 
 function positionTableTools(){
   const tools=document.getElementById('tblTools');
@@ -50,7 +117,7 @@ function positionTableTools(){
     return;
   }
   const r=tbl.getBoundingClientRect();
-  const ed=bodyEl().getBoundingClientRect();
+  const ed=(document.getElementById('editorScroll')||bodyEl()).getBoundingClientRect();
   if(r.bottom<ed.top || r.top>ed.bottom){
     tools.classList.remove('show');
     document.getElementById('tblColorDropdown')?.classList.remove('show');
@@ -363,66 +430,153 @@ function closeTblSheet(){
 
 function initTableTools(){
   const ed=bodyEl(); if(!ed) return;
+  normalizeEditorTables();
 
   /* ── Track active cell + multi-cell selection ── */
-  let isDragSelect=false, dragStart=null;
+  let selectionGesture=null;
+  let touchSelectionMode=false;
+  let longPressTimer=null;
 
   function pickCell(e){ return e.target.closest?.('td,th'); }
   function cellInEditor(c){ return c && ed.contains(c); }
-
-  ed.addEventListener('mousedown', e=>{
-    const cell=pickCell(e);
-    if(!cellInEditor(cell)) return;
-    // Column drag-resize: right-edge (within 8px of right border)
-    const r=cell.getBoundingClientRect();
-    if(e.clientX >= r.right-8){
-      // handled below in dragCol block
-      return;
-    }
-    // Shift+click: range selection
-    if(e.shiftKey && selAnchor && cellInEditor(selAnchor)){
-      clearCellSelection();
-      const tbl=cell.closest('table');
-      selectedCells=cellRange(tbl,selAnchor,cell);
-      activeCell=cell;
-      highlightSelected();
-      positionTableTools();
-      return;
-    }
-    // Start new selection / drag
+  function cellAtPoint(x,y){
+    const cell=document.elementFromPoint(x,y)?.closest?.('td,th');
+    return cellInEditor(cell)?cell:null;
+  }
+  function selectRange(anchor,cell){
+    const tbl=anchor?.closest('table');
+    if(!tbl||cell?.closest('table')!==tbl) return;
+    clearCellSelection();
+    selectedCells=cellRange(tbl,anchor,cell);
+    selAnchor=anchor;
+    activeCell=cell;
+    highlightSelected();
+    if(touchSelectionMode) tbl.classList.add('table-selection-mode');
+    positionTableTools();
+  }
+  function selectOnly(cell){
+    if(!cell) return;
     clearCellSelection();
     activeCell=cell;
     selAnchor=cell;
     selectedCells=new Set([cell]);
     highlightSelected();
-    isDragSelect=true; dragStart=cell;
     positionTableTools();
-  });
+  }
+  function toggleSelectedCell(cell){
+    if(!cell) return;
+    if(activeCell?.closest('table')!==cell.closest('table')) selectOnly(cell);
+    else{
+      activeCell=cell;
+      selAnchor=selAnchor||cell;
+      if(selectedCells.has(cell)&&selectedCells.size>1) selectedCells.delete(cell);
+      else selectedCells.add(cell);
+      highlightSelected();
+      positionTableTools();
+    }
+  }
+  function endSelectionGesture(){
+    if(longPressTimer){ clearTimeout(longPressTimer); longPressTimer=null; }
+    if(selectionGesture?.dragging) document.body.style.userSelect='';
+    selectionGesture=null;
+  }
 
-  ed.addEventListener('mouseover', e=>{
-    if(!isDragSelect||!dragStart) return;
-    const cell=pickCell(e);
-    if(!cellInEditor(cell)||!cell.closest('table')) return;
-    clearCellSelection();
-    const tbl=dragStart.closest('table');
-    selectedCells=cellRange(tbl,dragStart,cell);
-    activeCell=cell;
-    highlightSelected();
-    positionTableTools();
-  });
-
-  document.addEventListener('mouseup', ()=>{
-    if(isDragSelect) isDragSelect=false;
-  });
-
-  // Touch: single tap → cell focus; two-finger drag → pan (native)
-  ed.addEventListener('touchstart', e=>{
+  ed.addEventListener('pointerdown', e=>{
+    if(e.button!==0) return;
     const cell=pickCell(e);
     if(!cellInEditor(cell)) return;
-    clearCellSelection();
-    activeCell=cell; selAnchor=cell; selectedCells=new Set([cell]);
-    highlightSelected(); positionTableTools();
-  }, {passive:true});
+
+    // Mouse resize zones are handled by the dedicated listeners below.
+    const r=cell.getBoundingClientRect();
+    if(e.pointerType==='mouse'&&(e.clientX>=r.right-8||e.clientY>=r.bottom-6)) return;
+
+    if(e.pointerType==='touch'){
+      selectionGesture={
+        pointerId:e.pointerId,
+        pointerType:'touch',
+        startX:e.clientX,
+        startY:e.clientY,
+        anchor:cell,
+        dragging:false,
+        longPressed:false
+      };
+      longPressTimer=setTimeout(()=>{
+        if(!selectionGesture||selectionGesture.pointerId!==e.pointerId) return;
+        selectionGesture.longPressed=true;
+        selectionGesture.dragging=true;
+        touchSelectionMode=true;
+        selectOnly(cell);
+        cell.closest('table')?.classList.add('table-selection-mode');
+        document.body.style.userSelect='none';
+        toast('Selection mode: drag or tap more cells');
+        try{ ed.setPointerCapture(e.pointerId); }catch(_){}
+      },420);
+      return;
+    }
+
+    if(e.shiftKey&&selAnchor&&cellInEditor(selAnchor)){
+      selectRange(selAnchor,cell);
+      e.preventDefault();
+      return;
+    }
+    if(e.ctrlKey||e.metaKey){
+      toggleSelectedCell(cell);
+      e.preventDefault();
+      return;
+    }
+
+    selectOnly(cell);
+    selectionGesture={
+      pointerId:e.pointerId,
+      pointerType:'mouse',
+      startX:e.clientX,
+      startY:e.clientY,
+      anchor:cell,
+      dragging:false,
+      longPressed:false
+    };
+  });
+
+  ed.addEventListener('pointermove', e=>{
+    const gesture=selectionGesture;
+    if(!gesture||gesture.pointerId!==e.pointerId) return;
+    const distance=Math.hypot(e.clientX-gesture.startX,e.clientY-gesture.startY);
+
+    if(gesture.pointerType==='touch'&&!gesture.longPressed){
+      if(distance>10) endSelectionGesture(); // keep ordinary table scrolling
+      return;
+    }
+    if(gesture.pointerType==='mouse'&&!gesture.dragging&&distance<5) return;
+
+    const cell=cellAtPoint(e.clientX,e.clientY);
+    if(!cell||cell.closest('table')!==gesture.anchor.closest('table')) return;
+    gesture.dragging=true;
+    document.body.style.userSelect='none';
+    selectRange(gesture.anchor,cell);
+    e.preventDefault();
+  });
+
+  ed.addEventListener('pointerup', e=>{
+    const gesture=selectionGesture;
+    if(!gesture||gesture.pointerId!==e.pointerId) return;
+    if(gesture.pointerType==='touch'&&!gesture.longPressed){
+      if(longPressTimer){ clearTimeout(longPressTimer); longPressTimer=null; }
+      const cell=cellAtPoint(e.clientX,e.clientY)||gesture.anchor;
+      if(touchSelectionMode&&cell?.closest('table')===activeCell?.closest('table')){
+        toggleSelectedCell(cell);
+        cell.closest('table')?.classList.add('table-selection-mode');
+        e.preventDefault();
+      }else{
+        touchSelectionMode=false;
+        selectOnly(cell);
+      }
+    }
+    endSelectionGesture();
+  });
+  ed.addEventListener('pointercancel', endSelectionGesture);
+  ed.addEventListener('contextmenu',e=>{
+    if(e.target.closest?.('table.table-selection-mode')) e.preventDefault();
+  });
 
   ed.addEventListener('keyup', ()=>{
     const sel=window.getSelection();
@@ -432,7 +586,7 @@ function initTableTools(){
     if(cell!==activeCell){ activeCell=cell; if(cell&&!selectedCells.has(cell)){ clearCellSelection(); if(cell){selectedCells=new Set([cell]);highlightSelected();} } positionTableTools(); }
   });
 
-  ed.addEventListener('scroll',  positionTableTools, {passive:true});
+  (document.getElementById('editorScroll')||ed).addEventListener('scroll',positionTableTools,{passive:true});
   window.addEventListener('resize', positionTableTools);
 
   /* ── Column drag-resize (mouse, right edge of any cell) ── */
@@ -442,7 +596,7 @@ function initTableTools(){
     const r=cell.getBoundingClientRect();
     if(e.clientX < r.right-8) return;  // not on the resize edge
     e.preventDefault(); e.stopPropagation();
-    isDragSelect=false;
+    endSelectionGesture();
     dragCol={cell,startX:e.clientX,startW:cell.offsetWidth};
     document.body.style.userSelect='none';
   });
@@ -464,7 +618,7 @@ function initTableTools(){
     if(e.clientY < r.bottom-6) return;
     if(e.clientX >= r.right-8) return; // let col resize win
     e.preventDefault(); e.stopPropagation();
-    isDragSelect=false;
+    endSelectionGesture();
     dragRow={row:cell.parentElement,startY:e.clientY,startH:cell.parentElement.offsetHeight};
     document.body.style.userSelect='none';
   });
@@ -478,6 +632,80 @@ function initTableTools(){
   });
 
   /* ── Primary toolbar button → menu mapping ── */
+  /* Move the enclosed table as one editor block using the toolbar grip. */
+  const moveHandle=document.getElementById('tblMoveHandle');
+  let tableMove=null;
+  function directEditorChild(node){
+    let current=node;
+    while(current&&current.parentElement!==ed) current=current.parentElement;
+    return current;
+  }
+  function updateTableDropPosition(clientY){
+    if(!tableMove) return;
+    const blocks=Array.from(ed.children).filter(block=>
+      block!==tableMove.placeholder&&block!==tableMove.originBlock
+    );
+    const before=blocks.find(block=>{
+      const rect=block.getBoundingClientRect();
+      return clientY<rect.top+rect.height/2;
+    });
+    ed.insertBefore(tableMove.placeholder,before||null);
+  }
+  function finishTableMove(commit=true){
+    if(!tableMove) return;
+    const {unit,placeholder,originParent,originNext,originBlock}=tableMove;
+    const moved=commit&&(
+      placeholder.parentElement!==originParent||
+      placeholder.nextSibling!==unit
+    );
+    if(commit) placeholder.parentNode?.insertBefore(unit,placeholder);
+    else originParent?.insertBefore(unit,originNext);
+    placeholder.remove();
+    unit.classList.remove('table-moving');
+    if(originBlock!==unit&&originBlock?.isConnected&&!originBlock.textContent.trim()&&!originBlock.children.length){
+      originBlock.remove();
+    }
+    document.body.classList.remove('table-block-moving');
+    document.body.style.userSelect='';
+    tableMove=null;
+    if(moved){
+      handleBodyInput();
+      toast('Table moved');
+    }
+    positionTableTools();
+  }
+  moveHandle?.addEventListener('pointerdown',e=>{
+    if(e.button!==0) return;
+    const tbl=currentTable();
+    if(!tbl) return;
+    const unit=ensureTableWrapper(tbl)||tbl;
+    const originBlock=directEditorChild(unit)||unit;
+    const placeholder=document.createElement('div');
+    placeholder.className='table-move-placeholder';
+    placeholder.setAttribute('contenteditable','false');
+    const originParent=unit.parentNode;
+    const originNext=unit.nextSibling;
+    ed.insertBefore(placeholder,originBlock);
+    unit.classList.add('table-moving');
+    document.body.classList.add('table-block-moving');
+    document.body.style.userSelect='none';
+    tableMove={pointerId:e.pointerId,unit,placeholder,originParent,originNext,originBlock};
+    try{ moveHandle.setPointerCapture(e.pointerId); }catch(_){}
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  moveHandle?.addEventListener('pointermove',e=>{
+    if(!tableMove||tableMove.pointerId!==e.pointerId) return;
+    updateTableDropPosition(e.clientY);
+    e.preventDefault();
+  });
+  moveHandle?.addEventListener('pointerup',e=>{
+    if(!tableMove||tableMove.pointerId!==e.pointerId) return;
+    finishTableMove(true);
+    e.preventDefault();
+  });
+  moveHandle?.addEventListener('pointercancel',()=>finishTableMove(false));
+
   const menuBtnMap={
     tblBtnInsert:'tblMenuInsert',
     tblBtnMerge:'tblMenuMerge',
@@ -570,14 +798,27 @@ function initTableTools(){
       dropdown?.classList.remove('show');
     }
     // Deselect cells if clicking outside any table
-    if(!e.target.closest('table')){ clearCellSelection(); positionTableTools(); }
+    if(!e.target.closest('table')&&!e.target.closest('#tblTools,.tbl-submenu,.tbl-sheet,.tbl-color-dropdown')){
+      touchSelectionMode=false;
+      clearCellSelection();
+      activeCell=null;
+      positionTableTools();
+    }
+  });
+
+  document.addEventListener('keydown',e=>{
+    if(e.key!=='Escape'||!currentTable()) return;
+    touchSelectionMode=false;
+    clearCellSelection();
+    activeCell=null;
+    positionTableTools();
   });
 
   /* ── On mobile, show sheet button, hide full toolbar ── */
   function adaptTblToolbar(){
     const isMobile=window.innerWidth<=640;
     const sheetBtn=document.getElementById('tblBtnMobileSheet');
-    const fullBtns=document.querySelectorAll('#tblTools button:not(#tblBtnMobileSheet):not(#tblDel)');
+    const fullBtns=document.querySelectorAll('#tblTools button:not(#tblMoveHandle):not(#tblBtnMobileSheet):not(#tblDel)');
     if(sheetBtn) sheetBtn.style.display=isMobile?'inline-flex':'none';
     fullBtns.forEach(b=>{ b.style.display=isMobile?'none':''; });
   }
@@ -680,7 +921,7 @@ function initResponsiveImages(){
     ed.addEventListener(ev, ()=>{ clearTimeout(longPressTimer); }, {passive:true}));
 
   // Keep chrome glued to the image while scrolling / resizing
-  ed.addEventListener('scroll', ()=>{ if(selectedImg) syncImageChrome(); reposBadges(); }, {passive:true});
+  (document.getElementById('editorScroll')||ed).addEventListener('scroll',()=>{ if(selectedImg) syncImageChrome(); reposBadges(); },{passive:true});
   window.addEventListener('resize', ()=>{ if(selectedImg) syncImageChrome(); reposBadges(); });
 
   /* ----- Floating toolbar ----- */

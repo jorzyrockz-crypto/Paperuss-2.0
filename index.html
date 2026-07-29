@@ -76,7 +76,6 @@
       <img class="logo" src="assets/icons/paperuss-192.png" srcset="assets/icons/paperuss-192.png 192w, assets/icons/paperuss-512.png 512w" sizes="28px" alt="">
       <div class="brand">
         <h1>PapeRuss</h1>
-        <span class="sub">flat · offline-first</span>
       </div>
     </div>
     <div class="search-wrap">
@@ -94,25 +93,9 @@
       <button class="btn btn-icon" id="themeToggle" title="Toggle theme">
         <i data-lucide="sun" id="themeIcon" class="w-4 h-4"></i>
       </button>
-      <button class="btn btn-icon" id="shareBtn" title="Share current note">
-        <i data-lucide="share-2" class="w-4 h-4"></i>
-      </button>
-      <button class="btn btn-icon" id="printBtn" title="Print current note to PDF">
-        <i data-lucide="printer" class="w-4 h-4"></i>
-      </button>
       <button class="btn btn-icon" id="installBtn" title="Install PapeRuss">
         <i data-lucide="download" class="w-4 h-4"></i>
       </button>
-      <div class="mobile-actions-wrap" id="mobileActionsWrap">
-        <button class="btn btn-icon" id="mobileActionsBtn" title="More actions" aria-label="More actions">
-          <i data-lucide="ellipsis" class="w-4 h-4"></i>
-        </button>
-        <div class="mobile-actions-panel" id="mobileActionsPanel">
-          <button class="profile-menu-item" id="mobileShareBtn"><i data-lucide="share-2" class="w-4 h-4"></i> Share note</button>
-          <button class="profile-menu-item" id="mobilePrintBtn"><i data-lucide="printer" class="w-4 h-4"></i> Print / PDF</button>
-          <button class="profile-menu-item" id="mobileNotifBtn"><i data-lucide="bell" class="w-4 h-4"></i> Notifications</button>
-        </div>
-      </div>
       <div class="notif-bell-wrap" id="notifBellWrap">
         <button class="btn btn-icon" id="notifBellBtn" title="Notifications">
           <i data-lucide="bell" class="w-4 h-4"></i>
@@ -138,7 +121,6 @@
         <img src="assets/icons/paperuss-192.png" alt="" aria-hidden="true">
         <div>
           <strong>PapeRuss</strong>
-          <span>flat · offline-first</span>
         </div>
       </div>
       <div class="nav-section">
@@ -160,6 +142,10 @@
           <i data-lucide="archive" class="w-4 h-4"></i>
           <span>Archived</span> <span class="count" id="countArchived">0</span>
         </button>
+        <button class="nav-btn" data-filter="trash">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+          <span>Trash</span> <span class="count" id="countTrash">0</span>
+        </button>
         <button class="nav-btn" data-filter="calendar">
           <i data-lucide="calendar" class="w-4 h-4"></i>
           <span>Calendar</span> <span class="count" id="countCalendar">0</span>
@@ -176,10 +162,6 @@
           <i data-lucide="settings" class="w-4 h-4"></i>
           <span>Settings</span>
         </button>
-      </div>
-      <div class="nav-section" style="flex:1">
-        <h3>Tags</h3>
-        <div id="tagList"></div>
       </div>
       <div class="sidebar-footer">
         <div id="storageText">0 notes · stored locally</div>
@@ -220,18 +202,24 @@
           <button class="btn btn-icon" id="archiveBtn" title="Archive">
             <i data-lucide="archive" class="w-4 h-4"></i>
           </button>
+          <button class="btn btn-icon" id="restoreBtn" title="Restore note" style="display:none;color:var(--accent)">
+            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+          </button>
           <button class="btn btn-icon" id="deleteBtn" title="Delete" style="color:var(--danger)">
             <i data-lucide="trash-2" class="w-4 h-4"></i>
           </button>
-          <!-- Mobile-only more-actions button replaces pin/archive/delete -->
+          <!-- Share/Print live here on every device; compact note actions join them on touch layouts. -->
           <div class="editor-more-wrap" id="editorMoreWrap">
-            <button class="btn btn-icon" id="editorMoreBtn" title="More note actions" style="display:none">
+            <button class="btn btn-icon" id="editorMoreBtn" title="More note actions" aria-label="More note actions">
               <i data-lucide="ellipsis-vertical" class="w-4 h-4"></i>
             </button>
             <div class="editor-more-panel" id="editorMorePanel">
-              <button class="profile-menu-item" id="morePinBtn"><i data-lucide="pin" class="w-4 h-4"></i> Pin / Unpin</button>
-              <button class="profile-menu-item" id="moreArchiveBtn"><i data-lucide="archive" class="w-4 h-4"></i> Archive / Restore</button>
-              <button class="profile-menu-item danger" id="moreDeleteBtn"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
+              <button class="profile-menu-item" id="moreShareBtn"><i data-lucide="share-2" class="w-4 h-4"></i> Share note</button>
+              <button class="profile-menu-item" id="morePrintBtn"><i data-lucide="printer" class="w-4 h-4"></i> Print / PDF</button>
+              <div class="hl-divider compact-note-action" style="margin:6px 0"></div>
+              <button class="profile-menu-item compact-note-action" id="morePinBtn"><i data-lucide="pin" class="w-4 h-4"></i> Pin / Unpin</button>
+              <button class="profile-menu-item compact-note-action" id="moreArchiveBtn"><i data-lucide="archive" class="w-4 h-4"></i> Archive / Restore</button>
+              <button class="profile-menu-item compact-note-action danger" id="moreDeleteBtn"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
             </div>
           </div>
         </div>
@@ -362,7 +350,9 @@
         <input type="file" id="mediaImageInput" accept="image/*" hidden>
         <input type="file" id="mediaVideoInput" accept="video/*" hidden>
         <input type="file" id="mediaFileInput" hidden>
-        <div class="note-editor" id="noteBody" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" data-placeholder="Start writing… Select text and use the toolbar to format it."></div>
+        <div class="editor-scroll" id="editorScroll">
+          <div class="note-editor" id="noteBody" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" data-placeholder="Start writing… Select text and use the toolbar to format it."></div>
+        </div>
         <div class="editor-footer">
           <div class="save-status" id="saveStatus"><span class="dot"></span><span>Saved</span></div>
           <div class="stats">
@@ -706,6 +696,8 @@
 <!-- ============ TABLE QUICK TOOLBAR (fix #7) ============ -->
 <!-- Grouped table toolbar: primary 6 buttons + submenus -->
 <div class="tbl-tools" id="tblTools">
+  <button id="tblMoveHandle" class="tbl-move-handle" title="Move table" aria-label="Move table"><i data-lucide="grip-vertical" class="w-4 h-4"></i></button>
+  <span class="tbl-sep"></span>
   <button id="tblBtnInsert"  title="Insert…"><i data-lucide="plus" class="w-4 h-4"></i></button>
   <button id="tblBtnMerge"   title="Merge / Split"><i data-lucide="combine" class="w-4 h-4"></i></button>
   <button id="tblBtnFit"     title="Auto Fit"><i data-lucide="maximize-2" class="w-4 h-4"></i></button>
@@ -920,7 +912,7 @@
     <button class="profile-menu-item" id="profileSyncNowBtn">
       <i data-lucide="refresh-cw" class="w-4 h-4"></i> Sync now
     </button>
-    <div class="mobile-profile-tools">
+    <div class="profile-tools">
       <div class="hl-divider" style="margin:6px 0"></div>
       <button class="profile-menu-item" id="profileImportBtn">
         <i data-lucide="folder-input" class="w-4 h-4"></i> Import notes

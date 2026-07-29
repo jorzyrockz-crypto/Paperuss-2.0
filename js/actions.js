@@ -7,7 +7,7 @@ function insertDivider(){
 }
 
 function insertTable(rows, cols){
-  let html='<div class="table-wrapper" contenteditable="false"><table contenteditable="true"><thead><tr>';
+  let html='<div class="table-wrapper" data-table-wrapper="1" contenteditable="false"><table contenteditable="true"><thead><tr>';
   for(let c=0;c<cols;c++) html+=`<th>Header ${c+1}</th>`;
   html+='</tr></thead><tbody>';
   for(let r=0;r<rows-1;r++){
@@ -15,7 +15,7 @@ function insertTable(rows, cols){
     for(let c=0;c<cols;c++) html+='<td>&nbsp;</td>';
     html+='</tr>';
   }
-  html+='</tbody></table></div>';
+  html+='</tbody></table></div><p><br></p>';
   insertHTMLAtCaret(html);
   toast(`${rows}×${cols} table inserted`);
 }
@@ -128,7 +128,7 @@ function contextualNew(){
   } else if(f==='media'){
     document.getElementById('mediaFileInput').click();
   } else {
-    if(f==='settings'){
+    if(f==='settings'||f==='trash'){
       state.filter='all'; state.tag=null;
       document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.filter==='all'));
     }
@@ -345,6 +345,7 @@ const persist = debounce(()=>{
 
 function editField(field, value){
   const n=getNote(state.currentId); if(!n) return;
+  if(n.deletedAt) return;
   n[field]=value; n.updatedAt=Date.now();
   const st=document.getElementById('saveStatus'); st.className='save-status saving';
   st.innerHTML='<span class="dot"></span><span>Saving…</span>';
@@ -354,10 +355,18 @@ function editField(field, value){
 }
 
 function sanitizeForStorage(html){
-  // Strip transient blob: URLs so storage stays portable; they'll be re-hydrated on load
-  return (html||'')
+  // Strip transient blob URLs and interaction-only table state.
+  const clean=(html||'')
     .replace(/\ssrc="blob:[^"]*"/g,'')
     .replace(/\sdata-blob-url="[^"]*"/g,'');
+  const temp=document.createElement('div');
+  temp.innerHTML=clean;
+  temp.querySelectorAll('.table-move-placeholder,[data-table-ui]').forEach(el=>el.remove());
+  temp.querySelectorAll('.tbl-selected').forEach(cell=>cell.classList.remove('tbl-selected'));
+  temp.querySelectorAll('.table-selection-mode,.table-moving').forEach(el=>{
+    el.classList.remove('table-selection-mode','table-moving');
+  });
+  return temp.innerHTML;
 }
 function handleBodyInput(){
   if(state.suppressInput) return;
@@ -370,37 +379,67 @@ function handleBodyInput(){
 
 function togglePin(){
   const n=getNote(state.currentId); if(!n) return;
+  if(n.deletedAt) return;
   n.pinned=!n.pinned; n.updatedAt=Date.now();
   save(); renderAll(); toast(n.pinned?'Note pinned':'Note unpinned');
 }
 function toggleArchive(){
   const n=getNote(state.currentId); if(!n) return;
+  if(n.deletedAt) return;
   n.archived=!n.archived; n.updatedAt=Date.now();
   save(); renderAll(); toast(n.archived?'Note archived':'Note restored');
 }
-function deleteNote(id){
+
+function restoreNote(id,options={}){
+  const n=getNote(id); if(!n) return;
+  delete n.deletedAt;
+  n.updatedAt=Date.now();
+  if(options.filter){
+    state.filter=options.filter;
+  }else if(options.open!==false){
+    state.filter=n.archived?'archived':'all';
+  }
+  if(options.select!==false) state.currentId=id;
+  state.tag=null;
+  save();
+  renderAll();
+  toast('Note restored');
+}
+
+function permanentlyDeleteNote(id){
   const n=getNote(id); if(!n) return;
   const idx=notes.indexOf(n);
-  confirmDialog('Delete note?','"'+esc(titleOf(n))+'" will be permanently removed. This cannot be undone.','Delete',()=>{
-    const removed=notes.splice(idx,1)[0];
+  confirmDialog('Delete permanently?','"'+esc(titleOf(n))+'" will be permanently removed. This cannot be undone.','Delete permanently',()=>{
+    notes.splice(idx,1);
     if(typeof recordCloudDeletion==='function') recordCloudDeletion('notes',id);
-    if(state.currentId===id){
-      const list=filteredNotes();
-      state.currentId = list.length?list[0].id:null;
-    }
-    save(); renderAll();
+    if(state.currentId===id) state.currentId=filteredNotes()[0]?.id||null;
+    save();
+    renderAll();
     cancelEventTimers(id);
-    toast('Note deleted', ()=>{
-      notes.splice(idx,0,removed);
-      if(typeof clearCloudDeletion==='function') clearCloudDeletion('notes',id);
-      save(); renderAll(); toast('Note restored');
+    toast('Note permanently deleted');
+    setTimeout(gcOrphanMedia,500);
+  });
+}
+
+function deleteNote(id){
+  const n=getNote(id); if(!n) return;
+  if(n.deletedAt){ permanentlyDeleteNote(id); return; }
+  const previousFilter=state.filter;
+  confirmDialog('Move note to Trash?','"'+esc(titleOf(n))+'" can be restored later from Trash.','Move to Trash',()=>{
+    n.deletedAt=Date.now();
+    n.updatedAt=Date.now();
+    cancelEventTimers(id);
+    if(state.currentId===id) state.currentId=filteredNotes()[0]?.id||null;
+    save();
+    renderAll();
+    toast('Note moved to Trash',()=>{
+      restoreNote(id,{filter:previousFilter,select:true});
     });
-    // Clean orphan media after a delay so undo works
-    setTimeout(gcOrphanMedia, 6000);
   });
 }
 function addTag(tag){
   const n=getNote(state.currentId); if(!n) return;
+  if(n.deletedAt) return;
   tag=tag.trim().replace(/^#/,''); if(!tag) return;
   n.tags=n.tags||[]; if(n.tags.includes(tag)) return;
   n.tags.push(tag); n.updatedAt=Date.now();
@@ -408,6 +447,7 @@ function addTag(tag){
 }
 function removeTag(tag){
   const n=getNote(state.currentId); if(!n) return;
+  if(n.deletedAt) return;
   n.tags=(n.tags||[]).filter(t=>t!==tag); n.updatedAt=Date.now();
   save(); renderTags(n); renderList(); renderSidebar();
 }

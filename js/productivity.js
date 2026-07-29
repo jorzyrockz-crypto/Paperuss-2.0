@@ -16,6 +16,7 @@ function persistCalendarState(){
 function calendarOccurrences(rangeStart,rangeEnd){
   const out=[];
   notes.forEach(n=>{
+    if(n.deletedAt) return;
     if(!(n.tags||[]).includes('calendar')) return;
     let start=n.calendarStart||n.createdAt;
     let end=n.calendarEnd||start;
@@ -60,7 +61,7 @@ function renderCalendarPlannerList(){
   const date=new Date(ts);
   title.textContent=date.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
   const occ=calendarOccurrences(dayStart(ts),dayEnd(ts));
-  const datedNotes=notes.filter(n=>!(n.tags||[]).includes('calendar')&&(sameCalendarDay(n.createdAt,ts)||sameCalendarDay(n.updatedAt,ts)));
+  const datedNotes=notes.filter(n=>!n.deletedAt&&!(n.tags||[]).includes('calendar')&&(sameCalendarDay(n.createdAt,ts)||sameCalendarDay(n.updatedAt,ts)));
   const dueTasks=standaloneTasks.filter(t=>t.due&&sameCalendarDay(t.due,ts));
   let html='';
   occ.forEach(({note,start})=>{
@@ -116,6 +117,7 @@ function renderCalendarMonthView(){
   // Build a map: day → notes
   const dayMap={};
   notes.forEach(n=>{
+    if(n.deletedAt) return;
     const isCalendarNote = (n.tags||[]).includes('calendar');
     if(!isCalendarNote) return;
 
@@ -412,7 +414,7 @@ function renderTasksView(){
 
   const allTasks=[];
   notes.forEach(n=>{
-    if(!n.content) return;
+    if(n.deletedAt||!n.content) return;
     const tmp=document.createElement('div');
     tmp.innerHTML=n.content;
     const checkboxes=tmp.querySelectorAll('input[type=checkbox]');

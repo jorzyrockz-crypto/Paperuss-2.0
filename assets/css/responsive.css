@@ -3,6 +3,10 @@
 @media (min-width: 641px) and (max-width: 1024px){
   .menu-toggle{display:inline-flex}
   .sidebar:not(.expanded){width:68px;padding:10px 6px}
+  .sidebar:not(.expanded) .mobile-sidebar-brand{
+    justify-content:center;gap:0;padding-left:0;padding-right:0
+  }
+  .sidebar:not(.expanded) .mobile-sidebar-brand > div{display:none}
   .sidebar:not(.expanded) h3 span{display:none}
   .sidebar:not(.expanded) .nav-btn, .sidebar:not(.expanded) .tag-btn{justify-content:center;padding:10px;position:relative}
   .sidebar:not(.expanded) .nav-btn span:not(.count), .sidebar:not(.expanded) .tag-btn span:not(.tag-dot){display:none}
@@ -74,8 +78,6 @@
   .notif-bell-wrap{display:inline-flex!important;order:98;flex:0 0 auto;width:auto;overflow:visible;position:relative}
   /* Make room for it in the actions area. */
   .header-actions{max-width:min(72vw,300px)}
-  .mobile-actions-wrap{display:block!important;order:80;flex:0 0 auto}
-  #mobileActionsBtn{display:inline-flex!important;width:34px;height:34px;padding:7px}
   .header-actions .btn-icon{width:34px;height:34px;padding:7px}
   #newNoteBtn{width:34px;height:34px;padding:0;justify-content:center;font-size:0}
   #newNoteBtn svg{width:16px;height:16px}
@@ -84,7 +86,7 @@
     background:var(--header-bg);padding-left:3px
   }
   .profile-avatar-btn{width:34px;height:34px;box-shadow:0 0 0 2px var(--accent-soft)}
-  .mobile-profile-tools{display:block!important}
+  .profile-tools{display:block!important}
   .profile-panel,.notif-panel{
     position:fixed;top:54px;right:8px;left:auto;width:min(310px,calc(100vw - 16px));max-height:calc(100vh - 62px);overflow-y:auto;z-index:220
   }
@@ -135,9 +137,10 @@
   /* Pin / Archive / Delete — always visible in editor topbar on mobile */
   .editor-topbar{gap:6px;padding:10px 12px}
   .editor-topbar .btn-icon{width:34px;height:34px;padding:6px}
-  #pinBtn,#archiveBtn,#deleteBtn{display:none!important}
+  #pinBtn,#archiveBtn,#restoreBtn,#deleteBtn{display:none!important}
   .editor-more-wrap{display:block!important}
   #editorMoreBtn{display:inline-flex!important}
+  .editor-more-panel .compact-note-action{display:flex!important}
   .note-editor{padding:20px 16px 90px}
   .mobile-fab{display:inline-flex}
   /* Phone gallery: single column, large thumbnails, comfortable touch spacing */
@@ -162,11 +165,9 @@
   .header-actions::-webkit-scrollbar{display:none}
   .header-actions>*{flex:0 0 auto}
   #importBtn,#exportBtn,#themeToggle,#installBtn,#shareBtn,#printBtn{display:none!important}
-  .mobile-actions-wrap{display:block!important;order:80;flex:0 0 auto}
-  #mobileActionsBtn{display:inline-flex!important}
   .notif-bell-wrap{display:inline-flex!important;order:98;position:relative}
   .profile-menu-wrap{order:99;flex:0 0 auto}
-  .mobile-profile-tools{display:block!important}
+  .profile-tools{display:block!important}
   .mobile-sidebar-brand{
     display:flex!important;align-items:center;gap:10px;padding:10px 10px 14px;
     margin-bottom:4px;border-bottom:1px solid var(--border)
@@ -177,9 +178,10 @@
   .mobile-sidebar-brand span{font-size:10px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
 
   /* --- EDITOR TITLE BAR (phone treatment: consolidate into More) --- */
-  #pinBtn,#archiveBtn,#deleteBtn{display:none!important}
+  #pinBtn,#archiveBtn,#restoreBtn,#deleteBtn{display:none!important}
   .editor-more-wrap{display:block!important}
   #editorMoreBtn{display:inline-flex!important}
+  .editor-more-panel .compact-note-action{display:flex!important}
 }
 
 /* ============ TABLET (641-1024px) — collapsible toolbar + touch sizing ============ */

@@ -229,7 +229,7 @@ function initBatchBar(){
     if(el){ el.addEventListener('mousedown',e=>e.preventDefault()); el.addEventListener('click',fn); }
   });
   // Reposition badges on scroll / resize
-  bodyEl()?.addEventListener('scroll', reposBadges, {passive:true});
+  (document.getElementById('editorScroll')||bodyEl())?.addEventListener('scroll',reposBadges,{passive:true});
   window.addEventListener('resize', reposBadges);
   refreshIcons();
 }
@@ -511,25 +511,72 @@ async function renderNotebookCover(){
     coverEl=document.createElement('div');
     coverEl.className='note-cover-header';
     coverEl.id='noteCoverHeader';
-    const topBar=contentEl.querySelector('.editor-topbar');
-    if(topBar) topBar.parentNode.insertBefore(coverEl, topBar.nextSibling);
-    else contentEl.insertBefore(coverEl, contentEl.firstChild);
   }
+  // The cover starts below the toolbar but belongs to the note's scroll flow,
+  // so it scrolls away with the note instead of behaving like a sticky header.
+  const scrollArea=document.getElementById('editorScroll');
+  const noteBody=document.getElementById('noteBody');
+  if(scrollArea&&noteBody) scrollArea.insertBefore(coverEl,noteBody);
+  else contentEl.insertBefore(coverEl,contentEl.firstChild);
   let coverSrc=n.coverImage.src||'';
   if(n.coverImage.mediaId){
     try{coverSrc=await getMediaURL(n.coverImage.mediaId)||coverSrc;}catch(e){}
   }
   coverEl.innerHTML=`
-    <img src="${esc(coverSrc)}" alt="Cover" style="object-position: center ${n.coverImage.positionY||50}%">
+    <img src="${esc(coverSrc)}" alt="Cover" style="object-position: center ${n.coverImage.positionY??50}%">
     <div class="cover-btn-overlay">
-      <button id="btnCoverReposition"><i data-lucide="move" class="w-3.5 h-3.5"></i> Reposition</button>
+      <button id="btnCoverReposition" aria-pressed="false"><i data-lucide="move" class="w-3.5 h-3.5"></i> Reposition</button>
       <button id="btnCoverRemove"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remove</button>
     </div>
   `;
+  const coverImg=coverEl.querySelector('img');
+  const repositionBtn=document.getElementById('btnCoverReposition');
+  const setRepositionMode=enabled=>{
+    coverEl.classList.toggle('is-repositioning',enabled);
+    repositionBtn.setAttribute('aria-pressed',String(enabled));
+    repositionBtn.innerHTML=enabled
+      ? '<i data-lucide="check" class="w-3.5 h-3.5"></i> Done'
+      : '<i data-lucide="move" class="w-3.5 h-3.5"></i> Reposition';
+    refreshIcons();
+  };
+  let coverDrag=null;
+  coverEl.onpointerdown=e=>{
+    if(!coverEl.classList.contains('is-repositioning')||e.target.closest('button')) return;
+    const box=coverEl.getBoundingClientRect();
+    const naturalRatio=coverImg.naturalWidth&&coverImg.naturalHeight
+      ? coverImg.naturalWidth/coverImg.naturalHeight
+      : box.width/box.height;
+    const renderedHeight=Math.max(box.height,box.width/naturalRatio);
+    coverDrag={
+      pointerId:e.pointerId,
+      startY:e.clientY,
+      startPosition:Number(n.coverImage.positionY??50),
+      overflowY:Math.max(1,renderedHeight-box.height)
+    };
+    coverEl.classList.add('is-dragging');
+    try{coverEl.setPointerCapture(e.pointerId);}catch(_){}
+    e.preventDefault();
+  };
+  coverEl.onpointermove=e=>{
+    if(!coverDrag||coverDrag.pointerId!==e.pointerId) return;
+    const deltaY=e.clientY-coverDrag.startY;
+    const position=Math.max(0,Math.min(100,coverDrag.startPosition-(deltaY/coverDrag.overflowY)*100));
+    n.coverImage.positionY=position;
+    coverImg.style.objectPosition=`center ${position}%`;
+    e.preventDefault();
+  };
+  const finishCoverDrag=e=>{
+    if(!coverDrag||e.pointerId!==coverDrag.pointerId) return;
+    coverDrag=null;
+    coverEl.classList.remove('is-dragging');
+    save();
+    toast('Cover position saved');
+  };
+  coverEl.onpointerup=finishCoverDrag;
+  coverEl.onpointercancel=finishCoverDrag;
   document.getElementById('btnCoverRemove').onclick=removeNotebookCover;
-  document.getElementById('btnCoverReposition').onclick=()=>{
-    let pos=(n.coverImage.positionY||50)+25; if(pos>100) pos=0;
-    n.coverImage.positionY=pos; save(); renderNotebookCover();
+  repositionBtn.onclick=()=>{
+    setRepositionMode(!coverEl.classList.contains('is-repositioning'));
   };
   refreshIcons();
 }
