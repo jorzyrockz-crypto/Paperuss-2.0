@@ -1,0 +1,21 @@
+# Imported source snapshots and merge workspaces
+.incoming/
+.incoming2/
+.incoming3/
+.merge-preview/
+.merge-preview2/
+.merge-preview3/
+Paperus v2/
+Phase 1 – Editor Foundation & Formatting.txt
+
+# Local Firebase state and logs
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+
+# Local development files
+.DS_Store
+Thumbs.db
+node_modules/
+*.log

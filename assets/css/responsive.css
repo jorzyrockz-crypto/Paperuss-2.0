@@ -1,0 +1,224 @@
+/* ============ TABLET & PHONE PREMIUM RESPONSIVE ============ */
+/* Tablet Portrait & Medium Screens (641px to 1024px) - True multi-pane productivity! */
+@media (min-width: 641px) and (max-width: 1024px){
+  .menu-toggle{display:inline-flex}
+  .sidebar:not(.expanded){width:68px;padding:10px 6px}
+  .sidebar:not(.expanded) h3 span{display:none}
+  .sidebar:not(.expanded) .nav-btn, .sidebar:not(.expanded) .tag-btn{justify-content:center;padding:10px;position:relative}
+  .sidebar:not(.expanded) .nav-btn span:not(.count), .sidebar:not(.expanded) .tag-btn span:not(.tag-dot){display:none}
+  .sidebar:not(.expanded) .nav-btn .count{position:absolute;top:3px;right:3px;font-size:9.5px;padding:0 5px;min-width:16px}
+  .sidebar:not(.expanded) .sidebar-footer #storageText{display:none}
+  .sidebar.expanded{width:230px}
+  .note-list{width:270px;flex-shrink:0}
+  .editor{flex:1;display:flex}
+}
+
+/* Sidebar toggle rail button for desktop/tablet */
+.sidebar-rail-toggle{display:inline-flex;align-items:center;justify-content:center;padding:6px;border-radius:6px;color:var(--fg-secondary)}
+.sidebar-rail-toggle:hover{background:var(--hover);color:var(--fg)}
+
+/* Desktop collapsed rail (>1024px) */
+@media (min-width: 1025px){
+  .sidebar.rail-collapsed{width:68px;padding:10px 6px}
+  .sidebar.rail-collapsed h3 span{display:none}
+  .sidebar.rail-collapsed .nav-btn,
+  .sidebar.rail-collapsed .tag-btn{justify-content:center;padding:10px;position:relative}
+  .sidebar.rail-collapsed .nav-btn span:not(.count),
+  .sidebar.rail-collapsed .tag-btn span:not(.tag-dot){display:none}
+  .sidebar.rail-collapsed .nav-btn .count{position:absolute;top:3px;right:3px;font-size:9.5px;padding:0 5px;min-width:16px}
+  .sidebar.rail-collapsed .sidebar-footer #storageText{display:none}
+  .sidebar.rail-collapsed h3{justify-content:center}
+}
+.sidebar{transition:width .22s cubic-bezier(0.16,1,0.3,1)}
+
+/* Mobile Drawer Backdrop */
+.sidebar-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:48;opacity:0;
+  pointer-events:none;transition:opacity .25s ease;backdrop-filter:blur(4px);
+}
+.sidebar-backdrop.active{opacity:1;pointer-events:auto}
+
+/* Mobile Floating Action Button (<= 640px) */
+.mobile-fab{
+  display:none;position:fixed;right:20px;bottom:24px;z-index:42;
+  background:var(--accent);color:#fff;border-radius:99px;padding:13px 22px;
+  font-size:14px;font-weight:600;box-shadow:0 8px 24px var(--accent-ring);
+  align-items:center;gap:8px;transition:transform .15s ease, background .15s ease;
+}
+.mobile-fab:active{transform:scale(0.95)}
+.mobile-fab:hover{background:var(--accent-emphasis)}
+
+/* Phone mode (<= 640px) - True phone drawer */
+@media (max-width: 640px){
+  /* Compact, horizontally scrollable app header keeps every action reachable. */
+  .header{padding:8px;gap:6px;min-width:0}
+  .menu-toggle{display:inline-flex}
+  /* Brand moves into the hidden drawer to maximize top-bar space. */
+  .header-left{display:none}
+  .search-wrap{min-width:76px;max-width:none;flex:1 1 100px}
+  .search-wrap svg{left:8px}
+  #searchInput{padding:7px 8px 7px 29px;font-size:12px}
+  .kbd{display:none}
+  .header-actions{
+    flex:0 1 auto;min-width:72px;max-width:52vw;overflow-x:auto;overflow-y:hidden;
+    flex-wrap:nowrap;scrollbar-width:none;touch-action:pan-x;overscroll-behavior-x:contain;
+  }
+  .header-actions::-webkit-scrollbar{display:none}
+  .header-actions>*{flex:0 0 auto}
+  /* Utilities move into compact mobile menus; note creation uses the FAB. */
+  #importBtn,#exportBtn,#themeToggle,#installBtn,#shareBtn,#printBtn,#newNoteBtn{display:none!important}
+  /* Keep the notification bell visible next to the account button. */
+  #notifBellBtn{display:inline-flex!important;width:34px;height:34px;padding:7px}
+  #notifBellBtn svg{width:16px;height:16px}
+  /* Keep the notification bell visible directly next to the account avatar. */
+  .notif-bell-wrap{display:inline-flex!important;order:98;flex:0 0 auto;width:auto;overflow:visible;position:relative}
+  /* Make room for it in the actions area. */
+  .header-actions{max-width:min(72vw,300px)}
+  .mobile-actions-wrap{display:block!important;order:80;flex:0 0 auto}
+  #mobileActionsBtn{display:inline-flex!important;width:34px;height:34px;padding:7px}
+  .header-actions .btn-icon{width:34px;height:34px;padding:7px}
+  #newNoteBtn{width:34px;height:34px;padding:0;justify-content:center;font-size:0}
+  #newNoteBtn svg{width:16px;height:16px}
+  .profile-menu-wrap{
+    position:sticky;right:0;z-index:4;order:99;flex:0 0 auto;
+    background:var(--header-bg);padding-left:3px
+  }
+  .profile-avatar-btn{width:34px;height:34px;box-shadow:0 0 0 2px var(--accent-soft)}
+  .mobile-profile-tools{display:block!important}
+  .profile-panel,.notif-panel{
+    position:fixed;top:54px;right:8px;left:auto;width:min(310px,calc(100vw - 16px));max-height:calc(100vh - 62px);overflow-y:auto;z-index:220
+  }
+  .sidebar{
+    position:fixed;left:-290px;top:0;bottom:0;z-index:50;width:270px;
+    transition:left .25s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow:12px 0 36px rgba(0,0,0,.55);background:var(--canvas);padding-top:58px;
+  }
+  .mobile-sidebar-brand{
+    display:flex!important;align-items:center;gap:10px;padding:10px 10px 14px;
+    margin-bottom:4px;border-bottom:1px solid var(--border)
+  }
+  .mobile-sidebar-brand img{width:34px;height:34px;object-fit:cover;border-radius:9px;flex-shrink:0}
+  .mobile-sidebar-brand div{display:flex;flex-direction:column;line-height:1.2}
+  .mobile-sidebar-brand strong{font-size:14px;color:var(--fg);font-weight:750;letter-spacing:-.2px}
+  .mobile-sidebar-brand span{font-size:10px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+  .sidebar.open{left:0}
+  .note-list{display:flex;position:fixed;inset:58px 0 0;z-index:40;width:100%}
+  .note-list.mobile-hide{display:none}
+  .editor{display:none}
+  .editor.mobile-show{display:flex;position:fixed;inset:58px 0 0;z-index:45;width:100%}
+  .back-btn{display:inline-flex}
+  .search-wrap{max-width:none}
+  /* Toolbar: scrollable single row with a [v] toggle to expand downward */
+  .toolbar-collapse-toggle{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:46px;height:16px;align-self:center;flex-shrink:0;color:var(--fg-muted);
+    background:var(--subtle);border:1px solid var(--border);border-top:0;
+    border-radius:0 0 10px 10px;cursor:pointer;transition:color .12s ease,background .12s ease;
+    margin-top:-1px;z-index:3;
+  }
+  .toolbar-collapse-toggle:hover{color:var(--fg)}
+  .toolbar-collapse-toggle.expanded i{transform:rotate(180deg)}
+  .editor-toolbar{
+    flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;white-space:nowrap;
+    padding:5px 8px;gap:1px;scrollbar-width:none;touch-action:pan-x;
+    overscroll-behavior-x:contain;min-height:42px;max-height:42px;
+    transition:max-height .22s ease,flex-wrap .22s ease;
+  }
+  .editor-toolbar::-webkit-scrollbar{display:none}
+  .editor-toolbar.expanded{
+    flex-wrap:wrap;overflow-x:visible;overflow-y:auto;
+    max-height:240px;min-height:42px;
+  }
+  .editor-toolbar .tool-btn,.editor-toolbar .tool-sep,
+  .editor-toolbar .font-style-picker,.editor-toolbar .hl-picker,
+  .editor-toolbar .sz-picker,.editor-toolbar .tbl-picker{flex:0 0 auto}
+  /* Pin / Archive / Delete — always visible in editor topbar on mobile */
+  .editor-topbar{gap:6px;padding:10px 12px}
+  .editor-topbar .btn-icon{width:34px;height:34px;padding:6px}
+  #pinBtn,#archiveBtn,#deleteBtn{display:none!important}
+  .editor-more-wrap{display:block!important}
+  #editorMoreBtn{display:inline-flex!important}
+  .note-editor{padding:20px 16px 90px}
+  .mobile-fab{display:inline-flex}
+  /* Phone gallery: single column, large thumbnails, comfortable touch spacing */
+  .mh-grid{grid-template-columns:1fr;gap:14px}
+  .mh-thumb{height:190px}
+  .mh-info{padding:14px}
+  .mh-card{border-radius:16px}
+}
+
+/* ============ TABLET PORTRAIT — reuse the phone UI ============
+   Applies the compact phone treatment to the TOP BAR, editor TITLE BAR and
+   the collapsible TOOLBAR while keeping the tablet's dual-pane workspace. */
+@media (min-width:641px) and (max-width:1024px) and (orientation:portrait){
+  /* --- TOP BAR (phone treatment) --- */
+  .header{padding:8px 10px;gap:8px}
+  .header-left{display:none}
+  .kbd{display:none}
+  .header-actions{
+    flex:0 1 auto;max-width:56vw;overflow-x:auto;overflow-y:hidden;
+    flex-wrap:nowrap;scrollbar-width:none;touch-action:pan-x;overscroll-behavior-x:contain;
+  }
+  .header-actions::-webkit-scrollbar{display:none}
+  .header-actions>*{flex:0 0 auto}
+  #importBtn,#exportBtn,#themeToggle,#installBtn,#shareBtn,#printBtn{display:none!important}
+  .mobile-actions-wrap{display:block!important;order:80;flex:0 0 auto}
+  #mobileActionsBtn{display:inline-flex!important}
+  .notif-bell-wrap{display:inline-flex!important;order:98;position:relative}
+  .profile-menu-wrap{order:99;flex:0 0 auto}
+  .mobile-profile-tools{display:block!important}
+  .mobile-sidebar-brand{
+    display:flex!important;align-items:center;gap:10px;padding:10px 10px 14px;
+    margin-bottom:4px;border-bottom:1px solid var(--border)
+  }
+  .mobile-sidebar-brand img{width:34px;height:34px;object-fit:cover;border-radius:9px;flex-shrink:0}
+  .mobile-sidebar-brand div{display:flex;flex-direction:column;line-height:1.2}
+  .mobile-sidebar-brand strong{font-size:14px;color:var(--fg);font-weight:750}
+  .mobile-sidebar-brand span{font-size:10px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+
+  /* --- EDITOR TITLE BAR (phone treatment: consolidate into More) --- */
+  #pinBtn,#archiveBtn,#deleteBtn{display:none!important}
+  .editor-more-wrap{display:block!important}
+  #editorMoreBtn{display:inline-flex!important}
+}
+
+/* ============ TABLET (641-1024px) — collapsible toolbar + touch sizing ============ */
+@media (min-width:641px) and (max-width:1024px){
+  /* Collapsible single-row toolbar with the [v] toggle, same as phone */
+  .toolbar-collapse-toggle{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:52px;height:20px;align-self:center;flex-shrink:0;color:var(--fg-muted);
+    background:var(--subtle);border:1px solid var(--border);border-top:0;
+    border-radius:0 0 10px 10px;cursor:pointer;transition:color .12s ease,background .12s ease;
+    margin-top:-1px;z-index:3;
+  }
+  .toolbar-collapse-toggle:hover{color:var(--fg)}
+  .toolbar-collapse-toggle.expanded i{transform:rotate(180deg)}
+  .editor-toolbar{
+    flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;white-space:nowrap;
+    padding:6px 12px;gap:3px;scrollbar-width:none;touch-action:pan-x;
+    overscroll-behavior-x:contain;min-height:48px;max-height:48px;
+    transition:max-height .22s ease;
+  }
+  .editor-toolbar::-webkit-scrollbar{display:none}
+  .editor-toolbar.expanded{
+    flex-wrap:wrap;overflow-x:visible;overflow-y:auto;
+    max-height:260px;min-height:48px;
+  }
+  .editor-toolbar .tool-btn,.editor-toolbar .tool-sep,
+  .editor-toolbar .font-style-picker,.editor-toolbar .hl-picker,
+  .editor-toolbar .sz-picker,.editor-toolbar .tbl-picker{flex:0 0 auto}
+
+  /* --- Touch calibration: 44px minimum hit targets (Apple/Material guidance) --- */
+  .editor-toolbar .tool-btn{min-width:40px;height:40px;padding:0 9px}
+  .editor-toolbar .tool-btn svg,.editor-toolbar .tool-btn i{width:18px;height:18px}
+  .editor-toolbar .tool-sep{height:22px;margin:0 5px}
+  .header-actions .btn-icon,.editor-topbar .btn-icon{width:40px;height:40px;padding:9px}
+  .nav-btn,.tag-btn{min-height:42px}
+  .mh-tab{min-height:38px;padding:8px 16px}
+  .note-card{padding:15px 16px}
+  .task-hub-card input[type=checkbox]{width:20px;height:20px}
+  .hl-swatch{width:32px;height:32px}
+  .sz-opt,.fs-opt{padding:10px 14px}
+  .profile-menu-item,.block-menu-item,.icm-item{padding:11px 12px}
+}

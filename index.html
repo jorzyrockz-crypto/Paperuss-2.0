@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="description" content="PapeRuss is a fast, offline-first notes, tasks, and calendar app.">
+<meta name="theme-color" content="#0b0e14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="application-name" content="PapeRuss">
+<meta name="apple-mobile-web-app-title" content="PapeRuss">
+<title>PapeRuss · Offline Notes</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icons/paperuss-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="assets/icons/paperuss-512.png">
+<link rel="apple-touch-icon" href="assets/icons/paperuss-192.png">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<!-- Firebase (optional cloud sync). App works fully offline if these fail to load or are unconfigured. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" onerror="window.__fbLoadFailed=true"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" onerror="window.__fbLoadFailed=true"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" onerror="window.__fbLoadFailed=true"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js" onerror="window.__fbStorageLoadFailed=true"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js" onerror="window.__fbAnalyticsLoadFailed=true"></script>
+<link rel="stylesheet" href="assets/css/core.css">
+<link rel="stylesheet" href="assets/css/features.css">
+<link rel="stylesheet" href="assets/css/responsive.css">
+<link rel="stylesheet" href="assets/css/settings.css">
+</head>
+<body>
+<!-- ============ AUTH LANDING PAGE (sign-in / guest mode) ============ -->
+<div class="auth-landing hidden" id="authLanding">
+  <div class="auth-card">
+    <div class="auth-logo-wrap">
+      <img class="auth-app-logo" src="assets/icons/paperuss-192.png" srcset="assets/icons/paperuss-192.png 192w, assets/icons/paperuss-512.png 512w, assets/icons/paperuss-logo.png 1024w" sizes="52px" alt="PapeRuss logo">
+      <h1>Welcome to PapeRuss</h1>
+      <p>Sign in to sync across devices, or continue offline as a guest.</p>
+    </div>
+    <div class="auth-actions">
+      <button class="auth-btn auth-google" id="authGoogleBtn">
+        <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.6-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34 5.1 29.3 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.2-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34 5.1 29.3 3 24 3 16.3 3 9.6 7.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 45c5.2 0 9.9-2 13.5-5.2l-6.2-5.2C29.3 36.6 26.8 37.5 24 37.5c-5.3 0-9.7-3.4-11.3-8.1l-6.5 5C9.5 40.6 16.2 45 24 45z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4 5.6l6.2 5.2C40.9 36 44 30.6 44 24c0-1.2-.1-2.4-.4-3.5z"/></svg>
+        Continue with Google
+      </button>
+      <div class="auth-divider">or use email</div>
+      <form class="auth-email-form" id="authEmailForm">
+        <label for="authEmail">Email address</label>
+        <input type="email" id="authEmail" autocomplete="email" inputmode="email" required placeholder="you@example.com">
+        <label for="authPassword">Password</label>
+        <input type="password" id="authPassword" autocomplete="current-password" minlength="6" required placeholder="At least 6 characters">
+        <div class="auth-email-actions">
+          <button class="auth-btn auth-email-primary" id="authEmailSignInBtn" type="submit">Sign in</button>
+          <button class="auth-btn" id="authEmailCreateBtn" type="button">Create account</button>
+        </div>
+        <button class="auth-link-btn" id="authResetPasswordBtn" type="button">Forgot password?</button>
+        <div class="auth-form-message" id="authFormMessage" role="status" aria-live="polite"></div>
+      </form>
+      <div class="auth-divider">or stay offline</div>
+      <button class="auth-btn auth-guest" id="authGuestBtn">
+        <i data-lucide="user-round" class="w-4 h-4"></i>
+        Continue as Guest
+      </button>
+    </div>
+    <div class="auth-footnote" id="authFootnote">
+      Guest mode stores everything <b>locally on this device</b>.<br>Sign in anytime later from the profile menu to enable sync.
+    </div>
+  </div>
+</div>
+
+<div class="app">
+  <header class="header">
+    <button class="btn btn-icon menu-toggle" id="menuToggle" title="Menu">
+      <i data-lucide="menu" class="w-4 h-4"></i>
+    </button>
+    <div class="header-left">
+      <img class="logo" src="assets/icons/paperuss-192.png" srcset="assets/icons/paperuss-192.png 192w, assets/icons/paperuss-512.png 512w" sizes="28px" alt="">
+      <div class="brand">
+        <h1>PapeRuss</h1>
+        <span class="sub">flat · offline-first</span>
+      </div>
+    </div>
+    <div class="search-wrap">
+      <i data-lucide="search" class="w-4 h-4"></i>
+      <input type="search" id="searchInput" placeholder="Search notes or media…" autocomplete="off">
+      <kbd class="kbd">/</kbd>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-icon" id="importBtn" title="Import notes (JSON)">
+        <i data-lucide="folder-input" class="w-4 h-4"></i>
+      </button>
+      <button class="btn btn-icon" id="exportBtn" title="Export all notes (JSON)">
+        <i data-lucide="folder-output" class="w-4 h-4"></i>
+      </button>
+      <button class="btn btn-icon" id="themeToggle" title="Toggle theme">
+        <i data-lucide="sun" id="themeIcon" class="w-4 h-4"></i>
+      </button>
+      <button class="btn btn-icon" id="shareBtn" title="Share current note">
+        <i data-lucide="share-2" class="w-4 h-4"></i>
+      </button>
+      <button class="btn btn-icon" id="printBtn" title="Print current note to PDF">
+        <i data-lucide="printer" class="w-4 h-4"></i>
+      </button>
+      <button class="btn btn-icon" id="installBtn" title="Install PapeRuss">
+        <i data-lucide="download" class="w-4 h-4"></i>
+      </button>
+      <div class="mobile-actions-wrap" id="mobileActionsWrap">
+        <button class="btn btn-icon" id="mobileActionsBtn" title="More actions" aria-label="More actions">
+          <i data-lucide="ellipsis" class="w-4 h-4"></i>
+        </button>
+        <div class="mobile-actions-panel" id="mobileActionsPanel">
+          <button class="profile-menu-item" id="mobileShareBtn"><i data-lucide="share-2" class="w-4 h-4"></i> Share note</button>
+          <button class="profile-menu-item" id="mobilePrintBtn"><i data-lucide="printer" class="w-4 h-4"></i> Print / PDF</button>
+          <button class="profile-menu-item" id="mobileNotifBtn"><i data-lucide="bell" class="w-4 h-4"></i> Notifications</button>
+        </div>
+      </div>
+      <div class="notif-bell-wrap" id="notifBellWrap">
+        <button class="btn btn-icon" id="notifBellBtn" title="Notifications">
+          <i data-lucide="bell" class="w-4 h-4"></i>
+          <span class="notif-badge" id="notifBadge">0</span>
+        </button>
+      </div>
+      <button class="btn btn-primary" id="newNoteBtn">
+        <i data-lucide="plus" class="w-4 h-4"></i>
+        New
+      </button>
+      <div class="profile-menu-wrap" id="profileMenuWrap">
+        <button class="profile-avatar-btn" id="profileAvatarBtn" title="Account">
+          <span id="profileAvatarInitial">G</span>
+        </button>
+      </div>
+    </div>
+    <input type="file" id="importFile" accept="application/json" hidden>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="mobile-sidebar-brand">
+        <img src="assets/icons/paperuss-192.png" alt="" aria-hidden="true">
+        <div>
+          <strong>PapeRuss</strong>
+          <span>flat · offline-first</span>
+        </div>
+      </div>
+      <div class="nav-section">
+        <h3 style="display:flex;align-items:center;justify-content:space-between">
+          <span>Library</span>
+          <button class="sidebar-rail-toggle" id="sidebarRailToggle" title="Toggle compact sidebar">
+            <i data-lucide="panel-left-close" id="sidebarRailIcon" class="w-3.5 h-3.5"></i>
+          </button>
+        </h3>
+        <button class="nav-btn active" data-filter="all">
+          <i data-lucide="library" class="w-4 h-4"></i>
+          <span>All Notes</span> <span class="count" id="countAll">0</span>
+        </button>
+        <button class="nav-btn" data-filter="pinned">
+          <i data-lucide="pin" class="w-4 h-4"></i>
+          <span>Pinned</span> <span class="count" id="countPinned">0</span>
+        </button>
+        <button class="nav-btn" data-filter="archived">
+          <i data-lucide="archive" class="w-4 h-4"></i>
+          <span>Archived</span> <span class="count" id="countArchived">0</span>
+        </button>
+        <button class="nav-btn" data-filter="calendar">
+          <i data-lucide="calendar" class="w-4 h-4"></i>
+          <span>Calendar</span> <span class="count" id="countCalendar">0</span>
+        </button>
+        <button class="nav-btn" data-filter="tasks">
+          <i data-lucide="check-square" class="w-4 h-4"></i>
+          <span>Tasks & Todos</span> <span class="count" id="countTasks">0</span>
+        </button>
+        <button class="nav-btn" data-filter="media">
+          <i data-lucide="folder-open" class="w-4 h-4"></i>
+          <span>Media Hub</span> <span class="count" id="countMedia">0</span>
+        </button>
+        <button class="nav-btn" data-filter="settings">
+          <i data-lucide="settings" class="w-4 h-4"></i>
+          <span>Settings</span>
+        </button>
+      </div>
+      <div class="nav-section" style="flex:1">
+        <h3>Tags</h3>
+        <div id="tagList"></div>
+      </div>
+      <div class="sidebar-footer">
+        <div id="storageText">0 notes · stored locally</div>
+        <div class="storage-bar"><div class="storage-fill" id="storageFill" style="width:0%"></div></div>
+      </div>
+    </aside>
+
+    <section class="note-list" id="noteList">
+      <div class="list-header">
+        <h2 id="listTitle">All Notes</h2>
+        <select id="sortSelect" title="Sort">
+          <option value="updated">Updated</option>
+          <option value="created">Created</option>
+          <option value="title">Title</option>
+        </select>
+      </div>
+      <div class="notes" id="notesContainer"></div>
+    </section>
+
+    <section class="editor" id="editor">
+      <div class="editor-empty" id="editorEmpty">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/>
+        </svg>
+        <h2>No note selected</h2>
+        <p>Pick a note from the list, or create a new one to start writing.</p>
+        <button class="btn btn-primary" onclick="createNote()">+ Create your first note</button>
+      </div>
+      <div class="editor-content" id="editorContent">
+        <div class="editor-topbar">
+          <button class="btn btn-icon" id="backBtn" title="Toggle note list panel for wider editor">
+            <i data-lucide="panel-left" id="backBtnIcon" class="w-4 h-4"></i>
+          </button>
+          <input type="text" id="noteTitle" placeholder="Untitled">
+          <button class="btn btn-icon" id="pinBtn" title="Pin note">
+            <i data-lucide="pin" class="w-4 h-4"></i>
+          </button>
+          <button class="btn btn-icon" id="archiveBtn" title="Archive">
+            <i data-lucide="archive" class="w-4 h-4"></i>
+          </button>
+          <button class="btn btn-icon" id="deleteBtn" title="Delete" style="color:var(--danger)">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+          <!-- Mobile-only more-actions button replaces pin/archive/delete -->
+          <div class="editor-more-wrap" id="editorMoreWrap">
+            <button class="btn btn-icon" id="editorMoreBtn" title="More note actions" style="display:none">
+              <i data-lucide="ellipsis-vertical" class="w-4 h-4"></i>
+            </button>
+            <div class="editor-more-panel" id="editorMorePanel">
+              <button class="profile-menu-item" id="morePinBtn"><i data-lucide="pin" class="w-4 h-4"></i> Pin / Unpin</button>
+              <button class="profile-menu-item" id="moreArchiveBtn"><i data-lucide="archive" class="w-4 h-4"></i> Archive / Restore</button>
+              <button class="profile-menu-item danger" id="moreDeleteBtn"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
+            </div>
+          </div>
+        </div>
+        <div class="editor-meta">
+          <div class="tag-input-wrap">
+            <i data-lucide="tag" class="w-3.5 h-3.5 text-fg-muted"></i>
+            <span id="tagChips"></span>
+            <input type="text" id="tagInput" placeholder="add tag…">
+          </div>
+        </div>
+        <div class="editor-toolbar" id="formatBar">
+          <div class="font-style-picker" id="fontStylePicker" style="position:relative;display:inline-flex">
+            <button class="tool-btn" id="fontStyleBtn" title="System Font Style" style="min-width:68px;font-size:12px;gap:4px">
+              <span id="fontStyleLabel">Sans</span>
+              <i data-lucide="chevron-down" class="w-3 h-3"></i>
+            </button>
+            <div class="font-style-dropdown" id="fontStyleDropdown">
+              <button class="fs-opt active" data-fontstyle="sans">
+                <span class="font-sans font-medium">Sans</span>
+                <span class="text-xs text-fg-muted">Inter / System</span>
+              </button>
+              <button class="fs-opt" data-fontstyle="serif" style="font-family: Georgia, 'Times New Roman', serif;">
+                <span class="font-semibold">Serif</span>
+                <span class="text-xs text-fg-muted">Editorial</span>
+              </button>
+              <button class="fs-opt" data-fontstyle="mono" style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">
+                <span class="font-semibold">Mono</span>
+                <span class="text-xs text-fg-muted">Code / Tech</span>
+              </button>
+              <button class="fs-opt" data-fontstyle="rounded" style="font-family: 'SF Pro Rounded', 'Quicksand', system-ui, sans-serif;">
+                <span class="font-semibold">Rounded</span>
+                <span class="text-xs text-fg-muted">Modern / Soft</span>
+              </button>
+            </div>
+          </div>
+          <div class="hl-picker" id="hlPicker" style="position:relative;display:inline-flex">
+            <button class="tool-btn" id="hlBtn" title="Highlight" style="min-width:32px">
+              <i data-lucide="highlighter" class="w-4 h-4"></i>
+            </button>
+            <div class="hl-dropdown" id="hlDropdown">
+              <button class="hl-swatch" data-cmd="hilite" data-val="#fef08a" style="background:#fef08a" title="Yellow"></button>
+              <button class="hl-swatch" data-cmd="hilite" data-val="#bbf7d0" style="background:#bbf7d0" title="Green"></button>
+              <button class="hl-swatch" data-cmd="hilite" data-val="#bfdbfe" style="background:#bfdbfe" title="Blue"></button>
+              <button class="hl-swatch" data-cmd="hilite" data-val="#fbcfe8" style="background:#fbcfe8" title="Pink"></button>
+              <button class="hl-swatch" data-cmd="hilite" data-val="#fed7aa" style="background:#fed7aa" title="Orange"></button>
+              <button class="hl-swatch" data-cmd="hilite" data-val="#fca5a5" style="background:#fca5a5" title="Red"></button>
+              <div class="hl-divider"></div>
+              <button class="hl-swatch hl-none" data-cmd="hilite" data-val="remove" title="Remove highlight">✕</button>
+            </div>
+          </div>
+          <div class="sz-picker" style="position:relative;display:inline-flex">
+            <button class="tool-btn" id="szBtn" title="Font size" style="min-width:54px;font-size:12px;gap:2px">
+              <span>Size</span>
+              <i data-lucide="chevron-down" class="w-3 h-3"></i>
+            </button>
+            <div class="sz-dropdown" id="szDropdown">
+              <button class="sz-opt" data-cmd="fontSize" data-val="13px" style="font-size:11px">Small</button>
+              <button class="sz-opt active" data-cmd="fontSize" data-val="15px" style="font-size:13px">Normal</button>
+              <button class="sz-opt" data-cmd="fontSize" data-val="18px" style="font-size:15px">Large</button>
+              <button class="sz-opt" data-cmd="fontSize" data-val="22px" style="font-size:18px">Huge</button>
+              <button class="sz-opt" data-cmd="fontSize" data-val="28px" style="font-size:22px">Massive</button>
+            </div>
+          </div>
+          <span class="tool-sep"></span>
+          <button class="tool-btn" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+          <button class="tool-btn" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+          <button class="tool-btn" data-cmd="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+          <button class="tool-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+          <span class="tool-sep"></span>
+          <button class="tool-btn" data-cmd="insertUnorderedList" title="Bullet list">
+            <i data-lucide="list" class="w-4 h-4"></i>
+          </button>
+          <button class="tool-btn" data-cmd="insertOrderedList" title="Numbered list">
+            <i data-lucide="list-ordered" class="w-4 h-4"></i>
+          </button>
+          <button class="tool-btn" data-cmd="task" title="Task list">
+            <i data-lucide="check-square" class="w-4 h-4"></i>
+          </button>
+          <button class="tool-btn" data-cmd="formatBlock" data-val="blockquote" title="Quote">
+            <i data-lucide="quote" class="w-4 h-4"></i>
+          </button>
+          <button class="tool-btn" id="alignBtn" data-cmd="align" data-align="left" title="Alignment (click to cycle)">
+            <i data-lucide="align-left" class="w-4 h-4"></i>
+          </button>
+          <span class="tool-sep"></span>
+          <button class="tool-btn" data-cmd="code" title="Inline code">
+            <i data-lucide="code" class="w-4 h-4"></i>
+          </button>
+          <button class="tool-btn" data-cmd="createLink" title="Link">
+            <i data-lucide="link" class="w-4 h-4"></i>
+          </button>
+          <button class="tool-btn" data-cmd="removeFormat" title="Clear formatting">
+            <i data-lucide="remove-formatting" class="w-4 h-4"></i>
+          </button>
+          <span class="tool-sep"></span>
+          <button class="tool-btn" data-cmd="divider" title="Insert divider">
+            <i data-lucide="minus" class="w-4 h-4"></i>
+          </button>
+          <div class="tbl-picker" id="tablePicker" style="position:relative;display:inline-flex">
+            <button class="tool-btn" id="tableBtn" title="Insert table">
+              <i data-lucide="table" class="w-4 h-4"></i>
+            </button>
+            <div class="table-grid-picker" id="tableGridPicker">
+              <div class="tgp-grid" id="tgpGrid"></div>
+              <div class="tgp-label" id="tgpLabel">Pick size</div>
+            </div>
+          </div>
+          <span class="tool-sep"></span>
+          <button class="tool-btn" data-media="image" title="Insert image">
+            <i data-lucide="image" class="w-4 h-4"></i>
+          </button>
+          <button class="tool-btn" data-media="audio" title="Record voice">
+            <i data-lucide="mic" class="w-4 h-4"></i>
+          </button>
+          <button class="tool-btn" data-media="video" title="Insert video">
+            <i data-lucide="video" class="w-4 h-4"></i>
+          </button>
+          <button class="tool-btn" data-media="link" title="Rich link">
+            <i data-lucide="globe" class="w-4 h-4"></i>
+          </button>
+          <button class="tool-btn" data-media="file" title="Attach file">
+            <i data-lucide="paperclip" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <button class="toolbar-collapse-toggle" id="toolbarCollapseBtn" title="Expand toolbar" aria-label="Toggle toolbar">
+          <i data-lucide="chevron-down" class="w-4 h-4"></i>
+        </button>
+        <input type="file" id="mediaImageInput" accept="image/*" hidden>
+        <input type="file" id="mediaVideoInput" accept="video/*" hidden>
+        <input type="file" id="mediaFileInput" hidden>
+        <div class="note-editor" id="noteBody" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" data-placeholder="Start writing… Select text and use the toolbar to format it."></div>
+        <div class="editor-footer">
+          <div class="save-status" id="saveStatus"><span class="dot"></span><span>Saved</span></div>
+          <div class="stats">
+            <span id="wordCount">0 words</span>
+            <span id="charCount">0 chars</span>
+            <span id="updatedTime"></span>
+          </div>
+        </div>
+      </div>
+      <div class="media-hub-view" id="mediaHubView">
+        <div class="mh-header">
+          <div class="mh-header-left">
+            <i data-lucide="folder-open" class="w-5 h-5 text-accent"></i>
+            <h2>Media Hub</h2>
+            <span class="mh-stat-pill" id="mhStatPill">0 assets · 0 B</span>
+          </div>
+        </div>
+        <div class="mh-tabs" id="mhTabs">
+          <button class="mh-tab active" data-mhtab="all">All Media</button>
+          <button class="mh-tab" data-mhtab="image">Images</button>
+          <button class="mh-tab" data-mhtab="audio">Voice & Audio</button>
+          <button class="mh-tab" data-mhtab="video">Videos</button>
+          <button class="mh-tab" data-mhtab="file">Attachments</button>
+        </div>
+        <div class="mh-body" id="mhBody">
+          <div class="mh-grid" id="mhGrid"></div>
+        </div>
+        <div class="mh-detail-view" id="mhDetailView"></div>
+      </div>
+
+      <!-- Calendar View -->
+      <div class="calendar-view" id="calendarView">
+        <div class="cal-header">
+          <div class="cal-header-left">
+            <i data-lucide="calendar" class="w-5 h-5 text-accent"></i>
+            <h2 id="calMonthTitle">Calendar</h2>
+          </div>
+          <div class="cal-header-actions">
+            <button class="btn" id="calPrevMonth" title="Previous Month"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+            <button class="btn" id="calTodayBtn">Today</button>
+            <button class="btn" id="calNextMonth" title="Next Month"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+            <select id="calViewSelect" class="settings-control" title="Calendar view" style="min-width:104px;padding:6px 9px">
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+              <option value="month" selected>Month</option>
+              <option value="schedule">Schedule</option>
+            </select>
+          </div>
+        </div>
+        <div class="cal-weekdays" id="calWeekdays">
+          <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+
+      <!-- Tasks / Todo Hub -->
+      <div class="tasks-view" id="tasksView">
+        <div class="tasks-header">
+          <div class="tasks-header-left">
+            <i data-lucide="check-square" class="w-5 h-5 text-accent"></i>
+            <h2>Tasks & Todos</h2>
+            <span class="mh-stat-pill" id="tasksStatPill">0 tasks</span>
+          </div>
+          <div class="mh-tabs" id="tasksTabs" style="border:none;padding:0;gap:4px;flex-wrap:wrap">
+            <button class="mh-tab active" data-taskfilter="today">Today</button>
+            <button class="mh-tab" data-taskfilter="yesterday">Yesterday</button>
+            <button class="mh-tab" data-taskfilter="completed">Completed</button>
+          </div>
+        </div>
+        <div class="notif-permission-bar" id="notifBar" style="display:none">
+          <i data-lucide="bell-ring" class="w-4 h-4 text-accent"></i>
+          <span>Enable browser notifications to get reminded about due tasks.</span>
+          <button class="btn btn-primary" id="enableNotifBtn" style="margin-left:auto;padding:5px 12px;font-size:12px">Enable</button>
+        </div>
+        <div class="task-create-bar" id="taskCreateBar">
+          <button class="btn btn-primary" id="addTaskBtn">
+            <i data-lucide="plus" class="w-4 h-4"></i> New Task
+          </button>
+          <span class="task-stats-bar" id="taskStatsBar">0 / 0 completed</span>
+        </div>
+        <div class="tasks-body" id="tasksBody">
+          <div class="tasks-list" id="tasksList"></div>
+        </div>
+      </div>
+      <button class="task-fab" id="taskFab">
+        <i data-lucide="plus" class="w-4 h-4"></i> New Task
+      </button>
+
+      <!-- Settings View -->
+      <div class="settings-view" id="settingsView">
+        <div class="settings-header">
+          <i data-lucide="settings" class="w-5 h-5 text-accent"></i>
+          <h2>Settings</h2>
+        </div>
+        <div class="settings-body">
+
+          <div class="settings-section">
+            <h3><i data-lucide="palette" class="w-4 h-4"></i> Appearance</h3>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Theme</span>
+                <small>Switch between dark and light mode</small>
+              </div>
+              <select id="setTheme" class="settings-control">
+                <option value="dark">🌙 Dark</option>
+                <option value="light">☀️ Light</option>
+              </select>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Accent color</span>
+                <small>Personalize buttons, links & highlights</small>
+              </div>
+              <div class="accent-swatch-row" id="accentSwatchRow"></div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>App font style</span>
+                <small>Applied across the whole interface</small>
+              </div>
+              <select id="setDefaultFont" class="settings-control">
+                <option value="sans">Sans (Inter / System)</option>
+                <option value="serif">Serif (Editorial)</option>
+                <option value="mono">Mono (Code)</option>
+                <option value="rounded">Rounded (Soft)</option>
+              </select>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Editor width</span>
+                <small>Automatically adapts to your screen size</small>
+              </div>
+              <span class="settings-control" style="display:inline-flex;align-items:center;gap:6px;justify-content:center;color:var(--fg-muted);font-size:12.5px;font-weight:600">
+                <i data-lucide="wand-sparkles" class="w-3.5 h-3.5"></i> Automatic
+              </span>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3><i data-lucide="user-round" class="w-4 h-4"></i> Account & Sync</h3>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span id="setAccountName">Guest</span>
+                <small id="setAccountEmail">Signed out · local-only mode</small>
+              </div>
+              <button class="btn" id="setAuthBtn">Sign in or create account</button>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Cloud sync status</span>
+                <small id="setSyncDetail">Offline · workspace stays on this device</small>
+              </div>
+              <button class="btn" id="setSyncNowBtn"><i data-lucide="refresh-cw" class="w-4 h-4"></i> Sync now</button>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3><i data-lucide="bell" class="w-4 h-4"></i> Notifications & Reminders</h3>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Browser notifications</span>
+                <small id="notifPermStatus">Permission: unknown</small>
+              </div>
+              <button class="btn" id="setNotifPerm">Request Permission</button>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Reminder check interval</span>
+                <small>How often due tasks are checked</small>
+              </div>
+              <select id="setReminderInterval" class="settings-control">
+                <option value="15000">Every 15 seconds</option>
+                <option value="30000" selected>Every 30 seconds</option>
+                <option value="60000">Every minute</option>
+                <option value="300000">Every 5 minutes</option>
+              </select>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Due-task alert banner</span>
+                <small>Show the red banner at the top when a task falls due</small>
+              </div>
+              <label class="settings-switch"><input type="checkbox" id="setNotifBanner" checked><span></span></label>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Completion sound</span>
+                <small>Play a chime when you check off a task</small>
+              </div>
+              <label class="settings-switch"><input type="checkbox" id="setNotifSound" checked><span></span></label>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Event reminders</span>
+                <small>Notify when a calendar event is starting</small>
+              </div>
+              <label class="settings-switch"><input type="checkbox" id="setNotifEvents" checked><span></span></label>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Activity log</span>
+                <small>Record edits &amp; media actions in the notification panel</small>
+              </div>
+              <label class="settings-switch"><input type="checkbox" id="setNotifActivity" checked><span></span></label>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Toast pop-ups</span>
+                <small>Brief confirmations after actions</small>
+              </div>
+              <label class="settings-switch"><input type="checkbox" id="setNotifToasts" checked><span></span></label>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Test notification</span>
+                <small>Fire a sample alert to verify everything works</small>
+              </div>
+              <button class="btn" id="setNotifTest"><i data-lucide="bell-ring" class="w-4 h-4"></i> Send test</button>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3><i data-lucide="database" class="w-4 h-4"></i> Data & Storage</h3>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Storage usage</span>
+                <small id="setStorageDetail">Calculating…</small>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Export backup</span>
+                <small>Notes + media as a portable JSON file</small>
+              </div>
+              <button class="btn" id="setExportBtn"><i data-lucide="download" class="w-4 h-4"></i> Export</button>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Import backup</span>
+                <small>Restore notes from a JSON export</small>
+              </div>
+              <button class="btn" id="setImportBtn"><i data-lucide="upload" class="w-4 h-4"></i> Import</button>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Clean orphan media</span>
+                <small>Remove media files no longer used in any note</small>
+              </div>
+              <button class="btn" id="setGcBtn"><i data-lucide="paintbrush" class="w-4 h-4"></i> Clean</button>
+            </div>
+          </div>
+
+          <div class="settings-section settings-danger">
+            <h3><i data-lucide="triangle-alert" class="w-4 h-4"></i> Danger Zone</h3>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Clear all notifications</span>
+                <small>Empty the notification panel history</small>
+              </div>
+              <button class="btn" id="setClearNotifs">Clear</button>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Delete all tasks</span>
+                <small>Remove every standalone task permanently</small>
+              </div>
+              <button class="btn btn-danger" id="setClearTasks">Delete Tasks</button>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Reset everything</span>
+                <small>Delete all notes, media, tasks & settings — cannot be undone</small>
+              </div>
+              <button class="btn btn-danger" id="setResetAll">Reset App</button>
+            </div>
+          </div>
+
+          <div class="settings-footer">
+            PapeRuss · offline-first · complete workspace sync when signed in
+          </div>
+        </div>
+      </div>
+
+      <!-- Block drag gutter (hover on top-level blocks in noteBody) -->
+      <div class="block-gutter" id="blockGutter">
+        <button class="block-gutter-btn" id="blockAddButton" title="Insert block (/ menu)">
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+        </button>
+        <div class="block-gutter-btn block-drag-handle" id="blockDragHandle" title="Drag to rearrange block" draggable="true">
+          <i data-lucide="grip-vertical" class="w-3.5 h-3.5"></i>
+        </div>
+      </div>
+
+      <!-- Quick block command menu -->
+      <div class="block-command-menu" id="blockCommandMenu">
+        <div class="block-menu-title">Insert Block</div>
+        <button class="block-menu-item" data-block-action="h1"><i data-lucide="heading-1" class="w-4 h-4"></i><span>Heading 1</span></button>
+        <button class="block-menu-item" data-block-action="h2"><i data-lucide="heading-2" class="w-4 h-4"></i><span>Heading 2</span></button>
+        <button class="block-menu-item" data-block-action="h3"><i data-lucide="heading-3" class="w-4 h-4"></i><span>Heading 3</span></button>
+        <button class="block-menu-item" data-block-action="ul"><i data-lucide="list" class="w-4 h-4"></i><span>Bullet List</span></button>
+        <button class="block-menu-item" data-block-action="ol"><i data-lucide="list-ordered" class="w-4 h-4"></i><span>Numbered List</span></button>
+        <button class="block-menu-item" data-block-action="task"><i data-lucide="check-square" class="w-4 h-4"></i><span>Todo Checkbox</span></button>
+        <button class="block-menu-item" data-block-action="quote"><i data-lucide="quote" class="w-4 h-4"></i><span>Quote Block</span></button>
+        <button class="block-menu-item" data-block-action="code"><i data-lucide="code" class="w-4 h-4"></i><span>Code Block</span></button>
+        <div class="hl-divider" style="margin:4px 0"></div>
+        <button class="block-menu-item" data-block-action="image"><i data-lucide="image" class="w-4 h-4"></i><span>Image Attachment</span></button>
+        <button class="block-menu-item" data-block-action="audio"><i data-lucide="mic" class="w-4 h-4"></i><span>Voice Recording</span></button>
+        <button class="block-menu-item" data-block-action="video"><i data-lucide="video" class="w-4 h-4"></i><span>Video Attachment</span></button>
+        <button class="block-menu-item" data-block-action="link"><i data-lucide="globe" class="w-4 h-4"></i><span>Rich Link Card</span></button>
+        <button class="block-menu-item" data-block-action="file"><i data-lucide="paperclip" class="w-4 h-4"></i><span>File Attachment</span></button>
+        <div class="hl-divider" style="margin:4px 0"></div>
+        <button class="block-menu-item" data-block-action="calevent"><i data-lucide="calendar-plus" class="w-4 h-4"></i><span>Insert Calendar Event</span></button>
+        <button class="block-menu-item" data-block-action="newtask"><i data-lucide="check-square" class="w-4 h-4"></i><span>Insert Task</span></button>
+      </div>
+
+      <!-- Image / Media Context Menu -->
+      <div class="image-context-menu" id="imageContextMenu">
+        <button class="icm-item" id="icmDownload"><i data-lucide="download" class="w-4 h-4"></i><span>Download</span></button>
+        <button class="icm-item" id="icmResize"><i data-lucide="maximize-2" class="w-4 h-4"></i><span>Resize Image</span></button>
+        <button class="icm-item" id="icmCopy"><i data-lucide="copy" class="w-4 h-4"></i><span>Copy URL</span></button>
+        <button class="icm-item" id="icmOpenNew"><i data-lucide="external-link" class="w-4 h-4"></i><span>Open in New Tab</span></button>
+        <button class="icm-item" id="icmMetadata"><i data-lucide="info" class="w-4 h-4"></i><span>View Info</span></button>
+        <div class="hl-divider" style="margin:4px 0"></div>
+        <button class="icm-item" id="icmInsertEvent"><i data-lucide="calendar-plus" class="w-4 h-4"></i><span>Insert Calendar Event</span></button>
+        <button class="icm-item" id="icmInsertTask"><i data-lucide="check-square" class="w-4 h-4"></i><span>Insert Task</span></button>
+        <div class="hl-divider" style="margin:4px 0"></div>
+        <button class="icm-item text-danger" id="icmDelete"><i data-lucide="trash-2" class="w-4 h-4"></i><span>Delete</span></button>
+      </div>
+    </section>
+  </div>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <button class="mobile-fab" id="mobileFab" title="Create new note">
+    <i data-lucide="plus" class="w-4 h-4"></i>
+    <span>New Note</span>
+  </button>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toast-container"></div>
+
+<!-- ============ TABLE QUICK TOOLBAR (fix #7) ============ -->
+<!-- Grouped table toolbar: primary 6 buttons + submenus -->
+<div class="tbl-tools" id="tblTools">
+  <button id="tblBtnInsert"  title="Insert…"><i data-lucide="plus" class="w-4 h-4"></i></button>
+  <button id="tblBtnMerge"   title="Merge / Split"><i data-lucide="combine" class="w-4 h-4"></i></button>
+  <button id="tblBtnFit"     title="Auto Fit"><i data-lucide="maximize-2" class="w-4 h-4"></i></button>
+  <button id="tblBtnAlign"   title="Alignment"><i data-lucide="align-left" class="w-4 h-4"></i></button>
+  <button id="tblBtnMore"    title="More"><i data-lucide="more-horizontal" class="w-4 h-4"></i></button>
+  <span class="tbl-sep"></span>
+  <button id="tblDel" class="danger" title="Delete table"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+  <!-- Mobile button (hidden on desktop/tablet via CSS) -->
+  <button id="tblBtnMobileSheet" class="tbl-mobile-only" title="Table options" style="display:none"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i></button>
+</div>
+
+<!-- ── Insert submenu ── -->
+<div class="tbl-submenu" id="tblMenuInsert">
+  <button id="tblRowAbove"><i data-lucide="arrow-up-to-line" class="w-4 h-4"></i>Insert Row Above</button>
+  <button id="tblRowBelow"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>Insert Row Below</button>
+  <div class="tbl-sep"></div>
+  <button id="tblColLeft"><i data-lucide="arrow-left-to-line" class="w-4 h-4"></i>Insert Column Left</button>
+  <button id="tblColRight"><i data-lucide="arrow-right-to-line" class="w-4 h-4"></i>Insert Column Right</button>
+  <div class="tbl-sep"></div>
+  <button id="tblRowDel" class="danger"><i data-lucide="rows-3" class="w-4 h-4"></i>Delete Row</button>
+  <button id="tblColDel" class="danger"><i data-lucide="columns-3" class="w-4 h-4"></i>Delete Column</button>
+</div>
+
+<!-- ── Merge / Split submenu ── -->
+<div class="tbl-submenu" id="tblMenuMerge">
+  <button id="tblMergeCells"><i data-lucide="combine" class="w-4 h-4"></i>Merge Selected Cells</button>
+  <button id="tblSplitCell"><i data-lucide="split" class="w-4 h-4"></i>Split Cell</button>
+  <div class="tbl-sep"></div>
+  <button id="tblMergeRow"><i data-lucide="minus" class="w-4 h-4"></i>Merge Across Row</button>
+  <button id="tblMergeCol"><i data-lucide="chevrons-down" class="w-4 h-4"></i>Merge Down Column</button>
+</div>
+
+<!-- ── Auto Fit submenu ── -->
+<div class="tbl-submenu" id="tblMenuFit">
+  <button id="tblFitWindow"><i data-lucide="stretch-horizontal" class="w-4 h-4"></i>Fit to Window</button>
+  <button id="tblFitContent"><i data-lucide="shrink" class="w-4 h-4"></i>Fit to Content</button>
+  <button id="tblDistribute"><i data-lucide="columns" class="w-4 h-4"></i>Distribute Evenly</button>
+  <button id="tblEqualRowH"><i data-lucide="align-vertical-distribute-center" class="w-4 h-4"></i>Equal Row Heights</button>
+</div>
+
+<!-- ── Alignment submenu ── -->
+<div class="tbl-submenu" id="tblMenuAlign">
+  <button id="tblAlignLeft"><i data-lucide="align-left" class="w-4 h-4"></i>Align Left</button>
+  <button id="tblAlignCenter"><i data-lucide="align-center" class="w-4 h-4"></i>Align Center</button>
+  <button id="tblAlignRight"><i data-lucide="align-right" class="w-4 h-4"></i>Align Right</button>
+  <div class="tbl-sep"></div>
+  <button id="tblValignTop"><i data-lucide="align-vertical-space-around" class="w-4 h-4"></i>Vertical Top</button>
+  <button id="tblValignMiddle"><i data-lucide="align-vertical-justify-center" class="w-4 h-4"></i>Vertical Middle</button>
+  <button id="tblValignBottom"><i data-lucide="align-vertical-justify-end" class="w-4 h-4"></i>Vertical Bottom</button>
+</div>
+
+<!-- ── More submenu ── -->
+<div class="tbl-submenu" id="tblMenuMore">
+  <button id="tblHeaderRow"><i data-lucide="type" class="w-4 h-4"></i>Toggle Header Row</button>
+  <button id="tblHeaderCol"><i data-lucide="italic" class="w-4 h-4"></i>Toggle Header Column</button>
+  <button id="tblAltRowShading"><i data-lucide="layers" class="w-4 h-4"></i>Alternate Row Shading</button>
+  <div class="tbl-sep"></div>
+  <button id="tblCellBg"><i data-lucide="paint-bucket" class="w-4 h-4"></i>Cell Background</button>
+  <button id="tblCellBorder"><i data-lucide="border-all" class="w-4 h-4"></i>Toggle Borders</button>
+  <div class="tbl-sep"></div>
+  <button id="tblMobileWrap"><i data-lucide="smartphone" class="w-4 h-4"></i>Mobile Scroll Mode</button>
+</div>
+
+<!-- Cell Background Color Dropdown -->
+<div class="tbl-color-dropdown" id="tblColorDropdown">
+  <button class="tbl-color-swatch" style="background:transparent;color:var(--fg-muted)" title="Transparent" data-color="transparent">✕</button>
+  <button class="tbl-color-swatch" style="background:#fee2e2" data-color="#fee2e2" title="Light Red"></button>
+  <button class="tbl-color-swatch" style="background:#fef3c7" data-color="#fef3c7" title="Light Orange"></button>
+  <button class="tbl-color-swatch" style="background:#fef9c3" data-color="#fef9c3" title="Light Yellow"></button>
+  <button class="tbl-color-swatch" style="background:#dcfce7" data-color="#dcfce7" title="Light Green"></button>
+  <button class="tbl-color-swatch" style="background:#e0f2fe" data-color="#e0f2fe" title="Light Blue"></button>
+  <button class="tbl-color-swatch" style="background:#f3e8ff" data-color="#f3e8ff" title="Light Purple"></button>
+  <button class="tbl-color-swatch" style="background:#fce7f3" data-color="#fce7f3" title="Light Pink"></button>
+  <button class="tbl-color-swatch" style="background:#f4f4f5" data-color="#f4f4f5" title="Light Gray"></button>
+  <button class="tbl-color-swatch" style="background:#18181b" data-color="#18181b" title="Dark Gray"></button>
+</div>
+
+<!-- Table mobile bottom sheet -->
+<div class="tbl-sheet-backdrop" id="tblSheetBackdrop"></div>
+<div class="tbl-sheet" id="tblSheet">
+  <div class="tbl-sheet-grip"></div>
+  <button class="tbl-sheet-item" data-ts="tblRowAbove"><i data-lucide="arrow-up-to-line" class="w-5 h-5"></i>Insert Row Above</button>
+  <button class="tbl-sheet-item" data-ts="tblRowBelow"><i data-lucide="arrow-down-to-line" class="w-5 h-5"></i>Insert Row Below</button>
+  <button class="tbl-sheet-item" data-ts="tblColLeft"><i data-lucide="arrow-left-to-line" class="w-5 h-5"></i>Insert Column Left</button>
+  <button class="tbl-sheet-item" data-ts="tblColRight"><i data-lucide="arrow-right-to-line" class="w-5 h-5"></i>Insert Column Right</button>
+  <button class="tbl-sheet-item" data-ts="tblMergeCells"><i data-lucide="combine" class="w-5 h-5"></i>Merge Selected</button>
+  <button class="tbl-sheet-item" data-ts="tblSplitCell"><i data-lucide="split" class="w-5 h-5"></i>Split Cell</button>
+  <button class="tbl-sheet-item" data-ts="tblFitWindow"><i data-lucide="maximize-2" class="w-5 h-5"></i>Fit to Window</button>
+  <button class="tbl-sheet-item" data-ts="tblDistribute"><i data-lucide="columns" class="w-5 h-5"></i>Distribute Evenly</button>
+  <button class="tbl-sheet-item" data-ts="tblHeaderRow"><i data-lucide="type" class="w-5 h-5"></i>Toggle Header Row</button>
+  <button class="tbl-sheet-item" data-ts="tblAltRowShading"><i data-lucide="layers" class="w-5 h-5"></i>Alternate Shading</button>
+  <button class="tbl-sheet-item" data-ts="tblMobileWrap"><i data-lucide="smartphone" class="w-5 h-5"></i>Mobile Scroll Mode</button>
+  <button class="tbl-sheet-item danger" data-ts="tblRowDel"><i data-lucide="rows-3" class="w-5 h-5"></i>Delete Row</button>
+  <button class="tbl-sheet-item danger" data-ts="tblColDel"><i data-lucide="columns-3" class="w-5 h-5"></i>Delete Column</button>
+  <button class="tbl-sheet-item danger" data-ts="tblDel"><i data-lucide="trash-2" class="w-5 h-5"></i>Delete Table</button>
+</div>
+
+<!-- ============ RESPONSIVE IMAGE CONTROLS ============ -->
+<div class="img-batch-bar" id="imgBatchBar">
+  <span class="ibb-count" id="ibbCount">0 selected</span>
+  <button id="ibbResizeSmall" title="Resize all to Small">S</button>
+  <button id="ibbResizeMedium" title="Resize all to Medium">M</button>
+  <button id="ibbResizeLarge" title="Resize all to Large">L</button>
+  <button id="ibbResizeFull" title="Resize all to Full">Full</button>
+  <span class="ibb-sep"></span>
+  <button id="ibbEqualWidth" title="Set equal width"><i data-lucide="align-justify" class="w-4 h-4"></i></button>
+  <button id="ibbGallery" title="Convert to gallery"><i data-lucide="layout-grid" class="w-4 h-4"></i></button>
+  <button id="ibbAlignLeft" title="Float left"><i data-lucide="align-left" class="w-4 h-4"></i></button>
+  <button id="ibbAlignRight" title="Float right"><i data-lucide="align-right" class="w-4 h-4"></i></button>
+  <button id="ibbAlignCenter" title="Center / clear float"><i data-lucide="align-center" class="w-4 h-4"></i></button>
+  <span class="ibb-sep"></span>
+  <button id="ibbDelete" class="danger" title="Delete selected"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+  <button id="ibbDeselect" title="Clear selection"><i data-lucide="x" class="w-4 h-4"></i></button>
+</div>
+<div class="img-toolbar" id="imgToolbar">
+  <button data-imgsize="small" title="Small (35%)">S</button>
+  <button data-imgsize="medium" title="Medium (55%)">M</button>
+  <button data-imgsize="large" title="Large (78%)">L</button>
+  <button data-imgsize="full" title="Full width (100%)">Full</button>
+  <span class="itb-sep"></span>
+  <button id="imgTbCrop" title="Crop Image"><i data-lucide="crop" class="w-4 h-4"></i></button>
+  <button id="imgTbAlignLeft" title="Align / Float Left"><i data-lucide="align-left" class="w-4 h-4"></i></button>
+  <button id="imgTbAlignCenter" title="Center Image"><i data-lucide="align-center" class="w-4 h-4"></i></button>
+  <button id="imgTbAlignRight" title="Align / Float Right"><i data-lucide="align-right" class="w-4 h-4"></i></button>
+  <span class="itb-sep"></span>
+  <button id="imgTbRotate" title="Rotate 90°"><i data-lucide="rotate-cw" class="w-4 h-4"></i></button>
+  <button id="imgTbFlip" title="Flip Horizontally"><i data-lucide="flip-horizontal" class="w-4 h-4"></i></button>
+  <button id="imgTbFlipV" title="Flip Vertically"><i data-lucide="flip-vertical" class="w-4 h-4"></i></button>
+  <button id="imgTbCaption" title="Add / Edit Caption"><i data-lucide="text" class="w-4 h-4"></i></button>
+  <button id="imgTbCover" title="Set as Notebook Cover"><i data-lucide="panel-top" class="w-4 h-4"></i></button>
+  <button id="imgTbReplace" title="Replace Image"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
+  <span class="itb-sep"></span>
+  <button id="imgTbView" title="Full screen preview"><i data-lucide="maximize" class="w-4 h-4"></i></button>
+  <button id="imgTbDownload" title="Download"><i data-lucide="download" class="w-4 h-4"></i></button>
+  <button id="imgTbDelete" class="danger" title="Delete"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+</div>
+<div class="img-handle" data-corner="nw" id="imgHandleNW"></div>
+<div class="img-handle" data-corner="ne" id="imgHandleNE"></div>
+<div class="img-handle" data-corner="sw" id="imgHandleSW"></div>
+<div class="img-handle" data-corner="se" id="imgHandleSE"></div>
+
+<div class="img-sheet-backdrop" id="imgSheetBackdrop"></div>
+<div class="img-sheet" id="imgSheet">
+  <div class="img-sheet-grip"></div>
+  <div class="img-sheet-title">Image size</div>
+  <div class="img-sheet-sizes" id="imgSheetSizes">
+    <button data-imgsize="small"><span class="iss-bar" style="width:35%"></span>Small</button>
+    <button data-imgsize="medium"><span class="iss-bar" style="width:55%"></span>Medium</button>
+    <button data-imgsize="large"><span class="iss-bar" style="width:78%"></span>Large</button>
+    <button data-imgsize="full"><span class="iss-bar" style="width:100%"></span>Full</button>
+  </div>
+  <div class="img-sheet-title">Actions</div>
+  <div class="img-sheet-sizes" style="grid-template-columns:repeat(3,1fr)">
+    <button id="imgSheetAlignLeft"><i data-lucide="align-left" class="w-5 h-5"></i>Left</button>
+    <button id="imgSheetAlignCenter"><i data-lucide="align-center" class="w-5 h-5"></i>Center</button>
+    <button id="imgSheetAlignRight"><i data-lucide="align-right" class="w-5 h-5"></i>Right</button>
+  </div>
+  <button class="img-sheet-item" id="imgSheetCrop"><i data-lucide="crop" class="w-5 h-5"></i> Non-destructive Crop</button>
+  <button class="img-sheet-item" id="imgSheetCaption"><i data-lucide="text" class="w-5 h-5"></i> Add / Edit Caption</button>
+  <button class="img-sheet-item" id="imgSheetCover"><i data-lucide="panel-top" class="w-5 h-5"></i> Set as Notebook Cover</button>
+  <button class="img-sheet-item" id="imgSheetReplace"><i data-lucide="refresh-cw" class="w-5 h-5"></i> Replace Image</button>
+  <button class="img-sheet-item" id="imgSheetRotate"><i data-lucide="rotate-cw" class="w-5 h-5"></i> Rotate 90°</button>
+  <button class="img-sheet-item" id="imgSheetFlip"><i data-lucide="flip-horizontal" class="w-5 h-5"></i> Flip Horizontally</button>
+  <button class="img-sheet-item" id="imgSheetFlipV"><i data-lucide="flip-vertical" class="w-5 h-5"></i> Flip Vertically</button>
+  <button class="img-sheet-item" id="imgSheetView"><i data-lucide="maximize" class="w-5 h-5"></i> View full screen</button>
+  <button class="img-sheet-item" id="imgSheetDownload"><i data-lucide="download" class="w-5 h-5"></i> Download image</button>
+  <button class="img-sheet-item danger" id="imgSheetDelete"><i data-lucide="trash-2" class="w-5 h-5"></i> Delete image</button>
+</div>
+
+<div class="img-fullscreen" id="imgFullscreen">
+  <button class="img-fs-close" id="imgFsClose"><i data-lucide="x" class="w-5 h-5"></i></button>
+  <button class="img-fs-nav-btn prev" id="imgFsPrev" title="Previous Image"><i data-lucide="chevron-left" class="w-6 h-6"></i></button>
+  <button class="img-fs-nav-btn next" id="imgFsNext" title="Next Image"><i data-lucide="chevron-right" class="w-6 h-6"></i></button>
+  <img id="imgFsImage" alt="">
+  <div class="img-fs-hint" id="imgFsHint">Pinch or scroll to zoom · drag to pan</div>
+</div>
+
+<!-- Top-level overlay panels (notif + profile) so they sit above the entire app workspace. -->
+<div class="notif-panel" id="notifPanel">
+  <div class="np-header">
+    <h3>Notifications</h3>
+    <div class="np-header-actions">
+      <button class="btn btn-sm" id="notifMarkAllRead" title="Mark all as read">
+        <i data-lucide="check-check" class="w-3.5 h-3.5"></i> Mark all read
+      </button>
+      <button class="btn btn-sm" id="notifClearAll" title="Clear all">
+        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+      </button>
+    </div>
+  </div>
+  <div class="np-body" id="notifPanelBody"></div>
+</div>
+<div class="profile-panel" id="profilePanel">
+  <div class="profile-panel-head">
+    <div class="profile-panel-avatar" id="profilePanelAvatar">
+      <span id="profilePanelInitial">G</span>
+      <button class="profile-avatar-upload" id="profilePictureBtn" title="Upload profile picture" aria-label="Upload profile picture">
+        <i data-lucide="camera" class="w-2.5 h-2.5"></i>
+      </button>
+    </div>
+    <input type="file" id="profilePictureInput" accept="image/*" hidden>
+    <div class="profile-panel-info">
+      <div class="profile-panel-name" id="profilePanelName">Guest</div>
+      <div class="profile-panel-email" id="profilePanelEmail">Local-only mode</div>
+    </div>
+  </div>
+  <div class="profile-panel-body">
+    <div class="sync-status-pill offline" id="syncStatusPill">
+      <span class="ssp-dot"></span>
+      <span id="syncStatusText">Offline · local only</span>
+    </div>
+    <button class="profile-menu-item" id="profileSyncNowBtn">
+      <i data-lucide="refresh-cw" class="w-4 h-4"></i> Sync now
+    </button>
+    <div class="mobile-profile-tools">
+      <div class="hl-divider" style="margin:6px 0"></div>
+      <button class="profile-menu-item" id="profileImportBtn">
+        <i data-lucide="folder-input" class="w-4 h-4"></i> Import notes
+      </button>
+      <button class="profile-menu-item" id="profileExportBtn">
+        <i data-lucide="folder-output" class="w-4 h-4"></i> Export notes
+      </button>
+      <button class="profile-menu-item" id="profileThemeBtn">
+        <i data-lucide="sun-moon" class="w-4 h-4"></i> Toggle theme
+      </button>
+      <button class="profile-menu-item" id="profileInstallBtn">
+        <i data-lucide="download" class="w-4 h-4"></i> Install PapeRuss
+      </button>
+    </div>
+    <button class="profile-menu-item" id="profileSignInBtn">
+      <i data-lucide="log-in" class="w-4 h-4"></i> Sign in or create account
+    </button>
+    <button class="profile-menu-item danger" id="profileSignOutBtn" style="display:none">
+      <i data-lucide="log-out" class="w-4 h-4"></i> Sign out
+    </button>
+  </div>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/productivity.js"></script>
+<script src="js/editor-ui.js"></script>
+<script src="js/tasks-settings.js"></script>
+<script src="js/cloud-notifications.js"></script>
+<script src="js/actions.js"></script>
+<script src="js/formatting.js"></script>
+<script src="js/media.js"></script>
+<script src="js/data-transfer.js"></script>
+<script src="js/responsive-images.js"></script>
+<script src="js/tables.js"></script>
+<script src="js/bootstrap.js"></script>
+</body>
+</html>
