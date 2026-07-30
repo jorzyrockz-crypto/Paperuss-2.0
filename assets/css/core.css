@@ -88,7 +88,9 @@ svg{display:block;flex-shrink:0}
   width:100%;background:var(--inset);border:1px solid transparent;border-radius:99px;
   padding:7px 14px 7px 36px;font-size:13px;outline:none;
   transition:all .15s ease;color:var(--fg);
+  caret-color:var(--fg);cursor:text;
 }
+
 #searchInput:focus{background:var(--subtle);border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring)}
 #searchInput::placeholder{color:var(--fg-muted)}
 .kbd{
@@ -203,6 +205,7 @@ svg{display:block;flex-shrink:0}
 #noteTitle{
   flex:1;background:transparent;border:none;outline:none;
   font-size:22px;font-weight:700;color:var(--fg);letter-spacing:-.5px;
+  caret-color:var(--fg);cursor:text;
 }
 #noteTitle::placeholder{color:var(--fg-muted);font-weight:600}
 
@@ -215,7 +218,7 @@ svg{display:block;flex-shrink:0}
 }
 .tag-chip button{display:inline-flex;color:var(--fg-muted);padding:1px;border-radius:50%}
 .tag-chip button:hover{color:var(--danger)}
-#tagInput{background:transparent;border:none;outline:none;font-size:12.5px;width:100px;color:var(--fg)}
+#tagInput{background:transparent;border:none;outline:none;font-size:12.5px;width:100px;color:var(--fg);caret-color:var(--fg);cursor:text}
 #tagInput::placeholder{color:var(--fg-muted)}
 
 /* Modern Flat Toolbar */
@@ -238,6 +241,7 @@ svg{display:block;flex-shrink:0}
 .editor-scroll{
   flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
   background:var(--canvas);
+  cursor:text;
 }
 .note-editor{
   overflow:visible;outline:none;padding:32px clamp(24px,8%,90px) 80px;
@@ -245,7 +249,15 @@ svg{display:block;flex-shrink:0}
   /* Automatic measure: grows with the viewport but stays inside a readable range. */
   max-width:clamp(680px,72vw,1100px);width:100%;margin:0 auto;
   overscroll-behavior:contain;
+  cursor:text;
+  caret-color:var(--fg);
 }
+.note-editor p, .note-editor h1, .note-editor h2, .note-editor h3, .note-editor h4,
+.note-editor blockquote, .note-editor li, .note-editor pre, .note-editor code,
+.note-editor mark, .note-editor span, .note-editor div:not(.media-card):not(.block-gutter) {
+  caret-color: var(--fg);
+}
+
 /* Reserve a stable interaction lane for the add/drag block controls. */
 @media (min-width:641px){
   .note-editor{padding-left:max(76px,clamp(24px,8%,90px))}
