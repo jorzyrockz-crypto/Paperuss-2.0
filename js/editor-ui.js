@@ -184,30 +184,95 @@ function initBlockTools(){
     dragHandle.addEventListener('dragend', cleanupDragState);
   }
 
-  /* ---------- Touch Drag Support for Mobile ---------- */
-  function handleTouchDragStart(e, targetBlock){
+  /* ---------- Touch Drag Support for Mobile — Lift & Move ---------- */
+  let touchGhost = null;           // floating clone that follows the finger
+  let touchGhostOffsetX = 0;       // where on the element the finger landed
+  let touchGhostOffsetY = 0;
+  let touchLongPressTimer = null;  // 350ms hold before drag activates
+  let touchDragReady = false;      // becomes true after long-press fires
+
+  function createTouchGhost(block, touchX, touchY){
+    if(touchGhost) touchGhost.remove();
+    const rect = block.getBoundingClientRect();
+    touchGhostOffsetX = touchX - rect.left;
+    touchGhostOffsetY = touchY - rect.top;
+
+    touchGhost = block.cloneNode(true);
+    touchGhost.style.cssText = `
+      position:fixed;
+      left:${rect.left}px;
+      top:${rect.top}px;
+      width:${rect.width}px;
+      z-index:9999;
+      pointer-events:none;
+      border-radius:12px;
+      box-shadow:0 20px 60px rgba(0,0,0,0.45), 0 0 0 2px var(--accent,#3b82f6);
+      opacity:0.92;
+      transform:scale(1.04) rotate(-1deg);
+      transform-origin:${touchGhostOffsetX}px ${touchGhostOffsetY}px;
+      transition:transform 0.18s cubic-bezier(.34,1.56,.64,1), box-shadow 0.18s ease;
+      background:var(--canvas,#fff);
+      will-change:transform,left,top;
+    `;
+    document.body.appendChild(touchGhost);
+  }
+
+  function moveTouchGhost(touchX, touchY){
+    if(!touchGhost) return;
+    const newLeft = touchX - touchGhostOffsetX;
+    const newTop  = touchY - touchGhostOffsetY;
+    touchGhost.style.left = `${newLeft}px`;
+    touchGhost.style.top  = `${newTop}px`;
+  }
+
+  function removeTouchGhost(){
+    if(touchGhost){ touchGhost.remove(); touchGhost = null; }
+  }
+
+  function triggerHaptic(type='light'){
+    if(!navigator.vibrate) return;
+    if(type==='light') navigator.vibrate(10);
+    else if(type==='success') navigator.vibrate([10,30,20]);
+    else if(type==='heavy') navigator.vibrate(30);
+  }
+
+  function handleTouchDragStart(startTouch, targetBlock){
     if(!targetBlock || isTouchDragging) return;
-    isTouchDragging=true;
-    activeDragBlock=targetBlock;
-    activeDragBlock.style.opacity='0.45';
+    isTouchDragging = true;
+    activeDragBlock = targetBlock;
+
+    // Visual: show dragging state on original
+    activeDragBlock.style.opacity = '0.28';
+    activeDragBlock.style.transform = 'scale(0.98)';
+    activeDragBlock.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
+
+    gutter.classList.add('touch-dragging');
+    createTouchGhost(activeDragBlock, startTouch.clientX, startTouch.clientY);
     ensureDropIndicator();
+    triggerHaptic('heavy');
   }
 
   function handleTouchDragMove(e){
     if(!isTouchDragging || !activeDragBlock) return;
-    const touch=e.touches[0];
+    const touch = e.touches[0];
     if(!touch) return;
     e.preventDefault();
 
+    moveTouchGhost(touch.clientX, touch.clientY);
     scheduleAutoScroll(touch.clientY);
-    const ind=ensureDropIndicator();
-    const overEl=document.elementFromPoint(touch.clientX, touch.clientY);
+
+    // Hide ghost temporarily to hit-test the element underneath
+    if(touchGhost) touchGhost.style.display = 'none';
+    const overEl = document.elementFromPoint(touch.clientX, touch.clientY);
+    if(touchGhost) touchGhost.style.display = '';
+
     if(overEl && ed.contains(overEl)){
-      const overBlock=overEl.closest('p, div, h1, h2, h3, h4, blockquote, table, figure, .media-card, img, video, audio') || overEl;
-      const validBlock=overBlock ? (overBlock.closest('.note-editor > *') || overBlock) : null;
+      const ind = ensureDropIndicator();
+      const overBlock = overEl.closest('p, div, h1, h2, h3, h4, blockquote, table, figure, .media-card, img, video, audio') || overEl;
+      const validBlock = overBlock ? (overBlock.closest('.note-editor > *') || overBlock) : null;
       if(validBlock && validBlock !== activeDragBlock && validBlock !== ind && ed.contains(validBlock)){
-        const r=validBlock.getBoundingClientRect();
-        const isBottom=(touch.clientY - r.top) > (r.height / 2);
+        const r = validBlock.getBoundingClientRect();
+        const isBottom = (touch.clientY - r.top) > (r.height / 2);
         if(isBottom) validBlock.parentElement.insertBefore(ind, validBlock.nextSibling);
         else validBlock.parentElement.insertBefore(ind, validBlock);
       }
@@ -217,25 +282,92 @@ function initBlockTools(){
   function handleTouchDragEnd(){
     if(!isTouchDragging || !activeDragBlock) return;
     stopAutoScroll();
-    const ind=dropIndicator;
+
+    const ind = dropIndicator;
+    const target = activeDragBlock;
+
+    // Animate ghost snapping to drop position
+    if(touchGhost && ind && ind.parentElement){
+      const dropRect = ind.getBoundingClientRect();
+      touchGhost.style.transition = 'left 0.2s cubic-bezier(.34,1.1,.64,1), top 0.2s cubic-bezier(.34,1.1,.64,1), opacity 0.18s ease, transform 0.18s ease';
+      touchGhost.style.left = `${dropRect.left}px`;
+      touchGhost.style.top  = `${dropRect.top}px`;
+      touchGhost.style.transform = 'scale(1) rotate(0deg)';
+      touchGhost.style.opacity = '0';
+    }
+
+    // Commit the DOM move
     if(ind && ind.parentElement){
-      ind.parentElement.insertBefore(activeDragBlock, ind);
+      ind.parentElement.insertBefore(target, ind);
       ind.remove();
       handleBodyInput();
       save();
-      toast('Block moved');
+      triggerHaptic('success');
     }
-    cleanupDragState();
+
+    // Restore original element
+    target.style.opacity = '';
+    target.style.transform = '';
+    target.style.transition = '';
+
+    gutter.classList.remove('touch-dragging');
+    setTimeout(removeTouchGhost, 220);
+    isTouchDragging = false;
+    activeDragBlock = null;
+    if(dropIndicator && dropIndicator.parentElement) dropIndicator.remove();
+    dropIndicator = null;
+    stopAutoScroll();
+    touchDragReady = false;
   }
 
+  function handleTouchCancel(){
+    if(activeDragBlock){
+      activeDragBlock.style.opacity = '';
+      activeDragBlock.style.transform = '';
+      activeDragBlock.style.transition = '';
+    }
+    gutter.classList.remove('touch-dragging');
+    removeTouchGhost();
+    cleanupDragState();
+    touchDragReady = false;
+    clearTimeout(touchLongPressTimer);
+  }
+
+  // Wire long-press on drag handle: 350ms hold activates drag
   if(dragHandle){
     dragHandle.addEventListener('touchstart', e=>{
-      if(activeGutterBlock) handleTouchDragStart(e, activeGutterBlock);
-    },{passive:false});
-    dragHandle.addEventListener('touchmove', handleTouchDragMove, {passive:false});
-    dragHandle.addEventListener('touchend', handleTouchDragEnd);
-    dragHandle.addEventListener('touchcancel', handleTouchDragEnd);
+      const touch = e.touches[0];
+      clearTimeout(touchLongPressTimer);
+      touchDragReady = false;
+      touchLongPressTimer = setTimeout(() => {
+        if(activeGutterBlock){
+          touchDragReady = true;
+          handleTouchDragStart(touch, activeGutterBlock);
+        }
+      }, 200);
+    }, {passive:true});
+
+    dragHandle.addEventListener('touchmove', e=>{
+      if(!touchDragReady){
+        clearTimeout(touchLongPressTimer);
+        return;
+      }
+      handleTouchDragMove(e);
+    }, {passive:false});
+
+    dragHandle.addEventListener('touchend', e=>{
+      clearTimeout(touchLongPressTimer);
+      if(touchDragReady) handleTouchDragEnd();
+      else touchDragReady = false;
+    });
+
+    dragHandle.addEventListener('touchcancel', ()=>{
+      clearTimeout(touchLongPressTimer);
+      handleTouchCancel();
+    });
   }
+
+
 
   // Allow direct grabbing of media elements anywhere on the block
   ed.addEventListener('pointerover', e=>{

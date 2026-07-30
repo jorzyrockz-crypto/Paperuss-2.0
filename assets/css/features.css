@@ -743,12 +743,15 @@
 .block-gutter.show{display:flex!important}
 @media (max-width:640px){
   .block-gutter{
-    padding:4px 6px;gap:4px;
+    padding:6px 8px;gap:6px;
     background:var(--overlay);
     border-color:var(--accent);
+    /* Larger hit target on touch devices */
+    min-height:44px;
   }
   .block-gutter-btn{
-    width:30px!important;height:30px!important;
+    width:36px!important;height:36px!important;
+    border-radius:8px!important;
   }
 }
 .block-gutter-btn{
@@ -757,8 +760,19 @@
   transition:all .12s ease;background:transparent;touch-action:none;
 }
 .block-gutter-btn:hover,.block-gutter-btn:active{background:var(--hover);color:var(--fg)}
-.block-drag-handle{cursor:grab;touch-action:none}
+.block-drag-handle{cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none}
 .block-drag-handle:active{cursor:grabbing}
+/* Gutter pulse feedback when drag lifts */
+.block-gutter.touch-dragging{
+  border-color:var(--accent);
+  box-shadow:0 0 0 2px var(--accent-ring),0 8px 24px rgba(0,0,0,.5);
+  animation:gutterPulse 0.6s ease forwards;
+}
+@keyframes gutterPulse{
+  0%{transform:scale(1)}
+  35%{transform:scale(1.1)}
+  100%{transform:scale(1)}
+}
 
 
 .block-command-menu{
