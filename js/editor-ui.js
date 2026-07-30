@@ -60,17 +60,32 @@ function initBlockTools(){
     if(!block || !block.isConnected) return;
     clearTimeout(gutterHideTimer);
     activeGutterBlock=block;
-    // Fixed coordinates match getBoundingClientRect(), unlike offsetTop/Left
-    // which change with editor scrolling and nested formatted content.
     gutter.classList.add('show');
     const rect=block.getBoundingClientRect();
     const gutterWidth=gutter.offsetWidth||60;
     const gutterHeight=gutter.offsetHeight||30;
-    const left=Math.max(8,rect.left-gutterWidth-8);
-    const top=Math.max(8,Math.min(rect.top+2,window.innerHeight-gutterHeight-8));
+
+    const vpTop=window.visualViewport?window.visualViewport.offsetTop:0;
+    const vpHeight=window.visualViewport?window.visualViewport.height:window.innerHeight;
+
+    let left=rect.left-gutterWidth-6;
+    if(left < 6) left=Math.max(6, rect.left + 4);
+    let top=rect.top;
+    if(top < vpTop + 6) top=vpTop + 6;
+    if(top + gutterHeight > vpTop + vpHeight - 8) top=vpTop + vpHeight - gutterHeight - 8;
+
     gutter.style.left=`${Math.round(left)}px`;
     gutter.style.top=`${Math.round(top)}px`;
   };
+
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', ()=>{
+      if(activeGutterBlock?.isConnected) showGutterForBlock(activeGutterBlock);
+    });
+    window.visualViewport.addEventListener('scroll', ()=>{
+      if(activeGutterBlock?.isConnected) showGutterForBlock(activeGutterBlock);
+    });
+  }
 
   /* ---------- Auto-scroll state during drag ---------- */
   let autoScrollRaf=null;
@@ -136,6 +151,7 @@ function initBlockTools(){
   const dragHandle=document.getElementById('blockDragHandle');
   let dropIndicator=null;
   let activeDragBlock=null;
+  let isTouchDragging=false;
 
   function ensureDropIndicator(){
     if(!dropIndicator){
@@ -148,6 +164,7 @@ function initBlockTools(){
   function cleanupDragState(){
     if(activeDragBlock) activeDragBlock.style.opacity='';
     activeDragBlock=null;
+    isTouchDragging=false;
     if(activeGutterBlock) activeGutterBlock.classList.remove('opacity-50');
     if(dropIndicator && dropIndicator.parentElement) dropIndicator.remove();
     dropIndicator=null;
@@ -165,6 +182,59 @@ function initBlockTools(){
       try{ e.dataTransfer.setDragImage(activeGutterBlock, 20, 20); }catch(_){}
     });
     dragHandle.addEventListener('dragend', cleanupDragState);
+  }
+
+  /* ---------- Touch Drag Support for Mobile ---------- */
+  function handleTouchDragStart(e, targetBlock){
+    if(!targetBlock || isTouchDragging) return;
+    isTouchDragging=true;
+    activeDragBlock=targetBlock;
+    activeDragBlock.style.opacity='0.45';
+    ensureDropIndicator();
+  }
+
+  function handleTouchDragMove(e){
+    if(!isTouchDragging || !activeDragBlock) return;
+    const touch=e.touches[0];
+    if(!touch) return;
+    e.preventDefault();
+
+    scheduleAutoScroll(touch.clientY);
+    const ind=ensureDropIndicator();
+    const overEl=document.elementFromPoint(touch.clientX, touch.clientY);
+    if(overEl && ed.contains(overEl)){
+      const overBlock=overEl.closest('p, div, h1, h2, h3, h4, blockquote, table, figure, .media-card, img, video, audio') || overEl;
+      const validBlock=overBlock ? (overBlock.closest('.note-editor > *') || overBlock) : null;
+      if(validBlock && validBlock !== activeDragBlock && validBlock !== ind && ed.contains(validBlock)){
+        const r=validBlock.getBoundingClientRect();
+        const isBottom=(touch.clientY - r.top) > (r.height / 2);
+        if(isBottom) validBlock.parentElement.insertBefore(ind, validBlock.nextSibling);
+        else validBlock.parentElement.insertBefore(ind, validBlock);
+      }
+    }
+  }
+
+  function handleTouchDragEnd(){
+    if(!isTouchDragging || !activeDragBlock) return;
+    stopAutoScroll();
+    const ind=dropIndicator;
+    if(ind && ind.parentElement){
+      ind.parentElement.insertBefore(activeDragBlock, ind);
+      ind.remove();
+      handleBodyInput();
+      save();
+      toast('Block moved');
+    }
+    cleanupDragState();
+  }
+
+  if(dragHandle){
+    dragHandle.addEventListener('touchstart', e=>{
+      if(activeGutterBlock) handleTouchDragStart(e, activeGutterBlock);
+    },{passive:false});
+    dragHandle.addEventListener('touchmove', handleTouchDragMove, {passive:false});
+    dragHandle.addEventListener('touchend', handleTouchDragEnd);
+    dragHandle.addEventListener('touchcancel', handleTouchDragEnd);
   }
 
   // Allow direct grabbing of media elements anywhere on the block
@@ -226,6 +296,7 @@ function initBlockTools(){
     }
     cleanupDragState();
   });
+
 
   /* ---------- Slash "/" command ---------- */
   ed.addEventListener('keyup', e=>{

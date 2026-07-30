@@ -735,22 +735,31 @@
 
 /* ============ MODULAR BLOCK GUTTER & COMMAND MENU ============ */
 .block-gutter{
-  position:fixed;display:none;align-items:center;gap:2px;z-index:40;
-  padding:2px 4px;border-radius:8px;background:var(--overlay);
-  border:1px solid var(--border);box-shadow:0 4px 12px rgba(0,0,0,.25);
+  position:fixed;display:none;align-items:center;gap:2px;z-index:140;
+  padding:3px 5px;border-radius:10px;background:var(--overlay);
+  border:1px solid var(--border);box-shadow:0 6px 20px rgba(0,0,0,.35);
+  touch-action:none;
 }
-.block-gutter.show{display:flex}
+.block-gutter.show{display:flex!important}
 @media (max-width:640px){
-  .block-gutter.show{display:none}
+  .block-gutter{
+    padding:4px 6px;gap:4px;
+    background:var(--overlay);
+    border-color:var(--accent);
+  }
+  .block-gutter-btn{
+    width:30px!important;height:30px!important;
+  }
 }
 .block-gutter-btn{
   width:24px;height:24px;border-radius:6px;display:inline-flex;align-items:center;
   justify-content:center;color:var(--fg-secondary);cursor:pointer;
-  transition:all .12s ease;background:transparent;
+  transition:all .12s ease;background:transparent;touch-action:none;
 }
-.block-gutter-btn:hover{background:var(--hover);color:var(--fg)}
-.block-drag-handle{cursor:grab}
+.block-gutter-btn:hover,.block-gutter-btn:active{background:var(--hover);color:var(--fg)}
+.block-drag-handle{cursor:grab;touch-action:none}
 .block-drag-handle:active{cursor:grabbing}
+
 
 .block-command-menu{
   position:fixed;display:none;flex-direction:column;gap:2px;z-index:80;
