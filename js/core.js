@@ -94,6 +94,42 @@ function mediaSyncIndicator(record){
 function addMediaSyncIndicator(el,record){
   if(!el || el.dataset.mediaKind==='link') return;
   const status=mediaSyncIndicator(record);
+  const isSignedIn=typeof currentSession==='object' && currentSession?.mode==='auth';
+  const isSynced=isSignedIn && (+record?.cloudSyncedAt||0)>=mediaVersion(record);
+  const isUploading=isSignedIn && !isSynced;
+
+  // Manage animated glassmorphic overlay layer
+  let overlayWrap = el.closest('.media-sync-overlay-wrap');
+  let overlay = (overlayWrap || el.parentElement)?.querySelector?.('.media-sync-overlay');
+
+  if(isUploading){
+    if(!overlayWrap && el.tagName === 'IMG' && el.parentNode){
+      overlayWrap = document.createElement('span');
+      overlayWrap.className = 'media-sync-overlay-wrap';
+      el.parentNode.insertBefore(overlayWrap, el);
+      overlayWrap.appendChild(el);
+    }
+    const container = overlayWrap || el;
+    overlay = container.querySelector('.media-sync-overlay');
+    if(!overlay){
+      overlay = document.createElement('div');
+      overlay.className = 'media-sync-overlay';
+      overlay.contentEditable = 'false';
+      overlay.innerHTML = `
+        <div class="mso-spinner"></div>
+        <div class="mso-text"><i data-lucide="cloud-upload" class="w-4 h-4"></i> Syncing online...</div>
+      `;
+      container.appendChild(overlay);
+      if(typeof lucide==='object' && typeof lucide.createIcons==='function') lucide.createIcons();
+    }
+    overlay.classList.remove('synced-fade');
+  } else if(overlay){
+    overlay.classList.add('synced-fade');
+    setTimeout(() => {
+      if(overlay && overlay.parentElement) overlay.remove();
+    }, 350);
+  }
+
   let badge;
   if(el.classList.contains('media-card')){
     badge=el.querySelector('[data-media-sync-indicator]');
@@ -117,6 +153,7 @@ function addMediaSyncIndicator(el,record){
   badge.setAttribute('aria-label',status.label);
   badge.innerHTML=`<i data-lucide="${status.icon}" aria-hidden="true"></i>`;
 }
+
 async function getMediaURL(id){
   if(urlCache.has(id)) return urlCache.get(id);
   const rec=await mediaGet(id);
