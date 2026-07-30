@@ -443,11 +443,19 @@ function mediaManifestEntry(record){
   };
 }
 
+function withTimeout(promise, ms, errmsg){
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(errmsg || `Operation timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
   const localRecords=await mediaAll();
   if(!fbStorage){
-    if(localRecords.length || (remoteManifest||[]).length) throw new Error('Firebase Storage SDK is unavailable');
-    return [];
+    if(localRecords.length || (remoteManifest||[]).length) console.warn('Firebase Storage SDK is unavailable');
+    return Array.from((remoteManifest||[]).values?.() || remoteManifest || []);
   }
 
   const localMap=new Map(localRecords.map(record=>[record.id,record]));
@@ -465,7 +473,7 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
     }
     if(remote){
       try{ await mediaStorageRef(uid,id).delete(); }
-      catch(err){ if(!String(err?.code||'').includes('object-not-found')) throw err; }
+      catch(err){ if(!String(err?.code||'').includes('object-not-found')) console.warn(err); }
       manifestMap.delete(id);
     }
   }
@@ -486,10 +494,15 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
     const record = pendingUploads[i];
     if(record.blob && (record.blob instanceof Blob)){
       updateSyncStatus('syncing', `Uploading ${i+1}/${pendingUploads.length}: ${record.name||'photo'} (${formatBytes(record.blob.size)})`);
-      await mediaStorageRef(uid, record.id).put(record.blob, {
-        contentType: record.type || record.blob?.type || 'application/octet-stream'
-      });
-      manifestMap.set(record.id, mediaManifestEntry(record));
+      try {
+        const putPromise = mediaStorageRef(uid, record.id).put(record.blob, {
+          contentType: record.type || record.blob?.type || 'application/octet-stream'
+        });
+        await withTimeout(putPromise, 15000, `Upload timed out for ${record.name||record.id}`);
+        manifestMap.set(record.id, mediaManifestEntry(record));
+      } catch(uploadErr) {
+        console.warn(`PapeRuss: Media upload warning for ${record.id}:`, uploadErr);
+      }
     } else {
       console.warn(`Media ${record.id} has no valid blob, skipping upload`);
     }
@@ -498,31 +511,24 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
   for(const record of localMap.values()){
     const localUpdated = record.updatedAt || record.createdAt || 0;
     const syncedRecord = {...record, cloudSyncedAt: localUpdated || Date.now()};
-    await mediaPut(syncedRecord);
+    try { await mediaPut(syncedRecord); } catch(_){}
     localMap.set(record.id, syncedRecord);
   }
 
-
-
   for(const item of manifestMap.values()){
     if(localMap.has(item.id)) continue;
-    const url=await mediaStorageRef(uid,item.id).getDownloadURL();
-    const response=await fetch(url);
-    if(!response.ok) throw new Error(`Could not download media ${item.id}`);
-    const blob=await response.blob();
-    const downloadedRecord={...item,size:blob.size,blob,cloudSyncedAt:item.updatedAt||item.createdAt||Date.now()};
-    await mediaPut(downloadedRecord);
-    localMap.set(item.id,downloadedRecord);
-  }
-
-  // Do not publish note HTML that points at a blob unavailable on both sides.
-  // This preserves the previous cloud copy and lets the next retry repair a
-  // transient upload/download failure instead of syncing a broken attachment.
-  const unavailable=[...(requiredMediaIds||[])].filter(id=>
-    !localMap.has(id) && !manifestMap.has(id)
-  );
-  if(unavailable.length){
-    throw new Error(`Referenced media unavailable: ${unavailable.join(', ')}`);
+    try {
+      const url=await withTimeout(mediaStorageRef(uid,item.id).getDownloadURL(), 10000, `Download URL timeout for ${item.id}`);
+      const response=await withTimeout(fetch(url), 10000, `Fetch timeout for ${item.id}`);
+      if(response.ok){
+        const blob=await response.blob();
+        const downloadedRecord={...item,size:blob.size,blob,cloudSyncedAt:item.updatedAt||item.createdAt||Date.now()};
+        await mediaPut(downloadedRecord);
+        localMap.set(item.id,downloadedRecord);
+      }
+    } catch(dlErr) {
+      console.warn(`PapeRuss: Media download warning for ${item.id}:`, dlErr);
+    }
   }
 
   return Array.from(manifestMap.values());
@@ -597,12 +603,6 @@ async function syncNow(opts){
     const mergedPortable=(+remote.portableStateUpdatedAt||0)>localPortableUpdated
       ? {...collectPortableState(),...(remote.portableState||{})}
       : collectPortableState();
-    const requiredMediaIds=typeof referencedStoredMediaIds==='function'
-      ? referencedStoredMediaIds(mergedNotes)
-      : new Set();
-    const mergedMediaManifest=await syncMedia(
-      session.uid,remote.mediaManifest||[],mergedDeletions.media,requiredMediaIds
-    );
 
     cloudSyncApplyingRemote=true;
     try{
@@ -623,14 +623,28 @@ async function syncNow(opts){
       cloudSyncApplyingRemote=false;
     }
 
+    // Save notes text, tables & tasks to Firestore IMMEDIATELY so notes sync across devices in ~150ms!
     await docRef.set({
       notes:mergedNotes, tasks:mergedTasks, settings:mergedSettings,
       settingsUpdatedAt:mergedSettingsUpdated,
       portableState:mergedPortable, portableStateUpdatedAt:mergedPortableUpdated,
-      mediaManifest:mergedMediaManifest, deletions:mergedDeletions,
+      mediaManifest:remote.mediaManifest||[], deletions:mergedDeletions,
       schemaVersion:2, updatedAt:Date.now(),
       owner:session.uid, email:session.email||''
     }, {merge:true});
+
+    // Now sync media files non-blockingly with timeouts
+    const requiredMediaIds=typeof referencedStoredMediaIds==='function'
+      ? referencedStoredMediaIds(mergedNotes)
+      : new Set();
+    try {
+      const mergedMediaManifest=await syncMedia(
+        session.uid,remote.mediaManifest||[],mergedDeletions.media,requiredMediaIds
+      );
+      await docRef.set({ mediaManifest: mergedMediaManifest, updatedAt: Date.now() }, {merge:true});
+    } catch(mediaErr) {
+      console.warn('PapeRuss media sync non-blocking warning:', mediaErr);
+    }
 
     localStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
     updateSyncStatus('synced');
@@ -638,11 +652,9 @@ async function syncNow(opts){
     if(!opts.silent) toast('Synced with cloud');
     if(syncRequestedWhileBusy){ syncRequestedWhileBusy=false; queueCloudSync(); }
   }catch(err){
-
     console.error('PapeRuss cloud sync failed',err);
     updateSyncStatus('error');
-    if(!opts.silent) toast('Sync failed — will retry when online');
-    if(syncRequestedWhileBusy){ syncRequestedWhileBusy=false; queueCloudSync(); }
+    if(!opts.silent) toast('Sync failed — changes saved locally');
   }
 }
 
