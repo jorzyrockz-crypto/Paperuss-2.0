@@ -486,7 +486,11 @@ function timeoutForSize(bytes){
 async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
   const localRecords=await mediaAll();
   if(!fbStorage){
-    if(localRecords.length || (remoteManifest||[]).length) console.warn('Firebase Storage SDK is unavailable');
+    const hasPending = localRecords.some(r=>r.pendingUpload);
+    if(hasPending){
+      updateSyncStatus('error', 'Media Storage unavailable — photos saved locally only');
+      toast('⚠️ Firebase Storage not loaded — photos saved locally, will retry next sync');
+    }
     return Array.from((remoteManifest||[]).values?.() || remoteManifest || []);
   }
 
@@ -582,7 +586,8 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
       removeFromOfflineUploadQueue(record.id);
 
     }catch(uploadErr){
-      console.warn(`PapeRuss: Media upload failed for ${record.id}:`, uploadErr);
+      const errMsg = uploadErr?.message || uploadErr?.code || String(uploadErr);
+      console.error(`PapeRuss: Media upload failed for ${record.id}:`, uploadErr);
       // ❌ Failure — increment counter, keep pendingUpload:true, DO NOT touch cloudSyncedAt
       const failures = (record.uploadFailures||0) + 1;
       const failedRecord = {...record,
@@ -596,6 +601,12 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
       document.dispatchEvent(new CustomEvent('media-upload-progress', {
         detail:{ id:record.id, percent:0, error:true, failures }
       }));
+      // Surface the first failure and permanent failures to user
+      if(failures === 1){
+        toast(`⚠️ Media upload failed: ${errMsg} — will retry automatically`);
+      } else if(failures >= MAX_UPLOAD_FAILURES){
+        toast(`❌ "${label}" could not be uploaded after ${failures} attempts. Check your connection and sign-in status.`);
+      }
     }
   }
 
@@ -680,6 +691,20 @@ async function syncNow(opts){
     return;
   }
   updateSyncStatus('syncing');
+
+  // When user manually taps Sync Now (non-silent), give all stuck media a fresh retry
+  // by resetting their failure counter — this clears the backoff window too
+  if(!opts.silent){
+    try{
+      const allMedia = await mediaAll();
+      const stuck = allMedia.filter(r=>r.pendingUpload && (r.uploadFailures||0) > 0);
+      for(const r of stuck){
+        await mediaPut({...r, uploadFailures: 0, lastUploadAttempt: 0});
+      }
+      if(stuck.length > 0) console.log(`PapeRuss: Reset ${stuck.length} stuck media upload(s) for retry`);
+    }catch(_){}
+  }
+
   try{
     const docRef=fbDb.collection('paperuss_users').doc(session.uid);
     const snap=await docRef.get();

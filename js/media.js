@@ -143,12 +143,14 @@ async function insertImageFile(file){
   const defSize = (typeof IMG_DEFAULT_SIZE==='object' && typeof deviceClass==='function')
     ? IMG_DEFAULT_SIZE[deviceClass()] : 'large';
 
-  // 1. Insert image into note editor INSTANTLY (0ms response, zero wait time)
+  // 1. Show image INSTANTLY in the editor using a temporary local blob URL
+  //    Note: we do NOT call save() yet — blob: URLs are ephemeral and must
+  //    NOT be persisted to note storage. save() happens only after the real
+  //    data-media-id is assigned below.
   const tempClass = 'temp-img-' + Math.random().toString(36).slice(2, 8);
   insertHTMLAtCaret(`<img class="${tempClass}" data-media-kind="image" data-img-size="${defSize}" src="${tempUrl}" alt="${esc(file.name)}">`);
-  save();
 
-  // 2. Process downscale + IndexedDB save + cloud sync asynchronously in background
+  // 2. Downscale + save to IndexedDB + queue cloud sync (runs in background)
   try {
     const id = await saveMediaBlob(file, file.name, 'image');
     const dbUrl = await getMediaURL(id);
@@ -158,13 +160,19 @@ async function insertImageFile(file){
       imgEl.dataset.mediaId = id;
       imgEl.src = dbUrl;
       imgEl.classList.remove(tempClass);
-      save();
     }
+    // Only persist to note storage NOW that we have a valid data-media-id
+    save();
+    toast('Image added');
+    renderStorageStats();
   } catch(err){
-    console.warn('PapeRuss: background image save error', err);
+    // If save fails, remove the broken temp image from the editor
+    const imgEl = document.querySelector(`img.${tempClass}`);
+    if(imgEl) imgEl.remove();
+    URL.revokeObjectURL(tempUrl);
+    console.error('PapeRuss: image save error', err);
+    toast('Could not add image — please try again');
   }
-  toast('Image added');
-  renderStorageStats();
 }
 
 
