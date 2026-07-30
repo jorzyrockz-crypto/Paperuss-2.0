@@ -32,7 +32,7 @@ The frontend is a lightweight static application built with HTML, CSS, and JavaS
 | Layer | Technology | Purpose |
 | --- | --- | --- |
 | Frontend | HTML, CSS, JavaScript | Application interface and local behavior |
-| Hosting | Cloudflare Workers | HTTPS delivery and GitHub-based deployment |
+| Hosting | Cloudflare Worker + static assets | HTTPS delivery and GitHub-based deployment |
 | Authentication | Firebase Authentication | Google and email/password accounts |
 | Data | Cloud Firestore | Notes, tasks, settings, and sync metadata |
 | Media | Firebase Storage | Images, video, audio, and attachments |
@@ -105,7 +105,9 @@ The production application is available at:
 https://paperuss-2.jorzyrockz.workers.dev/
 ```
 
-Connect Cloudflare to this GitHub repository and use `main` as the production branch. Because PapeRuss is a static application, it does not require a build command or output transformation.
+The `Deploy Cloudflare Worker` GitHub Actions workflow publishes `main` using a Worker with static assets. Add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as repository secrets before enabling deployment.
+
+Published GitHub Releases are automatically converted into `CHANGELOG.md` and `changelog.json`. The app serves the JSON document at `/changelog.json` and displays it from the profile menu’s **What’s new** action.
 
 ### Firebase Hosting
 

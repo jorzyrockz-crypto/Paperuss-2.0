@@ -726,7 +726,7 @@
 
 /* ============ MODULAR BLOCK GUTTER & COMMAND MENU ============ */
 .block-gutter{
-  position:absolute;display:none;align-items:center;gap:2px;z-index:40;
+  position:fixed;display:none;align-items:center;gap:2px;z-index:40;
   padding:2px 4px;border-radius:8px;background:var(--overlay);
   border:1px solid var(--border);box-shadow:0 4px 12px rgba(0,0,0,.25);
 }

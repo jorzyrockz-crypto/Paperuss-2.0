@@ -1,8 +1,9 @@
 const CACHE_PREFIX = "paperuss-shell-";
-const CACHE_NAME = `${CACHE_PREFIX}v16`;
+const CACHE_NAME = `${CACHE_PREFIX}v17`;
 const APP_SHELL = [
   "./",
   "./index.html",
+  "./changelog.json",
   "./manifest.webmanifest",
   "./assets/css/core.css",
   "./assets/css/features.css",
@@ -57,6 +58,28 @@ self.addEventListener("fetch", event => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
+
+  // Release notes change independently from the app shell. Always attempt a
+  // fresh request first, then fall back to the most recently cached document.
+  if (url.origin === self.location.origin && url.pathname.endsWith("/changelog.json")) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(async () =>
+          (await caches.match(request)) ||
+          new Response(JSON.stringify({ generatedAt: null, releases: [] }), {
+            headers: { "Content-Type": "application/json" }, status: 503
+          })
+        )
+    );
+    return;
+  }
 
   if (request.mode === "navigate") {
     event.respondWith(

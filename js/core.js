@@ -570,6 +570,42 @@ async function renderMediaList(){
   refreshIcons();
 }
 
+function captureEditorSelection(editor){
+  const selection=window.getSelection();
+  if(!selection || !selection.rangeCount || !editor.contains(selection.anchorNode)) return null;
+  const pathFor=node=>{
+    const path=[];
+    while(node && node!==editor){
+      const parent=node.parentNode;
+      if(!parent) return null;
+      path.unshift(Array.prototype.indexOf.call(parent.childNodes,node));
+      node=parent;
+    }
+    return node===editor?path:null;
+  };
+  const range=selection.getRangeAt(0);
+  const startPath=pathFor(range.startContainer);
+  const endPath=pathFor(range.endContainer);
+  return startPath&&endPath?{startPath,startOffset:range.startOffset,endPath,endOffset:range.endOffset}:null;
+}
+
+function restoreEditorSelection(editor,savedSelection){
+  if(!savedSelection) return;
+  const nodeFor=path=>path.reduce((node,index)=>node?.childNodes[index]||null,editor);
+  const start=nodeFor(savedSelection.startPath);
+  const end=nodeFor(savedSelection.endPath);
+  if(!start || !end) return;
+  const safeOffset=(node,offset)=>Math.min(offset,node.nodeType===Node.TEXT_NODE?node.textContent.length:node.childNodes.length);
+  try{
+    const range=document.createRange();
+    range.setStart(start,safeOffset(start,savedSelection.startOffset));
+    range.setEnd(end,safeOffset(end,savedSelection.endOffset));
+    const selection=window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }catch(_){ /* A changed remote document has no safe equivalent selection. */ }
+}
+
 function renderEditor(){
   const empty=document.getElementById('editorEmpty');
   const content=document.getElementById('editorContent');
@@ -661,6 +697,9 @@ function renderEditor(){
   state.suppressInput=true;
   revokeCachedURLs();
   const ed=bodyEl();
+  // Background sync refreshes the editor after a paste or edit. Keep the live
+  // range so replacing innerHTML cannot send the caret back to the first block.
+  const savedSelection=!trashMode && document.activeElement===ed ? captureEditorSelection(ed) : null;
   ed.setAttribute('contenteditable',trashMode?'false':'true');
   const tagInput=document.getElementById('tagInput');
   if(tagInput) tagInput.disabled=trashMode;
@@ -682,6 +721,7 @@ function renderEditor(){
   hydrateMediaInEditor();
   if(typeof renderNotebookCover==='function') renderNotebookCover();
   if(typeof normalizeEditorImages==='function') normalizeEditorImages();
+  restoreEditorSelection(ed,savedSelection);
   if(typeof clearImageSelection==='function') clearImageSelection();
   if(trashMode&&typeof clearCellSelection==='function'){
     clearCellSelection();
