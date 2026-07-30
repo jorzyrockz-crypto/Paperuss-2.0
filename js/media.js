@@ -1,31 +1,67 @@
-/* ============================================================
-   MEDIA INSERTION
-   ============================================================ */
+let savedEditorRange = null;
+
+function saveCurrentEditorRange(){
+  const ed=document.getElementById('noteBody');
+  const sel=window.getSelection();
+  if(sel && sel.rangeCount > 0 && ed && ed.contains(sel.anchorNode)){
+    try{ savedEditorRange = sel.getRangeAt(0).cloneRange(); }catch(_){}
+  }
+}
+
+document.addEventListener('selectionchange', ()=>{
+  const ed=document.getElementById('noteBody');
+  if(document.activeElement===ed || (ed && ed.contains(document.activeElement))){
+    saveCurrentEditorRange();
+  }
+});
+
+function openLinkInAppOrTab(url){
+  if(!url) return;
+  // Allow OS deep-linking / registered app protocol handlers to launch directly
+  const a=document.createElement('a');
+  a.href=url;
+  a.rel='noopener';
+  a.click();
+}
+
 function insertHTMLAtCaret(html){
   const ed=document.getElementById('noteBody');
+  if(!ed) return;
   ed.focus();
   const sel=window.getSelection();
-  let range;
-  if(sel && sel.rangeCount && ed.contains(sel.anchorNode)){
+  let range=null;
+
+  if(savedEditorRange && ed.contains(savedEditorRange.commonAncestorContainer)){
+    range=savedEditorRange.cloneRange();
+  } else if(sel && sel.rangeCount && ed.contains(sel.anchorNode)){
     range=sel.getRangeAt(0);
-    range.deleteContents();
-  } else {
+  }
+
+  if(!range){
     range=document.createRange();
     range.selectNodeContents(ed);
     range.collapse(false);
+  } else {
+    if(!range.collapsed) range.deleteContents();
   }
+
   const tmp=document.createElement('div'); tmp.innerHTML=html;
   const frag=document.createDocumentFragment();
   let last;
   while(tmp.firstChild){ last=tmp.firstChild; frag.appendChild(last); }
   range.insertNode(frag);
+
   // Move caret after the inserted block + add an empty paragraph so users can keep typing
   const br=document.createElement('p'); br.innerHTML='<br>';
   if(last && last.parentNode){ last.parentNode.insertBefore(br, last.nextSibling); }
-  const r=document.createRange(); r.setStart(br,0); r.collapse(true);
-  sel.removeAllRanges(); sel.addRange(r);
+  try{
+    const r=document.createRange(); r.setStart(br,0); r.collapse(true);
+    sel.removeAllRanges(); sel.addRange(r);
+    savedEditorRange=r.cloneRange();
+  }catch(_){}
   handleBodyInput();
 }
+
 
 async function insertImageFile(file){
   if(!file || !file.type.startsWith('image/')){ toast('Not an image'); return; }

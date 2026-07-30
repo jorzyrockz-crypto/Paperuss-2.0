@@ -135,6 +135,8 @@ function initBlockTools(){
   /* ---------- Drag & drop block rearrangement ---------- */
   const dragHandle=document.getElementById('blockDragHandle');
   let dropIndicator=null;
+  let directDraggedMedia = null;
+
   if(dragHandle){
     dragHandle.addEventListener('dragstart', e=>{
       if(!activeGutterBlock) return;
@@ -142,7 +144,6 @@ function initBlockTools(){
       activeGutterBlock.classList.add('opacity-50');
       dropIndicator=document.createElement('div');
       dropIndicator.className='block-drop-indicator';
-      // Ghost image — use the block itself
       try{ e.dataTransfer.setDragImage(activeGutterBlock, 20, 20); }catch(_){}
     });
     dragHandle.addEventListener('dragend', ()=>{
@@ -152,10 +153,39 @@ function initBlockTools(){
     });
   }
 
+  // Allow direct grabbing of media elements anywhere on the block
+  ed.addEventListener('pointerover', e=>{
+    const mediaEl=e.target.closest('[data-media-id], .media-card, figure');
+    if(mediaEl && !mediaEl.getAttribute('draggable')){
+      mediaEl.setAttribute('draggable', 'true');
+    }
+  });
+
+  ed.addEventListener('dragstart', e=>{
+    const mediaEl=e.target.closest('[data-media-id], .media-card, figure');
+    if(mediaEl && !e.dataTransfer.getData('text/plain')){
+      directDraggedMedia = mediaEl;
+      e.dataTransfer.setData('application/x-paperuss-media-move', '1');
+      e.dataTransfer.effectAllowed = 'move';
+      mediaEl.style.opacity = '0.5';
+    }
+  });
+
+  ed.addEventListener('dragend', e=>{
+    if(directDraggedMedia){
+      directDraggedMedia.style.opacity = '';
+      directDraggedMedia = null;
+    }
+  });
+
   ed.addEventListener('dragover', e=>{
+    if(directDraggedMedia){
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      return;
+    }
     if(!activeGutterBlock || !dropIndicator) return;
     e.preventDefault();
-    // Auto-scroll when near edges
     scheduleAutoScroll(e.clientY);
     const overBlock=e.target.closest(blockSelector);
     if(overBlock && overBlock !== activeGutterBlock && ed.contains(overBlock)){
@@ -167,6 +197,25 @@ function initBlockTools(){
   });
 
   ed.addEventListener('drop', e=>{
+    if(directDraggedMedia){
+      e.preventDefault();
+      e.stopPropagation();
+      let target = document.elementFromPoint(e.clientX, e.clientY);
+      if(target && ed.contains(target)){
+        const blockTarget = target.closest('p, div, h1, h2, h3, blockquote, table, figure, .media-card') || target;
+        if(blockTarget && blockTarget !== directDraggedMedia){
+          const rect = blockTarget.getBoundingClientRect();
+          const midY = rect.top + rect.height / 2;
+          if(e.clientY > midY) blockTarget.after(directDraggedMedia);
+          else blockTarget.before(directDraggedMedia);
+        }
+      }
+      directDraggedMedia.style.opacity = '';
+      directDraggedMedia = null;
+      handleBodyInput();
+      save();
+      return;
+    }
     if(!activeGutterBlock || !dropIndicator) return;
     if(e.dataTransfer.getData('text/plain') === 'modular-block-drag'){
       e.preventDefault(); stopAutoScroll();
@@ -232,30 +281,54 @@ function initSlashMenuActions(){
 }
 
 /* ============================================================
-   IMAGE CONTEXT MENU & ZOOMED LIGHTBOX PANNING
+   IMAGE / MEDIA CONTEXT MENU & LONG-PRESS
    ============================================================ */
 function initImageContextMenu(){
   const menu=document.getElementById('imageContextMenu');
   const ed=bodyEl();
   if(!menu || !ed) return;
 
-  // Show context menu on right-click for any media element (img, audio, video, media-card)
+  function showContextMenuForMedia(mediaEl, x, y){
+    state.selectedImageEl = mediaEl;
+    const resizeBtn=document.getElementById('icmResize');
+    const downloadBtn=document.getElementById('icmDownload');
+    const openBtn=document.getElementById('icmOpenNew');
+    const isLink = mediaEl.dataset?.mediaKind==='link' || mediaEl.tagName==='A' || !!mediaEl.getAttribute('href');
+
+    if(resizeBtn) resizeBtn.style.display=mediaEl.tagName==='IMG'?'flex':'none';
+    if(downloadBtn) downloadBtn.style.display=isLink?'none':'flex';
+    if(openBtn){
+      const labelSpan = openBtn.querySelector('span') || openBtn;
+      labelSpan.textContent = isLink ? 'Open App / Open Link' : 'Open / View Media';
+    }
+    menu.style.top = `${Math.min(y, window.innerHeight - 250)}px`;
+    menu.style.left = `${Math.min(x, window.innerWidth - 220)}px`;
+    menu.classList.add('show');
+  }
+
+  // Right-click contextmenu handler
   ed.addEventListener('contextmenu', e=>{
-    const mediaEl=e.target.closest('[data-media-id]');
+    const mediaEl=e.target.closest('[data-media-id], .media-card, a[href]');
     if(mediaEl){
       e.preventDefault();
-      state.selectedImageEl = mediaEl;
-      // Show/hide resize option based on whether it's an image
-      const resizeBtn=document.getElementById('icmResize');
-      const downloadBtn=document.getElementById('icmDownload');
-      if(resizeBtn) resizeBtn.style.display=mediaEl.tagName==='IMG'?'flex':'none';
-      // Rich links are external references, not IndexedDB media files.
-      if(downloadBtn) downloadBtn.style.display=mediaEl.dataset.mediaKind==='link'?'none':'flex';
-      menu.style.top = `${e.clientY}px`;
-      menu.style.left = `${Math.min(e.clientX, window.innerWidth - 200)}px`;
-      menu.classList.add('show');
+      showContextMenuForMedia(mediaEl, e.clientX, e.clientY);
     }
   });
+
+  // Touch Long-Press handler (500ms)
+  let longPressTimer = null;
+  ed.addEventListener('touchstart', e=>{
+    const mediaEl=e.target.closest('[data-media-id], .media-card, a[href]');
+    if(mediaEl && e.touches.length === 1){
+      const touch = e.touches[0];
+      longPressTimer = setTimeout(()=>{
+        showContextMenuForMedia(mediaEl, touch.clientX, touch.clientY);
+      }, 500);
+    }
+  },{passive:true});
+
+  ed.addEventListener('touchend', ()=>{ if(longPressTimer) clearTimeout(longPressTimer); });
+  ed.addEventListener('touchmove', ()=>{ if(longPressTimer) clearTimeout(longPressTimer); });
 
   document.getElementById('icmDownload').onclick=async ()=>{
     menu.classList.remove('show');
@@ -275,24 +348,34 @@ function initImageContextMenu(){
     menu.classList.remove('show');
     if(state.selectedImageEl){
       try{
-        await navigator.clipboard.writeText(state.selectedImageEl.src||'');
-        toast('URL copied');
+        const url = state.selectedImageEl.getAttribute('href') || state.selectedImageEl.src || state.selectedImageEl.dataset?.url || '';
+        await navigator.clipboard.writeText(url);
+        toast('URL copied to clipboard');
       }catch(e){ toast('Copy failed'); }
     }
   };
   document.getElementById('icmOpenNew').onclick=()=>{
     menu.classList.remove('show');
     if(state.selectedImageEl){
-      const src=state.selectedImageEl.src || state.selectedImageEl.querySelector('source')?.src;
-      if(src) window.open(src, '_blank');
+      const url = state.selectedImageEl.getAttribute('href') || state.selectedImageEl.src || state.selectedImageEl.querySelector('source')?.src;
+      if(url){
+        if(typeof openLinkInAppOrTab==='function') openLinkInAppOrTab(url);
+        else window.open(url, '_blank');
+      }
     }
   };
   document.getElementById('icmMetadata').onclick=async ()=>{
     menu.classList.remove('show');
     if(state.selectedImageEl){
       const id=state.selectedImageEl.getAttribute('data-media-id');
-      const rec=await mediaGet(id);
-      if(rec) toast(`${esc(rec.name)} · ${formatBytes(rec.size)} · ${rec.type}`);
+      if(id){
+        const rec=await mediaGet(id);
+        if(rec) toast(`${esc(rec.name)} · ${formatBytes(rec.size)} · ${rec.type}`);
+        else toast(`Media ID: ${id}`);
+      } else {
+        const href=state.selectedImageEl.getAttribute('href');
+        if(href) toast(`Web Link: ${href}`);
+      }
     }
   };
   document.getElementById('icmInsertEvent').onclick=()=>{
@@ -308,7 +391,13 @@ function initImageContextMenu(){
     menu.classList.remove('show');
     if(state.selectedImageEl){
       const id=state.selectedImageEl.getAttribute('data-media-id');
-      confirmDeleteMediaAsset(id, 'Media asset');
+      if(id){
+        confirmDeleteMediaAsset(id, 'Media asset');
+      } else {
+        state.selectedImageEl.remove();
+        handleBodyInput();
+        toast('Media element deleted');
+      }
     }
   };
 
@@ -316,6 +405,7 @@ function initImageContextMenu(){
     if(!e.target.closest('#imageContextMenu')) menu.classList.remove('show');
   });
 }
+
 
 function openResizeDialog(img){
   if(!img || img.tagName!=='IMG') return;
