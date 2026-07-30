@@ -428,19 +428,62 @@ function updateTasksCount(){
   }
 }
 
+function collectLinksFromNotes(sourceNotes=notes){
+  const links=[];
+  sourceNotes.forEach(n=>{
+    if(n.deletedAt || !n.content) return;
+    const parser=document.createElement('div');
+    parser.innerHTML=n.content;
+    const anchorElements=parser.querySelectorAll('[data-media-kind="link"], a[href]');
+    anchorElements.forEach(a=>{
+      const href=a.getAttribute('href');
+      if(!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+      const title=a.querySelector('.mc-title')?.textContent || a.textContent?.trim() || href;
+      let host=a.querySelector('.mc-meta')?.textContent || '';
+      if(!host){
+        try{ host=new URL(href).hostname.replace(/^www\./,''); }catch(_){ host=href; }
+      }
+      const id=a.getAttribute('data-media-id') || ('l_'+href);
+      if(!links.some(l=>l.id===id || l.url===href)){
+        links.push({
+          id,
+          kind:'link',
+          name:title,
+          type:'web/link',
+          url:href,
+          host,
+          size:0,
+          createdAt:n.createdAt||Date.now(),
+          refNote:n
+        });
+      }
+    });
+  });
+  return links;
+}
+
+async function mediaAllWithLinks(){
+  let dbMedia=[];
+  try{ dbMedia=await mediaAll(); }catch(_){ dbMedia=[]; }
+  const links=collectLinksFromNotes();
+  return [...dbMedia, ...links];
+}
+
 async function updateMediaCount(){
   try{
-    const all=await mediaAll();
-    const count=all.length;
+    const dbMedia=await mediaAll();
+    const links=collectLinksFromNotes();
+    const totalCount=dbMedia.length + links.length;
     const countEl=document.getElementById('countMedia');
-    if(countEl) countEl.textContent=count;
+    if(countEl) countEl.textContent=totalCount;
     const statPill=document.getElementById('mhStatPill');
     if(statPill){
-      const bytes=all.reduce((s,r)=>s+(r.size||0), 0);
-      statPill.textContent=`${count} asset${count!==1?'s':''} · ${formatBytes(bytes)}`;
+      const bytes=dbMedia.reduce((s,r)=>s+(r.size||0), 0);
+      statPill.textContent=`${totalCount} item${totalCount!==1?'s':''} (${dbMedia.length} asset${dbMedia.length!==1?'s':''}, ${links.length} link${links.length!==1?'s':''}) · ${formatBytes(bytes)}`;
     }
   }catch(e){}
 }
+
 
 function filteredNotes(){
   let arr=notes.filter(n=>{
@@ -525,48 +568,6 @@ function renderList(){
       </div>
     </div>`;
   }).join('');
-  refreshIcons();
-}
-
-async function renderMediaList(){
-  const c=document.getElementById('notesContainer');
-  document.getElementById('listTitle').textContent = 'Media Assets';
-  try{
-    let all=await mediaAll();
-    if(state.mediaTypeFilter && state.mediaTypeFilter!=='all'){
-      all=all.filter(r=>r.kind===state.mediaTypeFilter);
-    }
-    if(state.query){
-      const q=state.query.toLowerCase();
-      all=all.filter(r=>r.name.toLowerCase().includes(q) || r.kind.toLowerCase().includes(q));
-    }
-    all.sort((a,b)=>b.createdAt - a.createdAt);
-    if(!all.length){
-      c.innerHTML=`<div class="list-empty">No media assets found.<br>Attach images, voice, or files in your notes.</div>`;
-      refreshIcons();
-      return;
-    }
-    c.innerHTML=all.map(r=>{
-      const active=r.id===state.currentMediaId?'active':'';
-      let iconName='file';
-      if(r.kind==='image') iconName='image';
-      else if(r.kind==='audio') iconName='mic';
-      else if(r.kind==='video') iconName='video';
-      return `<div class="note-card ${active}" data-media-card-id="${r.id}">
-        <div class="note-title" style="align-items:center">
-          <i data-lucide="${iconName}" class="w-4 h-4 text-accent"></i>
-          <span>${esc(r.name)}</span>
-        </div>
-        <div class="note-preview">${esc(r.type||'file')}</div>
-        <div class="note-meta">
-          <span>${formatBytes(r.size)}</span>
-          <span>${timeAgo(r.createdAt)}</span>
-        </div>
-      </div>`;
-    }).join('');
-  }catch(e){
-    c.innerHTML=`<div class="list-empty">Failed to load media assets.</div>`;
-  }
   refreshIcons();
 }
 
@@ -759,6 +760,49 @@ function renderEditor(){
   refreshIcons();
 }
 
+async function renderMediaList(){
+  const c=document.getElementById('notesContainer');
+  document.getElementById('listTitle').textContent = 'Media Assets & Links';
+  try{
+    let all=await mediaAllWithLinks();
+    if(state.mediaTypeFilter && state.mediaTypeFilter!=='all'){
+      all=all.filter(r=>r.kind===state.mediaTypeFilter);
+    }
+    if(state.query){
+      const q=state.query.toLowerCase();
+      all=all.filter(r=>r.name.toLowerCase().includes(q) || r.kind.toLowerCase().includes(q) || (r.url&&r.url.toLowerCase().includes(q)));
+    }
+    all.sort((a,b)=>b.createdAt - a.createdAt);
+    if(!all.length){
+      c.innerHTML=`<div class="list-empty">No media or links found.<br>Attach images, voice, files, or rich links in your notes.</div>`;
+      refreshIcons();
+      return;
+    }
+    c.innerHTML=all.map(r=>{
+      const active=r.id===state.currentMediaId?'active':'';
+      let iconName='file';
+      if(r.kind==='image') iconName='image';
+      else if(r.kind==='audio') iconName='mic';
+      else if(r.kind==='video') iconName='video';
+      else if(r.kind==='link') iconName='globe';
+      return `<div class="note-card ${active}" data-media-card-id="${r.id}">
+        <div class="note-title" style="align-items:center">
+          <i data-lucide="${iconName}" class="w-4 h-4 text-accent"></i>
+          <span>${esc(r.name)}</span>
+        </div>
+        <div class="note-preview">${esc(r.kind==='link'?(r.host||r.url):(r.type||'file'))}</div>
+        <div class="note-meta">
+          <span>${r.kind==='link'?'Web link':formatBytes(r.size)}</span>
+          <span>${timeAgo(r.createdAt)}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    c.innerHTML=`<div class="list-empty">Failed to load media assets.</div>`;
+  }
+  refreshIcons();
+}
+
 async function renderMediaHubView(){
   const gridEl=document.getElementById('mhGrid');
   const detailEl=document.getElementById('mhDetailView');
@@ -768,13 +812,13 @@ async function renderMediaHubView(){
   });
 
   try{
-    let all=await mediaAll();
+    let all=await mediaAllWithLinks();
     if(state.mediaTypeFilter && state.mediaTypeFilter!=='all'){
       all=all.filter(r=>r.kind===state.mediaTypeFilter);
     }
     if(state.query){
       const q=state.query.toLowerCase();
-      all=all.filter(r=>r.name.toLowerCase().includes(q) || r.kind.toLowerCase().includes(q));
+      all=all.filter(r=>r.name.toLowerCase().includes(q) || r.kind.toLowerCase().includes(q) || (r.url&&r.url.toLowerCase().includes(q)));
     }
     all.sort((a,b)=>b.createdAt - a.createdAt);
 
@@ -783,14 +827,17 @@ async function renderMediaHubView(){
       if(detailEl){
         detailEl.style.display='flex';
         detailEl.classList.add('show');
-        const rec=await mediaGet(state.currentMediaId);
+        let rec=await mediaGet(state.currentMediaId);
+        if(!rec){
+          rec=collectLinksFromNotes().find(l=>l.id===state.currentMediaId);
+        }
         if(!rec){
           state.currentMediaId=null;
           renderMediaHubView();
           return;
         }
-        const url=await getMediaURL(rec.id);
-        const refNote=notes.find(n=>n.content && n.content.includes(rec.id));
+        const url=rec.kind==='link'?rec.url:(await getMediaURL(rec.id));
+        const refNote=rec.refNote||notes.find(n=>n.content && n.content.includes(rec.id));
         let previewHtml='';
         if(rec.kind==='image'){
           previewHtml=`<div class="mh-detail-preview"><img src="${url}" alt="${esc(rec.name)}" onclick="openImageLightbox('${url}')" style="cursor:zoom-in"></div>`;
@@ -798,21 +845,35 @@ async function renderMediaHubView(){
           previewHtml=`<div class="mh-detail-preview"><video controls src="${url}"></video></div>`;
         } else if(rec.kind==='audio'){
           previewHtml=`<div class="mh-detail-preview" style="padding:24px"><audio controls src="${url}"></audio></div>`;
+        } else if(rec.kind==='link'){
+          const favicon=`https://www.google.com/s2/favicons?domain=${rec.host||'google.com'}&sz=64`;
+          previewHtml=`<div class="mh-detail-preview" style="padding:32px;display:flex;flex-direction:column;align-items:center;gap:12px">
+            <img src="${favicon}" alt="" style="width:48px;height:48px;border-radius:12px" onerror="this.style.display='none'">
+            <h3 style="font-size:17px;font-weight:700;color:var(--fg);text-align:center">${esc(rec.name)}</h3>
+            <a href="${esc(rec.url)}" target="_blank" rel="noopener noreferrer" class="text-accent" style="word-break:break-all;font-size:13px;font-weight:500">${esc(rec.url)}</a>
+          </div>`;
         } else {
           previewHtml=`<div class="mh-detail-preview" style="padding:40px"><i data-lucide="file-text" class="w-16 h-16 text-accent"></i></div>`;
         }
+
+        const actionBtns=rec.kind==='link'?`
+          <button class="btn btn-primary" onclick="window.open('${esc(rec.url)}','_blank')"><i data-lucide="external-link" class="w-4 h-4"></i> Open Link</button>
+        `:`
+          <button class="btn" onclick="downloadMediaById('${rec.id}','${esc(rec.name)}')"><i data-lucide="download" class="w-4 h-4"></i> Download</button>
+          <button class="btn btn-danger" onclick="confirmDeleteMediaAsset('${rec.id}','${esc(rec.name)}')"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
+        `;
+
         detailEl.innerHTML=`
           <div class="mh-detail-top">
             <button class="btn" onclick="closeMediaDetail()"><i data-lucide="arrow-left" class="w-4 h-4"></i> Back to Gallery</button>
             <div style="display:flex;gap:8px">
-              <button class="btn" onclick="downloadMediaById('${rec.id}','${esc(rec.name)}')"><i data-lucide="download" class="w-4 h-4"></i> Download</button>
-              <button class="btn btn-danger" onclick="confirmDeleteMediaAsset('${rec.id}','${esc(rec.name)}')"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
+              ${actionBtns}
             </div>
           </div>
           ${previewHtml}
           <div class="mh-detail-meta-box">
             <div class="mh-detail-row">
-              <span class="text-fg-muted font-medium">Filename</span>
+              <span class="text-fg-muted font-medium">${rec.kind==='link'?'Title':'Filename'}</span>
               <span class="font-semibold">${esc(rec.name)}</span>
             </div>
             <div class="mh-detail-row">
@@ -820,8 +881,8 @@ async function renderMediaHubView(){
               <span>${esc(rec.type||rec.kind)}</span>
             </div>
             <div class="mh-detail-row">
-              <span class="text-fg-muted font-medium">File Size</span>
-              <span>${formatBytes(rec.size)}</span>
+              <span class="text-fg-muted font-medium">${rec.kind==='link'?'Domain / Host':'File Size'}</span>
+              <span>${rec.kind==='link'?esc(rec.host||rec.url):formatBytes(rec.size)}</span>
             </div>
             <div class="mh-detail-row">
               <span class="text-fg-muted font-medium">Created</span>
@@ -849,11 +910,11 @@ async function renderMediaHubView(){
       if(bodyEl) bodyEl.style.display='flex';
       if(detailEl){ detailEl.style.display='none'; detailEl.classList.remove('show'); }
       if(!all.length){
-        gridEl.innerHTML=`<div class="list-empty" style="grid-column:1/-1">No media in this view.<br>Upload or drop attachments into your notes!</div>`;
+        gridEl.innerHTML=`<div class="list-empty" style="grid-column:1/-1">No items in this view.<br>Upload attachments or paste links into your notes!</div>`;
       } else {
         const cardsHtml=await Promise.all(all.map(async r=>{
-          const url=await getMediaURL(r.id);
-          const refNote=notes.find(n=>n.content && n.content.includes(r.id));
+          const url=r.kind==='link'?r.url:(await getMediaURL(r.id));
+          const refNote=r.refNote||notes.find(n=>n.content && n.content.includes(r.id));
           let thumbContent=`<i data-lucide="file" class="mh-thumb-icon"></i>`;
           if(r.kind==='image'){
             thumbContent=`<img src="${url}" alt="${esc(r.name)}" loading="lazy">`;
@@ -861,13 +922,16 @@ async function renderMediaHubView(){
             thumbContent=`<i data-lucide="video" class="mh-thumb-icon"></i>`;
           } else if(r.kind==='audio'){
             thumbContent=`<i data-lucide="mic" class="mh-thumb-icon"></i>`;
+          } else if(r.kind==='link'){
+            const favicon=`https://www.google.com/s2/favicons?domain=${r.host||'google.com'}&sz=64`;
+            thumbContent=`<img src="${favicon}" alt="" style="width:36px;height:36px;border-radius:8px" onerror="this.outerHTML='<i data-lucide=\\'globe\\' class=\\'mh-thumb-icon\\'></i>'">`;
           }
           return `<div class="mh-card" data-mh-select="${r.id}">
             <div class="mh-thumb">${thumbContent}</div>
             <div class="mh-info">
               <div class="mh-title">${esc(r.name)}</div>
               <div class="mh-meta">
-                <span>${formatBytes(r.size)}</span>
+                <span>${r.kind==='link'?(r.host||'Web Link'):formatBytes(r.size)}</span>
                 <span>${timeAgo(r.createdAt)}</span>
               </div>
               ${refNote ? `
