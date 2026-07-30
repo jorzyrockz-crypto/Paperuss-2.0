@@ -65,6 +65,7 @@ async function saveMediaBlob(blob, name, kind){
     try{ processedBlob = await downscaleImageBlob(blob); }catch(_){}
   }
   const id=mediaUid();
+  const now = Date.now();
   await mediaPut({
     id,
     kind,
@@ -72,8 +73,12 @@ async function saveMediaBlob(blob, name, kind){
     type: processedBlob.type || blob.type || '',
     size: processedBlob.size || 0,
     blob: processedBlob,
-    createdAt: Date.now(),
-    cloudSyncedAt: 0
+    createdAt: now,
+    updatedAt: now,         // required for correct sync timestamp comparison
+    cloudSyncedAt: 0,       // will be set ONLY after confirmed upload
+    pendingUpload: true,    // marks this as needing cloud upload
+    uploadFailures: 0,      // retry counter
+    lastUploadAttempt: 0
   });
   if(typeof queueCloudSync==='function') queueCloudSync();
   return id;
@@ -85,24 +90,28 @@ function mediaVersion(record){
 }
 function mediaSyncIndicator(record){
   const isSignedIn=typeof currentSession==='object' && currentSession?.mode==='auth';
-  const isSynced=isSignedIn && (+record?.cloudSyncedAt||0)>=mediaVersion(record);
+  const failures = record?.uploadFailures||0;
+  const isPermanentlyFailed = isSignedIn && failures >= (typeof MAX_UPLOAD_FAILURES!=='undefined' ? MAX_UPLOAD_FAILURES : 5);
+  const isSynced=isSignedIn && !record?.pendingUpload && (+record?.cloudSyncedAt||0)>=mediaVersion(record);
+  if(isPermanentlyFailed) return {icon:'cloud-off',label:`Upload failed (${failures} attempts) — will retry when reconnected`,error:true};
   if(isSynced) return {icon:'cloud-check',label:'Synced online'};
   return isSignedIn
-    ? {icon:'cloud-upload',label:'Waiting to sync online'}
+    ? {icon:'cloud-upload',label: failures>0 ? `Retrying upload (attempt ${failures+1})…` : 'Waiting to sync online'}
     : {icon:'hard-drive',label:'Local only'};
 }
 function addMediaSyncIndicator(el,record){
   if(!el || el.dataset.mediaKind==='link') return;
   const status=mediaSyncIndicator(record);
   const isSignedIn=typeof currentSession==='object' && currentSession?.mode==='auth';
-  const isSynced=isSignedIn && (+record?.cloudSyncedAt||0)>=mediaVersion(record);
+  const isSynced=isSignedIn && !record?.pendingUpload && (+record?.cloudSyncedAt||0)>=mediaVersion(record);
   const isUploading=isSignedIn && !isSynced;
+  const isPermanentlyFailed = status.error;
 
-  // Manage animated glassmorphic overlay layer
+  // ── Animated glassmorphic overlay layer ──
   let overlayWrap = el.closest('.media-sync-overlay-wrap');
   let overlay = (overlayWrap || el.parentElement)?.querySelector?.('.media-sync-overlay');
 
-  if(isUploading){
+  if(isUploading && !isPermanentlyFailed){
     if(!overlayWrap && el.tagName === 'IMG' && el.parentNode){
       overlayWrap = document.createElement('span');
       overlayWrap.className = 'media-sync-overlay-wrap';
@@ -115,21 +124,55 @@ function addMediaSyncIndicator(el,record){
       overlay = document.createElement('div');
       overlay.className = 'media-sync-overlay';
       overlay.contentEditable = 'false';
+      const retryLabel = (record?.uploadFailures||0) > 0
+        ? ` (retry ${record.uploadFailures})` : '';
       overlay.innerHTML = `
         <div class="mso-spinner"></div>
-        <div class="mso-text"><i data-lucide="cloud-upload" class="w-4 h-4"></i> Syncing online...</div>
+        <div class="mso-progress-bar"><div class="mso-progress-fill" style="width:0%"></div></div>
+        <div class="mso-text"><i data-lucide="cloud-upload" class="w-4 h-4"></i> Syncing online${retryLabel}...</div>
       `;
       container.appendChild(overlay);
       if(typeof lucide==='object' && typeof lucide.createIcons==='function') lucide.createIcons();
+
+      // Wire live progress events for this specific media element
+      const mediaId = el.getAttribute('data-media-id') || record?.id;
+      if(mediaId){
+        const onProgress = (e) => {
+          if(e.detail.id !== mediaId) return;
+          const fill = overlay.querySelector('.mso-progress-fill');
+          const text = overlay.querySelector('.mso-text');
+          if(e.detail.error){
+            if(fill) fill.style.width = '0%';
+            if(text) text.innerHTML = `<i data-lucide="alert-circle" class="w-4 h-4"></i> Retrying (${e.detail.failures}/${typeof MAX_UPLOAD_FAILURES!=='undefined'?MAX_UPLOAD_FAILURES:5})…`;
+            if(typeof lucide==='object' && typeof lucide.createIcons==='function') lucide.createIcons();
+          } else {
+            if(fill) fill.style.width = `${e.detail.percent}%`;
+            if(text) text.innerHTML = `<i data-lucide="cloud-upload" class="w-4 h-4"></i> ${e.detail.percent}% — ${formatBytes(e.detail.bytesTransferred)}/${formatBytes(e.detail.totalBytes)}`;
+            if(typeof lucide==='object' && typeof lucide.createIcons==='function') lucide.createIcons();
+          }
+        };
+        document.addEventListener('media-upload-progress', onProgress);
+        // Auto-remove listener when overlay is removed from DOM
+        const obs = new MutationObserver(() => {
+          if(!overlay.isConnected){ document.removeEventListener('media-upload-progress', onProgress); obs.disconnect(); }
+        });
+        obs.observe(document.body, {childList:true, subtree:true});
+      }
     }
-    overlay.classList.remove('synced-fade');
+    overlay.classList.remove('synced-fade','mso-error');
   } else if(overlay){
-    overlay.classList.add('synced-fade');
-    setTimeout(() => {
-      if(overlay && overlay.parentElement) overlay.remove();
-    }, 350);
+    if(isPermanentlyFailed){
+      overlay.classList.add('mso-error');
+      const text = overlay.querySelector('.mso-text');
+      if(text) text.innerHTML = `<i data-lucide="cloud-off" class="w-4 h-4"></i> Upload failed — tap to retry`;
+      if(typeof lucide==='object' && typeof lucide.createIcons==='function') lucide.createIcons();
+    } else {
+      overlay.classList.add('synced-fade');
+      setTimeout(() => { if(overlay && overlay.parentElement) overlay.remove(); }, 350);
+    }
   }
 
+  // ── Compact sync badge (cloud icon below media) ──
   let badge;
   if(el.classList.contains('media-card')){
     badge=el.querySelector('[data-media-sync-indicator]');
@@ -148,7 +191,7 @@ function addMediaSyncIndicator(el,record){
       el.insertAdjacentElement('afterend',badge);
     }
   }
-  badge.className=`media-sync-indicator ${status.icon==='cloud-check'?'is-synced':''}`;
+  badge.className=`media-sync-indicator ${status.icon==='cloud-check'?'is-synced':''} ${isPermanentlyFailed?'is-error':''}`;
   badge.title=status.label;
   badge.setAttribute('aria-label',status.label);
   badge.innerHTML=`<i data-lucide="${status.icon}" aria-hidden="true"></i>`;
