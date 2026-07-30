@@ -1,3 +1,5 @@
 {
-  "outputDirectory": "."
+  "buildCommand": "npm run build:vercel",
+  "outputDirectory": ".worker-assets",
+  "cleanUrls": true
 }
