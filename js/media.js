@@ -36,6 +36,7 @@ async function insertImageFile(file){
   const defSize=(typeof IMG_DEFAULT_SIZE==='object' && typeof deviceClass==='function')
     ? IMG_DEFAULT_SIZE[deviceClass()] : 'large';
   insertHTMLAtCaret(`<img data-media-id="${id}" data-media-kind="image" data-img-size="${defSize}" src="${url}" alt="${esc(file.name)}">`);
+  save();
   toast('Image added');
   renderStorageStats();
 }
@@ -44,6 +45,7 @@ async function insertVideoFile(file){
   const id=await saveMediaBlob(file, file.name, 'video');
   const url=await getMediaURL(id);
   insertHTMLAtCaret(`<video controls preload="metadata" data-media-id="${id}" data-media-kind="video" src="${url}"></video>`);
+  save();
   toast('Video added');
   renderStorageStats();
 }
@@ -51,6 +53,7 @@ async function insertAudioBlob(blob, name='Voice recording'){
   const id=await saveMediaBlob(blob, name, 'audio');
   const url=await getMediaURL(id);
   insertHTMLAtCaret(`<audio controls preload="metadata" data-media-id="${id}" data-media-kind="audio" src="${url}"></audio>`);
+  save();
   toast('Recording added');
   renderStorageStats();
 }
@@ -68,9 +71,11 @@ async function insertAttachmentFile(file){
       <button class="mc-action" data-mc-download="${id}" data-mc-name="${esc(file.name)}">Download</button>
     </div>`
   );
+  save();
   toast('File attached');
   renderStorageStats();
 }
+
 function fileIconSVG(type,name){
   const ext=(name||'').split('.').pop().toLowerCase();
   if(type.startsWith('image/')) return '<svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M1.75 2.5a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V2.75a.25.25 0 0 0-.25-.25ZM0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25Zm5 2.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z"/></svg>';

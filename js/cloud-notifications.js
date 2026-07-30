@@ -475,17 +475,22 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
     const localUpdated=record.updatedAt||record.createdAt||0;
     const remoteUpdated=remote?.updatedAt||remote?.createdAt||0;
     if(!remote || localUpdated>remoteUpdated){
-      await mediaStorageRef(uid,record.id).put(record.blob,{
-        contentType:record.type||record.blob?.type||'application/octet-stream'
-      });
-      manifestMap.set(record.id,mediaManifestEntry(record));
+      if(record.blob && (record.blob instanceof Blob)){
+        await mediaStorageRef(uid,record.id).put(record.blob,{
+          contentType:record.type||record.blob?.type||'application/octet-stream'
+        });
+        manifestMap.set(record.id,mediaManifestEntry(record));
+      }else{
+        console.warn(`Media ${record.id} has no valid blob, skipping upload`);
+      }
     }
     // Persist an acknowledgement so the editor can show a per-attachment
     // online-sync indicator without performing a storage request on render.
-    const syncedRecord={...record,cloudSyncedAt:localUpdated};
+    const syncedRecord={...record,cloudSyncedAt:localUpdated||Date.now()};
     await mediaPut(syncedRecord);
     localMap.set(record.id,syncedRecord);
   }
+
 
   for(const item of manifestMap.values()){
     if(localMap.has(item.id)) continue;
@@ -617,9 +622,11 @@ async function syncNow(opts){
 
     localStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
     updateSyncStatus('synced');
+    if(typeof hydrateMediaInEditor==='function') hydrateMediaInEditor();
     if(!opts.silent) toast('Synced with cloud');
     if(syncRequestedWhileBusy){ syncRequestedWhileBusy=false; queueCloudSync(); }
   }catch(err){
+
     console.error('PapeRuss cloud sync failed',err);
     updateSyncStatus('error');
     if(!opts.silent) toast('Sync failed — will retry when online');
