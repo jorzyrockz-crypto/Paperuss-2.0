@@ -132,25 +132,39 @@ function initBlockTools(){
     };
   }
 
-  /* ---------- Drag & drop block rearrangement ---------- */
+  /* ---------- Drag & drop block & media rearrangement ---------- */
   const dragHandle=document.getElementById('blockDragHandle');
   let dropIndicator=null;
-  let directDraggedMedia = null;
+  let activeDragBlock=null;
+
+  function ensureDropIndicator(){
+    if(!dropIndicator){
+      dropIndicator=document.createElement('div');
+      dropIndicator.className='block-drop-indicator';
+    }
+    return dropIndicator;
+  }
+
+  function cleanupDragState(){
+    if(activeDragBlock) activeDragBlock.style.opacity='';
+    activeDragBlock=null;
+    if(activeGutterBlock) activeGutterBlock.classList.remove('opacity-50');
+    if(dropIndicator && dropIndicator.parentElement) dropIndicator.remove();
+    dropIndicator=null;
+    stopAutoScroll();
+  }
 
   if(dragHandle){
     dragHandle.addEventListener('dragstart', e=>{
       if(!activeGutterBlock) return;
+      activeDragBlock=activeGutterBlock;
       e.dataTransfer.setData('text/plain', 'modular-block-drag');
+      e.dataTransfer.effectAllowed='move';
       activeGutterBlock.classList.add('opacity-50');
-      dropIndicator=document.createElement('div');
-      dropIndicator.className='block-drop-indicator';
+      ensureDropIndicator();
       try{ e.dataTransfer.setDragImage(activeGutterBlock, 20, 20); }catch(_){}
     });
-    dragHandle.addEventListener('dragend', ()=>{
-      if(activeGutterBlock) activeGutterBlock.classList.remove('opacity-50');
-      if(dropIndicator && dropIndicator.parentElement) dropIndicator.remove();
-      dropIndicator=null; stopAutoScroll();
-    });
+    dragHandle.addEventListener('dragend', cleanupDragState);
   }
 
   // Allow direct grabbing of media elements anywhere on the block
@@ -163,69 +177,54 @@ function initBlockTools(){
 
   ed.addEventListener('dragstart', e=>{
     const mediaEl=e.target.closest('[data-media-id], .media-card, figure');
-    if(mediaEl && !e.dataTransfer.getData('text/plain')){
-      directDraggedMedia = mediaEl;
-      e.dataTransfer.setData('application/x-paperuss-media-move', '1');
+    if(mediaEl && ed.contains(mediaEl)){
+      activeDragBlock = mediaEl;
+      e.dataTransfer.setData('text/plain', 'paperuss-media-drag');
       e.dataTransfer.effectAllowed = 'move';
-      mediaEl.style.opacity = '0.5';
+      mediaEl.style.opacity = '0.45';
+      ensureDropIndicator();
     }
   });
 
-  ed.addEventListener('dragend', e=>{
-    if(directDraggedMedia){
-      directDraggedMedia.style.opacity = '';
-      directDraggedMedia = null;
-    }
-  });
+  ed.addEventListener('dragend', cleanupDragState);
 
   ed.addEventListener('dragover', e=>{
-    if(directDraggedMedia){
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      return;
-    }
-    if(!activeGutterBlock || !dropIndicator) return;
+    if(!activeDragBlock) return;
     e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
     scheduleAutoScroll(e.clientY);
-    const overBlock=e.target.closest(blockSelector);
-    if(overBlock && overBlock !== activeGutterBlock && ed.contains(overBlock)){
-      const r=overBlock.getBoundingClientRect();
-      const isBottom=(e.clientY - r.top) > (r.height / 2);
-      if(isBottom) overBlock.parentElement.insertBefore(dropIndicator, overBlock.nextSibling);
-      else overBlock.parentElement.insertBefore(dropIndicator, overBlock);
+
+    const ind = ensureDropIndicator();
+    const overBlock = e.target.closest('p, div, h1, h2, h3, h4, blockquote, table, figure, .media-card, img, video, audio') || e.target;
+    const validBlock = overBlock ? (overBlock.closest('.note-editor > *') || overBlock) : null;
+
+    if(validBlock && validBlock !== activeDragBlock && validBlock !== ind && ed.contains(validBlock)){
+      const r = validBlock.getBoundingClientRect();
+      const isBottom = (e.clientY - r.top) > (r.height / 2);
+      if(isBottom){
+        validBlock.parentElement.insertBefore(ind, validBlock.nextSibling);
+      } else {
+        validBlock.parentElement.insertBefore(ind, validBlock);
+      }
     }
   });
 
   ed.addEventListener('drop', e=>{
-    if(directDraggedMedia){
-      e.preventDefault();
-      e.stopPropagation();
-      let target = document.elementFromPoint(e.clientX, e.clientY);
-      if(target && ed.contains(target)){
-        const blockTarget = target.closest('p, div, h1, h2, h3, blockquote, table, figure, .media-card') || target;
-        if(blockTarget && blockTarget !== directDraggedMedia){
-          const rect = blockTarget.getBoundingClientRect();
-          const midY = rect.top + rect.height / 2;
-          if(e.clientY > midY) blockTarget.after(directDraggedMedia);
-          else blockTarget.before(directDraggedMedia);
-        }
-      }
-      directDraggedMedia.style.opacity = '';
-      directDraggedMedia = null;
+    if(!activeDragBlock) return;
+    e.preventDefault();
+    e.stopPropagation();
+    stopAutoScroll();
+
+    const ind = dropIndicator;
+    if(ind && ind.parentElement){
+      ind.parentElement.insertBefore(activeDragBlock, ind);
+      ind.remove();
       handleBodyInput();
       save();
-      return;
+      addNotification({type:'edit',title:'Block rearranged',body:'A media or content block was moved.',icon:'grip-vertical'});
     }
-    if(!activeGutterBlock || !dropIndicator) return;
-    if(e.dataTransfer.getData('text/plain') === 'modular-block-drag'){
-      e.preventDefault(); stopAutoScroll();
-      if(dropIndicator.parentElement){
-        dropIndicator.parentElement.insertBefore(activeGutterBlock, dropIndicator);
-        dropIndicator.remove();
-        handleBodyInput();
-        addNotification({type:'edit',title:'Block rearranged',body:'A content block was moved.',icon:'grip-vertical'});
-      }
-    }
+    cleanupDragState();
   });
 
   /* ---------- Slash "/" command ---------- */
