@@ -2,6 +2,9 @@
   "name": "paperuss-2",
   "main": "worker/index.js",
   "compatibility_date": "2025-06-01",
+  "build": {
+    "command": "node tools/stage-worker-assets.cjs"
+  },
   "assets": {
     "directory": ".worker-assets",
     "binding": "ASSETS",
