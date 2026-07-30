@@ -1,5 +1,15 @@
 {
-  "generatedAt": "2026-07-30T03:17:14.962Z",
+  "generatedAt": "2026-07-30T03:54:11.185Z",
   "source": "https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases",
-  "releases": []
+  "releases": [
+    {
+      "tagName": "v2.0.0",
+      "name": "PapeRuss 2.0 Official Release",
+      "title": "Major Feature Release & Improvements",
+      "publishedAt": "2026-07-30T03:54:11.178Z",
+      "body": "### What's New in PapeRuss 2.0\n- **Block & Rich Text Editor**: Enhanced formatting, table insertion, drag-and-drop media, slash commands, and block handles.\n- **Cloud Sync & Firebase Auth**: Cross-device synchronization with complete offline fallback and local IndexedDB media storage.\n- **Attachment & Scroll Fixes**: Smooth note navigation, auto-scroll containment, and resilient offline attachment caching.\n- **Task & Activity Hub**: Centralized notifications, due-task alert banners, completion chimes, and reminder scheduling.\n- **Theme & Accent Customization**: Vibrant dark/light modes and customizable accent themes.\n- **Data Backup & Clearing**: Portability tools to export/import backups and clear local offline cache safely.",
+      "url": "https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases",
+      "prerelease": false
+    }
+  ]
 }
