@@ -361,6 +361,7 @@ function sanitizeForStorage(html){
     .replace(/\sdata-blob-url="[^"]*"/g,'');
   const temp=document.createElement('div');
   temp.innerHTML=clean;
+  temp.querySelectorAll('[data-media-sync-indicator]').forEach(el=>el.remove());
   temp.querySelectorAll('.table-move-placeholder,[data-table-ui]').forEach(el=>el.remove());
   temp.querySelectorAll('.tbl-selected').forEach(cell=>cell.classList.remove('tbl-selected'));
   temp.querySelectorAll('.table-selection-mode,.table-moving').forEach(el=>{

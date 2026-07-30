@@ -1,14 +1,14 @@
 /* ============ SETTINGS PAGE ============ */
 /* Settings occupies the full page — the note-list column is hidden */
 .note-list.settings-hidden{display:none !important}
-.settings-view{display:none;flex-direction:column;height:100%;overflow-y:auto;background:var(--canvas)}
+.settings-view{display:none;flex:1;min-height:0;flex-direction:column;overflow:hidden;background:var(--canvas)}
 .settings-view.show{display:flex}
 .settings-header{
   display:flex;align-items:center;gap:10px;padding:16px 24px;
   border-bottom:1px solid var(--border);background:var(--header-bg);flex-shrink:0;
 }
 .settings-header h2{font-size:18px;font-weight:700;letter-spacing:-.3px}
-.settings-body{flex:1;overflow-y:auto;padding:28px 32px;max-width:900px;width:100%;margin:0 auto}
+.settings-body{flex:1;min-height:0;overflow-y:auto;padding:28px 32px;max-width:900px;width:100%;margin:0 auto}
 .settings-section{
   background:var(--subtle);border:1px solid var(--border);border-radius:14px;
   padding:18px 20px;margin-bottom:16px;

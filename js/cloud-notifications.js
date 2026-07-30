@@ -443,7 +443,7 @@ function mediaManifestEntry(record){
   };
 }
 
-async function syncMedia(uid,remoteManifest,deletions){
+async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
   const localRecords=await mediaAll();
   if(!fbStorage){
     if(localRecords.length || (remoteManifest||[]).length) throw new Error('Firebase Storage SDK is unavailable');
@@ -480,6 +480,11 @@ async function syncMedia(uid,remoteManifest,deletions){
       });
       manifestMap.set(record.id,mediaManifestEntry(record));
     }
+    // Persist an acknowledgement so the editor can show a per-attachment
+    // online-sync indicator without performing a storage request on render.
+    const syncedRecord={...record,cloudSyncedAt:localUpdated};
+    await mediaPut(syncedRecord);
+    localMap.set(record.id,syncedRecord);
   }
 
   for(const item of manifestMap.values()){
@@ -488,7 +493,19 @@ async function syncMedia(uid,remoteManifest,deletions){
     const response=await fetch(url);
     if(!response.ok) throw new Error(`Could not download media ${item.id}`);
     const blob=await response.blob();
-    await mediaPut({...item,size:blob.size,blob});
+    const downloadedRecord={...item,size:blob.size,blob,cloudSyncedAt:item.updatedAt||item.createdAt||Date.now()};
+    await mediaPut(downloadedRecord);
+    localMap.set(item.id,downloadedRecord);
+  }
+
+  // Do not publish note HTML that points at a blob unavailable on both sides.
+  // This preserves the previous cloud copy and lets the next retry repair a
+  // transient upload/download failure instead of syncing a broken attachment.
+  const unavailable=[...(requiredMediaIds||[])].filter(id=>
+    !localMap.has(id) && !manifestMap.has(id)
+  );
+  if(unavailable.length){
+    throw new Error(`Referenced media unavailable: ${unavailable.join(', ')}`);
   }
 
   return Array.from(manifestMap.values());
@@ -563,7 +580,12 @@ async function syncNow(opts){
     const mergedPortable=(+remote.portableStateUpdatedAt||0)>localPortableUpdated
       ? {...collectPortableState(),...(remote.portableState||{})}
       : collectPortableState();
-    const mergedMediaManifest=await syncMedia(session.uid,remote.mediaManifest||[],mergedDeletions.media);
+    const requiredMediaIds=typeof referencedStoredMediaIds==='function'
+      ? referencedStoredMediaIds(mergedNotes)
+      : new Set();
+    const mergedMediaManifest=await syncMedia(
+      session.uid,remote.mediaManifest||[],mergedDeletions.media,requiredMediaIds
+    );
 
     cloudSyncApplyingRemote=true;
     try{

@@ -61,9 +61,47 @@ const mediaUid = () => 'm_'+Date.now().toString(36)+Math.random().toString(36).s
 
 async function saveMediaBlob(blob, name, kind){
   const id=mediaUid();
-  await mediaPut({id, kind, name:name||'file', type:blob.type||'', size:blob.size||0, blob, createdAt:Date.now()});
+  await mediaPut({id, kind, name:name||'file', type:blob.type||'', size:blob.size||0, blob, createdAt:Date.now(), cloudSyncedAt:0});
   if(typeof queueCloudSync==='function') queueCloudSync();
   return id;
+}
+
+function mediaVersion(record){
+  return +record?.updatedAt||+record?.createdAt||0;
+}
+function mediaSyncIndicator(record){
+  const isSignedIn=typeof currentSession==='object' && currentSession?.mode==='auth';
+  const isSynced=isSignedIn && (+record?.cloudSyncedAt||0)>=mediaVersion(record);
+  if(isSynced) return {icon:'cloud-check',label:'Synced online'};
+  return isSignedIn
+    ? {icon:'cloud-upload',label:'Waiting to sync online'}
+    : {icon:'hard-drive',label:'Local only'};
+}
+function addMediaSyncIndicator(el,record){
+  if(!el || el.dataset.mediaKind==='link') return;
+  const status=mediaSyncIndicator(record);
+  let badge;
+  if(el.classList.contains('media-card')){
+    badge=el.querySelector('[data-media-sync-indicator]');
+    if(!badge){
+      badge=document.createElement('span');
+      badge.dataset.mediaSyncIndicator='1';
+      badge.contentEditable='false';
+      el.appendChild(badge);
+    }
+  }else{
+    badge=el.nextElementSibling;
+    if(!badge || !badge.matches('[data-media-sync-indicator]')){
+      badge=document.createElement('span');
+      badge.dataset.mediaSyncIndicator='1';
+      badge.contentEditable='false';
+      el.insertAdjacentElement('afterend',badge);
+    }
+  }
+  badge.className=`media-sync-indicator ${status.icon==='cloud-check'?'is-synced':''}`;
+  badge.title=status.label;
+  badge.setAttribute('aria-label',status.label);
+  badge.innerHTML=`<i data-lucide="${status.icon}" aria-hidden="true"></i>`;
 }
 async function getMediaURL(id){
   if(urlCache.has(id)) return urlCache.get(id);
@@ -99,13 +137,31 @@ function dataURLToBlob(dataURL){
   return new Blob([arr],{type});
 }
 
-/* Collect all media IDs referenced by the current notes */
-function referencedMediaIds(){
+/* Collect all media IDs referenced by a set of notes. */
+function referencedMediaIds(sourceNotes=notes){
   const set=new Set();
-  notes.forEach(n=>{
+  sourceNotes.forEach(n=>{
     if(!n.content) return;
     const matches=n.content.match(/data-media-id="([^"]+)"/g)||[];
     matches.forEach(m=>set.add(m.match(/"([^"]+)"/)[1]));
+  });
+  return set;
+}
+
+/*
+   Rich-link cards have a data-media-id for editor consistency but no blob to
+   upload. Everything else with a media id must exist in IndexedDB or Firebase
+   Storage before the note document is allowed to sync.
+*/
+function referencedStoredMediaIds(sourceNotes=notes){
+  const set=new Set();
+  sourceNotes.forEach(n=>{
+    const tags=String(n.content||'').match(/<[^>]*\bdata-media-id="[^"]+"[^>]*>/g)||[];
+    tags.forEach(tag=>{
+      if(/\bdata-media-kind="link"/.test(tag)) return;
+      const match=tag.match(/\bdata-media-id="([^"]+)"/);
+      if(match) set.add(match[1]);
+    });
   });
   return set;
 }
@@ -142,6 +198,8 @@ async function hydrateMediaInEditor(){
     const id=el.getAttribute('data-media-id');
     const kind=el.getAttribute('data-media-kind');
     if(kind==='link') continue; // rich links don't need blob URLs
+    const record=await mediaGet(id);
+    if(!record){ el.setAttribute('data-missing','1'); continue; }
     const url=await getMediaURL(id);
     if(!url){ el.setAttribute('data-missing','1'); continue; }
     if(el.tagName==='IMG' || el.tagName==='AUDIO' || el.tagName==='VIDEO'){
@@ -150,7 +208,9 @@ async function hydrateMediaInEditor(){
       // Attach a click handler for download button (delegated below too, but this ensures URL is warm)
       el.dataset.blobUrl=url;
     }
+    addMediaSyncIndicator(el,record);
   }
+  refreshIcons();
 }
 
 let notes = [];
