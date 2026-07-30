@@ -1,26 +1,28 @@
 /* ============================================================
    EVENT WIRING + INIT
    ============================================================ */
+function selectFilter(filterName){
+  if(!filterName) return;
+  state.filter=filterName; state.tag=null; state.currentMediaId=null;
+  document.querySelectorAll('.nav-btn').forEach(x=>x.classList.toggle('active', x.dataset.filter===filterName));
+  if(!['media','calendar','tasks','settings'].includes(state.filter)){
+    state.currentId = filteredNotes()[0]?.id || null;
+  }
+  renderAll();
+  if(window.innerWidth<=640){
+    if(['all','pinned','archived','trash'].includes(state.filter)) showMobileList();
+    else showMobileEditor();
+  }
+  if(typeof closeSidebarMobile==='function') closeSidebarMobile();
+}
+
 function bind(){
   document.getElementById('newNoteBtn').onclick=()=>contextualNew();
 
   document.getElementById('searchInput').addEventListener('input', e=>{ state.query=e.target.value; renderList(); });
 
-  document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>{
-    state.filter=b.dataset.filter; state.tag=null; state.currentMediaId=null;
-    document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
-    b.classList.add('active');
-    if(!['media','calendar','tasks','settings'].includes(state.filter)){
-      state.currentId = filteredNotes()[0]?.id || null;
-    }
-    renderAll();
-    if(window.innerWidth<=640){
-      // Notes pages always open on the list. Utility pages render their full view.
-      if(['all','pinned','archived','trash'].includes(state.filter)) showMobileList();
-      else showMobileEditor();
-    }
-    closeSidebarMobile();
-  });
+  document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>selectFilter(b.dataset.filter));
+
 
   document.getElementById('sortSelect').onchange=e=>{ state.sort=e.target.value; renderList(); };
 
