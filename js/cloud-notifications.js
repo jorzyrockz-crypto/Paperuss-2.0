@@ -701,11 +701,17 @@ function initAuthAndSync(){
   };
   const syncNowBtn=document.getElementById('profileSyncNowBtn');
   if(syncNowBtn) syncNowBtn.onclick=()=>syncNow();
+  const settingsBtn=document.getElementById('profileSettingsBtn');
+  if(settingsBtn) settingsBtn.onclick=()=>{
+    document.getElementById('profilePanel')?.classList.remove('show');
+    if(typeof selectFilter==='function') selectFilter('settings');
+  };
   const whatsNewBtn=document.getElementById('profileWhatsNewBtn');
   if(whatsNewBtn) whatsNewBtn.onclick=()=>{
     document.getElementById('profilePanel')?.classList.remove('show');
     if(typeof openChangelogModal==='function') openChangelogModal();
   };
+
   const signInBtn=document.getElementById('profileSignInBtn');
   if(signInBtn) signInBtn.onclick=()=>{
     document.getElementById('profilePanel')?.classList.remove('show');
