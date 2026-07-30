@@ -586,6 +586,9 @@
   border:1px solid var(--border);padding:9px 13px;text-align:left;vertical-align:top;
   min-width:60px;position:relative;word-break:break-word;
   transition: background .12s ease, border .12s ease;
+  cursor:text;
+  color:var(--fg);
+  caret-color:var(--fg);
 }
 .note-editor table th{background:var(--subtle);font-weight:700;color:var(--fg)}
 .note-editor table td:focus,.note-editor table th:focus{outline:2px solid var(--accent);outline-offset:-2px}
@@ -608,6 +611,7 @@
 /* Multi-cell selection highlight + table extras */
 .note-editor td.tbl-selected,.note-editor th.tbl-selected{
   outline:2px solid var(--accent);outline-offset:-2px;background-color:var(--selection)!important;
+  color:var(--fg);caret-color:var(--fg);
 }
 .note-editor table.table-selection-mode{
   touch-action:none;
@@ -615,6 +619,11 @@
   -webkit-user-select:none;
   -webkit-touch-callout:none;
 }
+.note-editor table.table-selection-mode td,
+.note-editor table.table-selection-mode th{
+  cursor:cell;
+}
+
 .note-editor table.alt-shading tbody tr:nth-child(even) td{background:var(--subtle)}
 .note-editor table.tbl-mobile-wrap{min-width:480px}
 /* Row resize affordance (desktop/tablet) */
