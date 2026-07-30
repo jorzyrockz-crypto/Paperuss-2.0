@@ -34,6 +34,33 @@ function applyFontStyle(fontStyle){
 }
 
 /* ============================================================
+   CLOSE ALL FLOATING EDITOR TOOLS
+   Call this whenever the user navigates to a different page/filter
+   so the block gutter, slash menu, and image context menu don't
+   linger on top of unrelated views.
+   ============================================================ */
+function closeAllContextTools(){
+  // Block gutter
+  const gutter = document.getElementById('blockGutter');
+  if(gutter) gutter.classList.remove('show','touch-dragging');
+
+  // Slash / block command menu
+  const slashMenu = document.getElementById('blockCommandMenu');
+  if(slashMenu) slashMenu.classList.remove('show');
+
+  // Image / media context menu
+  const imageMenu = document.getElementById('imageContextMenu');
+  if(imageMenu) imageMenu.classList.remove('show');
+
+  // Font-style dropdown
+  const fontDrop = document.getElementById('fontStyleDropdown');
+  if(fontDrop) fontDrop.classList.remove('show');
+
+  // Cancel any in-progress touch drag
+  if(typeof handleTouchCancel === 'function') handleTouchCancel();
+}
+
+/* ============================================================
    MODULAR BLOCK GUTTER & COMMAND MENU
    ============================================================ */
 let activeGutterBlock = null;
@@ -175,7 +202,9 @@ function initBlockTools(){
     dragHandle.addEventListener('dragstart', e=>{
       if(!activeGutterBlock) return;
       activeDragBlock=activeGutterBlock;
-      e.dataTransfer.setData('text/plain', 'modular-block-drag');
+      // Use custom MIME type to avoid browser inserting text into contenteditable on drop
+      e.dataTransfer.clearData();
+      e.dataTransfer.setData('application/x-paperuss-drag', 'block');
       e.dataTransfer.effectAllowed='move';
       activeGutterBlock.classList.add('opacity-50');
       ensureDropIndicator();
@@ -381,7 +410,11 @@ function initBlockTools(){
     const mediaEl=e.target.closest('[data-media-id], .media-card, figure');
     if(mediaEl && ed.contains(mediaEl)){
       activeDragBlock = mediaEl;
-      e.dataTransfer.setData('text/plain', 'paperuss-media-drag');
+      // Use a custom MIME type — NOT text/plain — so the browser does NOT
+      // insert a text string into the contenteditable on drop, which causes
+      // the element to appear duplicated.
+      e.dataTransfer.clearData();
+      e.dataTransfer.setData('application/x-paperuss-drag', 'media');
       e.dataTransfer.effectAllowed = 'move';
       mediaEl.style.opacity = '0.45';
       ensureDropIndicator();

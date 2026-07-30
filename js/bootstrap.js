@@ -3,6 +3,9 @@
    ============================================================ */
 function selectFilter(filterName){
   if(!filterName) return;
+  // Close any floating editor tools (gutter, slash menu, image context menu)
+  // before switching pages so they don't linger on unrelated views.
+  if(typeof closeAllContextTools==='function') closeAllContextTools();
   state.filter=filterName; state.tag=null; state.currentMediaId=null;
   document.querySelectorAll('.nav-btn').forEach(x=>x.classList.toggle('active', x.dataset.filter===filterName));
   if(!['media','calendar','tasks','settings'].includes(state.filter)){
@@ -30,7 +33,10 @@ function bind(){
     const mediaCard=e.target.closest('[data-media-card-id]');
     if(mediaCard){ selectMediaAsset(mediaCard.dataset.mediaCardId); return; }
     const card=e.target.closest('.note-card');
-    if(card && card.dataset.id) selectNote(card.dataset.id);
+    if(card && card.dataset.id){
+      if(typeof closeAllContextTools==='function') closeAllContextTools();
+      selectNote(card.dataset.id);
+    }
   };
 
   // Media Hub gallery + tabs
