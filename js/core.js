@@ -60,11 +60,25 @@ async function mediaAll(){
 const mediaUid = () => 'm_'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 
 async function saveMediaBlob(blob, name, kind){
+  let processedBlob = blob;
+  if(kind === 'image' && typeof downscaleImageBlob === 'function'){
+    try{ processedBlob = await downscaleImageBlob(blob); }catch(_){}
+  }
   const id=mediaUid();
-  await mediaPut({id, kind, name:name||'file', type:blob.type||'', size:blob.size||0, blob, createdAt:Date.now(), cloudSyncedAt:0});
+  await mediaPut({
+    id,
+    kind,
+    name: name || 'file',
+    type: processedBlob.type || blob.type || '',
+    size: processedBlob.size || 0,
+    blob: processedBlob,
+    createdAt: Date.now(),
+    cloudSyncedAt: 0
+  });
   if(typeof queueCloudSync==='function') queueCloudSync();
   return id;
 }
+
 
 function mediaVersion(record){
   return +record?.updatedAt||+record?.createdAt||0;

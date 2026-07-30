@@ -470,26 +470,38 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
     }
   }
 
-  for(const record of localMap.values()){
-    const remote=manifestMap.get(record.id);
-    const localUpdated=record.updatedAt||record.createdAt||0;
-    const remoteUpdated=remote?.updatedAt||remote?.createdAt||0;
-    if(!remote || localUpdated>remoteUpdated){
-      if(record.blob && (record.blob instanceof Blob)){
-        await mediaStorageRef(uid,record.id).put(record.blob,{
-          contentType:record.type||record.blob?.type||'application/octet-stream'
-        });
-        manifestMap.set(record.id,mediaManifestEntry(record));
-      }else{
-        console.warn(`Media ${record.id} has no valid blob, skipping upload`);
-      }
-    }
-    // Persist an acknowledgement so the editor can show a per-attachment
-    // online-sync indicator without performing a storage request on render.
-    const syncedRecord={...record,cloudSyncedAt:localUpdated||Date.now()};
-    await mediaPut(syncedRecord);
-    localMap.set(record.id,syncedRecord);
+  const pendingUploads = Array.from(localMap.values()).filter(record => {
+    const remote = manifestMap.get(record.id);
+    const localUpdated = record.updatedAt || record.createdAt || 0;
+    const remoteUpdated = remote?.updatedAt || remote?.createdAt || 0;
+    return !remote || localUpdated > remoteUpdated;
+  });
+
+  if(pendingUploads.length > 0){
+    console.log(`PapeRuss: Cloud sync uploading ${pendingUploads.length} media asset(s)...`);
+    updateSyncStatus('syncing', `Uploading ${pendingUploads.length} asset${pendingUploads.length!==1?'s':''}...`);
   }
+
+  for(let i=0; i<pendingUploads.length; i++){
+    const record = pendingUploads[i];
+    if(record.blob && (record.blob instanceof Blob)){
+      updateSyncStatus('syncing', `Uploading ${i+1}/${pendingUploads.length}: ${record.name||'photo'} (${formatBytes(record.blob.size)})`);
+      await mediaStorageRef(uid, record.id).put(record.blob, {
+        contentType: record.type || record.blob?.type || 'application/octet-stream'
+      });
+      manifestMap.set(record.id, mediaManifestEntry(record));
+    } else {
+      console.warn(`Media ${record.id} has no valid blob, skipping upload`);
+    }
+  }
+
+  for(const record of localMap.values()){
+    const localUpdated = record.updatedAt || record.createdAt || 0;
+    const syncedRecord = {...record, cloudSyncedAt: localUpdated || Date.now()};
+    await mediaPut(syncedRecord);
+    localMap.set(record.id, syncedRecord);
+  }
+
 
 
   for(const item of manifestMap.values()){
