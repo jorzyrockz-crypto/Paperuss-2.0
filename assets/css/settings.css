@@ -1,14 +1,14 @@
 /* ============ SETTINGS PAGE ============ */
 /* Settings occupies the full page — the note-list column is hidden */
 .note-list.settings-hidden{display:none !important}
-.settings-view{display:none;flex-direction:column;height:100%;overflow-y:auto;background:var(--canvas)}
+.settings-view{display:none;flex:1;min-height:0;flex-direction:column;overflow:hidden;background:var(--canvas)}
 .settings-view.show{display:flex}
 .settings-header{
   display:flex;align-items:center;gap:10px;padding:16px 24px;
   border-bottom:1px solid var(--border);background:var(--header-bg);flex-shrink:0;
 }
 .settings-header h2{font-size:18px;font-weight:700;letter-spacing:-.3px}
-.settings-body{flex:1;overflow-y:auto;padding:28px 32px;max-width:900px;width:100%;margin:0 auto}
+.settings-body{flex:1;min-height:0;overflow-y:auto;padding:28px 32px;max-width:900px;width:100%;margin:0 auto}
 .settings-section{
   background:var(--subtle);border:1px solid var(--border);border-radius:14px;
   padding:18px 20px;margin-bottom:16px;
@@ -238,6 +238,23 @@
 }
 .profile-menu-item:hover{background:var(--hover)}
 .profile-menu-item.danger:hover{background:rgba(239,68,68,.12);color:var(--danger)}
+.changelog-modal{max-width:720px;width:min(92vw,720px);max-height:min(82vh,760px);display:flex;flex-direction:column;padding:0;overflow:hidden}
+.changelog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px;border-bottom:1px solid var(--border)}
+.changelog-head h3{margin:0;font-size:17px}
+.changelog-close{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;color:var(--fg-secondary)}
+.changelog-close:hover{background:var(--hover);color:var(--fg)}
+.changelog-body{overflow-y:auto;padding:18px 20px 24px}
+.changelog-state{padding:28px 8px;text-align:center;color:var(--fg-secondary)}
+.changelog-release{padding:0 0 22px;margin:0 0 20px;border-bottom:1px solid var(--border-muted)}
+.changelog-release:last-child{margin-bottom:0;border-bottom:0}
+.changelog-release-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px}
+.changelog-release h4{font-size:15px;color:var(--fg)}
+.changelog-release time{font-size:11.5px;color:var(--fg-muted);white-space:nowrap}
+.changelog-release h5{font-size:13px;margin:12px 0 6px;color:var(--fg)}
+.changelog-release p{margin:0 0 9px;color:var(--fg-secondary);line-height:1.55}
+.changelog-release ul,.changelog-release ol{margin:0 0 10px 20px;color:var(--fg-secondary)}
+.changelog-release li{margin:4px 0}.changelog-release code{font-size:.9em}
+.changelog-release a{color:var(--accent)}
 .mobile-sidebar-brand{display:none}
 .profile-tools{display:block}
 .editor-more-wrap{display:block;position:relative}

@@ -45,6 +45,33 @@ function initBlockTools(){
   const slashMenu=document.getElementById('blockCommandMenu');
   if(!ed || !gutter) return;
 
+  const blockSelector='p, h1, h2, h3, h4, ul, ol, blockquote, pre, .media-card, div[data-media-id]';
+  let gutterHideTimer=null;
+  const hideGutter=()=>{
+    clearTimeout(gutterHideTimer);
+    gutter.classList.remove('show');
+  };
+  const blockForNode=node=>{
+    const element=node?.nodeType===Node.TEXT_NODE?node.parentElement:node;
+    const block=element?.closest?.(blockSelector);
+    return block && ed.contains(block) && block!==ed ? block : null;
+  };
+  const showGutterForBlock=block=>{
+    if(!block || !block.isConnected) return;
+    clearTimeout(gutterHideTimer);
+    activeGutterBlock=block;
+    // Fixed coordinates match getBoundingClientRect(), unlike offsetTop/Left
+    // which change with editor scrolling and nested formatted content.
+    gutter.classList.add('show');
+    const rect=block.getBoundingClientRect();
+    const gutterWidth=gutter.offsetWidth||60;
+    const gutterHeight=gutter.offsetHeight||30;
+    const left=Math.max(8,rect.left-gutterWidth-8);
+    const top=Math.max(8,Math.min(rect.top+2,window.innerHeight-gutterHeight-8));
+    gutter.style.left=`${Math.round(left)}px`;
+    gutter.style.top=`${Math.round(top)}px`;
+  };
+
   /* ---------- Auto-scroll state during drag ---------- */
   let autoScrollRaf=null;
   function stopAutoScroll(){ if(autoScrollRaf){ cancelAnimationFrame(autoScrollRaf); autoScrollRaf=null; } }
@@ -63,27 +90,21 @@ function initBlockTools(){
     autoScrollRaf=requestAnimationFrame(step);
   }
 
-  ed.addEventListener('mousemove', e=>{
-    const target=e.target.closest('p, h1, h2, h3, h4, ul, ol, blockquote, pre, .media-card, div[data-media-id]');
-    if(target && ed.contains(target) && target !== ed){
-      activeGutterBlock = target;
-      // Use the control's real width so it ends before the text instead of
-      // relying on a fixed offset that can overlap the first few letters.
-      const gutterWidth=gutter.offsetWidth||60;
-      const gutterLeft=target.offsetLeft-gutterWidth-8;
-      gutter.style.top = `${target.offsetTop + 2}px`;
-      gutter.style.left = `${gutterLeft}px`;
-      gutter.classList.add('show');
-    }
+  ed.addEventListener('pointermove', e=>showGutterForBlock(blockForNode(e.target)));
+  ed.addEventListener('focusin', e=>showGutterForBlock(blockForNode(e.target)));
+  ed.addEventListener('keyup', ()=>{
+    const selection=window.getSelection();
+    showGutterForBlock(blockForNode(selection?.anchorNode));
   });
-
-  ed.addEventListener('mouseleave', ()=>{
-    setTimeout(()=>{
-      if(!gutter.matches(':hover')) gutter.classList.remove('show');
-    }, 150);
+  ed.addEventListener('pointerleave', ()=>{
+    gutterHideTimer=setTimeout(()=>{ if(!gutter.matches(':hover')) hideGutter(); },150);
   });
-  scrollHost.addEventListener('scroll',()=>gutter.classList.remove('show'),{passive:true});
-  gutter.addEventListener('mouseleave', ()=>gutter.classList.remove('show'));
+  scrollHost.addEventListener('scroll',()=>{
+    if(activeGutterBlock?.isConnected) showGutterForBlock(activeGutterBlock);
+    else hideGutter();
+  },{passive:true});
+  gutter.addEventListener('pointerenter',()=>clearTimeout(gutterHideTimer));
+  gutter.addEventListener('pointerleave',hideGutter);
 
   // Keep the insert-block menu inside the visible viewport. It flips above
   // the anchor near the bottom of a long document and remains scrollable.
@@ -136,7 +157,7 @@ function initBlockTools(){
     e.preventDefault();
     // Auto-scroll when near edges
     scheduleAutoScroll(e.clientY);
-    const overBlock=e.target.closest('p, h1, h2, h3, h4, ul, ol, blockquote, pre, .media-card, div[data-media-id]');
+    const overBlock=e.target.closest(blockSelector);
     if(overBlock && overBlock !== activeGutterBlock && ed.contains(overBlock)){
       const r=overBlock.getBoundingClientRect();
       const isBottom=(e.clientY - r.top) > (r.height / 2);

@@ -384,6 +384,16 @@ function bindSettings(){
     toast('Orphan media cleaned');
   };
 
+  const clearCacheBtn=document.getElementById('setClearCacheBtn');
+  if(clearCacheBtn) clearCacheBtn.onclick=()=>{
+    confirmDialog(
+      'Clear cached app data?',
+      'This removes PapeRuss offline cache, notes, media and settings from this device, then reloads the newest app version. Synced cloud data is not deleted and can be restored after signing in.',
+      'Clear & Reload',
+      clearLocalAppCacheAndData
+    );
+  };
+
   const clearNotifsBtn=document.getElementById('setClearNotifs');
   if(clearNotifsBtn) clearNotifsBtn.onclick=clearAllNotifs;
 
@@ -418,6 +428,37 @@ function bindSettings(){
       location.reload();
     });
   };
+}
+
+async function clearLocalAppCacheAndData(){
+  try{
+    // Keep cloud records intact: deleting IndexedDB directly avoids recording
+    // media deletions that would otherwise be synchronized to Firebase.
+    if(mediaDB){ mediaDB.close(); mediaDB=null; }
+    await new Promise(resolve=>{
+      const request=indexedDB.deleteDatabase(MEDIA_DB);
+      request.onsuccess=request.onerror=request.onblocked=()=>resolve();
+    });
+
+    Object.keys(localStorage)
+      .filter(key=>key.startsWith('octonotes:')||key.startsWith('paperuss:'))
+      .forEach(key=>localStorage.removeItem(key));
+
+    if('caches' in window){
+      const keys=await caches.keys();
+      await Promise.all(keys
+        .filter(key=>key.startsWith('paperuss-shell-'))
+        .map(key=>caches.delete(key)));
+    }
+
+    if('serviceWorker' in navigator){
+      const registration=await navigator.serviceWorker.getRegistration();
+      if(registration) await registration.unregister();
+    }
+  }catch(error){
+    console.warn('Could not fully clear local PapeRuss data',error);
+  }
+  location.reload();
 }
 
 /* ============================================================

@@ -20,3 +20,4 @@ ui-debug.log*
 Thumbs.db
 node_modules/
 *.log
+.worker-assets/
