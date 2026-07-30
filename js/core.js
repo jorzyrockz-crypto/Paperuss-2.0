@@ -147,7 +147,7 @@ function addMediaSyncIndicator(el,record){
             if(typeof lucide==='object' && typeof lucide.createIcons==='function') lucide.createIcons();
           } else {
             if(fill) fill.style.width = `${e.detail.percent}%`;
-            if(text) text.innerHTML = `<i data-lucide="cloud-upload" class="w-4 h-4"></i> ${e.detail.percent}% — ${formatBytes(e.detail.bytesTransferred)}/${formatBytes(e.detail.totalBytes)}`;
+            if(text) text.innerHTML = `<i data-lucide="cloud-upload" class="w-3.5 h-3.5"></i> ${e.detail.percent}%`;
             if(typeof lucide==='object' && typeof lucide.createIcons==='function') lucide.createIcons();
           }
         };

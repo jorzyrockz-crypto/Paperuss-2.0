@@ -139,18 +139,34 @@ async function downscaleImageBlob(blobOrFile, maxDimension = 1920, quality = 0.8
 
 async function insertImageFile(file){
   if(!file || !file.type.startsWith('image/')){ toast('Not an image'); return; }
-  const optimizedFile = await downscaleImageBlob(file);
-  const id=await saveMediaBlob(optimizedFile, file.name, 'image');
-  const url=await getMediaURL(id);
-  urlCache.set(id,url);
-  // Device-appropriate default size (phone=full, tablet/desktop=large); syncs via note HTML.
-  const defSize=(typeof IMG_DEFAULT_SIZE==='object' && typeof deviceClass==='function')
+  const tempUrl = URL.createObjectURL(file);
+  const defSize = (typeof IMG_DEFAULT_SIZE==='object' && typeof deviceClass==='function')
     ? IMG_DEFAULT_SIZE[deviceClass()] : 'large';
-  insertHTMLAtCaret(`<img data-media-id="${id}" data-media-kind="image" data-img-size="${defSize}" src="${url}" alt="${esc(file.name)}">`);
+
+  // 1. Insert image into note editor INSTANTLY (0ms response, zero wait time)
+  const tempClass = 'temp-img-' + Math.random().toString(36).slice(2, 8);
+  insertHTMLAtCaret(`<img class="${tempClass}" data-media-kind="image" data-img-size="${defSize}" src="${tempUrl}" alt="${esc(file.name)}">`);
   save();
+
+  // 2. Process downscale + IndexedDB save + cloud sync asynchronously in background
+  try {
+    const id = await saveMediaBlob(file, file.name, 'image');
+    const dbUrl = await getMediaURL(id);
+    urlCache.set(id, dbUrl);
+    const imgEl = document.querySelector(`img.${tempClass}`);
+    if(imgEl){
+      imgEl.dataset.mediaId = id;
+      imgEl.src = dbUrl;
+      imgEl.classList.remove(tempClass);
+      save();
+    }
+  } catch(err){
+    console.warn('PapeRuss: background image save error', err);
+  }
   toast('Image added');
   renderStorageStats();
 }
+
 
 async function insertVideoFile(file){
   if(!file || !file.type.startsWith('video/')){ toast('Not a video'); return; }
