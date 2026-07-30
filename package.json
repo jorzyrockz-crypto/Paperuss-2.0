@@ -1,0 +1,11 @@
+{
+  "name": "paperuss-2",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "stage-assets": "node tools/stage-worker-assets.cjs",
+    "generate-changelog": "node tools/generate-changelog.mjs",
+    "deploy": "node tools/stage-worker-assets.cjs && wrangler deploy"
+  }
+}

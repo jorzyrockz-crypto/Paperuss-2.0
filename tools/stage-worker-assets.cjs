@@ -8,8 +8,17 @@ const directories=['assets','js'];
 
 fs.rmSync(output,{recursive:true,force:true});
 fs.mkdirSync(output,{recursive:true});
-for(const file of files) fs.copyFileSync(path.join(root,file),path.join(output,file));
-for(const directory of directories){
-  fs.cpSync(path.join(root,directory),path.join(output,directory),{recursive:true});
+for(const file of files){
+  const src=path.join(root,file);
+  if(fs.existsSync(src)){
+    fs.copyFileSync(src,path.join(output,file));
+  }
 }
-console.log(`Staged ${files.length} root files and ${directories.length} asset directories in ${output}`);
+for(const directory of directories){
+  const src=path.join(root,directory);
+  if(fs.existsSync(src)){
+    fs.cpSync(src,path.join(output,directory),{recursive:true});
+  }
+}
+console.log(`Staged root files and asset directories in ${output}`);
+
