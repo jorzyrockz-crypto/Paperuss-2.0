@@ -325,8 +325,10 @@ async function renderSettingsView(){
     try{
       const jsonBytes=new Blob([JSON.stringify(notes)]).size;
       let mediaBytes=0, mediaCount=0;
-      (await mediaAll()).forEach(r=>{ mediaBytes+=(r.size||0); mediaCount++; });
-      storEl.textContent=`${notes.length} notes (${formatBytes(jsonBytes)}) · ${mediaCount} media (${formatBytes(mediaBytes)}) · ${standaloneTasks.length} tasks`;
+      const totalBytes = jsonBytes + mediaBytes;
+      const cloudEnabled = typeof currentSession==='object' && currentSession?.mode==='auth';
+      const quotaStr = cloudEnabled ? ` · ${((totalBytes / (5 * 1024 * 1024 * 1024)) * 100).toFixed(2)}% of 5 GB Firebase Free Plan` : ' · Persistent Local Device Storage';
+      storEl.textContent=`${notes.length} notes (${formatBytes(jsonBytes)}) · ${mediaCount} media (${formatBytes(mediaBytes)}) · ${standaloneTasks.length} tasks${quotaStr}`;
     }catch(e){ storEl.textContent='Unable to calculate'; }
   }
   refreshIcons();

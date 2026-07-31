@@ -327,9 +327,24 @@ async function renderStorageStats(){
   const cloudEnabled=typeof currentSession==='object' && currentSession?.mode==='auth';
   const liveCount=notes.filter(n=>!n.deletedAt).length;
   const trashCount=notes.length-liveCount;
-  if(el) el.textContent=`${liveCount} note${liveCount!==1?'s':''}${trashCount?` · ${trashCount} in Trash`:''} · ${label} · ${cloudEnabled?'cloud sync on':'local only'}`;
+  const FIREBASE_FREE_BYTES = 5 * 1024 * 1024 * 1024; // 5 GB Spark Plan
+  const LOCAL_REF_BYTES = 500 * 1024 * 1024; // 500 MB Local Storage reference
+  if(el){
+    if(cloudEnabled){
+      const pct = ((total / FIREBASE_FREE_BYTES) * 100).toFixed(total < 10*1024*1024 ? 2 : 1);
+      el.textContent = `${liveCount} note${liveCount!==1?'s':''}${trashCount?` · ${trashCount} in Trash`:''} · ${label} / 5 GB free (${pct}% of Firebase)`;
+      el.title = `Firebase Spark Free Tier: Using ${label} of 5 GB Cloud Storage (${pct}%)`;
+    } else {
+      const pct = ((total / LOCAL_REF_BYTES) * 100).toFixed(1);
+      el.textContent = `${liveCount} note${liveCount!==1?'s':''}${trashCount?` · ${trashCount} in Trash`:''} · ${label} (Local Storage)`;
+      el.title = `Persistent Local Device Storage (IndexedDB + localStorage): ${label}`;
+    }
+  }
   const fill=document.getElementById('storageFill');
-  if(fill) fill.style.width=Math.min(100,(total/(50*1024*1024))*100)+'%';
+  if(fill){
+    const quotaBytes = cloudEnabled ? FIREBASE_FREE_BYTES : LOCAL_REF_BYTES;
+    fill.style.width = Math.max(1, Math.min(100, (total / quotaBytes) * 100)) + '%';
+  }
 }
 
 /* Hydrate media placeholders in the loaded editor with real blob URLs or remote cloudUrls */
