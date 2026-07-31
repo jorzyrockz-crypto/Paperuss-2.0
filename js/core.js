@@ -368,6 +368,7 @@ async function hydrateMediaInEditor(){
     const record = (await mediaGet(id)) || (window.__remoteMediaManifest || new Map()).get(id) || { id, cloudUrl: url };
     addMediaSyncIndicator(el, record);
   }
+  if(typeof autoCaptureExternalImages==='function') autoCaptureExternalImages();
   refreshIcons();
 }
 

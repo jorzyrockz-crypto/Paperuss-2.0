@@ -423,3 +423,108 @@ function setTheme(theme,trackChange=true){
     refreshIcons();
   }
 }
+
+/* ============================================================
+   REMOTE & EXPIRED IMAGE AUTO-CAPTURE AND RECOVERY
+   ============================================================ */
+function setupBrokenImageElement(img){
+  if(!img || img.dataset.brokenHandled) return;
+  img.dataset.brokenHandled = 'true';
+
+  const alt = img.getAttribute('alt') || img.getAttribute('title') || 'Image attachment';
+  const wrapper = document.createElement('div');
+  wrapper.className = 'broken-media-card';
+  wrapper.setAttribute('contenteditable', 'false');
+  wrapper.innerHTML = `
+    <div class="bmc-content">
+      <i data-lucide="image-off" class="w-5 h-5"></i>
+      <div class="bmc-info">
+        <span class="bmc-title">${esc(alt)}</span>
+        <span class="bmc-sub">Remote image link expired or unavailable</span>
+      </div>
+    </div>
+    <button type="button" class="bmc-replace-btn"><i data-lucide="upload" class="w-4 h-4"></i> Re-upload Image</button>
+  `;
+
+  const replaceBtn = wrapper.querySelector('.bmc-replace-btn');
+  if(replaceBtn){
+    replaceBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async () => {
+        if(input.files && input.files[0]){
+          const file = input.files[0];
+          try {
+            const id = await saveMediaBlob(file, file.name, 'image');
+            const localUrl = await getMediaURL(id);
+            if(typeof urlCache !== 'undefined') urlCache.set(id, localUrl);
+            const newImg = document.createElement('img');
+            newImg.setAttribute('data-media-id', id);
+            newImg.setAttribute('data-media-kind', 'image');
+            newImg.src = localUrl;
+            newImg.alt = esc(file.name);
+            wrapper.replaceWith(newImg);
+            toast('Image replaced & saved');
+            save();
+            renderStorageStats();
+          } catch(err){
+            toast('Could not replace image');
+          }
+        }
+      };
+      input.click();
+    };
+  }
+
+  img.replaceWith(wrapper);
+  if(typeof refreshIcons === 'function') refreshIcons();
+}
+
+async function autoCaptureExternalImages(){
+  const ed = document.getElementById('noteBody');
+  if(!ed) return;
+  const imgs = Array.from(ed.querySelectorAll('img')).filter(img => {
+    const src = img.getAttribute('src') || '';
+    const hasMediaId = img.hasAttribute('data-media-id');
+    return !hasMediaId && (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('blob:'));
+  });
+
+  for(const img of imgs){
+    const src = img.getAttribute('src');
+    if(!src || img.dataset.capturing) continue;
+
+    img.onerror = () => setupBrokenImageElement(img);
+    if(img.complete && img.naturalWidth === 0){
+      setupBrokenImageElement(img);
+      continue;
+    }
+
+    img.dataset.capturing = 'true';
+    const altName = img.getAttribute('alt') || 'chatgpt_image.png';
+
+    try {
+      const res = await fetch(src);
+      if(!res.ok) throw new Error('Fetch failed ' + res.status);
+      const blob = await res.blob();
+      if(!blob.type.startsWith('image/')) throw new Error('Not an image blob');
+
+      const id = await saveMediaBlob(blob, altName, 'image');
+      const localUrl = await getMediaURL(id);
+      if(typeof urlCache !== 'undefined') urlCache.set(id, localUrl);
+      img.setAttribute('data-media-id', id);
+      img.setAttribute('data-media-kind', 'image');
+      img.src = localUrl;
+      delete img.dataset.capturing;
+      toast('Captured ChatGPT image locally');
+      save();
+      renderStorageStats();
+    } catch(err){
+      console.warn('PapeRuss: Remote image fetch failed or CORS restricted', src, err);
+      delete img.dataset.capturing;
+      if(!img.naturalWidth) setupBrokenImageElement(img);
+    }
+  }
+}

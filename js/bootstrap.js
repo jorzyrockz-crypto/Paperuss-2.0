@@ -495,6 +495,7 @@ function bind(){
       const cleanHTML = doc.body.innerHTML;
       document.execCommand('insertHTML', false, cleanHTML);
       showPasteAsPlainTextChip(text || doc.body.textContent);
+      if(typeof autoCaptureExternalImages==='function') setTimeout(autoCaptureExternalImages, 50);
       setTimeout(handleBodyInput, 0);
       return;
     }
