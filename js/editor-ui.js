@@ -498,6 +498,7 @@ function initSlashMenuActions(){
     else if(cmd==='task') applyCommand('task');
     else if(cmd==='code') applyCommand('code');
     else if(cmd==='quote') applyCommand('formatBlock', 'blockquote');
+    else if(cmd==='callout') applyCommand('callout', 'tip');
     else if(cmd==='image'||cmd==='audio'||cmd==='video'||cmd==='link'||cmd==='file') handleMediaAction(cmd);
     else if(cmd==='calevent'){
       const today=new Date();

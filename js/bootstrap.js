@@ -65,6 +65,21 @@ function bind(){
       // let default toggle happen, then save
       setTimeout(handleBodyInput, 0);
     }
+    const badge = e.target.closest('.callout-badge');
+    if(badge){
+      e.preventDefault();
+      const callout = badge.closest('.note-callout');
+      if(callout){
+        const types = ['tip', 'warning', 'summary', 'info'];
+        const cur = callout.dataset.callout || 'tip';
+        const next = types[(types.indexOf(cur) + 1) % types.length];
+        callout.className = `note-callout callout-${next}`;
+        callout.dataset.callout = next;
+        const badgeNames = { tip: '💡 Tip', warning: '⚠️ Warning', summary: '📝 Summary', info: 'ℹ️ Info' };
+        badge.textContent = badgeNames[next] || '💡 Tip';
+        setTimeout(handleBodyInput, 0);
+      }
+    }
   });
 
   // Enter in a task item creates a new task line
@@ -130,6 +145,12 @@ function bind(){
         e.preventDefault();
         node.textContent = node.textContent.slice(3);
         document.execCommand('insertHorizontalRule', false, null);
+        setTimeout(handleBodyInput, 0);
+      } else if((text === '!tip' || text === '!warning' || text === '!summary' || text === '!info') && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        const type = text.slice(1);
+        node.textContent = node.textContent.slice(type.length + 1);
+        if(typeof insertCallout === 'function') insertCallout(type);
         setTimeout(handleBodyInput, 0);
       } else {
         // Inline markdown auto-formatting for **bold**, ~~strike~~, and *italic*

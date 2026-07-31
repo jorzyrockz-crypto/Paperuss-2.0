@@ -54,6 +54,9 @@ function applyCommand(cmd, val){
     document.execCommand('formatBlock', false, val);
   } else if(cmd==='code'){
     wrapInlineCode();
+  } else if(cmd==='callout'){
+    insertCallout(val || 'tip');
+    return;
   } else if(cmd==='task'){
     toggleList('task');
     return;
@@ -605,3 +608,73 @@ function toggleList(targetType){
 
 // Legacy alias so any remaining callers still work.
 function insertTaskList(){ toggleList('task'); }
+
+const CALLOUT_BADGES = {
+  tip: '💡 Tip',
+  warning: '⚠️ Warning',
+  summary: '📝 Summary',
+  info: 'ℹ️ Info'
+};
+
+function insertCallout(type = 'tip'){
+  const sel = window.getSelection();
+  if(!sel || !sel.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  const ed = bodyEl();
+  let node = sel.anchorNode;
+  if(node && node.nodeType === 3) node = node.parentElement;
+  
+  // If already in a callout, toggle off or switch type
+  const existing = node && node.closest ? node.closest('blockquote.note-callout') : null;
+  if(existing){
+    if(existing.dataset.callout === type){
+      // Unwrap
+      const p = document.createElement('p');
+      p.innerHTML = existing.querySelector('p')?.innerHTML || existing.textContent || '';
+      existing.replaceWith(p);
+      const r = document.createRange();
+      r.selectNodeContents(p); r.collapse(false);
+      sel.removeAllRanges(); sel.addRange(r);
+      handleBodyInput(); updateToolbarState();
+      return;
+    } else {
+      // Switch type
+      existing.className = `note-callout callout-${type}`;
+      existing.dataset.callout = type;
+      const badge = existing.querySelector('.callout-badge');
+      if(badge) badge.textContent = CALLOUT_BADGES[type] || CALLOUT_BADGES.tip;
+      handleBodyInput(); updateToolbarState();
+      return;
+    }
+  }
+
+  const bq = document.createElement('blockquote');
+  bq.className = `note-callout callout-${type}`;
+  bq.dataset.callout = type;
+  
+  const badge = document.createElement('div');
+  badge.className = 'callout-badge';
+  badge.contentEditable = 'false';
+  badge.textContent = CALLOUT_BADGES[type] || CALLOUT_BADGES.tip;
+  badge.title = 'Click to switch callout type (Tip / Warning / Summary / Info)';
+  
+  const p = document.createElement('p');
+  p.innerHTML = sel.isCollapsed ? '<br>' : sel.toString();
+
+  bq.appendChild(badge);
+  bq.appendChild(p);
+
+  const block = node && node.closest ? node.closest('p, div, h1, h2, h3, h4, blockquote') : null;
+  if(block && block !== ed && isEditorEmpty(block.innerHTML)){
+    block.replaceWith(bq);
+  } else {
+    range.deleteContents();
+    range.insertNode(bq);
+  }
+
+  const r = document.createRange();
+  r.selectNodeContents(p);
+  r.collapse(false);
+  sel.removeAllRanges(); sel.addRange(r);
+  handleBodyInput(); updateToolbarState();
+}
