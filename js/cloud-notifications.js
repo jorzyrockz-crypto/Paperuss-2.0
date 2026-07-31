@@ -493,14 +493,7 @@ function timeoutForSize(bytes){
 
 async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
   const localRecords=await mediaAll();
-  if(!fbStorage){
-    const hasPending = localRecords.some(r=>r.pendingUpload);
-    if(hasPending){
-      updateSyncStatus('error', 'Media Storage unavailable — photos saved locally only');
-      toast('⚠️ Firebase Storage not loaded — photos saved locally, will retry next sync');
-    }
-    return Array.from((remoteManifest||[]).values?.() || remoteManifest || []);
-  }
+  const useStorage = !!(fbStorage && !window.__fbStorageDisabled);
 
   const localMap=new Map(localRecords.map(record=>[record.id,record]));
   const manifestMap=new Map((remoteManifest||[]).map(item=>[item.id,item]));
@@ -518,8 +511,11 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
       localMap.delete(id);
     }
     if(remote){
-      try{ await mediaStorageRef(uid,id).delete(); }
-      catch(err){ if(!String(err?.code||'').includes('object-not-found')) console.warn(err); }
+      try{ await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id).delete(); }catch(_){}
+      if(useStorage){
+        try{ await mediaStorageRef(uid,id).delete(); }
+        catch(err){ if(!String(err?.code||'').includes('object-not-found')) console.warn(err); }
+      }
       manifestMap.delete(id);
     }
   }
@@ -560,32 +556,56 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
     try{ await mediaPut({...record, lastUploadAttempt: Date.now()}); }catch(_){}
 
     try{
-      const storageRef = mediaStorageRef(uid, record.id);
-      const uploadTask = storageRef.put(record.blob, {
-        contentType: record.type || record.blob?.type || 'application/octet-stream'
-      });
-
-      // Live Firebase progress → CustomEvent so overlay/badge can show real %
-      uploadTask.on('state_changed', snapshot => {
-        const pct = snapshot.totalBytes > 0
-          ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100) : 0;
-        document.dispatchEvent(new CustomEvent('media-upload-progress', {
-          detail:{ id:record.id, percent:pct,
-                   bytesTransferred:snapshot.bytesTransferred,
-                   totalBytes:snapshot.totalBytes }
-        }));
-        updateSyncStatus('syncing',
-          `Uploading ${i+1}/${pendingUploads.length}: ${label} — ${pct}% (${formatBytes(snapshot.bytesTransferred)}/${formatBytes(snapshot.totalBytes)})`
-        );
-      });
-
-      await withTimeout(uploadTask, timeoutForSize(fileBytes), `Upload timed out for ${label}`);
-
       let cloudUrl = record.cloudUrl || '';
-      try {
-        cloudUrl = await storageRef.getDownloadURL();
-      } catch(urlErr) {
-        console.warn('PapeRuss: could not fetch download URL for', record.id, urlErr);
+      let uploadedToStorage = false;
+      if(useStorage){
+        try {
+          const storageRef = mediaStorageRef(uid, record.id);
+          const uploadTask = storageRef.put(record.blob, {
+            contentType: record.type || record.blob?.type || 'application/octet-stream'
+          });
+
+          // Live Firebase progress → CustomEvent so overlay/badge can show real %
+          uploadTask.on('state_changed', snapshot => {
+            const pct = snapshot.totalBytes > 0
+              ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100) : 0;
+            document.dispatchEvent(new CustomEvent('media-upload-progress', {
+              detail:{ id:record.id, percent:pct,
+                       bytesTransferred:snapshot.bytesTransferred,
+                       totalBytes:snapshot.totalBytes }
+            }));
+            updateSyncStatus('syncing',
+              `Uploading ${i+1}/${pendingUploads.length}: ${label} — ${pct}% (${formatBytes(snapshot.bytesTransferred)}/${formatBytes(snapshot.totalBytes)})`
+            );
+          });
+
+          await withTimeout(uploadTask, timeoutForSize(fileBytes), `Upload timed out for ${label}`);
+          cloudUrl = await storageRef.getDownloadURL();
+          uploadedToStorage = true;
+        } catch(storageErr) {
+          console.warn(`PapeRuss: Cloud Storage upload unavailable for ${record.id} (${storageErr.message||storageErr.code}), using Firestore-only media sync`);
+          window.__fbStorageDisabled = true;
+        }
+      }
+
+      if(!uploadedToStorage){
+        // Firestore-only media sync fallback: save base64 DataURL in paperuss_users/{uid}/media/{id}
+        if(fileBytes > 950000){
+          throw new Error('Media asset exceeds 950KB (too large for Firestore sync)');
+        }
+        const dataUrl = await blobToDataURL(record.blob);
+        await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id).set({
+          id: record.id,
+          dataUrl: dataUrl,
+          type: record.type || record.blob?.type || 'application/octet-stream',
+          size: fileBytes,
+          name: label,
+          updatedAt: Date.now()
+        }, {merge: true});
+        cloudUrl = 'firestore:' + record.id;
+        document.dispatchEvent(new CustomEvent('media-upload-progress', {
+          detail:{ id:record.id, percent:100, bytesTransferred:fileBytes, totalBytes:fileBytes }
+        }));
       }
 
       // ✅ Confirmed upload — ONLY NOW set cloudSyncedAt and clear pendingUpload
@@ -646,12 +666,29 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
     // Skip assets not referenced in any open note — saves bandwidth on first sync
     if(needsIds.size > 0 && !needsIds.has(item.id)) continue;
     try{
-      const url = await withTimeout(
-        mediaStorageRef(uid,item.id).getDownloadURL(), 12000, `Download URL timeout for ${item.id}`
-      );
-      const response = await withTimeout(fetch(url), timeoutForSize(item.size||500000), `Fetch timeout for ${item.id}`);
-      if(response.ok){
-        const blob = await response.blob();
+      let blob = null;
+      if(item.cloudUrl && item.cloudUrl.startsWith('data:')){
+        blob = dataURLToBlob(item.cloudUrl);
+      } else if(item.cloudUrl === 'firestore:'+item.id || !useStorage || window.__fbStorageDisabled){
+        const docSnap = await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(item.id).get();
+        if(docSnap && docSnap.exists && docSnap.data().dataUrl){
+          blob = dataURLToBlob(docSnap.data().dataUrl);
+        }
+      } else {
+        try {
+          const url = await withTimeout(
+            mediaStorageRef(uid,item.id).getDownloadURL(), 12000, `Download URL timeout for ${item.id}`
+          );
+          const response = await withTimeout(fetch(url), timeoutForSize(item.size||500000), `Fetch timeout for ${item.id}`);
+          if(response.ok) blob = await response.blob();
+        } catch(_) {
+          const docSnap = await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(item.id).get();
+          if(docSnap && docSnap.exists && docSnap.data().dataUrl){
+            blob = dataURLToBlob(docSnap.data().dataUrl);
+          }
+        }
+      }
+      if(blob){
         const downloadedRecord = {...item, size:blob.size, blob,
           cloudSyncedAt: item.updatedAt||item.createdAt||Date.now(),
           pendingUpload: false, uploadFailures: 0

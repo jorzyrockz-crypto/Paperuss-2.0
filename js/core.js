@@ -230,10 +230,26 @@ async function getMediaURL(id){
 
   // 2. Secondary Device Hybrid Fallback: check remote cloudUrl in manifest or local record
   const manifestItem = (window.__remoteMediaManifest || new Map()).get(id) || rec;
-  if(manifestItem && manifestItem.cloudUrl){
+  if(manifestItem && manifestItem.cloudUrl && !manifestItem.cloudUrl.startsWith('firestore:')){
     urlCache.set(id, manifestItem.cloudUrl);
     return manifestItem.cloudUrl;
   }
+
+  // 2.5. Firestore-only media fallback: fetch dataUrl from Firestore subcollection
+  try {
+    if(typeof fbDb !== 'undefined' && fbDb){
+      const session = (typeof currentSession !== 'undefined' && currentSession) || (typeof loadSession === 'function' ? loadSession() : null);
+      if(session && session.uid){
+        const docSnap = await fbDb.collection('paperuss_users').doc(session.uid).collection('media').doc(id).get();
+        if(docSnap && docSnap.exists && docSnap.data().dataUrl){
+          const remoteUrl = docSnap.data().dataUrl;
+          if(manifestItem) manifestItem.cloudUrl = remoteUrl;
+          urlCache.set(id, remoteUrl);
+          return remoteUrl;
+        }
+      }
+    }
+  } catch(_){}
 
   // 3. Fallback for older uploaded media without stored cloudUrl: fetch download URL from Firebase Storage
   try {
