@@ -27,6 +27,9 @@ const PORTABLE_STATE_UPDATED_KEY='paperuss:portableStateUpdatedAt';
 const PROFILE_PHOTO_KEY='paperuss:profilePhoto';
 const OFFLINE_UPLOAD_QUEUE_KEY='paperuss:offlineUploadQueue'; // persists upload IDs that need retry
 const MAX_UPLOAD_FAILURES=5;   // give up after this many consecutive failed attempts
+// This deployment keeps attachment data in Firestore. Set to false only after
+// Firebase Storage is intentionally configured and deployed for this project.
+const FIRESTORE_ONLY_MEDIA=true;
 const UPLOAD_RETRY_BASE_MS=30000; // 30s base; doubles each failure: 30sâ†’1mâ†’2mâ†’4mâ†’8m
 
 let fbApp=null, fbAuth=null, fbDb=null, fbStorage=null, fbAnalytics=null, firebaseReady=false;
@@ -544,10 +547,12 @@ function timeoutForSize(bytes){
 async function syncMedia(uid,deletions,requiredMediaIds){
   const localRecords=await mediaAll();
   const storageConsecutiveFailures = window.__fbStorageFailCount || 0;
-  const useStorage = !!(fbStorage && storageConsecutiveFailures < 3);
+  const useStorage = !FIRESTORE_ONLY_MEDIA && !!(fbStorage && storageConsecutiveFailures < 3);
 
   const localMap=new Map(localRecords.map(record=>[record.id,record]));
-  let partialFailure = false;
+  let partialFailure = localRecords.some(record=>
+    record.pendingUpload && (record.uploadFailures||0) >= MAX_UPLOAD_FAILURES
+  );
 
   // Phase 1: Apply deletion markers
   for(const [id,deletedAt] of Object.entries(deletions||{})){
@@ -578,7 +583,13 @@ async function syncMedia(uid,deletions,requiredMediaIds){
   }
 
   // Phase 2: Upload local files missing in cloud
-  const pendingUploads = Array.from(localMap.values()).filter(r=>r.pendingUpload);
+  const pendingUploads = Array.from(localMap.values()).filter(record=>{
+    if(!record.pendingUpload || (record.uploadFailures||0) >= MAX_UPLOAD_FAILURES) return false;
+    const failures=record.uploadFailures||0;
+    if(!failures) return true;
+    const backoffMs=Math.min(UPLOAD_RETRY_BASE_MS*Math.pow(2,failures-1),8*60*1000);
+    return Date.now()-(record.lastUploadAttempt||0) >= backoffMs;
+  });
   if(pendingUploads.length > 0){
     console.log('PapeRuss: Cloud sync uploading ' + pendingUploads.length + ' media asset(s)...');
     updateSyncStatus('syncing', 'Uploading ' + pendingUploads.length + ' asset(s)...');
@@ -587,7 +598,20 @@ async function syncMedia(uid,deletions,requiredMediaIds){
   for(let i=0; i<pendingUploads.length; i++){
     const record = pendingUploads[i];
     if(!(record.blob instanceof Blob)){
-      console.warn('Media '+record.id+' has no valid blob, skipping upload');
+      partialFailure=true;
+      const failedRecord={...record,
+        pendingUpload:true,
+        uploadFailures:MAX_UPLOAD_FAILURES,
+        lastUploadAttempt:Date.now(),
+        uploadError:'The local media file is missing from this browser.'
+      };
+      try{ await mediaPut(failedRecord); }catch(_){}
+      localMap.set(record.id,failedRecord);
+      removeFromOfflineUploadQueue(record.id);
+      console.error('PapeRuss: Media '+record.id+' cannot upload because its local Blob is missing');
+      document.dispatchEvent(new CustomEvent('media-upload-progress',{
+        detail:{id:record.id,percent:0,error:true,failures:MAX_UPLOAD_FAILURES}
+      }));
       continue;
     }
     const fileBytes = record.blob.size || 0;
