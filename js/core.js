@@ -263,7 +263,7 @@ function referencedMediaIds(sourceNotes=notes){
   const set=new Set();
   sourceNotes.forEach(n=>{
     if(!n.content) return;
-    const matches=n.content.match(/data-media-id="([^"]+)"/g)||[];
+    const matches=n.content.match(/(?:data-media-id|data-original-media-id)="([^"]+)"/g)||[];
     matches.forEach(m=>set.add(m.match(/"([^"]+)"/)[1]));
   });
   return set;
@@ -277,11 +277,13 @@ function referencedMediaIds(sourceNotes=notes){
 function referencedStoredMediaIds(sourceNotes=notes){
   const set=new Set();
   sourceNotes.forEach(n=>{
-    const tags=String(n.content||'').match(/<[^>]*\bdata-media-id="[^"]+"[^>]*>/g)||[];
+    const tags=String(n.content||'').match(/<[^>]*\b(?:data-media-id|data-original-media-id)="[^"]+"[^>]*>/g)||[];
     tags.forEach(tag=>{
       if(/\bdata-media-kind="link"/.test(tag)) return;
-      const match=tag.match(/\bdata-media-id="([^"]+)"/);
-      if(match) set.add(match[1]);
+      const matches=tag.match(/\b(?:data-media-id|data-original-media-id)="([^"]+)"/g);
+      if(matches){
+        matches.forEach(m=>set.add(m.match(/"([^"]+)"/)[1]));
+      }
     });
   });
   return set;
@@ -1103,7 +1105,7 @@ function confirmDeleteMediaAsset(id, name){
       if(n.content && n.content.includes(id)){
         const tmp=document.createElement('div');
         tmp.innerHTML=n.content;
-        tmp.querySelectorAll(`[data-media-id="${id}"],[data-media-card-id="${id}"]`).forEach(el=>el.remove());
+        tmp.querySelectorAll(`[data-media-id="${id}"],[data-media-card-id="${id}"],[data-original-media-id="${id}"]`).forEach(el=>el.remove());
         n.content=tmp.innerHTML;
         n.updatedAt=Date.now();
       }

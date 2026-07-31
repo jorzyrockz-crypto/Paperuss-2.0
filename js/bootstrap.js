@@ -254,12 +254,7 @@ function bind(){
     for(const f of e.dataTransfer.files){
       if(f.type.startsWith('image/')) insertImageFile(f);
       else if(f.type.startsWith('video/')) insertVideoFile(f);
-      else if(f.type.startsWith('audio/')) (async()=>{
-        const id=await saveMediaBlob(f, f.name, 'audio');
-        const url=await getMediaURL(id);
-        insertHTMLAtCaret(`<audio controls preload="metadata" data-media-id="${id}" data-media-kind="audio" src="${url}"></audio>`);
-        renderStorageStats();
-      })();
+      else if(f.type.startsWith('audio/')) insertAudioFile(f);
       else insertAttachmentFile(f);
     }
   });

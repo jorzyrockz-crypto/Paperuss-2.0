@@ -185,6 +185,15 @@ async function insertVideoFile(file){
   toast('Video added');
   renderStorageStats();
 }
+async function insertAudioFile(file){
+  if(!file || !file.type.startsWith('audio/')){ toast('Not an audio file'); return; }
+  const id=await saveMediaBlob(file, file.name, 'audio');
+  const url=await getMediaURL(id);
+  insertHTMLAtCaret(`<audio controls preload="metadata" data-media-id="${id}" data-media-kind="audio" src="${url}"></audio>`);
+  save();
+  toast('Audio added');
+  renderStorageStats();
+}
 async function insertAudioBlob(blob, name='Voice recording'){
   const id=await saveMediaBlob(blob, name, 'audio');
   const url=await getMediaURL(id);
