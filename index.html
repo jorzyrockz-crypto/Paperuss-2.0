@@ -611,6 +611,24 @@
             </div>
           </div>
 
+          <div class="settings-section">
+            <div class="settings-row">
+              <div class="settings-label">
+                <i data-lucide="hard-drive" class="w-4 h-4 text-accent"></i> Storage Sense & Maintenance
+                <small>Monitor local device quota and clean up orphaned files</small>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Local Storage Usage</span>
+                <small id="settingsStorageText">Usage: 0 MB / Quota: 0 MB (0%)</small>
+              </div>
+              <button class="settings-btn" id="runStorageSenseBtn">
+                <i data-lucide="zap" class="w-4 h-4"></i> Run Cleanup
+              </button>
+            </div>
+          </div>
+
           <div class="settings-section settings-danger">
             <h3><i data-lucide="triangle-alert" class="w-4 h-4"></i> Danger Zone</h3>
             <div class="settings-row">

@@ -384,33 +384,99 @@ async function gcOrphanMedia(){
   }catch(e){}
 }
 async function renderStorageStats(){
-  const jsonBytes=new Blob([JSON.stringify(notes)]).size;
-  let mediaBytes=0;
-  try{ (await mediaAll()).forEach(r=>mediaBytes+=(r.size||0)); }catch(e){}
-  const total=jsonBytes+mediaBytes;
-  const kb=(total/1024).toFixed(total<1024*1024?1:0);
-  const label = total>=1024*1024 ? (total/1024/1024).toFixed(2)+' MB' : kb+' KB';
-  const el=document.getElementById('storageText');
-  const cloudEnabled=typeof currentSession==='object' && currentSession?.mode==='auth';
+  let total = 0;
+  let quotaBytes = 500 * 1024 * 1024; // Fallback quota
+  let usingEstimate = false;
+
+  if (navigator.storage && navigator.storage.estimate) {
+    try {
+      const est = await navigator.storage.estimate();
+      total = est.usage || 0;
+      quotaBytes = est.quota || quotaBytes;
+      usingEstimate = true;
+    } catch(e) {}
+  }
+
+  if (!usingEstimate) {
+    const jsonBytes=new Blob([JSON.stringify(notes)]).size;
+    let mediaBytes=0;
+    try{ (await mediaAll()).forEach(r=>mediaBytes+=(r.size||0)); }catch(e){}
+    total=jsonBytes+mediaBytes;
+  }
+
+  const formatBytesStr = (bytes) => {
+    if (bytes >= 1024*1024*1024) return (bytes / (1024*1024*1024)).toFixed(2) + ' GB';
+    if (bytes >= 1024*1024) return (bytes / (1024*1024)).toFixed(2) + ' MB';
+    return (bytes / 1024).toFixed(1) + ' KB';
+  };
+
+  const usageLabel = formatBytesStr(total);
+  const quotaLabel = formatBytesStr(quotaBytes);
+  const pct = ((total / quotaBytes) * 100).toFixed(1);
+  const isWarning = (total / quotaBytes) >= 0.90;
+
   const liveCount=notes.filter(n=>!n.deletedAt).length;
   const trashCount=notes.length-liveCount;
-  const FIREBASE_FREE_BYTES = 5 * 1024 * 1024 * 1024; // 5 GB Spark Plan
-  const LOCAL_REF_BYTES = 500 * 1024 * 1024; // 500 MB Local Storage reference
+
+  const el = document.getElementById('storageText');
   if(el){
-    if(cloudEnabled){
-      const pct = ((total / FIREBASE_FREE_BYTES) * 100).toFixed(total < 10*1024*1024 ? 2 : 1);
-      el.textContent = `${liveCount} note${liveCount!==1?'s':''}${trashCount?` · ${trashCount} in Trash`:''} · ${label} / 5 GB free (${pct}% of Firebase)`;
-      el.title = `Firebase Spark Free Tier: Using ${label} of 5 GB Cloud Storage (${pct}%)`;
+    el.textContent = `${liveCount} note${liveCount!==1?'s':''}${trashCount?` · ${trashCount} in Trash`:''} · ${usageLabel} used`;
+    el.title = `Browser Storage: ${usageLabel} of ${quotaLabel} used (${pct}%)`;
+  }
+
+  const fill = document.getElementById('storageFill');
+  if(fill){
+    fill.style.width = Math.max(1, Math.min(100, (total / quotaBytes) * 100)) + '%';
+    if(isWarning){
+      fill.classList.add('is-warning');
     } else {
-      const pct = ((total / LOCAL_REF_BYTES) * 100).toFixed(1);
-      el.textContent = `${liveCount} note${liveCount!==1?'s':''}${trashCount?` · ${trashCount} in Trash`:''} · ${label} (Local Storage)`;
-      el.title = `Persistent Local Device Storage (IndexedDB + localStorage): ${label}`;
+      fill.classList.remove('is-warning');
     }
   }
-  const fill=document.getElementById('storageFill');
-  if(fill){
-    const quotaBytes = cloudEnabled ? FIREBASE_FREE_BYTES : LOCAL_REF_BYTES;
-    fill.style.width = Math.max(1, Math.min(100, (total / quotaBytes) * 100)) + '%';
+
+  // Update Storage Sense Settings UI if present
+  const senseEl = document.getElementById('settingsStorageText');
+  if(senseEl){
+    senseEl.textContent = `Usage: ${usageLabel} / Quota: ${quotaLabel} (${pct}%)`;
+    if(isWarning) senseEl.style.color = 'var(--danger-color)';
+    else senseEl.style.color = 'inherit';
+  }
+}
+
+async function runStorageSense() {
+  if (typeof toast === 'function') toast('Running Storage Sense... cleaning up memory and caches');
+  let freed = 0;
+  
+  // 1. GC Orphaned Media
+  const beforeGC = await navigator.storage.estimate().then(e => e.usage).catch(()=>0);
+  await gcOrphanMedia();
+  
+  // 2. Revoke blob URLs from RAM
+  revokeCachedURLs();
+  
+  // 3. Clear old service worker caches
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      const currentCache = typeof CACHE_NAME !== 'undefined' ? CACHE_NAME : (window.CACHE_NAME || 'paperuss-shell-v19');
+      for (const key of keys) {
+        if (key !== currentCache && key.startsWith('paperuss-shell')) {
+          await caches.delete(key);
+        }
+      }
+    }
+  } catch(e) {}
+  
+  const afterGC = await navigator.storage.estimate().then(e => e.usage).catch(()=>0);
+  freed = beforeGC > afterGC ? (beforeGC - afterGC) : 0;
+  
+  await renderStorageStats();
+  if (typeof toast === 'function') {
+    if (freed > 0) {
+      toast(`Storage Sense complete! Freed ${formatBytes(freed)}`);
+    } else {
+      toast('Storage Sense complete! Your storage is already fully optimized.');
+    }
   }
 }
 

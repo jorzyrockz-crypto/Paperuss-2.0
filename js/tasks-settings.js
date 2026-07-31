@@ -399,6 +399,21 @@ function bindSettings(){
   const clearNotifsBtn=document.getElementById('setClearNotifs');
   if(clearNotifsBtn) clearNotifsBtn.onclick=clearAllNotifs;
 
+  const runStorageSenseBtn=document.getElementById('runStorageSenseBtn');
+  if(runStorageSenseBtn) {
+    runStorageSenseBtn.onclick = async () => {
+      runStorageSenseBtn.disabled = true;
+      runStorageSenseBtn.innerHTML = '<i class="w-4 h-4 spinner" style="border:2px solid;border-right-color:transparent;border-radius:50%;width:14px;height:14px;animation:spin 1s linear infinite"></i> Cleaning...';
+      try {
+        if(typeof runStorageSense === 'function') await runStorageSense();
+      } finally {
+        runStorageSenseBtn.disabled = false;
+        runStorageSenseBtn.innerHTML = '<i data-lucide="zap" class="w-4 h-4"></i> Run Cleanup';
+        if(typeof lucide !== 'undefined') lucide.createIcons();
+      }
+    };
+  }
+
   const clearTasksBtn=document.getElementById('setClearTasks');
   if(clearTasksBtn) clearTasksBtn.onclick=()=>{
     confirmDialog('Delete all tasks?','All standalone tasks will be permanently removed.','Delete',()=>{
