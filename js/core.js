@@ -199,11 +199,38 @@ function addMediaSyncIndicator(el,record){
 
 async function getMediaURL(id){
   if(urlCache.has(id)) return urlCache.get(id);
-  const rec=await mediaGet(id);
-  if(!rec) return null;
-  const url=URL.createObjectURL(rec.blob);
-  urlCache.set(id,url);
-  return url;
+
+  // 1. Check local IndexedDB first (0ms fast Blob URL)
+  const rec = await mediaGet(id);
+  if(rec && rec.blob){
+    const url = URL.createObjectURL(rec.blob);
+    urlCache.set(id, url);
+    return url;
+  }
+
+  // 2. Secondary Device Hybrid Fallback: check remote cloudUrl in manifest or local record
+  const manifestItem = (window.__remoteMediaManifest || new Map()).get(id) || rec;
+  if(manifestItem && manifestItem.cloudUrl){
+    urlCache.set(id, manifestItem.cloudUrl);
+    return manifestItem.cloudUrl;
+  }
+
+  // 3. Fallback for older uploaded media without stored cloudUrl: fetch download URL from Firebase Storage
+  try {
+    if(typeof mediaStorageRef === 'function'){
+      const session = (typeof currentSession !== 'undefined' && currentSession) || (typeof loadSession === 'function' ? loadSession() : null);
+      if(session && session.uid){
+        const remoteUrl = await mediaStorageRef(session.uid, id).getDownloadURL();
+        if(remoteUrl){
+          if(manifestItem) manifestItem.cloudUrl = remoteUrl;
+          urlCache.set(id, remoteUrl);
+          return remoteUrl;
+        }
+      }
+    }
+  } catch(_){}
+
+  return null;
 }
 function revokeCachedURLs(){
   urlCache.forEach(u=>{ try{URL.revokeObjectURL(u);}catch(e){} });
@@ -283,7 +310,7 @@ async function renderStorageStats(){
   if(fill) fill.style.width=Math.min(100,(total/(50*1024*1024))*100)+'%';
 }
 
-/* Hydrate media placeholders in the loaded editor with real blob URLs */
+/* Hydrate media placeholders in the loaded editor with real blob URLs or remote cloudUrls */
 async function hydrateMediaInEditor(){
   const ed=document.getElementById('noteBody');
   if(!ed) return;
@@ -292,17 +319,17 @@ async function hydrateMediaInEditor(){
     const id=el.getAttribute('data-media-id');
     const kind=el.getAttribute('data-media-kind');
     if(kind==='link') continue; // rich links don't need blob URLs
-    const record=await mediaGet(id);
-    if(!record){ el.setAttribute('data-missing','1'); continue; }
-    const url=await getMediaURL(id);
+    const url = await getMediaURL(id);
     if(!url){ el.setAttribute('data-missing','1'); continue; }
+    el.removeAttribute('data-missing');
     if(el.tagName==='IMG' || el.tagName==='AUDIO' || el.tagName==='VIDEO'){
       el.src=url;
     } else if(el.classList.contains('media-card')){
-      // Attach a click handler for download button (delegated below too, but this ensures URL is warm)
+      // Attach a click handler for download button
       el.dataset.blobUrl=url;
     }
-    addMediaSyncIndicator(el,record);
+    const record = (await mediaGet(id)) || (window.__remoteMediaManifest || new Map()).get(id) || { id, cloudUrl: url };
+    addMediaSyncIndicator(el, record);
   }
   refreshIcons();
 }

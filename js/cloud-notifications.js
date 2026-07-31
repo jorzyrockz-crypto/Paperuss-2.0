@@ -441,6 +441,7 @@ function mediaManifestEntry(record){
     name:record.name||'file',
     type:record.type||'application/octet-stream',
     size:+record.size||record.blob?.size||0,
+    cloudUrl:record.cloudUrl||'',
     createdAt:+record.createdAt||Date.now(),
     updatedAt:+record.updatedAt||+record.createdAt||Date.now()
   };
@@ -496,6 +497,7 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
 
   const localMap=new Map(localRecords.map(record=>[record.id,record]));
   const manifestMap=new Map((remoteManifest||[]).map(item=>[item.id,item]));
+  window.__remoteMediaManifest = manifestMap;
 
   // Phase 1: Apply deletion markers
   for(const [id,deletedAt] of Object.entries(deletions||{})){
@@ -572,9 +574,17 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
 
       await withTimeout(uploadTask, timeoutForSize(fileBytes), `Upload timed out for ${label}`);
 
+      let cloudUrl = record.cloudUrl || '';
+      try {
+        cloudUrl = await storageRef.getDownloadURL();
+      } catch(urlErr) {
+        console.warn('PapeRuss: could not fetch download URL for', record.id, urlErr);
+      }
+
       // ✅ Confirmed upload — ONLY NOW set cloudSyncedAt and clear pendingUpload
       const localUpdated = record.updatedAt || record.createdAt || Date.now();
       const syncedRecord = {...record,
+        cloudUrl,
         cloudSyncedAt: localUpdated,
         pendingUpload: false,
         uploadFailures: 0,
@@ -582,7 +592,7 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
       };
       try{ await mediaPut(syncedRecord); }catch(_){}
       localMap.set(record.id, syncedRecord);
-      manifestMap.set(record.id, mediaManifestEntry(record));
+      manifestMap.set(record.id, mediaManifestEntry(syncedRecord));
       removeFromOfflineUploadQueue(record.id);
 
     }catch(uploadErr){
@@ -709,6 +719,9 @@ async function syncNow(opts){
     const docRef=fbDb.collection('paperuss_users').doc(session.uid);
     const snap=await docRef.get();
     const remote=snap.exists?snap.data():{};
+    if(remote.mediaManifest){
+      window.__remoteMediaManifest = new Map((remote.mediaManifest||[]).map(item=>[item.id, item]));
+    }
 
     standaloneTasks.forEach(task=>{ if(!task.updatedAt) task.updatedAt=task.createdAt||Date.now(); });
     const localDeletions=readCloudDeletions();
@@ -770,6 +783,9 @@ async function syncNow(opts){
       const mergedMediaManifest=await syncMedia(
         session.uid,remote.mediaManifest||[],mergedDeletions.media,requiredMediaIds
       );
+      if(mergedMediaManifest){
+        window.__remoteMediaManifest = new Map((mergedMediaManifest||[]).map(item=>[item.id, item]));
+      }
       await docRef.set({ mediaManifest: mergedMediaManifest, updatedAt: Date.now() }, {merge:true});
     } catch(mediaErr) {
       console.warn('PapeRuss media sync non-blocking warning:', mediaErr);
