@@ -383,6 +383,69 @@ function bind(){
     setTimeout(removeChip, 4500);
   }
 
+  function normalizeAIPasteHTML(doc){
+    // 1. Strip AI UI buttons, copy controls, and header bars
+    doc.querySelectorAll('button, svg, [aria-label*="Copy" i], [class*="copy-button" i], [class*="code-header" i]').forEach(el => el.remove());
+    // 2. Remove dangerous or non-semantic tags
+    doc.querySelectorAll('script, style, meta, link, iframe, object, embed, o\\:p').forEach(el => el.remove());
+
+    // 3. Normalize AI List Items (<ul><li><p>Text</p></li></ul> -> <ul><li>Text</li></ul>)
+    doc.querySelectorAll('li').forEach(li => {
+      const ps = Array.from(li.querySelectorAll('p'));
+      if(ps.length > 0){
+        li.innerHTML = ps.map(p => p.innerHTML).join('<br>');
+      }
+    });
+
+    // 4. Normalize AI Tables
+    doc.querySelectorAll('table').forEach(tbl => {
+      tbl.classList.add('note-table');
+      tbl.removeAttribute('border');
+      tbl.removeAttribute('width');
+      tbl.removeAttribute('height');
+      const parent = tbl.parentElement;
+      if(parent && parent.tagName === 'DIV' && parent.children.length === 1){
+        parent.replaceWith(tbl);
+      }
+    });
+
+    // 5. Normalize AI Code Blocks (<pre><code>)
+    doc.querySelectorAll('pre, code').forEach(el => {
+      el.removeAttribute('class');
+      if(el.style){
+        el.style.removeProperty('background');
+        el.style.removeProperty('background-color');
+        el.style.removeProperty('color');
+        if(!el.getAttribute('style') || !el.getAttribute('style').trim()) el.removeAttribute('style');
+      }
+    });
+
+    // 6. Clean attributes and theme-breaking inline styles across all elements
+    doc.body.querySelectorAll('*').forEach(el => {
+      Array.from(el.attributes).forEach(attr => {
+        const n = attr.name.toLowerCase();
+        const v = attr.value.toLowerCase();
+        if(n.startsWith('on') || v.includes('javascript:') || n.startsWith('data-mso') || n === 'id' || n.startsWith('aria-') || n === 'tabindex'){
+          el.removeAttribute(n);
+        }
+      });
+      if(el.className && typeof el.className === 'string' && (el.className.includes('Mso') || el.className.includes('apple-') || el.className.includes('token') || el.className.includes('hljs'))){
+        el.removeAttribute('class');
+      }
+      if(el.style){
+        el.style.removeProperty('color');
+        el.style.removeProperty('background-color');
+        el.style.removeProperty('background');
+        el.style.removeProperty('font-family');
+        el.style.removeProperty('font-size');
+        el.style.removeProperty('line-height');
+        el.style.removeProperty('margin');
+        el.style.removeProperty('padding');
+        if(!el.getAttribute('style') || !el.getAttribute('style').trim()) el.removeAttribute('style');
+      }
+    });
+  }
+
   // Paste images, spreadsheet tables, or clean formatted HTML from clipboard
   edEl.addEventListener('paste', e=>{
     if(!e.clipboardData) return;
@@ -407,30 +470,7 @@ function bind(){
     if(html){
       e.preventDefault();
       const doc = new DOMParser().parseFromString(html, 'text/html');
-      doc.querySelectorAll('script, style, meta, link, iframe, object, embed, o\\:p').forEach(el=>el.remove());
-      doc.body.querySelectorAll('*').forEach(el=>{
-        Array.from(el.attributes).forEach(attr=>{
-          const n = attr.name.toLowerCase();
-          const v = attr.value.toLowerCase();
-          if(n.startsWith('on') || v.includes('javascript:') || n.startsWith('data-mso')){
-            el.removeAttribute(n);
-          }
-        });
-        if(el.className && typeof el.className === 'string' && (el.className.includes('Mso') || el.className.includes('apple-'))){
-          el.removeAttribute('class');
-        }
-        if(el.style){
-          el.style.removeProperty('color');
-          el.style.removeProperty('background-color');
-          el.style.removeProperty('background');
-          el.style.removeProperty('font-family');
-          el.style.removeProperty('font-size');
-          el.style.removeProperty('line-height');
-          el.style.removeProperty('margin');
-          el.style.removeProperty('padding');
-          if(!el.getAttribute('style') || !el.getAttribute('style').trim()) el.removeAttribute('style');
-        }
-      });
+      normalizeAIPasteHTML(doc);
       const cleanHTML = doc.body.innerHTML;
       document.execCommand('insertHTML', false, cleanHTML);
       showPasteAsPlainTextChip(text || doc.body.textContent);

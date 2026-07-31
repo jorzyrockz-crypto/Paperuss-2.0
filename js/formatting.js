@@ -384,11 +384,14 @@ function wrapInlineCode(){
     r.selectNodeContents(code);
     sel.removeAllRanges(); sel.addRange(r);
   } else {
-    const code=document.createElement('code');
     try{
+      const code=document.createElement('code');
       range.surroundContents(code);
     }catch(e){
-      code.appendChild(range.extractContents());
+      // Robust multi-block / AI-formatted text code wrapping
+      const code=document.createElement('code');
+      code.textContent=sel.toString();
+      range.deleteContents();
       range.insertNode(code);
     }
   }
