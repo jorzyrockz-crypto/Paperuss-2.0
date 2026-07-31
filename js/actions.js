@@ -343,6 +343,13 @@ const persist = debounce(()=>{
   st.innerHTML='<span class="dot"></span><span>Saved '+timeAgo(n?n.updatedAt:Date.now())+'</span>';
 },500);
 
+// Debounced list/sidebar refresh — avoids a full DOM rebuild on every keystroke.
+// 300 ms is shorter than persist's 500 ms so the preview updates before the save.
+const _debouncedRenderListSidebar = debounce(()=>{
+  renderList();
+  renderSidebar();
+}, 300);
+
 function editField(field, value){
   const n=getNote(state.currentId); if(!n) return;
   if(n.deletedAt) return;
@@ -350,7 +357,9 @@ function editField(field, value){
   const st=document.getElementById('saveStatus'); st.className='save-status saving';
   st.innerHTML='<span class="dot"></span><span>Saving…</span>';
   persist();
-  renderList(); renderSidebar();
+  // Title edits flush immediately (short, cheap update); content edits debounce.
+  if(field==='title'){ renderList(); renderSidebar(); }
+  else { _debouncedRenderListSidebar(); }
   if(field==='content') renderStats(n);
 }
 

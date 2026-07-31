@@ -518,6 +518,8 @@ async function hydrateMediaInEditor(){
 }
 
 let notes = [];
+// Queued remote note update to apply on next editor blur (set by scheduleActiveNoteRefresh)
+let _pendingRemoteNote = null;
 let state = {
   currentId: null,
   filter: 'all',
@@ -1016,7 +1018,16 @@ function renderEditor(){
   document.querySelectorAll('#fontStyleDropdown .fs-opt').forEach(opt=>{
     opt.classList.toggle('active', opt.dataset.fontstyle === fontStyle);
   });
-  ed.innerHTML = n.content || '';
+  // Only replace the DOM when content actually changed. This prevents the
+  // 60-second cloud sync from resetting the cursor / scrollposition when no
+  // remote data has arrived. Also preserve scroll position across real swaps.
+  const incomingContent = n.content || '';
+  const editorScroll = document.getElementById('editorScroll');
+  if(ed.innerHTML !== incomingContent){
+    const savedScroll = editorScroll ? editorScroll.scrollTop : 0;
+    ed.innerHTML = incomingContent;
+    if(editorScroll) editorScroll.scrollTop = savedScroll;
+  }
   if(typeof normalizeEditorTables==='function') normalizeEditorTables();
   if(trashMode){
     ed.querySelectorAll('input,button,select,textarea').forEach(control=>{ control.disabled=true; });
@@ -1325,3 +1336,31 @@ function renderAll(){
   renderList();
   renderEditor();
 }
+
+/* ============================================================
+   SYNC-SAFE ACTIVE NOTE REFRESH
+   Called by cloud sync when the active note has a newer remote
+   version. Defers the DOM update if the user is currently typing.
+   ============================================================ */
+function scheduleActiveNoteRefresh(remoteNote){
+  if(!remoteNote || !remoteNote.id) return;
+  const ed=bodyEl();
+  const titleInput=document.getElementById('noteTitle');
+  const isEditorFocused=document.activeElement===ed || document.activeElement===titleInput;
+
+  if(!isEditorFocused){
+    // Safe to apply immediately — only swap if remote is genuinely newer
+    const local=getNote(remoteNote.id);
+    if(!local || (remoteNote.updatedAt||0) > (local.updatedAt||0)){
+      const idx=notes.findIndex(n=>n.id===remoteNote.id);
+      if(idx!==-1) notes[idx]=remoteNote; else notes.push(remoteNote);
+      renderEditor();   // targeted — no full list/sidebar rebuild
+    }
+    return;
+  }
+
+  // Editor is focused — queue the update for application on next blur
+  // so we don't interrupt an active typing session.
+  _pendingRemoteNote=remoteNote;
+}
+

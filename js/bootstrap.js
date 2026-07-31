@@ -59,6 +59,21 @@ function bind(){
   ed.addEventListener('keyup', updateToolbarState);
   ed.addEventListener('mouseup', updateToolbarState);
   ed.addEventListener('focus', updateToolbarState);
+  // Apply any remote note update that was deferred while the user was typing
+  function applyPendingRemoteNote(){
+    if(!_pendingRemoteNote) return;
+    const pending=_pendingRemoteNote;
+    _pendingRemoteNote=null;
+    if(pending.id !== state.currentId) return; // note switched while deferred
+    const local=getNote(pending.id);
+    if(!local || (pending.updatedAt||0) > (local.updatedAt||0)){
+      const idx=notes.findIndex(n=>n.id===pending.id);
+      if(idx!==-1) notes[idx]=pending; else notes.push(pending);
+      renderEditor();
+    }
+  }
+  ed.addEventListener('blur', applyPendingRemoteNote);
+  document.getElementById('noteTitle').addEventListener('blur', applyPendingRemoteNote);
   // Keep checkbox clicks working inside contenteditable
   ed.addEventListener('click', e=>{
     if(e.target && e.target.matches && e.target.matches('input[type=checkbox]')){

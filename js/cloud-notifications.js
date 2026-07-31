@@ -931,6 +931,9 @@ async function _syncNowInner(opts){
       ? {...collectPortableState(),...(remote.portableState||{})}
       : collectPortableState();
 
+    // Snapshot pre-merge state so we can diff what actually changed
+    const preMergeMap = new Map(notes.map(n=>[n.id, n.updatedAt||0]));
+
     cloudSyncApplyingRemote=true;
     try{
       notes=mergedNotes; standaloneTasks=mergedTasks; appSettings=mergedSettings;
@@ -944,7 +947,49 @@ async function _syncNowInner(opts){
       applyPortableState(mergedPortable);
       applySettingsEffects(); applyAccent(appSettings.accent||'blue');
       renderProfileMenu();
-      renderAll();
+
+      // Compute what actually changed so we can skip unnecessary DOM work.
+      // A note is "changed" if its id is new, deleted, or has a newer updatedAt.
+      const postMergeMap = new Map(mergedNotes.map(n=>[n.id, n.updatedAt||0]));
+      let anyNoteChanged = preMergeMap.size !== postMergeMap.size;
+      let changedRemoteNote = null;
+      if(!anyNoteChanged){
+        for(const [id, ts] of postMergeMap){
+          if(preMergeMap.get(id) !== ts){ anyNoteChanged=true; break; }
+        }
+        if(!anyNoteChanged){
+          for(const id of preMergeMap.keys()){
+            if(!postMergeMap.has(id)){ anyNoteChanged=true; break; }
+          }
+        }
+      }
+
+      if(anyNoteChanged){
+        // Find the merged version of the active note to check if it changed
+        const activeId=state.currentId;
+        if(activeId){
+          const mergedActive=mergedNotes.find(n=>n.id===activeId);
+          const preMergeTs=preMergeMap.get(activeId)||0;
+          if(mergedActive && (mergedActive.updatedAt||0) > preMergeTs){
+            changedRemoteNote=mergedActive;
+          }
+        }
+
+        if(changedRemoteNote && typeof scheduleActiveNoteRefresh==='function'){
+          // Active note got a newer remote version — defer/apply safely
+          scheduleActiveNoteRefresh(changedRemoteNote);
+          // Refresh the list and sidebar but NOT the editor (handled above)
+          renderList();
+          renderSidebar();
+        } else {
+          // Notes changed but not the active one — rebuild list/sidebar only.
+          // renderEditor() is skipped because the editor content is unchanged.
+          renderList();
+          renderSidebar();
+        }
+      }
+      // If nothing changed: skip all DOM work (silent no-op for background poll)
+
       renderStorageStats();
     }finally{
       cloudSyncApplyingRemote=false;
