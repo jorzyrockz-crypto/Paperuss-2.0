@@ -2,7 +2,8 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     // Scoped media attachments per authenticated user
-    match /users/{userId}/media/{mediaId} {
+    // Path must match mediaStorageRef() in cloud-notifications.js: paperuss_users/{uid}/media/{id}
+    match /paperuss_users/{userId}/media/{mediaId} {
       allow read, write, delete: if request.auth != null && request.auth.uid == userId;
     }
   }
