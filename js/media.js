@@ -139,35 +139,36 @@ async function downscaleImageBlob(blobOrFile, maxDimension = 1920, quality = 0.8
 
 async function insertImageFile(file){
   if(!file || !file.type.startsWith('image/')){ toast('Not an image'); return; }
+  const id = (typeof mediaUid === 'function') ? mediaUid() : ('m_' + Date.now().toString(36));
   const tempUrl = URL.createObjectURL(file);
   const defSize = (typeof IMG_DEFAULT_SIZE==='object' && typeof deviceClass==='function')
     ? IMG_DEFAULT_SIZE[deviceClass()] : 'large';
 
-  // 1. Show image INSTANTLY in the editor using a temporary local blob URL
-  //    Note: we do NOT call save() yet — blob: URLs are ephemeral and must
-  //    NOT be persisted to note storage. save() happens only after the real
-  //    data-media-id is assigned below.
-  const tempClass = 'temp-img-' + Math.random().toString(36).slice(2, 8);
-  insertHTMLAtCaret(`<img class="${tempClass}" data-media-kind="image" data-img-size="${defSize}" src="${tempUrl}" alt="${esc(file.name)}">`);
+  // 1. Show image INSTANTLY in the editor with valid data-media-id from 0ms
+  //    so auto-save never captures a dead headless blob: URL.
+  insertHTMLAtCaret(`<img data-media-id="${id}" data-media-kind="image" data-img-size="${defSize}" src="${tempUrl}" alt="${esc(file.name)}">`);
+  save();
 
   // 2. Downscale + save to IndexedDB + queue cloud sync (runs in background)
   try {
-    const id = await saveMediaBlob(file, file.name, 'image');
-    const dbUrl = await getMediaURL(id);
-    urlCache.set(id, dbUrl);
-    const imgEl = document.querySelector(`img.${tempClass}`);
-    if(imgEl){
-      imgEl.dataset.mediaId = id;
-      imgEl.src = dbUrl;
-      imgEl.classList.remove(tempClass);
+    const realId = await saveMediaBlob(file, file.name, 'image', id);
+    const targetId = realId || id;
+    if(realId && realId !== id){
+      // SHA-256 de-duplication matched an existing blob ID
+      const imgEl = document.querySelector(`img[data-media-id="${id}"]`);
+      if(imgEl) imgEl.setAttribute('data-media-id', realId);
     }
-    // Only persist to note storage NOW that we have a valid data-media-id
+    const dbUrl = await getMediaURL(targetId);
+    if(typeof urlCache !== 'undefined') urlCache.set(targetId, dbUrl);
+    const imgEl = document.querySelector(`img[data-media-id="${targetId}"]`);
+    if(imgEl){
+      imgEl.src = dbUrl;
+    }
     save();
     toast('Image added');
     renderStorageStats();
   } catch(err){
-    // If save fails, remove the broken temp image from the editor
-    const imgEl = document.querySelector(`img.${tempClass}`);
+    const imgEl = document.querySelector(`img[data-media-id="${id}"]`);
     if(imgEl) imgEl.remove();
     URL.revokeObjectURL(tempUrl);
     console.error('PapeRuss: image save error', err);

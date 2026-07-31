@@ -68,7 +68,7 @@ async function computeBlobHash(blob){
   } catch(_) { return null; }
 }
 
-async function saveMediaBlob(blob, name, kind){
+async function saveMediaBlob(blob, name, kind, customId){
   let processedBlob = blob;
   if(kind === 'image' && typeof downscaleImageBlob === 'function'){
     try{ processedBlob = await downscaleImageBlob(blob); }catch(_){}
@@ -82,7 +82,7 @@ async function saveMediaBlob(blob, name, kind){
       }
     } catch(_){}
   }
-  const id=mediaUid();
+  const id = customId || mediaUid();
   const now = Date.now();
   await mediaPut({
     id,
@@ -357,7 +357,13 @@ async function hydrateMediaInEditor(){
     const kind=el.getAttribute('data-media-kind');
     if(kind==='link') continue; // rich links don't need blob URLs
     const url = await getMediaURL(id);
-    if(!url){ el.setAttribute('data-missing','1'); continue; }
+    if(!url){
+      el.setAttribute('data-missing','1');
+      if(el.tagName==='IMG' && typeof setupBrokenImageElement==='function'){
+        setupBrokenImageElement(el);
+      }
+      continue;
+    }
     el.removeAttribute('data-missing');
     if(el.tagName==='IMG' || el.tagName==='AUDIO' || el.tagName==='VIDEO'){
       el.src=url;
@@ -367,6 +373,12 @@ async function hydrateMediaInEditor(){
     }
     const record = (await mediaGet(id)) || (window.__remoteMediaManifest || new Map()).get(id) || { id, cloudUrl: url };
     addMediaSyncIndicator(el, record);
+  }
+  const deadImgs = ed.querySelectorAll('img:not([data-media-id])');
+  for(const img of deadImgs){
+    if(img.complete && img.naturalWidth === 0 && typeof setupBrokenImageElement==='function'){
+      setupBrokenImageElement(img);
+    }
   }
   if(typeof autoCaptureExternalImages==='function') autoCaptureExternalImages();
   refreshIcons();
