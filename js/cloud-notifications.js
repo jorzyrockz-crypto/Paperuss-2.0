@@ -615,7 +615,9 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
       if(failures === 1){
         toast(`⚠️ Media upload failed: ${errMsg} — will retry automatically`);
       } else if(failures >= MAX_UPLOAD_FAILURES){
-        toast(`❌ "${label}" could not be uploaded after ${failures} attempts. Check your connection and sign-in status.`);
+        toast(`❌ "${label}" could not be uploaded after ${failures} attempts.`, () => {
+          if(typeof syncNow === 'function') syncNow();
+        }, 'Retry Now');
       }
     }
   }

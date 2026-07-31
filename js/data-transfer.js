@@ -85,11 +85,11 @@ function openImageLightbox(src){
   </div>`;
   root.querySelector('.modal-overlay').onclick=()=>root.innerHTML='';
 }
-function toast(msg, action){
+function toast(msg, action, label='Undo'){
   const c=document.getElementById('toast-container');
   const t=document.createElement('div');
   t.className='toast';
-  t.innerHTML='<span>'+msg+'</span>'+(action?'<button class="toast-action">Undo</button>':'');
+  t.innerHTML='<span>'+msg+'</span>'+(action?`<button class="toast-action">${label}</button>`:'');
   c.appendChild(t);
   const remove=()=>{ t.style.transition='opacity .2s'; t.style.opacity='0'; setTimeout(()=>t.remove(),200); };
   if(action) t.querySelector('.toast-action').onclick=()=>{ remove(); action(); };

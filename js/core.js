@@ -59,10 +59,28 @@ async function mediaAll(){
 
 const mediaUid = () => 'm_'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 
+async function computeBlobHash(blob){
+  try {
+    const buf = await blob.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buf);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch(_) { return null; }
+}
+
 async function saveMediaBlob(blob, name, kind){
   let processedBlob = blob;
   if(kind === 'image' && typeof downscaleImageBlob === 'function'){
     try{ processedBlob = await downscaleImageBlob(blob); }catch(_){}
+  }
+  const hash = await computeBlobHash(processedBlob);
+  if(hash){
+    try {
+      const existing = (await mediaAll()).find(r => r.hash === hash);
+      if(existing){
+        return existing.id;
+      }
+    } catch(_){}
   }
   const id=mediaUid();
   const now = Date.now();
@@ -73,6 +91,7 @@ async function saveMediaBlob(blob, name, kind){
     type: processedBlob.type || blob.type || '',
     size: processedBlob.size || 0,
     blob: processedBlob,
+    hash: hash || '',
     createdAt: now,
     updatedAt: now,         // required for correct sync timestamp comparison
     cloudSyncedAt: 0,       // will be set ONLY after confirmed upload
@@ -191,7 +210,8 @@ function addMediaSyncIndicator(el,record){
       el.insertAdjacentElement('afterend',badge);
     }
   }
-  badge.className=`media-sync-indicator ${status.icon==='cloud-check'?'is-synced':''} ${isPermanentlyFailed?'is-error':''}`;
+  const isBadgeUploading = status.icon==='loader' || status.icon==='cloud-upload' || (record && record.pendingUpload && !isPermanentlyFailed);
+  badge.className=`media-sync-indicator ${status.icon==='cloud-check'?'is-synced':''} ${isPermanentlyFailed?'is-error':''} ${isBadgeUploading?'is-uploading':''}`;
   badge.title=status.label;
   badge.setAttribute('aria-label',status.label);
   badge.innerHTML=`<i data-lucide="${status.icon}" aria-hidden="true"></i>`;
