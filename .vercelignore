@@ -3,5 +3,6 @@
 node_modules
 worker
 tools
+.worker-assets
 *.toml
 *.md
