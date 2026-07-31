@@ -788,4 +788,5 @@ function bind(){
   updateNotifBar();
   updateNotifBadge();
   startReminderWatcher();
+  if(typeof checkWhatsNewAutoPopup === 'function') setTimeout(checkWhatsNewAutoPopup, 1500);
 })();

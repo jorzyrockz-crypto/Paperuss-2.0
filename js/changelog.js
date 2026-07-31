@@ -81,3 +81,25 @@ function openChangelogModal(){
     body.querySelector('[data-changelog-retry]').onclick=()=>openChangelogModal();
   });
 }
+}
+
+async function checkWhatsNewAutoPopup(){
+  try {
+    const data = await loadChangelog();
+    if(data && Array.isArray(data.releases) && data.releases.length > 0) {
+      const latestReleaseName = data.releases[0].name || data.releases[0].tagName;
+      if(!latestReleaseName) return;
+      const lastSeenRelease = localStorage.getItem('paperuss:lastSeenRelease');
+      
+      if(lastSeenRelease && lastSeenRelease !== latestReleaseName) {
+        // Show modal for existing users when version updates
+        openChangelogModal();
+      }
+      
+      // Update last seen to the latest release
+      localStorage.setItem('paperuss:lastSeenRelease', latestReleaseName);
+    }
+  } catch(e) {
+    console.warn("Failed to check for What's New", e);
+  }
+}
