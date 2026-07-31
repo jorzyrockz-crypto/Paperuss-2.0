@@ -97,6 +97,19 @@ function bind(){
     }
   });
 
+  // Intercept Undo / Redo for Custom History Manager
+  ed.addEventListener('keydown', e => {
+    if(window.HistoryManager) {
+      if((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        window.HistoryManager.undo();
+      } else if((e.ctrlKey || e.metaKey) && ((e.shiftKey && e.key.toLowerCase() === 'z') || e.key.toLowerCase() === 'y')) {
+        e.preventDefault();
+        window.HistoryManager.redo();
+      }
+    }
+  });
+
   // Enter in a task item creates a new task line
   ed.addEventListener('keydown', e=>{
     if(e.key==='Enter' && !e.shiftKey){
@@ -411,7 +424,8 @@ function bind(){
     document.body.appendChild(chip);
     const removeChip = () => { if(chip && chip.parentNode) chip.remove(); };
     chip.querySelector('button').onclick = () => {
-      document.execCommand('undo', false, null);
+      if(window.HistoryManager) window.HistoryManager.undo();
+      else document.execCommand('undo', false, null);
       document.execCommand('insertText', false, plainText);
       setTimeout(handleBodyInput, 0);
       removeChip();
@@ -688,6 +702,11 @@ function bind(){
     applyCommand(opt.dataset.cmd, opt.dataset.val);
   };
 
+  // Page Layout dropdown
+  const plBtn = document.getElementById('pageLayoutBtn');
+  if(plBtn) plBtn.onclick = e => { e.stopPropagation(); toggleDropdown('pageLayoutDropdown'); };
+
+
   /* ---------- NOTIFICATION BELL & PANEL ---------- */
   const notifBell=document.getElementById('notifBellBtn');
   const notifPanel=document.getElementById('notifPanel');
@@ -724,7 +743,7 @@ function bind(){
 
   // Close dropdowns when clicking outside
   const closeAllDropdowns=()=>{
-    ['hlDropdown','szDropdown','fontStyleDropdown','tableGridPicker'].forEach(id=>{
+    ['hlDropdown','szDropdown','fontStyleDropdown','tableGridPicker','pageLayoutDropdown'].forEach(id=>{
       const el=document.getElementById(id);
       if(!el) return;
       el.classList.remove('show');
@@ -737,6 +756,7 @@ function bind(){
   document.addEventListener('click', e=>{
     if(!e.target.closest('#hlPicker') && !e.target.closest('.sz-picker')
       && !e.target.closest('#fontStylePicker') && !e.target.closest('#tablePicker')
+      && !e.target.closest('#pageLayoutPicker')
       && !e.target.closest('#notifBellWrap') && !e.target.closest('#notifPanel')){
       closeAllDropdowns();
     }

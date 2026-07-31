@@ -697,6 +697,131 @@ function openResizeDialog(img){
       handleBodyInput();
       close();
       toast(`Image resized to ${w}px`);
-    }
   };
 }
+
+/* ============================================================
+   PAGE LAYOUT / WYSIWYG EDITOR LOGIC
+   ============================================================ */
+function initPageLayoutUI() {
+  const dropdown = document.getElementById('pageLayoutDropdown');
+  if(!dropdown) return;
+
+  // Insert explicit page break
+  const btnBreak = document.getElementById('insertPageBreakBtn');
+  if(btnBreak) {
+    btnBreak.onclick = (e) => {
+      e.stopPropagation();
+      dropdown.classList.remove('show');
+      const ed = document.getElementById('noteBody');
+      ed.focus();
+      const sel = window.getSelection();
+      if(!sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+      const pb = document.createElement('div');
+      pb.className = 'page-break';
+      pb.contentEditable = 'false';
+      range.insertNode(pb);
+      // Move cursor after the page break
+      const p = document.createElement('p');
+      p.innerHTML = '<br>';
+      pb.parentNode.insertBefore(p, pb.nextSibling);
+      range.setStart(p, 0);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      if(typeof handleBodyInput === 'function') handleBodyInput();
+    };
+  }
+
+  // Handle option clicks
+  dropdown.addEventListener('click', e => {
+    const opt = e.target.closest('.pl-opt[data-prop]');
+    if(!opt) return;
+    e.stopPropagation();
+    
+    const prop = opt.dataset.prop;
+    const val = opt.dataset.val;
+    const note = activeNoteForAction();
+    if(!note) return;
+
+    if(prop === 'mode') note.pageViewEnabled = (val === 'wysiwyg');
+    else if(prop === 'size') note.pageSize = val;
+    else if(prop === 'orient') note.pageOrientation = val;
+    else if(prop === 'margin') note.pageMargins = val;
+    
+    // Save metadata
+    note.updatedAt = Date.now();
+    saveData();
+    if(typeof updateNoteList === 'function') updateNoteList();
+    
+    applyPageLayoutToEditor(note);
+    syncPageLayoutDropdown(note);
+  });
+}
+
+function syncPageLayoutDropdown(note) {
+  const dropdown = document.getElementById('pageLayoutDropdown');
+  if(!dropdown) return;
+  const isWysiwyg = !!note.pageViewEnabled;
+  const size = note.pageSize || 'a4';
+  const orient = note.pageOrientation || 'portrait';
+  const margin = note.pageMargins || 'normal';
+
+  dropdown.querySelectorAll('.pl-opt[data-prop]').forEach(btn => {
+    const prop = btn.dataset.prop;
+    const val = btn.dataset.val;
+    if(prop === 'mode') btn.classList.toggle('active', (val === 'wysiwyg') === isWysiwyg);
+    else if(prop === 'size') btn.classList.toggle('active', val === size);
+    else if(prop === 'orient') btn.classList.toggle('active', val === orient);
+    else if(prop === 'margin') btn.classList.toggle('active', val === margin);
+  });
+}
+
+function applyPageLayoutToEditor(note) {
+  const edContent = document.getElementById('editorContent');
+  const edBody = document.getElementById('noteBody');
+  if(!edContent || !edBody || !note) return;
+
+  const isWysiwyg = !!note.pageViewEnabled;
+  if(isWysiwyg) {
+    edContent.classList.add('wysiwyg-mode');
+    edBody.classList.add('wysiwyg-paper');
+    
+    // Dimensions map (at 96 DPI approximation for web)
+    const sizes = {
+      'a4': { w: 794, h: 1123 },
+      'letter': { w: 816, h: 1056 },
+      'legal': { w: 816, h: 1344 }
+    };
+    
+    const size = note.pageSize || 'a4';
+    const orient = note.pageOrientation || 'portrait';
+    const marginType = note.pageMargins || 'normal';
+    
+    let dim = sizes[size] || sizes['a4'];
+    let w = orient === 'landscape' ? dim.h : dim.w;
+    
+    let pad = '20mm'; // normal
+    if(marginType === 'narrow') pad = '12mm';
+    if(marginType === 'wide') pad = '30mm';
+
+    edBody.style.width = w + 'px';
+    edBody.style.maxWidth = '100%';
+    edBody.style.minHeight = (orient === 'landscape' ? dim.w : dim.h) + 'px';
+    edBody.style.padding = pad;
+    edBody.style.margin = '0 auto';
+  } else {
+    edContent.classList.remove('wysiwyg-mode');
+    edBody.classList.remove('wysiwyg-paper');
+    edBody.style.width = '';
+    edBody.style.maxWidth = '';
+    edBody.style.minHeight = '';
+    edBody.style.padding = '';
+    edBody.style.margin = '';
+  }
+}
+
+// Call init once
+document.addEventListener('DOMContentLoaded', initPageLayoutUI);
+

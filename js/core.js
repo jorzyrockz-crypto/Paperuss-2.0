@@ -1018,6 +1018,7 @@ function renderEditor(){
   document.querySelectorAll('#fontStyleDropdown .fs-opt').forEach(opt=>{
     opt.classList.toggle('active', opt.dataset.fontstyle === fontStyle);
   });
+
   // Only replace the DOM when content actually changed. This prevents the
   // 60-second cloud sync from resetting the cursor / scrollposition when no
   // remote data has arrived. Also preserve scroll position across real swaps.
@@ -1035,8 +1036,13 @@ function renderEditor(){
   }
   state.suppressInput=false;
   hydrateMediaInEditor();
+  if(window.HistoryManager && window.HistoryManager.activeNoteId !== n.id) {
+    window.HistoryManager.reset(n.id);
+  }
   if(typeof renderNotebookCover==='function') renderNotebookCover();
   if(typeof normalizeEditorImages==='function') normalizeEditorImages();
+  if(typeof applyPageLayoutToEditor==='function') applyPageLayoutToEditor(n);
+  if(typeof syncPageLayoutDropdown==='function') syncPageLayoutDropdown(n);
   restoreEditorSelection(ed,savedSelection);
   if(typeof clearImageSelection==='function') clearImageSelection();
   if(trashMode&&typeof clearCellSelection==='function'){

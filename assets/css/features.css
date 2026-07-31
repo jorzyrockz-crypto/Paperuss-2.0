@@ -374,6 +374,75 @@
 }
 .hl-divider{width:100%;height:1px;background:var(--border);margin:4px 0}
 .sz-dropdown.show{flex-direction:column;min-width:116px;max-width:144px;padding:6px}
+
+/* Page Layout Dropdown */
+.page-layout-dropdown {
+  display:none;position:absolute;top:100%;left:0;margin-top:4px;
+  background:#fff;border:1px solid var(--border);border-radius:6px;
+  padding:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);z-index:110;
+  flex-direction:column;min-width:200px;
+}
+.page-layout-dropdown.show{display:flex}
+.pl-section-title { font-size: 10px; font-weight: 600; color: var(--fg-muted); text-transform: uppercase; margin: 8px 6px 4px; letter-spacing: 0.5px; }
+.pl-opt {
+  display:flex;align-items:center;gap:8px;padding:6px 8px;border:none;background:transparent;
+  font-size:13px;color:var(--fg);border-radius:4px;cursor:pointer;text-align:left;width:100%;
+}
+.pl-opt:hover { background:var(--hover); }
+.pl-opt.active { background:var(--accent-hover); color:var(--accent); font-weight:600; }
+
+/* WYSIWYG Paper Surface */
+.editor-content.wysiwyg-mode {
+  background: #f1f5f9; /* Neutral desk background */
+  padding: 32px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.wysiwyg-paper {
+  background: #fff;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.06);
+  border: 1px solid #e2e8f0;
+  box-sizing: border-box;
+  margin-bottom: 24px;
+  position: relative;
+  /* Transitions when switching paper sizes */
+  transition: width 0.3s ease, padding 0.3s ease;
+}
+
+/* Page Break Divider (Visual representation on continuous flow or manual break) */
+.page-break {
+  display: block;
+  width: 100%;
+  height: 24px;
+  margin: 16px 0;
+  position: relative;
+  page-break-before: always;
+  break-before: page;
+  user-select: none;
+}
+.page-break::before {
+  content: "✂ --- Page Break ---";
+  position: absolute;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  font-size: 11px;
+  color: #94a3b8;
+  letter-spacing: 1px;
+  background: #fff;
+  padding: 0 12px;
+  z-index: 1;
+}
+.page-break::after {
+  content: "";
+  position: absolute;
+  top: 50%; left: 0; right: 0;
+  border-top: 1px dashed #cbd5e1;
+}
+.wysiwyg-paper .page-break {
+  /* Hide explicit page breaks in WYSIWYG mode if we're rendering multiple sheets */
+  display: none; 
+}
+
 .sz-opt{
   width:100%;text-align:left;padding:6px 12px;border-radius:6px;font-weight:500;
   background:transparent;border:none;color:var(--fg);cursor:pointer;transition:all .12s ease;

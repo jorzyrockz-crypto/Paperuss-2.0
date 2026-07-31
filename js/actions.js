@@ -277,7 +277,22 @@ function printCurrentNote(){
   const printedAt=new Date().toLocaleString();
   const reference=`paperuss://note/${note.id}?updated=${note.updatedAt}`;
 
+  const size = note.pageSize || 'auto';
+  let orient = note.pageOrientation || 'portrait';
+  let margin = note.pageMargins || 'normal';
+  let marginCss = '16mm 17mm 19mm'; // default auto margins
+  if(note.pageViewEnabled) {
+    if(margin === 'narrow') marginCss = '12mm';
+    else if(margin === 'wide') marginCss = '30mm';
+    else marginCss = '20mm';
+  }
+  
+  const pageCss = note.pageViewEnabled && size !== 'auto' 
+    ? `@page { size: ${size} ${orient}; margin: ${marginCss}; }`
+    : `@page { size: auto; margin: ${marginCss}; }`;
+
   sheet.innerHTML=`
+    <style>${pageCss}</style>
     <div class="ps-header">
       <div>
         <div class="ps-brand">PapeRuss</div>
@@ -385,6 +400,7 @@ function handleBodyInput(){
   if(isEditorEmpty(html) || html==='<br>' || html==='<div><br></div>') html='';
   html=sanitizeForStorage(html);
   editField('content', html);
+  if(window.HistoryManager) window.HistoryManager.queueCapture();
 }
 
 function togglePin(){

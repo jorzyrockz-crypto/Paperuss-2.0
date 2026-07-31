@@ -48,16 +48,35 @@ function cellRange(tbl,a,b){
   const start=positions.get(a);
   const end=positions.get(b);
   if(!start||!end) return new Set([b]);
-  const rowStart=Math.min(start.rowStart,end.rowStart);
-  const rowEnd=Math.max(start.rowEnd,end.rowEnd);
-  const colStart=Math.min(start.colStart,end.colStart);
-  const colEnd=Math.max(start.colEnd,end.colEnd);
+  
+  let rowStart=Math.min(start.rowStart,end.rowStart);
+  let rowEnd=Math.max(start.rowEnd,end.rowEnd);
+  let colStart=Math.min(start.colStart,end.colStart);
+  let colEnd=Math.max(start.colEnd,end.colEnd);
+
+  // Iteratively expand bounding box until no merged cell is partially cut off
+  let changed = true;
+  while(changed){
+    changed = false;
+    positions.forEach((position)=>{
+      const intersects =
+        position.rowEnd >= rowStart && position.rowStart <= rowEnd &&
+        position.colEnd >= colStart && position.colStart <= colEnd;
+      if(intersects){
+        if(position.rowStart < rowStart){ rowStart = position.rowStart; changed = true; }
+        if(position.rowEnd > rowEnd){ rowEnd = position.rowEnd; changed = true; }
+        if(position.colStart < colStart){ colStart = position.colStart; changed = true; }
+        if(position.colEnd > colEnd){ colEnd = position.colEnd; changed = true; }
+      }
+    });
+  }
+
   const out=new Set();
   positions.forEach((position,cell)=>{
-    const intersects=
-      position.rowEnd>=rowStart&&position.rowStart<=rowEnd&&
-      position.colEnd>=colStart&&position.colStart<=colEnd;
-    if(intersects) out.add(cell);
+    const inside =
+      position.rowStart >= rowStart && position.rowEnd <= rowEnd &&
+      position.colStart >= colStart && position.colEnd <= colEnd;
+    if(inside) out.add(cell);
   });
   return out;
 }
@@ -105,6 +124,17 @@ function normalizeEditorTables(){
   Array.from(ed.querySelectorAll('table')).forEach(tbl=>{
     if(!tbl.parentElement?.closest('table')) ensureTableWrapper(tbl);
   });
+}
+
+function normalizeTableStructure(tbl){
+  if(!tbl) return;
+  // Remove rows that have no cells
+  Array.from(tbl.rows).forEach(r => { if(r.cells.length === 0) r.remove(); });
+  if(tbl.rows.length === 0){
+    const wrapper = tbl.closest('.table-wrapper');
+    if(wrapper) wrapper.remove();
+    else tbl.remove();
+  }
 }
 
 function positionTableTools(){
@@ -313,24 +343,55 @@ function tblMobileWrap(){
 function tblMergeCells(){
   if(selectedCells.size<2){ toast('Select 2 or more cells to merge'); return; }
   const tbl=currentTable(); if(!tbl) return;
-  const rows=Array.from(tbl.rows);
-  const allCells=rows.map(r=>Array.from(r.cells));
+  const positions=tableCellLayout(tbl);
   const sel=[...selectedCells];
-  // Validate rectangular shape
-  const rowIdxs=[...new Set(sel.map(c=>rows.indexOf(c.parentElement)))].sort((a,b)=>a-b);
-  const colIdxs=[...new Set(sel.map(c=>{const r=c.parentElement;return Array.from(r.cells).indexOf(c);}))].sort((a,b)=>a-b);
-  const expected=rowIdxs.length*colIdxs.length;
-  if(sel.length!==expected){ toast('Only rectangular selections can be merged'); return; }
-  // Collect content
-  const pivot=allCells[rowIdxs[0]]?.[colIdxs[0]]; if(!pivot) return;
-  const html=sel.map(c=>c.innerHTML.replace(/&nbsp;/g,'').trim()).filter(Boolean).join('<br>');
-  pivot.innerHTML=html||'&nbsp;';
-  pivot.setAttribute('colspan',String(colIdxs.length));
-  pivot.setAttribute('rowspan',String(rowIdxs.length));
-  // Remove the other selected cells
-  sel.forEach(c=>{ if(c!==pivot) c.remove(); });
-  activeCell=pivot; clearCellSelection(); selectedCells.add(pivot); highlightSelected();
-  handleBodyInput(); positionTableTools();
+  
+  let minRow = Infinity, maxRow = -Infinity, minCol = Infinity, maxCol = -Infinity;
+  sel.forEach(cell => {
+    const pos = positions.get(cell);
+    if(pos){
+      minRow = Math.min(minRow, pos.rowStart);
+      maxRow = Math.max(maxRow, pos.rowEnd);
+      minCol = Math.min(minCol, pos.colStart);
+      maxCol = Math.max(maxCol, pos.colEnd);
+    }
+  });
+  
+  const targetColSpan = maxCol - minCol + 1;
+  const targetRowSpan = maxRow - minRow + 1;
+  
+  // Find pivot (top-left cell in selection)
+  let pivot = null;
+  sel.forEach(cell => {
+    const pos = positions.get(cell);
+    if(pos && pos.rowStart === minRow && pos.colStart === minCol){
+      pivot = cell;
+    }
+  });
+  if(!pivot) pivot = sel[0];
+  
+  // Collect text content from all merged cells
+  const html = sel.map(c=>c.innerHTML.replace(/&nbsp;/g,'').trim()).filter(Boolean).join('<br>');
+  pivot.innerHTML = html || '&nbsp;';
+  
+  if(targetColSpan > 1) pivot.setAttribute('colspan', String(targetColSpan));
+  else pivot.removeAttribute('colspan');
+  
+  if(targetRowSpan > 1) pivot.setAttribute('rowspan', String(targetRowSpan));
+  else pivot.removeAttribute('rowspan');
+  
+  // Remove all other merged cells
+  sel.forEach(c => {
+    if(c !== pivot && c.parentNode) c.remove();
+  });
+  
+  normalizeTableStructure(tbl);
+  activeCell = pivot;
+  clearCellSelection();
+  selectedCells.add(pivot);
+  highlightSelected();
+  handleBodyInput();
+  positionTableTools();
   toast('Cells merged');
 }
 
@@ -340,25 +401,42 @@ function tblSplitCell(){
   const rs=parseInt(activeCell.getAttribute('rowspan')||'1',10);
   if(cs===1&&rs===1){ toast('Cell is not merged'); return; }
   const tag=activeCell.tagName.toLowerCase();
-  const html=activeCell.innerHTML;
+  
+  const tbl=activeCell.closest('table');
+  const positions=tableCellLayout(tbl);
+  const pos=positions.get(activeCell);
+  if(!pos) return;
+
   activeCell.removeAttribute('colspan'); activeCell.removeAttribute('rowspan');
-  activeCell.setAttribute('colspan','1'); activeCell.setAttribute('rowspan','1');
   const row=activeCell.parentElement;
+  const rows=Array.from(tbl.rows);
+  
   // Insert missing cells in same row
   for(let c=1;c<cs;c++){
     const cell=document.createElement(tag); cell.innerHTML='&nbsp;';
     row.insertBefore(cell,activeCell.nextSibling);
   }
-  // Insert rows for rowspan>1
-  const rows=Array.from(activeCell.closest('table').rows);
-  const rowIdx=rows.indexOf(row);
+  
+  // Insert cells in subsequent rows
   for(let r=1;r<rs;r++){
-    const targetRow=rows[rowIdx+r]; if(!targetRow) break;
+    const targetRow=rows[pos.rowStart+r]; if(!targetRow) break;
+    
+    // Find the right place to insert in targetRow
+    let insertBeforeCell = null;
+    Array.from(targetRow.cells).forEach(c => {
+      const p = positions.get(c);
+      if(p && p.colStart >= pos.colStart && !insertBeforeCell){
+        insertBeforeCell = c;
+      }
+    });
+    
     for(let c=0;c<cs;c++){
       const cell=document.createElement(tag); cell.innerHTML='&nbsp;';
-      targetRow.appendChild(cell);
+      targetRow.insertBefore(cell, insertBeforeCell);
     }
   }
+  
+  normalizeTableStructure(tbl);
   handleBodyInput(); positionTableTools();
   toast('Cell split');
 }
@@ -401,7 +479,7 @@ function tblCellValign(val){
 }
 
 /* Open/close a submenu anchored to a toolbar button, closing others first */
-const tblMenuIds=['tblMenuInsert','tblMenuMerge','tblMenuFit','tblMenuAlign','tblMenuMore'];
+const tblMenuIds=['tblMenuInsert','tblMenuMerge','tblMenuFit','tblMenuAlign','tblMenuFormula','tblMenuFormat','tblMenuMore'];
 function openTblMenu(id,triggerEl){
   const menu=document.getElementById(id); if(!menu) return;
   const isOpen=menu.classList.contains('show');
@@ -711,6 +789,8 @@ function initTableTools(){
     tblBtnMerge:'tblMenuMerge',
     tblBtnFit:'tblMenuFit',
     tblBtnAlign:'tblMenuAlign',
+    tblBtnFormula:'tblMenuFormula',
+    tblBtnFormat:'tblMenuFormat',
     tblBtnMore:'tblMenuMore'
   };
   Object.entries(menuBtnMap).forEach(([btnId,menuId])=>{
@@ -733,6 +813,9 @@ function initTableTools(){
     tblColLeft:()=>tblInsertCol('left'),
     tblColRight:()=>tblInsertCol('right'),
     tblColDel:tblDeleteCol,
+    tblTplExpense:()=>insertFinancialTemplate('expense'),
+    tblTplBudget:()=>insertFinancialTemplate('budget'),
+    tblTplVariance:()=>insertFinancialTemplate('variance'),
     tblMergeCells:tblMergeCells,
     tblSplitCell:tblSplitCell,
     tblMergeRow:tblMergeRow,
@@ -747,6 +830,18 @@ function initTableTools(){
     tblValignTop:()=>tblCellValign('top'),
     tblValignMiddle:()=>tblCellValign('middle'),
     tblValignBottom:()=>tblCellValign('bottom'),
+    tblFmSum:()=>tblInsertFormula('=SUM()'),
+    tblFmAvg:()=>tblInsertFormula('=AVERAGE()'),
+    tblFmCount:()=>tblInsertFormula('=COUNT()'),
+    tblFmMin:()=>tblInsertFormula('=MIN()'),
+    tblFmMax:()=>tblInsertFormula('=MAX()'),
+    tblFmIf:()=>tblInsertFormula('=IF()'),
+    tblFmtNone:()=>setCellFormat('number'),
+    tblFmtUsd:()=>setCellFormat('currency','$'),
+    tblFmtEur:()=>setCellFormat('currency','€'),
+    tblFmtGbp:()=>setCellFormat('currency','£'),
+    tblFmtJpy:()=>setCellFormat('currency','¥'),
+    tblFmtPct:()=>setCellFormat('percent'),
     tblHeaderRow:tblHeaderRow,
     tblHeaderCol:tblHeaderCol,
     tblAltRowShading:tblAltRowShading,
@@ -807,11 +902,56 @@ function initTableTools(){
   });
 
   document.addEventListener('keydown',e=>{
-    if(e.key!=='Escape'||!currentTable()) return;
-    touchSelectionMode=false;
-    clearCellSelection();
-    activeCell=null;
-    positionTableTools();
+    const tbl=currentTable();
+    if(!tbl) return;
+    
+    if(e.key==='Escape'){
+      touchSelectionMode=false;
+      clearCellSelection();
+      activeCell=null;
+      positionTableTools();
+      return;
+    }
+    
+    // Expand table cell selection with Shift+Arrow IF there is already a multi-cell selection.
+    // We require selectedCells.size > 1 to avoid breaking normal text selection within a single cell.
+    if(e.shiftKey && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key) && selectedCells.size > 1){
+      e.preventDefault();
+      const positions = tableCellLayout(tbl);
+      let minRow=Infinity, maxRow=-Infinity, minCol=Infinity, maxCol=-Infinity;
+      selectedCells.forEach(c => {
+        const pos = positions.get(c);
+        if(pos){
+          minRow=Math.min(minRow,pos.rowStart); maxRow=Math.max(maxRow,pos.rowEnd);
+          minCol=Math.min(minCol,pos.colStart); maxCol=Math.max(maxCol,pos.colEnd);
+        }
+      });
+      
+      let dRow=0, dCol=0;
+      if(e.key==='ArrowUp') dRow=-1;
+      if(e.key==='ArrowDown') dRow=1;
+      if(e.key==='ArrowLeft') dCol=-1;
+      if(e.key==='ArrowRight') dCol=1;
+      
+      let targetCell = null;
+      for (let [cell, pos] of positions.entries()) {
+        if (dRow < 0 && pos.rowEnd === minRow - 1 && pos.colStart <= maxCol && pos.colEnd >= minCol) targetCell = cell;
+        if (dRow > 0 && pos.rowStart === maxRow + 1 && pos.colStart <= maxCol && pos.colEnd >= minCol) targetCell = cell;
+        if (dCol < 0 && pos.colEnd === minCol - 1 && pos.rowStart <= maxRow && pos.rowEnd >= minRow) targetCell = cell;
+        if (dCol > 0 && pos.colStart === maxCol + 1 && pos.rowStart <= maxRow && pos.rowEnd >= minRow) targetCell = cell;
+        if (targetCell) break;
+      }
+      
+      if(targetCell){
+        const anchor = selAnchor || activeCell;
+        clearCellSelection();
+        selAnchor = anchor;
+        selectedCells = cellRange(tbl, anchor, targetCell);
+        highlightSelected();
+        handleBodyInput();
+        positionTableTools();
+      }
+    }
   });
 
   /* ── On mobile, show sheet button, hide full toolbar ── */
@@ -1125,8 +1265,7 @@ function initResponsiveImages(){
     else if(e.key==='Enter'){ e.preventDefault(); openImageFullscreen(selectedImg.src); }
     else if(e.key==='Delete'||e.key==='Backspace'){
       e.preventDefault();
-      const img=selectedImg; clearImageSelection();
-      img.remove(); handleBodyInput(); toast('Image removed');
+
     }
   });
 
@@ -1136,9 +1275,279 @@ function initResponsiveImages(){
     const d=deviceClass();
     if(d!==lastDev){
       lastDev=d;
-      clearImageSelection();
-      clearMultiSelection();
-      normalizeEditorImages();
+      setTimeout(()=>{ if(document.getElementById('imgFullscreen')?.classList.contains('show')) applyFs(); }, 100);
     }
   });
+})();
+
+/* ============================================================
+   TABLE FORMULAS & FINANCIAL TOOLS
+   ============================================================ */
+
+function colIndexToLabel(idx) {
+  let label = '';
+  while (idx >= 0) {
+    label = String.fromCharCode((idx % 26) + 65) + label;
+    idx = Math.floor(idx / 26) - 1;
+  }
+  return label;
+}
+
+function labelToColIndex(str) {
+  let idx = 0;
+  for (let i = 0; i < str.length; i++) {
+    idx = idx * 26 + (str.charCodeAt(i) - 64);
+  }
+  return idx - 1;
+}
+
+function formatNumber(val, decimals = 2) {
+  const num = parseFloat(val);
+  if (isNaN(num)) return val;
+  return new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(num);
+}
+
+function formatCurrency(val, symbol = '$', decimals = 2) {
+  const num = parseFloat(val);
+  if (isNaN(num)) return val;
+  const isNegative = num < 0;
+  const absNum = Math.abs(num);
+  const formatted = new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(absNum);
+  return isNegative ? `(${symbol}${formatted})` : `${symbol}${formatted}`;
+}
+
+// Map A1 references to cell elements
+function resolveCellRange(tbl, refStr, positions) {
+  const match = refStr.trim().toUpperCase().match(/^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/);
+  if (!match) return [];
+  const colStart = labelToColIndex(match[1]);
+  const rowStart = parseInt(match[2], 10) - 1;
+  
+  let colEnd = colStart;
+  let rowEnd = rowStart;
+  
+  if (match[3] && match[4]) {
+    colEnd = labelToColIndex(match[3]);
+    rowEnd = parseInt(match[4], 10) - 1;
+  }
+  
+  const minRow = Math.min(rowStart, rowEnd);
+  const maxRow = Math.max(rowStart, rowEnd);
+  const minCol = Math.min(colStart, colEnd);
+  const maxCol = Math.max(colStart, colEnd);
+  
+  const cells = [];
+  positions.forEach((pos, cell) => {
+    if (pos.rowStart >= minRow && pos.rowStart <= maxRow && pos.colStart >= minCol && pos.colStart <= maxCol) {
+      cells.push(cell);
+    }
+  });
+  return cells;
+}
+
+function getCellValue(cell) {
+  let txt = cell.textContent.replace(/[^0-9.\-()]/g, '');
+  if (cell.textContent.includes('(') && cell.textContent.includes(')')) {
+    txt = '-' + txt.replace(/[()]/g, '');
+  }
+  const val = parseFloat(txt);
+  return isNaN(val) ? 0 : val;
+}
+
+function evaluateCellFormula(tbl, formulaStr, positions) {
+  const expr = formulaStr.substring(1).toUpperCase().trim();
+  
+  // Custom functions
+  const sumMatch = expr.match(/^SUM\(([^)]+)\)$/);
+  if (sumMatch) {
+    const refs = sumMatch[1].split(',');
+    let total = 0;
+    refs.forEach(r => resolveCellRange(tbl, r, positions).forEach(c => total += getCellValue(c)));
+    return total;
+  }
+  
+  const avgMatch = expr.match(/^(?:AVERAGE|AVG)\(([^)]+)\)$/);
+  if (avgMatch) {
+    const refs = avgMatch[1].split(',');
+    let total = 0, count = 0;
+    refs.forEach(r => resolveCellRange(tbl, r, positions).forEach(c => { total += getCellValue(c); count++; }));
+    return count > 0 ? total / count : 0;
+  }
+
+  const countMatch = expr.match(/^COUNT\(([^)]+)\)$/);
+  if (countMatch) {
+    const refs = countMatch[1].split(',');
+    let count = 0;
+    refs.forEach(r => resolveCellRange(tbl, r, positions).forEach(c => { if (!isNaN(parseFloat(c.textContent.replace(/[^0-9.\-()]/g, '')))) count++; }));
+    return count;
+  }
+
+  const minMatch = expr.match(/^MIN\(([^)]+)\)$/);
+  if (minMatch) {
+    let min = Infinity;
+    minMatch[1].split(',').forEach(r => resolveCellRange(tbl, r, positions).forEach(c => min = Math.min(min, getCellValue(c))));
+    return min === Infinity ? 0 : min;
+  }
+
+  const maxMatch = expr.match(/^MAX\(([^)]+)\)$/);
+  if (maxMatch) {
+    let max = -Infinity;
+    maxMatch[1].split(',').forEach(r => resolveCellRange(tbl, r, positions).forEach(c => max = Math.max(max, getCellValue(c))));
+    return max === -Infinity ? 0 : max;
+  }
+
+  const ifMatch = expr.match(/^IF\(([^,]+),([^,]+),(.*)\)$/);
+  if (ifMatch) {
+    let cond = ifMatch[1].replace(/[A-Z]+\d+/g, match => {
+      const cells = resolveCellRange(tbl, match, positions);
+      return cells.length > 0 ? getCellValue(cells[0]) : 0;
+    });
+    let tVal = ifMatch[2].replace(/^["'](.*)["']$/, '$1').trim();
+    let fVal = ifMatch[3].replace(/^["'](.*)["']$/, '$1').trim();
+    try {
+      if (new Function(`return ${cond}`)()) return tVal;
+      return fVal;
+    } catch(e) { return '#ERROR!'; }
+  }
+
+  const roundMatch = expr.match(/^ROUND\(([^,]+),(\d+)\)$/);
+  if(roundMatch){
+    let valExpr = roundMatch[1].replace(/[A-Z]+\d+/g, match => {
+      const cells = resolveCellRange(tbl, match, positions);
+      return cells.length > 0 ? getCellValue(cells[0]) : 0;
+    });
+    try {
+       let val = new Function(`return ${valExpr}`)();
+       let dec = parseInt(roundMatch[2]);
+       return Number(Math.round(val+'e'+dec)+'e-'+dec);
+    }catch(e) { return '#ERROR!'; }
+  }
+
+  // Basic Arithmetic
+  try {
+    let replacedExpr = expr.replace(/[A-Z]+\d+/g, match => {
+      const cells = resolveCellRange(tbl, match, positions);
+      return cells.length > 0 ? getCellValue(cells[0]) : 0;
+    });
+    if (/^[0-9+\-*/(). ]+$/.test(replacedExpr)) {
+      return new Function(`return ${replacedExpr}`)();
+    }
+  } catch (e) {
+    return '#ERROR!';
+  }
+  
+  return '#ERROR!';
+}
+
+function recalculateTableFormulas(tbl) {
+  if (!tbl) return;
+  const positions = tableCellLayout(tbl);
+  const formulaCells = Array.from(tbl.querySelectorAll('[data-formula]'));
+  
+  for(let pass=0; pass<3; pass++) {
+    formulaCells.forEach(cell => {
+      if (cell === document.activeElement) return;
+      const formula = cell.getAttribute('data-formula');
+      if (formula && formula.startsWith('=')) {
+        const result = evaluateCellFormula(tbl, formula, positions);
+        const format = cell.getAttribute('data-format');
+        const symbol = cell.getAttribute('data-currency') || '$';
+        
+        let output = result;
+        if (typeof result === 'number') {
+          if (format === 'currency') output = formatCurrency(result, symbol);
+          else if (format === 'percent') output = formatNumber(result * 100) + '%';
+          else output = formatNumber(result);
+        }
+        
+        cell.innerHTML = output;
+      }
+    });
+  }
+}
+
+const originalHandleBodyInput = window.handleBodyInput;
+window.handleBodyInput = function(e) {
+  if(originalHandleBodyInput) originalHandleBodyInput(e);
+  document.querySelectorAll('.editor-content table').forEach(tbl => {
+    recalculateTableFormulas(tbl);
+  });
+};
+
+document.addEventListener('focusin', e => {
+  const cell = e.target.closest('td,th');
+  if (cell && cell.getAttribute('data-formula')) {
+    cell.textContent = cell.getAttribute('data-formula');
+  }
+});
+document.addEventListener('focusout', e => {
+  const cell = e.target.closest('td,th');
+  if (cell && cell.isContentEditable) {
+    const text = cell.textContent.trim();
+    if (text.startsWith('=')) {
+      cell.setAttribute('data-formula', text);
+      recalculateTableFormulas(cell.closest('table'));
+    } else if (cell.hasAttribute('data-formula')) {
+      cell.removeAttribute('data-formula');
+    }
+  }
+});
+
+function tblInsertFormula(formulaTpl) {
+  if (!activeCell) return;
+  activeCell.setAttribute('data-formula', formulaTpl);
+  activeCell.textContent = formulaTpl;
+  activeCell.focus();
+}
+
+function setCellFormat(format, symbol='$') {
+  onSelected(c => {
+    c.setAttribute('data-format', format);
+    if(format === 'currency') c.setAttribute('data-currency', symbol);
+    else c.removeAttribute('data-currency');
+  });
+  const tbl = currentTable();
+  if(tbl) recalculateTableFormulas(tbl);
+}
+
+function insertFinancialTemplate(type) {
+  const ed = bodyEl();
+  if(!ed) return;
+  let html = '';
+  if (type === 'expense') {
+    html = `<div class="table-wrapper" contenteditable="false"><table contenteditable="true">
+      <tbody>
+        <tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr>
+        <tr><td></td><td></td><td></td><td data-format="currency" data-currency="$">0</td></tr>
+        <tr><td></td><td></td><td></td><td data-format="currency" data-currency="$">0</td></tr>
+        <tr style="border-top:2px solid currentColor; border-bottom:3px double currentColor; font-weight:bold;">
+          <td colspan="3">TOTAL</td><td data-format="currency" data-currency="$" data-formula="=SUM(D2:D3)">$0.00</td>
+        </tr>
+      </tbody>
+    </table></div><p><br></p>`;
+  } else if (type === 'budget') {
+    html = `<div class="table-wrapper" contenteditable="false"><table contenteditable="true">
+      <tbody>
+        <tr><th>Item</th><th>Qty</th><th>Unit Cost</th><th>Total Cost</th></tr>
+        <tr><td></td><td>1</td><td data-format="currency" data-currency="$">0</td><td data-format="currency" data-currency="$" data-formula="=B2*C2">$0.00</td></tr>
+        <tr><td></td><td>1</td><td data-format="currency" data-currency="$">0</td><td data-format="currency" data-currency="$" data-formula="=B3*C3">$0.00</td></tr>
+        <tr style="border-top:2px solid currentColor; border-bottom:3px double currentColor; font-weight:bold;">
+          <td colspan="3">TOTAL</td><td data-format="currency" data-currency="$" data-formula="=SUM(D2:D3)">$0.00</td>
+        </tr>
+      </tbody>
+    </table></div><p><br></p>`;
+  } else if (type === 'variance') {
+     html = `<div class="table-wrapper" contenteditable="false"><table contenteditable="true">
+      <tbody>
+        <tr><th>Category</th><th>Budgeted</th><th>Actual</th><th>Variance</th></tr>
+        <tr><td></td><td data-format="currency" data-currency="$">0</td><td data-format="currency" data-currency="$">0</td><td data-format="currency" data-currency="$" data-formula="=C2-B2">$0.00</td></tr>
+        <tr style="border-top:2px solid currentColor; border-bottom:3px double currentColor; font-weight:bold;">
+          <td>TOTAL</td><td data-format="currency" data-currency="$" data-formula="=SUM(B2:B2)">$0.00</td><td data-format="currency" data-currency="$" data-formula="=SUM(C2:C2)">$0.00</td><td data-format="currency" data-currency="$" data-formula="=C3-B3">$0.00</td>
+        </tr>
+      </tbody>
+    </table></div><p><br></p>`;
+  }
+  document.execCommand('insertHTML', false, html);
+  normalizeEditorTables();
+  handleBodyInput();
 }

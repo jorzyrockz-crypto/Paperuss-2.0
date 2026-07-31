@@ -5,6 +5,7 @@ function focusEditor(){ bodyEl().focus(); }
 
 function applyCommand(cmd, val){
   focusEditor();
+  if(window.HistoryManager) window.HistoryManager.capture(true);
   if(cmd==='createLink'){
     const url=prompt('Enter URL:','https://');
     if(!url) return;
@@ -307,7 +308,8 @@ const DROPDOWN_TRIGGERS={
   hlDropdown:'hlBtn',
   szDropdown:'szBtn',
   fontStyleDropdown:'fontStyleBtn',
-  tableGridPicker:'tableBtn'
+  tableGridPicker:'tableBtn',
+  pageLayoutDropdown:'pageLayoutBtn'
 };
 
 /**
