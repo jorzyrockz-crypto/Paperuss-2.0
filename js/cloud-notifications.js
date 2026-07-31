@@ -33,6 +33,7 @@ let fbApp=null, fbAuth=null, fbDb=null, fbStorage=null, fbAnalytics=null, fireba
 let currentSession=null; // {mode:'guest'} | {mode:'auth', uid, name, email, photoURL}
 let syncState='offline'; // offline | synced | syncing | error
 let syncDebounceTimer=null;
+let mediaRetryTimer=null;
 let cloudSyncApplyingRemote=false;
 let syncRequestedWhileBusy=false;
 
@@ -516,6 +517,25 @@ function drainOfflineQueue(){
   }
 }
 
+// Retry failed media while the browser remains online.  The per-record
+// backoff still lives in syncMedia(), so this only wakes the next attempt.
+function schedulePendingMediaRetry(){
+  clearTimeout(mediaRetryTimer);
+  mediaRetryTimer=null;
+  mediaAll().then(records=>{
+    const retryAt=records
+      .filter(record=>record.pendingUpload && (record.uploadFailures||0) > 0 && (record.uploadFailures||0) < MAX_UPLOAD_FAILURES)
+      .map(record=>{
+        const failures=record.uploadFailures||0;
+        const backoffMs=Math.min(UPLOAD_RETRY_BASE_MS*Math.pow(2,failures-1),8*60*1000);
+        return (record.lastUploadAttempt||0)+backoffMs;
+      });
+    if(!retryAt.length) return;
+    const delay=Math.max(0,Math.min(...retryAt)-Date.now());
+    mediaRetryTimer=setTimeout(()=>syncNow({silent:true}),delay);
+  }).catch(()=>{});
+}
+
 /* Dynamic upload timeout — 1 byte/ms minimum, floor at 20s, ceiling at 15min */
 function timeoutForSize(bytes){
   return Math.min(Math.max(20000, Math.round(bytes * 1.5)), 15*60*1000);
@@ -624,12 +644,11 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
           // Reset Storage failure counter on success
           window.__fbStorageFailCount = 0;
         } catch(storageErr) {
-          console.warn(`PapeRuss: Cloud Storage upload failed for ${record.id} (${storageErr.message||storageErr.code})`);
+          console.warn(`PapeRuss: Cloud Storage upload failed for ${record.id} (${storageErr.message||storageErr.code}), using Firestore media sync`);
           window.__fbStorageFailCount = (window.__fbStorageFailCount || 0) + 1;
           if(window.__fbStorageFailCount >= 3){
             console.warn('PapeRuss: Cloud Storage disabled after 3 consecutive failures (will retry on next manual Sync Now)');
           }
-          throw storageErr; // Do not silently fall back to Base64 Firestore
         }
       }
 
@@ -960,9 +979,14 @@ async function _syncNowInner(opts){
     }
 
     localStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
-    updateSyncStatus(partialFailure ? 'partial' : 'synced');
+    if(partialFailure){
+      updateSyncStatus('partial','Media sync incomplete — retry scheduled');
+      schedulePendingMediaRetry();
+    }else{
+      updateSyncStatus('synced');
+    }
     if(typeof hydrateMediaInEditor==='function') hydrateMediaInEditor();
-    if(!opts.silent) toast('Synced with cloud');
+    if(!opts.silent) toast(partialFailure ? 'Notes synced; some media will retry automatically' : 'Synced with cloud');
     if(syncRequestedWhileBusy){ syncRequestedWhileBusy=false; queueCloudSync(); }
   }catch(err){
     console.error('PapeRuss cloud sync failed',err);

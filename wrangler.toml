@@ -1,4 +1,4 @@
-name = "paperuss-2"
+name = "my-paperuss-database-2"
 main = "worker/index.js"
 compatibility_date = "2025-06-01"
 
