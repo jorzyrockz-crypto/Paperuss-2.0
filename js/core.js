@@ -70,7 +70,7 @@ async function computeBlobHash(blob){
 
 async function saveMediaBlob(blob, name, kind, customId){
   let processedBlob = blob;
-  if(kind === 'image' && typeof downscaleImageBlob === 'function'){
+  if((kind === 'image' || (blob && blob.type && blob.type.startsWith('image/'))) && typeof downscaleImageBlob === 'function'){
     try{ processedBlob = await downscaleImageBlob(blob); }catch(_){}
   }
   const hash = await computeBlobHash(processedBlob);
@@ -240,9 +240,26 @@ async function getMediaURL(id){
     if(typeof fbDb !== 'undefined' && fbDb){
       const session = (typeof currentSession !== 'undefined' && currentSession) || (typeof loadSession === 'function' ? loadSession() : null);
       if(session && session.uid){
-        const docSnap = await fbDb.collection('paperuss_users').doc(session.uid).collection('media').doc(id).get();
-        if(docSnap && docSnap.exists && docSnap.data().dataUrl){
-          const remoteUrl = docSnap.data().dataUrl;
+        let remoteUrl = null;
+        if(typeof fetchFirestoreMediaDataUrl === 'function'){
+          remoteUrl = await fetchFirestoreMediaDataUrl(session.uid, id);
+        } else {
+          const docSnap = await fbDb.collection('paperuss_users').doc(session.uid).collection('media').doc(id).get();
+          if(docSnap && docSnap.exists){
+            const data = docSnap.data();
+            if(data.chunked === true && data.totalChunks > 0){
+              const chunkPromises = [];
+              for(let c = 0; c < data.totalChunks; c++){
+                chunkPromises.push(fbDb.collection('paperuss_users').doc(session.uid).collection('media').doc(`${id}_chunk_${c}`).get());
+              }
+              const chunkSnaps = await Promise.all(chunkPromises);
+              remoteUrl = chunkSnaps.map(snap => (snap && snap.exists && snap.data().data) || '').join('');
+            } else {
+              remoteUrl = data.dataUrl || null;
+            }
+          }
+        }
+        if(remoteUrl){
           if(manifestItem) manifestItem.cloudUrl = remoteUrl;
           urlCache.set(id, remoteUrl);
           return remoteUrl;

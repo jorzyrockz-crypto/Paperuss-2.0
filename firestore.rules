@@ -2,9 +2,23 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /paperuss_users/{userId}/{document=**} {
-      allow read, create, update, delete: if request.auth != null
-        && request.auth.uid == userId;
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // 1. Root User Document (notes, tasks, settings, mediaManifest)
+    match /paperuss_users/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // 2. Media Subcollection (supports both standard single-doc media and chunked attachments)
+    match /paperuss_users/{userId}/media/{mediaId} {
+      allow read, delete: if isOwner(userId);
+      // Ensure neither dataUrl nor chunk data exceeds 950,000 characters (~700 KB raw file)
+      // This prevents 1 MiB document transaction size exceptions
+      allow create, update: if isOwner(userId)
+        && (!('dataUrl' in request.resource.data) || request.resource.data.dataUrl.size() <= 950000)
+        && (!('data' in request.resource.data) || request.resource.data.data.size() <= 950000);
     }
   }
 }

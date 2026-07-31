@@ -441,6 +441,22 @@ function mediaStorageRef(uid,id){
   return fbStorage.ref().child(`paperuss_users/${uid}/media/${id}`);
 }
 
+async function fetchFirestoreMediaDataUrl(uid, id){
+  if(!fbDb) return null;
+  const docSnap = await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id).get();
+  if(!docSnap || !docSnap.exists) return null;
+  const data = docSnap.data();
+  if(data.chunked === true && data.totalChunks > 0){
+    const chunkPromises = [];
+    for(let c = 0; c < data.totalChunks; c++){
+      chunkPromises.push(fbDb.collection('paperuss_users').doc(uid).collection('media').doc(`${id}_chunk_${c}`).get());
+    }
+    const chunkSnaps = await Promise.all(chunkPromises);
+    return chunkSnaps.map(snap => (snap && snap.exists && snap.data().data) || '').join('');
+  }
+  return data.dataUrl || null;
+}
+
 function mediaManifestEntry(record){
   return {
     id:record.id,
@@ -449,6 +465,8 @@ function mediaManifestEntry(record){
     type:record.type||'application/octet-stream',
     size:+record.size||record.blob?.size||0,
     cloudUrl:record.cloudUrl||'',
+    chunked:!!record.chunked,
+    totalChunks:+record.totalChunks||1,
     createdAt:+record.createdAt||Date.now(),
     updatedAt:+record.updatedAt||+record.createdAt||Date.now()
   };
@@ -511,7 +529,14 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
       localMap.delete(id);
     }
     if(remote){
-      try{ await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id).delete(); }catch(_){}
+      try{
+        if(remote.chunked && remote.totalChunks){
+          for(let c=0; c<remote.totalChunks; c++){
+            try{ await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(`${id}_chunk_${c}`).delete(); }catch(_){}
+          }
+        }
+        await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id).delete();
+      }catch(_){}
       if(useStorage){
         try{ await mediaStorageRef(uid,id).delete(); }
         catch(err){ if(!String(err?.code||'').includes('object-not-found')) console.warn(err); }
@@ -589,22 +614,71 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
       }
 
       if(!uploadedToStorage){
-        // Firestore-only media sync fallback: save base64 DataURL in paperuss_users/{uid}/media/{id}
-        if(fileBytes > 950000){
-          throw new Error('Media asset exceeds 950KB (too large for Firestore sync)');
+        // Pre-flight auth verification
+        if(!fbAuth || !fbAuth.currentUser || fbAuth.currentUser.uid !== uid){
+          throw new Error('permission-denied: Please sign in to sync media with your account');
         }
-        const dataUrl = await blobToDataURL(record.blob);
-        await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id).set({
-          id: record.id,
-          dataUrl: dataUrl,
-          type: record.type || record.blob?.type || 'application/octet-stream',
-          size: fileBytes,
-          name: label,
-          updatedAt: Date.now()
-        }, {merge: true});
+        let workingBlob = record.blob;
+        let workingBytes = fileBytes;
+        const mimeType = record.type || record.blob?.type || 'application/octet-stream';
+        // On-the-fly photo downscaling if image exceeds 600 KB
+        if(mimeType.startsWith('image/') && workingBytes > 600000 && typeof downscaleImageBlob === 'function'){
+          try {
+            workingBlob = await downscaleImageBlob(workingBlob, 1440, 400 * 1024);
+            workingBytes = workingBlob.size || workingBytes;
+          } catch(_) {}
+        }
+        const dataUrl = await blobToDataURL(workingBlob);
+        const CHUNK_CHAR_SIZE = 600000;
+        let chunked = false;
+        let totalChunks = 1;
+        if(dataUrl.length <= 900000){
+          await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id).set({
+            id: record.id,
+            dataUrl: dataUrl,
+            type: mimeType,
+            size: workingBytes,
+            name: label,
+            chunked: false,
+            totalChunks: 1,
+            updatedAt: Date.now()
+          }, {merge: true});
+        } else {
+          // Automatic Firestore Document Chunking for files/recordings > 900,000 Base64 chars
+          chunked = true;
+          totalChunks = Math.ceil(dataUrl.length / CHUNK_CHAR_SIZE);
+          const chunkPromises = [];
+          for(let c = 0; c < totalChunks; c++){
+            const sliceData = dataUrl.slice(c * CHUNK_CHAR_SIZE, (c + 1) * CHUNK_CHAR_SIZE);
+            chunkPromises.push(
+              fbDb.collection('paperuss_users').doc(uid).collection('media').doc(`${record.id}_chunk_${c}`).set({
+                parentId: record.id,
+                chunkIndex: c,
+                data: sliceData,
+                updatedAt: Date.now()
+              })
+            );
+          }
+          await Promise.all(chunkPromises);
+          await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id).set({
+            id: record.id,
+            type: mimeType,
+            size: workingBytes,
+            name: label,
+            chunked: true,
+            totalChunks: totalChunks,
+            updatedAt: Date.now()
+          }, {merge: true});
+        }
+        if(workingBlob !== record.blob){
+          record.blob = workingBlob;
+          record.size = workingBytes;
+        }
+        record.chunked = chunked;
+        record.totalChunks = totalChunks;
         cloudUrl = 'firestore:' + record.id;
         document.dispatchEvent(new CustomEvent('media-upload-progress', {
-          detail:{ id:record.id, percent:100, bytesTransferred:fileBytes, totalBytes:fileBytes }
+          detail:{ id:record.id, percent:100, bytesTransferred:workingBytes, totalBytes:workingBytes }
         }));
       }
 
@@ -625,6 +699,10 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
     }catch(uploadErr){
       const errMsg = uploadErr?.message || uploadErr?.code || String(uploadErr);
       console.error(`PapeRuss: Media upload failed for ${record.id}:`, uploadErr);
+      const isPermDenied = String(errMsg).includes('permission-denied');
+      if(isPermDenied){
+        toast('⚠️ Access denied by Firestore security rules. Please check your sign-in session.');
+      }
       // ❌ Failure — increment counter, keep pendingUpload:true, DO NOT touch cloudSyncedAt
       const failures = (record.uploadFailures||0) + 1;
       const failedRecord = {...record,
@@ -634,7 +712,11 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
       };
       try{ await mediaPut(failedRecord); }catch(_){}
       localMap.set(record.id, failedRecord);
-      addToOfflineUploadQueue(record.id);
+      if(failures >= MAX_UPLOAD_FAILURES || isPermDenied){
+        removeFromOfflineUploadQueue(record.id);
+      } else {
+        addToOfflineUploadQueue(record.id);
+      }
       document.dispatchEvent(new CustomEvent('media-upload-progress', {
         detail:{ id:record.id, percent:0, error:true, failures }
       }));
@@ -670,10 +752,8 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
       if(item.cloudUrl && item.cloudUrl.startsWith('data:')){
         blob = dataURLToBlob(item.cloudUrl);
       } else if(item.cloudUrl === 'firestore:'+item.id || !useStorage || window.__fbStorageDisabled){
-        const docSnap = await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(item.id).get();
-        if(docSnap && docSnap.exists && docSnap.data().dataUrl){
-          blob = dataURLToBlob(docSnap.data().dataUrl);
-        }
+        const dataUrl = await fetchFirestoreMediaDataUrl(uid, item.id);
+        if(dataUrl) blob = dataURLToBlob(dataUrl);
       } else {
         try {
           const url = await withTimeout(
@@ -682,10 +762,8 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
           const response = await withTimeout(fetch(url), timeoutForSize(item.size||500000), `Fetch timeout for ${item.id}`);
           if(response.ok) blob = await response.blob();
         } catch(_) {
-          const docSnap = await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(item.id).get();
-          if(docSnap && docSnap.exists && docSnap.data().dataUrl){
-            blob = dataURLToBlob(docSnap.data().dataUrl);
-          }
+          const dataUrl = await fetchFirestoreMediaDataUrl(uid, item.id);
+          if(dataUrl) blob = dataURLToBlob(dataUrl);
         }
       }
       if(blob){
@@ -751,6 +829,7 @@ async function syncNow(opts){
   // When user manually taps Sync Now (non-silent), give all stuck media a fresh retry
   // by resetting their failure counter — this clears the backoff window too
   if(!opts.silent){
+    window.__fbStorageDisabled = false;
     try{
       const allMedia = await mediaAll();
       const stuck = allMedia.filter(r=>r.pendingUpload && (r.uploadFailures||0) > 0);

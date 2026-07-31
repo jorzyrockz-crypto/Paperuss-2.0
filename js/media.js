@@ -101,7 +101,8 @@ function downscaleImageBlob(blobOrFile, maxDimension = 1920, targetMaxBytes = 25
       let h = img.naturalHeight || img.height;
       
       const isPng = type === 'image/png';
-      const outputType = (isPng && blobOrFile.size < 1024 * 1024) ? 'image/png' : 'image/jpeg';
+      // Convert large PNGs (> 500 KB) to JPEG so lossy compression reduces file size effectively
+      const outputType = (isPng && blobOrFile.size < 500 * 1024) ? 'image/png' : 'image/jpeg';
       let currentQuality = 0.85;
 
       if(w > maxDimension || h > maxDimension){
@@ -319,8 +320,15 @@ function openRecordingModal(){
       return;
     }
     recChunks=[];
-    const mime=MediaRecorder.isTypeSupported('audio/webm')?'audio/webm':'';
-    recRecorder=mime?new MediaRecorder(recStream,{mimeType:mime}):new MediaRecorder(recStream);
+    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' :
+                 MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' :
+                 MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+    const recOpts = mime ? { mimeType: mime, audioBitsPerSecond: 24000 } : { audioBitsPerSecond: 24000 };
+    try {
+      recRecorder = new MediaRecorder(recStream, recOpts);
+    } catch(_) {
+      recRecorder = mime ? new MediaRecorder(recStream, { mimeType: mime }) : new MediaRecorder(recStream);
+    }
     recRecorder.ondataavailable=e=>{ if(e.data && e.data.size) recChunks.push(e.data); };
     recRecorder.onstop=async ()=>{
       const blob=new Blob(recChunks,{type:recRecorder.mimeType||'audio/webm'});
