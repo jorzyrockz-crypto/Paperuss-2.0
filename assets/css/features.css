@@ -1155,3 +1155,29 @@
   color: #ef4444 !important;
   opacity: 1 !important;
 }
+
+/* Paste as plain text floating chip */
+.paste-plain-chip {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 10000;
+  animation: slideUpFade 0.2s ease;
+}
+.paste-plain-chip button {
+  background: var(--canvas);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.paste-plain-chip button:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}

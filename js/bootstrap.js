@@ -131,6 +131,54 @@ function bind(){
         node.textContent = node.textContent.slice(3);
         document.execCommand('insertHorizontalRule', false, null);
         setTimeout(handleBodyInput, 0);
+      } else {
+        // Inline markdown auto-formatting for **bold**, ~~strike~~, and *italic*
+        const boldMatch = text.match(/\*\*([^\*\s][^\*]*[^\*\s]|[^\*\s])\*\*$/);
+        const strikeMatch = text.match(/~~([^~\s][^~]*[^~\s]|[^~\s])~~$/);
+        const italicMatch = !boldMatch && text.match(/(?<!\*)\*([^\*\s][^\*]*[^\*\s]|[^\*\s])\*(?!\*)$/);
+        if(boldMatch){
+          e.preventDefault();
+          const word = boldMatch[1];
+          const range = sel.getRangeAt(0);
+          range.setStart(node, sel.anchorOffset - boldMatch[0].length);
+          range.deleteContents();
+          const strong = document.createElement('strong');
+          strong.textContent = word;
+          range.insertNode(strong);
+          range.setStartAfter(strong);
+          range.collapse(true);
+          sel.removeAllRanges(); sel.addRange(range);
+          document.execCommand('insertText', false, ' ');
+          setTimeout(handleBodyInput, 0);
+        } else if(strikeMatch){
+          e.preventDefault();
+          const word = strikeMatch[1];
+          const range = sel.getRangeAt(0);
+          range.setStart(node, sel.anchorOffset - strikeMatch[0].length);
+          range.deleteContents();
+          const del = document.createElement('del');
+          del.textContent = word;
+          range.insertNode(del);
+          range.setStartAfter(del);
+          range.collapse(true);
+          sel.removeAllRanges(); sel.addRange(range);
+          document.execCommand('insertText', false, ' ');
+          setTimeout(handleBodyInput, 0);
+        } else if(italicMatch){
+          e.preventDefault();
+          const word = italicMatch[1];
+          const range = sel.getRangeAt(0);
+          range.setStart(node, sel.anchorOffset - italicMatch[0].length);
+          range.deleteContents();
+          const em = document.createElement('em');
+          em.textContent = word;
+          range.insertNode(em);
+          range.setStartAfter(em);
+          range.collapse(true);
+          sel.removeAllRanges(); sel.addRange(range);
+          document.execCommand('insertText', false, ' ');
+          setTimeout(handleBodyInput, 0);
+        }
       }
     }
   });
@@ -298,7 +346,44 @@ function bind(){
     }
   });
 
-  // Paste images or clean formatted HTML from clipboard
+  function tsvToPaperussTable(tsv){
+    const rows = tsv.trim().split(/\r?\n/).map(r => r.split('\t'));
+    if(rows.length < 1 || !rows[0].length || (rows.length === 1 && rows[0].length <= 1)) return null;
+    let html = '<table class="note-table"><thead><tr>';
+    rows[0].forEach(cell => {
+      html += `<th>${esc(cell.trim())}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+    for(let i = 1; i < rows.length; i++){
+      html += '<tr>';
+      rows[i].forEach(cell => {
+        html += `<td>${esc(cell.trim())}</td>`;
+      });
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+    return html;
+  }
+
+  function showPasteAsPlainTextChip(plainText){
+    let chip = document.getElementById('pastePlainTextChip');
+    if(chip) chip.remove();
+    chip = document.createElement('div');
+    chip.id = 'pastePlainTextChip';
+    chip.className = 'paste-plain-chip';
+    chip.innerHTML = `<button type="button" title="Strip all formatting and paste as plain text">Paste as plain text</button>`;
+    document.body.appendChild(chip);
+    const removeChip = () => { if(chip && chip.parentNode) chip.remove(); };
+    chip.querySelector('button').onclick = () => {
+      document.execCommand('undo', false, null);
+      document.execCommand('insertText', false, plainText);
+      setTimeout(handleBodyInput, 0);
+      removeChip();
+    };
+    setTimeout(removeChip, 4500);
+  }
+
+  // Paste images, spreadsheet tables, or clean formatted HTML from clipboard
   edEl.addEventListener('paste', e=>{
     if(!e.clipboardData) return;
     const items=e.clipboardData.items||[];
@@ -306,6 +391,16 @@ function bind(){
       if(it.kind==='file'){
         const f=it.getAsFile();
         if(f && f.type.startsWith('image/')){ e.preventDefault(); insertImageFile(f); return; }
+      }
+    }
+    const text = e.clipboardData.getData('text/plain');
+    if(text && /\t/.test(text) && /\n/.test(text)){
+      const tableHtml = tsvToPaperussTable(text);
+      if(tableHtml){
+        e.preventDefault();
+        document.execCommand('insertHTML', false, tableHtml);
+        setTimeout(handleBodyInput, 0);
+        return;
       }
     }
     const html = e.clipboardData.getData('text/html');
@@ -338,6 +433,7 @@ function bind(){
       });
       const cleanHTML = doc.body.innerHTML;
       document.execCommand('insertHTML', false, cleanHTML);
+      showPasteAsPlainTextChip(text || doc.body.textContent);
       setTimeout(handleBodyInput, 0);
       return;
     }
