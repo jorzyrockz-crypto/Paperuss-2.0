@@ -5,14 +5,20 @@
 // cross-device sign-in/sync. Left blank, PapeRuss runs fully offline —
 // the landing page will still appear but cloud sign-in gracefully
 // falls back to Guest mode with a friendly notice.
+const getEnvVar = (key) => {
+  if (typeof window !== 'undefined' && window[key]) return window[key];
+  if (typeof process !== 'undefined' && process.env && process.env[key]) return process.env[key];
+  return null;
+};
+
 const FIREBASE_CONFIG={
-  apiKey:"AIzaSyDVurj0n57qBiSBwuCjaDpi5CSQs-3I3f0",
-  authDomain:"paperuss-2.firebaseapp.com",
-  projectId:"paperuss-2",
-  storageBucket:"paperuss-2.firebasestorage.app",
-  messagingSenderId:"158402331948",
-  appId:"1:158402331948:web:a3abb73a2c84b14e78d889",
-  measurementId:"G-1ZC6WLYCPG"
+  apiKey: getEnvVar('VITE_FIREBASE_API_KEY') || "AIzaSyDVurj0n57qBiSBwuCjaDpi5CSQs-3I3f0",
+  authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN') || "paperuss-2.firebaseapp.com",
+  projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID') || "paperuss-2",
+  storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET') || "paperuss-2.firebasestorage.app",
+  messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID') || "158402331948",
+  appId: getEnvVar('VITE_FIREBASE_APP_ID') || "1:158402331948:web:a3abb73a2c84b14e78d889",
+  measurementId: getEnvVar('VITE_FIREBASE_MEASUREMENT_ID') || "G-1ZC6WLYCPG"
 };
 const AUTH_SESSION_KEY='octonotes:session';
 const LAST_SYNC_KEY='octonotes:lastSyncAt';
