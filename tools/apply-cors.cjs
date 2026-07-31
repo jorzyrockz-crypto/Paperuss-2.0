@@ -11,7 +11,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const BUCKET = 'paperuss-2.firebasestorage.app';
+const BUCKET = 'my-paperuss-database-2.firebasestorage.app';
 const CORS_FILE = path.join(__dirname, '..', 'cors.json');
 
 const corsBody = `<?xml version="1.0" encoding="UTF-8"?>

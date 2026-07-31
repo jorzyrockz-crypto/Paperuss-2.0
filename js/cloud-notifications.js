@@ -324,6 +324,7 @@ function updateSyncStatus(newState, customText){
   const labels={
     offline: customText||(session.mode==='auth'?'Offline · will sync when online':'Offline · local only'),
     synced: customText||('Synced · '+(getLastSyncLabel())),
+    partial: customText||('Synced (Partial) · '+(getLastSyncLabel())),
     syncing: customText||'Syncing…',
     error: customText||'Sync error · retry later'
   };
@@ -527,6 +528,7 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
 
   const localMap=new Map(localRecords.map(record=>[record.id,record]));
   const manifestMap=new Map((remoteManifest||[]).map(item=>[item.id,item]));
+  let partialFailure = false;
   window.__remoteMediaManifest = manifestMap;
 
   // Phase 1: Apply deletion markers
@@ -622,11 +624,12 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
           // Reset Storage failure counter on success
           window.__fbStorageFailCount = 0;
         } catch(storageErr) {
-          console.warn(`PapeRuss: Cloud Storage upload failed for ${record.id} (${storageErr.message||storageErr.code}), using Firestore-only media sync`);
+          console.warn(`PapeRuss: Cloud Storage upload failed for ${record.id} (${storageErr.message||storageErr.code})`);
           window.__fbStorageFailCount = (window.__fbStorageFailCount || 0) + 1;
           if(window.__fbStorageFailCount >= 3){
             console.warn('PapeRuss: Cloud Storage disabled after 3 consecutive failures (will retry on next manual Sync Now)');
           }
+          throw storageErr; // Do not silently fall back to Base64 Firestore
         }
       }
 
@@ -714,6 +717,7 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
       removeFromOfflineUploadQueue(record.id);
 
     }catch(uploadErr){
+      partialFailure = true;
       const errMsg = uploadErr?.message || uploadErr?.code || String(uploadErr);
       console.error(`PapeRuss: Media upload failed for ${record.id}:`, uploadErr);
       const isPermDenied = String(errMsg).includes('permission-denied');
@@ -799,7 +803,7 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
     }
   }
 
-  return Array.from(manifestMap.values());
+  return { manifest: Array.from(manifestMap.values()), partialFailure };
 }
 
 
@@ -939,20 +943,24 @@ async function _syncNowInner(opts){
     const requiredMediaIds=typeof referencedStoredMediaIds==='function'
       ? referencedStoredMediaIds(mergedNotes)
       : new Set();
+    let partialFailure = false;
     try {
-      const mergedMediaManifest=await syncMedia(
+      const mediaResult=await syncMedia(
         session.uid,remote.mediaManifest||[],mergedDeletions.media,requiredMediaIds
       );
+      const mergedMediaManifest = mediaResult ? mediaResult.manifest : null;
+      partialFailure = mediaResult ? mediaResult.partialFailure : false;
       if(mergedMediaManifest){
         window.__remoteMediaManifest = new Map((mergedMediaManifest||[]).map(item=>[item.id, item]));
       }
       await docRef.set({ mediaManifest: mergedMediaManifest, updatedAt: Date.now() }, {merge:true});
     } catch(mediaErr) {
+      partialFailure = true;
       console.warn('PapeRuss media sync non-blocking warning:', mediaErr);
     }
 
     localStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
-    updateSyncStatus('synced');
+    updateSyncStatus(partialFailure ? 'partial' : 'synced');
     if(typeof hydrateMediaInEditor==='function') hydrateMediaInEditor();
     if(!opts.silent) toast('Synced with cloud');
     if(syncRequestedWhileBusy){ syncRequestedWhileBusy=false; queueCloudSync(); }
@@ -988,6 +996,13 @@ function initAuthAndSync(){
     syncNow({silent:true});
   });
   window.addEventListener('offline', ()=>updateSyncStatus('offline'));
+  // Background retry polling every 60 seconds
+  setInterval(() => {
+    if((currentSession||{}).mode==='auth' && navigator.onLine){
+      drainOfflineQueue();
+      syncNow({silent:true});
+    }
+  }, 60000);
 
   // Re-sync on tab focus or screen unlock if last sync was more than 60 seconds ago
   const RESYNC_STALE_MS = 60 * 1000;

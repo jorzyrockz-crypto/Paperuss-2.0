@@ -3,7 +3,7 @@
   <h1>PapeRuss</h1>
   <p>An offline-first workspace for notes, tasks, planning, and media.</p>
   <p>
-    <a href="https://paperuss-2.jorzyrockz.workers.dev/"><strong>Open PapeRuss</strong></a>
+    <a href="https://my-paperuss-database-2.jorzyrockz.workers.dev/"><strong>Open PapeRuss</strong></a>
   </p>
 </div>
 
@@ -69,7 +69,7 @@ http://127.0.0.1:8765/
 
 ## Firebase setup
 
-The checked-in configuration targets Firebase project `paperuss-2`.
+The checked-in configuration targets Firebase project `my-paperuss-database-2`.
 
 Enable these Firebase products:
 
@@ -82,9 +82,9 @@ Enable these Firebase products:
 Under **Authentication → Settings → Authorized domains**, include every production hostname:
 
 ```text
-paperuss-2.jorzyrockz.workers.dev
-paperuss-2.web.app
-paperuss-2.firebaseapp.com
+my-paperuss-database-2.jorzyrockz.workers.dev
+my-paperuss-database-2.web.app
+my-paperuss-database-2.firebaseapp.com
 localhost
 ```
 
@@ -102,7 +102,7 @@ The Firebase web API key in the frontend identifies the Firebase project; it is 
 The production application is available at:
 
 ```text
-https://paperuss-2.jorzyrockz.workers.dev/
+https://my-paperuss-database-2.jorzyrockz.workers.dev/
 ```
 
 The `Deploy Cloudflare Worker` GitHub Actions workflow publishes `main` using a Worker with static assets. Add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as repository secrets before enabling deployment.
