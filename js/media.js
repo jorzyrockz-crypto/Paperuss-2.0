@@ -176,9 +176,9 @@ async function insertImageFile(file){
     ? IMG_DEFAULT_SIZE[deviceClass()] : 'large';
 
   // 1. Show image INSTANTLY in the editor with valid data-media-id from 0ms
-  //    so auto-save never captures a dead headless blob: URL.
   insertHTMLAtCaret(`<img data-media-id="${id}" data-media-kind="image" data-img-size="${defSize}" src="${tempUrl}" alt="${esc(file.name)}">`);
-  save();
+  // NOTE: Do NOT save() here — saveMediaBlob must complete first, otherwise
+  // a failed/interrupted save leaves a permanent broken image reference in the note.
 
   // 2. Downscale + save to IndexedDB + queue cloud sync (runs in background)
   try {
@@ -202,6 +202,7 @@ async function insertImageFile(file){
     const imgEl = document.querySelector(`img[data-media-id="${id}"]`);
     if(imgEl) imgEl.remove();
     URL.revokeObjectURL(tempUrl);
+    save(); // save after removing the broken reference
     console.error('PapeRuss: image save error', err);
     toast('Could not add image — please try again');
   }

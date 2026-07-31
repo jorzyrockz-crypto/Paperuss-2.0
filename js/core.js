@@ -69,39 +69,46 @@ async function computeBlobHash(blob){
   } catch(_) { return null; }
 }
 
+const pendingSaveIds = new Set();
 async function saveMediaBlob(blob, name, kind, customId){
-  let processedBlob = blob;
-  if((kind === 'image' || (blob && blob.type && blob.type.startsWith('image/'))) && typeof downscaleImageBlob === 'function'){
-    try{ processedBlob = await downscaleImageBlob(blob); }catch(_){}
-  }
-  const hash = await computeBlobHash(processedBlob);
-  if(hash){
-    try {
-      const existing = (await mediaAll()).find(r => r.hash === hash);
-      if(existing){
-        return existing.id;
-      }
-    } catch(_){}
-  }
   const id = customId || mediaUid();
-  const now = Date.now();
-  await mediaPut({
-    id,
-    kind,
-    name: name || 'file',
-    type: processedBlob.type || blob.type || '',
-    size: processedBlob.size || 0,
-    blob: processedBlob,
-    hash: hash || '',
-    createdAt: now,
-    updatedAt: now,         // required for correct sync timestamp comparison
-    cloudSyncedAt: 0,       // will be set ONLY after confirmed upload
-    pendingUpload: true,    // marks this as needing cloud upload
-    uploadFailures: 0,      // retry counter
-    lastUploadAttempt: 0
-  });
-  if(typeof queueCloudSync==='function') queueCloudSync();
-  return id;
+  pendingSaveIds.add(id);
+  try {
+    let processedBlob = blob;
+    if((kind === 'image' || (blob && blob.type && blob.type.startsWith('image/'))) && typeof downscaleImageBlob === 'function'){
+      try{ processedBlob = await downscaleImageBlob(blob); }catch(_){}
+    }
+    const hash = await computeBlobHash(processedBlob);
+    if(hash){
+      try {
+        const existing = (await mediaAll()).find(r => r.hash === hash);
+        if(existing){
+          pendingSaveIds.delete(id);
+          return existing.id;
+        }
+      } catch(_){}
+    }
+    const now = Date.now();
+    await mediaPut({
+      id,
+      kind,
+      name: name || 'file',
+      type: processedBlob.type || blob.type || '',
+      size: processedBlob.size || 0,
+      blob: processedBlob,
+      hash: hash || '',
+      createdAt: now,
+      updatedAt: now,
+      cloudSyncedAt: 0,
+      pendingUpload: true,
+      uploadFailures: 0,
+      lastUploadAttempt: 0
+    });
+    if(typeof queueCloudSync==='function') queueCloudSync();
+    return id;
+  } finally {
+    pendingSaveIds.delete(id);
+  }
 }
 
 
@@ -309,7 +316,11 @@ function formatBytes(b){
   return b.toFixed(b<10&&i>0?1:0)+' '+u[i];
 }
 /* Convert Blob <-> base64 for export/import portability */
+const MAX_BLOB_DATAURL_SIZE = 50 * 1024 * 1024; // 50 MB safety limit
 function blobToDataURL(blob){
+  if(blob && blob.size > MAX_BLOB_DATAURL_SIZE){
+    return Promise.reject(new Error(`File too large for Base64 conversion (${formatBytes(blob.size)}). Maximum is 50 MB.`));
+  }
   return new Promise((res,rej)=>{
     const r=new FileReader();
     r.onload=()=>res(r.result); r.onerror=()=>rej(r.error);
@@ -364,7 +375,11 @@ async function gcOrphanMedia(){
   try{
     const all=await mediaAll();
     const used=referencedMediaIds();
-    for(const rec of all){ if(!used.has(rec.id)) await mediaDel(rec.id); }
+    for(const rec of all){
+      // Skip media currently being saved (in-flight async saveMediaBlob)
+      if(pendingSaveIds.has(rec.id)) continue;
+      if(!used.has(rec.id)) await mediaDel(rec.id);
+    }
     renderStorageStats();
   }catch(e){}
 }

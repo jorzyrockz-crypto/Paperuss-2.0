@@ -479,6 +479,17 @@ function withTimeout(promise, ms, errmsg){
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
+// Cancellable version for Firebase uploadTask objects
+function withCancellableTimeout(uploadTask, ms, errmsg){
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      try { uploadTask.cancel(); } catch(_) {}
+      reject(new Error(errmsg || `Upload timed out and was cancelled after ${ms}ms`));
+    }, ms);
+  });
+  return Promise.race([uploadTask, timeout]).finally(() => clearTimeout(timer));
+}
 
 /* ============================================================
    OFFLINE UPLOAD QUEUE — persists upload IDs across reloads
@@ -504,14 +515,15 @@ function drainOfflineQueue(){
   }
 }
 
-/* Dynamic upload timeout — 1 byte/ms minimum, floor at 20s, ceiling at 5min */
+/* Dynamic upload timeout — 1 byte/ms minimum, floor at 20s, ceiling at 15min */
 function timeoutForSize(bytes){
-  return Math.min(Math.max(20000, bytes), 5*60*1000);
+  return Math.min(Math.max(20000, Math.round(bytes * 1.5)), 15*60*1000);
 }
 
 async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
   const localRecords=await mediaAll();
-  const useStorage = !!(fbStorage && !window.__fbStorageDisabled);
+  const storageConsecutiveFailures = window.__fbStorageFailCount || 0;
+  const useStorage = !!(fbStorage && storageConsecutiveFailures < 3);
 
   const localMap=new Map(localRecords.map(record=>[record.id,record]));
   const manifestMap=new Map((remoteManifest||[]).map(item=>[item.id,item]));
@@ -604,12 +616,17 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
             );
           });
 
-          await withTimeout(uploadTask, timeoutForSize(fileBytes), `Upload timed out for ${label}`);
+          await withCancellableTimeout(uploadTask, timeoutForSize(fileBytes), `Upload timed out for ${label}`);
           cloudUrl = await storageRef.getDownloadURL();
           uploadedToStorage = true;
+          // Reset Storage failure counter on success
+          window.__fbStorageFailCount = 0;
         } catch(storageErr) {
-          console.warn(`PapeRuss: Cloud Storage upload unavailable for ${record.id} (${storageErr.message||storageErr.code}), using Firestore-only media sync`);
-          window.__fbStorageDisabled = true;
+          console.warn(`PapeRuss: Cloud Storage upload failed for ${record.id} (${storageErr.message||storageErr.code}), using Firestore-only media sync`);
+          window.__fbStorageFailCount = (window.__fbStorageFailCount || 0) + 1;
+          if(window.__fbStorageFailCount >= 3){
+            console.warn('PapeRuss: Cloud Storage disabled after 3 consecutive failures (will retry on next manual Sync Now)');
+          }
         }
       }
 
@@ -700,7 +717,9 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
       const errMsg = uploadErr?.message || uploadErr?.code || String(uploadErr);
       console.error(`PapeRuss: Media upload failed for ${record.id}:`, uploadErr);
       const isPermDenied = String(errMsg).includes('permission-denied');
-      if(isPermDenied){
+      // Distinguish auth token expiry (temporary) from real security rule violations (permanent)
+      const isAuthExpired = isPermDenied && (!fbAuth || !fbAuth.currentUser);
+      if(isPermDenied && !isAuthExpired){
         toast('⚠️ Access denied by Firestore security rules. Please check your sign-in session.');
       }
       // ❌ Failure — increment counter, keep pendingUpload:true, DO NOT touch cloudSyncedAt
@@ -712,7 +731,8 @@ async function syncMedia(uid,remoteManifest,deletions,requiredMediaIds){
       };
       try{ await mediaPut(failedRecord); }catch(_){}
       localMap.set(record.id, failedRecord);
-      if(failures >= MAX_UPLOAD_FAILURES || isPermDenied){
+      // Only permanently evict on true security rule violations, not expired tokens
+      if(failures >= MAX_UPLOAD_FAILURES || (isPermDenied && !isAuthExpired)){
         removeFromOfflineUploadQueue(record.id);
       } else {
         addToOfflineUploadQueue(record.id);
@@ -814,6 +834,21 @@ async function resetCloudWorkspace(){
 async function syncNow(opts){
   opts=opts||{};
   if(syncState==='syncing'){ syncRequestedWhileBusy=true; return; }
+  // Multi-tab safety: only one tab syncs at a time
+  if(typeof navigator.locks !== 'undefined'){
+    try {
+      await navigator.locks.request('paperuss-sync-lock', { ifAvailable: true }, async lock => {
+        if(!lock){ console.log('PapeRuss: Another tab is syncing, skipping'); return; }
+        await _syncNowInner(opts);
+      });
+    } catch(_) {
+      await _syncNowInner(opts);
+    }
+  } else {
+    await _syncNowInner(opts);
+  }
+}
+async function _syncNowInner(opts){
   const session=currentSession||loadSession();
   if(!session || session.mode!=='auth' || !firebaseReady){
     updateSyncStatus('offline');
@@ -829,7 +864,7 @@ async function syncNow(opts){
   // When user manually taps Sync Now (non-silent), give all stuck media a fresh retry
   // by resetting their failure counter — this clears the backoff window too
   if(!opts.silent){
-    window.__fbStorageDisabled = false;
+    window.__fbStorageFailCount = 0;
     try{
       const allMedia = await mediaAll();
       const stuck = allMedia.filter(r=>r.pendingUpload && (r.uploadFailures||0) > 0);
