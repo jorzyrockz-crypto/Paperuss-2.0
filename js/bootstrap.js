@@ -96,6 +96,45 @@ function bind(){
     }
   });
 
+  // Markdown auto-formatting shortcuts on Space
+  ed.addEventListener('keydown', e=>{
+    if(e.key===' '){
+      const sel=window.getSelection();
+      if(!sel || !sel.isCollapsed || !sel.anchorNode || !ed.contains(sel.anchorNode)) return;
+      let node=sel.anchorNode;
+      if(node.nodeType!==3) return;
+      const text = node.textContent.slice(0, sel.anchorOffset);
+      const parent = node.parentElement;
+      const block = parent.closest('p, div, h1, h2, h3, h4, blockquote, li') || parent;
+      if(text === '#' && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(1);
+        document.execCommand('formatBlock', false, 'h1');
+        setTimeout(handleBodyInput, 0);
+      } else if(text === '##' && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(2);
+        document.execCommand('formatBlock', false, 'h2');
+        setTimeout(handleBodyInput, 0);
+      } else if(text === '###' && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(3);
+        document.execCommand('formatBlock', false, 'h3');
+        setTimeout(handleBodyInput, 0);
+      } else if(text === '>' && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(1);
+        document.execCommand('formatBlock', false, 'blockquote');
+        setTimeout(handleBodyInput, 0);
+      } else if(text === '---'){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(3);
+        document.execCommand('insertHorizontalRule', false, null);
+        setTimeout(handleBodyInput, 0);
+      }
+    }
+  });
+
   /* Fix #6 — Tab key inside the editor.
      Default behaviour would jump focus to the next tab-stop (kicking the user
      out of the editor). Instead we insert an indentation and let Shift+Tab
@@ -259,7 +298,7 @@ function bind(){
     }
   });
 
-  // Paste images from clipboard
+  // Paste images or clean formatted HTML from clipboard
   edEl.addEventListener('paste', e=>{
     if(!e.clipboardData) return;
     const items=e.clipboardData.items||[];
@@ -268,6 +307,39 @@ function bind(){
         const f=it.getAsFile();
         if(f && f.type.startsWith('image/')){ e.preventDefault(); insertImageFile(f); return; }
       }
+    }
+    const html = e.clipboardData.getData('text/html');
+    if(html){
+      e.preventDefault();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      doc.querySelectorAll('script, style, meta, link, iframe, object, embed, o\\:p').forEach(el=>el.remove());
+      doc.body.querySelectorAll('*').forEach(el=>{
+        Array.from(el.attributes).forEach(attr=>{
+          const n = attr.name.toLowerCase();
+          const v = attr.value.toLowerCase();
+          if(n.startsWith('on') || v.includes('javascript:') || n.startsWith('data-mso')){
+            el.removeAttribute(n);
+          }
+        });
+        if(el.className && typeof el.className === 'string' && (el.className.includes('Mso') || el.className.includes('apple-'))){
+          el.removeAttribute('class');
+        }
+        if(el.style){
+          el.style.removeProperty('color');
+          el.style.removeProperty('background-color');
+          el.style.removeProperty('background');
+          el.style.removeProperty('font-family');
+          el.style.removeProperty('font-size');
+          el.style.removeProperty('line-height');
+          el.style.removeProperty('margin');
+          el.style.removeProperty('padding');
+          if(!el.getAttribute('style') || !el.getAttribute('style').trim()) el.removeAttribute('style');
+        }
+      });
+      const cleanHTML = doc.body.innerHTML;
+      document.execCommand('insertHTML', false, cleanHTML);
+      setTimeout(handleBodyInput, 0);
+      return;
     }
   });
 

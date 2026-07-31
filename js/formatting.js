@@ -198,20 +198,25 @@ function applyHighlight(color){
   // Remove any existing mark wrapping first
   stripMarksInRange(range);
 
-  // Wrap with mark
-  const m=document.createElement('mark');
-  m.style.background=color;
-  m.style.borderRadius='3px';
-  m.style.color='inherit';
+  // Use native hiliteColor/backColor for multi-block safety, fallback to mark
   try{
-    m.appendChild(range.extractContents());
-    range.insertNode(m);
-    const r=document.createRange();
-    r.setStartAfter(m);
-    r.collapse(true);
-    sel.removeAllRanges(); sel.addRange(r);
+    const success = document.execCommand('hiliteColor', false, color) || document.execCommand('backColor', false, color);
+    if(!success) throw new Error('fallback to mark');
   }catch(e){
-    document.execCommand('insertText', false, sel.toString());
+    try{
+      const m=document.createElement('mark');
+      m.style.background=color;
+      m.style.borderRadius='3px';
+      m.style.color='inherit';
+      m.appendChild(range.extractContents());
+      range.insertNode(m);
+      const r=document.createRange();
+      r.setStartAfter(m);
+      r.collapse(true);
+      sel.removeAllRanges(); sel.addRange(r);
+    }catch(err){
+      document.execCommand('backColor', false, color);
+    }
   }
 }
 
