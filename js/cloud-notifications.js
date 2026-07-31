@@ -12,13 +12,13 @@ const getEnvVar = (key) => {
 };
 
 const FIREBASE_CONFIG={
-  apiKey: getEnvVar('VITE_FIREBASE_API_KEY') || "AIzaSyDVurj0n57qBiSBwuCjaDpi5CSQs-3I3f0",
-  authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN') || "paperuss-2.firebaseapp.com",
-  projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID') || "paperuss-2",
-  storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET') || "paperuss-2.firebasestorage.app",
-  messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID') || "158402331948",
-  appId: getEnvVar('VITE_FIREBASE_APP_ID') || "1:158402331948:web:a3abb73a2c84b14e78d889",
-  measurementId: getEnvVar('VITE_FIREBASE_MEASUREMENT_ID') || "G-1ZC6WLYCPG"
+  apiKey: getEnvVar('VITE_FIREBASE_API_KEY') || "AIzaSyCGPLY38o2Mym1Q2aeKuDdp5gigN36Wg-I",
+  authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN') || "my-paperuss-database-2.firebaseapp.com",
+  projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID') || "my-paperuss-database-2",
+  storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET') || "my-paperuss-database-2.firebasestorage.app",
+  messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID') || "506884695642",
+  appId: getEnvVar('VITE_FIREBASE_APP_ID') || "1:506884695642:web:afef991984b581d06b9a63",
+  measurementId: getEnvVar('VITE_FIREBASE_MEASUREMENT_ID') || "G-V2SFSNKGZK"
 };
 const AUTH_SESSION_KEY='octonotes:session';
 const LAST_SYNC_KEY='octonotes:lastSyncAt';
