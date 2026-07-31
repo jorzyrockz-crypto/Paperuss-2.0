@@ -64,18 +64,32 @@ function insertHTMLAtCaret(html){
 
 
 /* Downscale and compress high-resolution photos for 95%+ faster cloud uploading & lower memory footprint */
-async function downscaleImageBlob(blobOrFile, maxDimension = 1920, quality = 0.82){
-  if(!blobOrFile || !(blobOrFile instanceof Blob)) return blobOrFile;
+function estimateBase64Bytes(dataUrl) {
+  const commaIdx = dataUrl.indexOf(',');
+  if(commaIdx === -1) return dataUrl.length;
+  return Math.round((dataUrl.length - commaIdx - 1) * 0.75);
+}
 
-  const type = blobOrFile.type || '';
-  // Skip non-images, animated GIFs, and vector SVGs
-  if(!type.startsWith('image/') || type.includes('gif') || type.includes('svg')){
-    return blobOrFile;
+function dataUrlToBlob(dataUrl, fileName = 'photo.jpg') {
+  const arr = dataUrl.split(',');
+  const mime = (arr[0].match(/:(.*?);/) || [])[1] || 'image/jpeg';
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while(n--){
+    u8arr[n] = bstr.charCodeAt(n);
   }
+  return new File([u8arr], fileName, { type: mime, lastModified: Date.now() });
+}
 
-  // If file is already small (e.g. < 250KB), keep original
-  if(blobOrFile.size < 250 * 1024){
-    return blobOrFile;
+function downscaleImageBlob(blobOrFile, maxDimension = 1920, targetMaxBytes = 250 * 1024){
+  if(!blobOrFile || !(blobOrFile instanceof Blob)) return Promise.resolve(blobOrFile);
+  const type = blobOrFile.type || '';
+  if(!type.startsWith('image/') || type.includes('gif') || type.includes('svg')){
+    return Promise.resolve(blobOrFile);
+  }
+  if(blobOrFile.size <= targetMaxBytes){
+    return Promise.resolve(blobOrFile);
   }
 
   return new Promise(resolve => {
@@ -85,14 +99,11 @@ async function downscaleImageBlob(blobOrFile, maxDimension = 1920, quality = 0.8
       URL.revokeObjectURL(url);
       let w = img.naturalWidth || img.width;
       let h = img.naturalHeight || img.height;
+      
+      const isPng = type === 'image/png';
+      const outputType = (isPng && blobOrFile.size < 1024 * 1024) ? 'image/png' : 'image/jpeg';
+      let currentQuality = 0.85;
 
-      // If dimensions are within maxDimension and size is modest, keep original
-      if(w <= maxDimension && h <= maxDimension && blobOrFile.size < 500 * 1024){
-        resolve(blobOrFile);
-        return;
-      }
-
-      // Calculate new scaled dimensions preserving aspect ratio
       if(w > maxDimension || h > maxDimension){
         if(w > h){
           h = Math.round((h * maxDimension) / w);
@@ -103,29 +114,48 @@ async function downscaleImageBlob(blobOrFile, maxDimension = 1920, quality = 0.8
         }
       }
 
-      const canvas = document.createElement('canvas');
+      let bestDataUrl = null;
+      let canvas = document.createElement('canvas');
       canvas.width = w;
       canvas.height = h;
-      const ctx = canvas.getContext('2d');
+      let ctx = canvas.getContext('2d');
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(img, 0, 0, w, h);
 
-      const exportType = (type === 'image/png' && blobOrFile.size < 1024 * 1024) ? 'image/png' : 'image/jpeg';
-      canvas.toBlob(
-        scaledBlob => {
-          if(scaledBlob && scaledBlob.size < blobOrFile.size){
-            console.log(`PapeRuss: Downscaled photo from ${formatBytes(blobOrFile.size)} to ${formatBytes(scaledBlob.size)} (${w}x${h})`);
-            const name = blobOrFile.name || 'photo.jpg';
-            const optBlob = new File([scaledBlob], name, { type: exportType, lastModified: Date.now() });
-            resolve(optBlob);
-          } else {
-            resolve(blobOrFile);
-          }
-        },
-        exportType,
-        quality
-      );
+      // Multi-pass compression loop (up to 8 passes)
+      for(let attempt = 0; attempt < 8; attempt++){
+        const dataUrl = canvas.toDataURL(outputType, currentQuality);
+        const estBytes = estimateBase64Bytes(dataUrl);
+        bestDataUrl = dataUrl;
+
+        // Stop once image size falls under targetMaxBytes (250 KB)
+        if(estBytes <= targetMaxBytes) break;
+
+        // Reduce quality first down to 0.40, then downscale canvas dimensions by 15%
+        if(outputType === 'image/png' || currentQuality <= 0.40){
+          w = Math.max(100, Math.round(w * 0.85));
+          h = Math.max(100, Math.round(h * 0.85));
+          canvas.width = w;
+          canvas.height = h;
+          ctx = canvas.getContext('2d');
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, w, h);
+        } else {
+          currentQuality = Math.max(0.40, currentQuality - 0.12);
+        }
+      }
+
+      if(bestDataUrl){
+        const optFile = dataUrlToBlob(bestDataUrl, blobOrFile.name || 'photo.jpg');
+        if(optFile.size < blobOrFile.size){
+          console.log(`PapeRuss: Multi-pass compressed photo from ${formatBytes(blobOrFile.size)} to ${formatBytes(optFile.size)} (${w}x${h})`);
+          resolve(optFile);
+          return;
+        }
+      }
+      resolve(blobOrFile);
     };
 
     img.onerror = () => {
