@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    FIREBASE AUTH + CLOUD SYNC (with full offline fallback)
    ============================================================ */
 // Fill these with your own Firebase project credentials to enable real
@@ -796,7 +796,6 @@ async function syncMedia(uid,deletions,requiredMediaIds){
   }
 
   return { partialFailure };
-};
 }
 
 
