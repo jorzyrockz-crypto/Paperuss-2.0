@@ -41,6 +41,7 @@ async function mediaGet(id){
 }
 async function mediaDel(id){
   if(typeof recordCloudDeletion==='function') recordCloudDeletion('media',id);
+  if(typeof removeFromOfflineUploadQueue==='function') removeFromOfflineUploadQueue(id);
   const db=await openMediaDB();
   return new Promise((res,rej)=>{
     const tx=db.transaction(MEDIA_STORE,'readwrite');
@@ -217,9 +218,21 @@ function addMediaSyncIndicator(el,record){
   badge.innerHTML=`<i data-lucide="${status.icon}" aria-hidden="true"></i>`;
 }
 
+const pendingFetches = new Map();
 async function getMediaURL(id){
   if(urlCache.has(id)) return urlCache.get(id);
+  if(pendingFetches.has(id)) return pendingFetches.get(id);
 
+  const fetchPromise = _getMediaURLInner(id);
+  pendingFetches.set(id, fetchPromise);
+  try {
+    const result = await fetchPromise;
+    return result;
+  } finally {
+    pendingFetches.delete(id);
+  }
+}
+async function _getMediaURLInner(id){
   // 1. Check local IndexedDB first (0ms fast Blob URL)
   const rec = await mediaGet(id);
   if(rec && rec.blob){
@@ -304,11 +317,17 @@ function blobToDataURL(blob){
   });
 }
 function dataURLToBlob(dataURL){
-  const [meta,b64]=dataURL.split(',');
-  const type=(meta.match(/data:([^;]+)/)||[])[1]||'application/octet-stream';
-  const bin=atob(b64); const arr=new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
-  return new Blob([arr],{type});
+  try {
+    if(!dataURL || typeof dataURL !== 'string' || !dataURL.includes(',')) return null;
+    const [meta,b64]=dataURL.split(',');
+    const type=(meta.match(/data:([^;]+)/)||[])[1]||'application/octet-stream';
+    const bin=atob(b64); const arr=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+    return new Blob([arr],{type});
+  } catch(e) {
+    console.warn('PapeRuss: dataURLToBlob failed — corrupted or malformed data', e);
+    return null;
+  }
 }
 
 /* Collect all media IDs referenced by a set of notes. */
