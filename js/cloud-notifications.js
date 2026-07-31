@@ -103,6 +103,7 @@ async function signInWithGoogle(fromLanding){
   }
   try{
     const provider=new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
     const result=await fbAuth.signInWithPopup(provider);
     const user=result.user;
     saveSession({mode:'auth', uid:user.uid, name:user.displayName||user.email||'Account', email:user.email||'', photoURL:user.photoURL||''});
