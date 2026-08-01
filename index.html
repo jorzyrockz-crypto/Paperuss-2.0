@@ -226,70 +226,144 @@
             </div>
           </div>
         </div>
-        <div class="editor-meta">
-          <div class="tag-input-wrap">
-            <i data-lucide="tag" class="w-3.5 h-3.5 text-fg-muted"></i>
-            <span id="tagChips"></span>
-            <input type="text" id="tagInput" placeholder="add tag…">
+        <div class="editor-toolbar" id="formatBar">
+          <div class="tool-group">
+            <div class="font-style-picker" id="fontStylePicker" style="position:relative;display:inline-flex">
+              <button class="tool-btn" id="fontStyleBtn" title="System Font Style" style="min-width:64px;font-size:12px;gap:4px">
+                <span id="fontStyleLabel">Sans</span>
+                <i data-lucide="chevron-down" class="w-3 h-3"></i>
+              </button>
+              <div class="font-style-dropdown" id="fontStyleDropdown">
+                <button class="fs-opt active" data-fontstyle="sans">
+                  <span class="font-sans font-medium">Sans</span>
+                  <span class="text-xs text-fg-muted">Inter / System</span>
+                </button>
+                <button class="fs-opt" data-fontstyle="serif" style="font-family: Georgia, 'Times New Roman', serif;">
+                  <span class="font-semibold">Serif</span>
+                  <span class="text-xs text-fg-muted">Editorial</span>
+                </button>
+                <button class="fs-opt" data-fontstyle="mono" style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">
+                  <span class="font-semibold">Mono</span>
+                  <span class="text-xs text-fg-muted">Code / Tech</span>
+                </button>
+                <button class="fs-opt" data-fontstyle="rounded" style="font-family: 'SF Pro Rounded', 'Quicksand', system-ui, sans-serif;">
+                  <span class="font-semibold">Rounded</span>
+                  <span class="text-xs text-fg-muted">Modern / Soft</span>
+                </button>
+              </div>
+            </div>
+            <div class="sz-picker" style="position:relative;display:inline-flex">
+              <button class="tool-btn" id="szBtn" title="Font size" style="min-width:54px;font-size:12px;gap:2px">
+                <span>Size</span>
+                <i data-lucide="chevron-down" class="w-3 h-3"></i>
+              </button>
+              <div class="sz-dropdown" id="szDropdown">
+                <button class="sz-opt" data-cmd="fontSize" data-val="13px" style="font-size:11px">Small</button>
+                <button class="sz-opt active" data-cmd="fontSize" data-val="15px" style="font-size:13px">Normal</button>
+                <button class="sz-opt" data-cmd="fontSize" data-val="18px" style="font-size:15px">Large</button>
+                <button class="sz-opt" data-cmd="fontSize" data-val="22px" style="font-size:18px">Huge</button>
+                <button class="sz-opt" data-cmd="fontSize" data-val="28px" style="font-size:22px">Massive</button>
+              </div>
+            </div>
+            <button class="tool-btn" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+            <button class="tool-btn" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+            <button class="tool-btn" data-cmd="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+            <button class="tool-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+            <div class="hl-picker" id="hlPicker" style="position:relative;display:inline-flex">
+              <button class="tool-btn" id="hlBtn" title="Highlight" style="min-width:32px">
+                <i data-lucide="highlighter" class="w-4 h-4"></i>
+              </button>
+              <div class="hl-dropdown" id="hlDropdown">
+                <button class="hl-swatch" data-cmd="hilite" data-val="#fef08a" style="background:#fef08a" title="Yellow"></button>
+                <button class="hl-swatch" data-cmd="hilite" data-val="#bbf7d0" style="background:#bbf7d0" title="Green"></button>
+                <button class="hl-swatch" data-cmd="hilite" data-val="#bfdbfe" style="background:#bfdbfe" title="Blue"></button>
+                <button class="hl-swatch" data-cmd="hilite" data-val="#fbcfe8" style="background:#fbcfe8" title="Pink"></button>
+                <button class="hl-swatch" data-cmd="hilite" data-val="#fed7aa" style="background:#fed7aa" title="Orange"></button>
+                <button class="hl-swatch" data-cmd="hilite" data-val="#fca5a5" style="background:#fca5a5" title="Red"></button>
+                <div class="hl-divider"></div>
+                <button class="hl-swatch hl-none" data-cmd="hilite" data-val="remove" title="Remove highlight">✕</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="tool-group">
+            <button class="tool-btn" data-cmd="insertUnorderedList" title="Bullet list">
+              <i data-lucide="list" class="w-4 h-4"></i>
+            </button>
+            <button class="tool-btn" data-cmd="insertOrderedList" title="Numbered list">
+              <i data-lucide="list-ordered" class="w-4 h-4"></i>
+            </button>
+            <button class="tool-btn" data-cmd="task" title="Task list">
+              <i data-lucide="check-square" class="w-4 h-4"></i>
+            </button>
+            <button class="tool-btn" id="alignBtn" data-cmd="align" data-align="left" title="Alignment (click to cycle)">
+              <i data-lucide="align-left" class="w-4 h-4"></i>
+            </button>
+            <button class="tool-btn" data-cmd="formatBlock" data-val="blockquote" title="Quote">
+              <i data-lucide="quote" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <div class="tool-group">
+            <div class="tbl-picker" id="tablePicker" style="position:relative;display:inline-flex">
+              <button class="tool-btn" id="tableBtn" title="Insert table">
+                <i data-lucide="table" class="w-4 h-4"></i>
+              </button>
+              <div class="table-grid-picker" id="tableGridPicker">
+                <div class="tgp-grid" id="tgpGrid"></div>
+                <div class="tgp-label" id="tgpLabel">Pick size</div>
+              </div>
+            </div>
+            <button class="tool-btn" data-cmd="code" title="Inline code">
+              <i data-lucide="code" class="w-4 h-4"></i>
+            </button>
+            <button class="tool-btn" data-cmd="createLink" title="Link">
+              <i data-lucide="link" class="w-4 h-4"></i>
+            </button>
+            <button class="tool-btn" data-cmd="divider" title="Insert divider">
+              <i data-lucide="minus" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <div class="tool-group">
+            <button class="tool-btn" data-media="image" title="Insert image">
+              <i data-lucide="image" class="w-4 h-4"></i>
+            </button>
+            <button class="tool-btn" data-media="audio" title="Record voice">
+              <i data-lucide="mic" class="w-4 h-4"></i>
+            </button>
+            <button class="tool-btn" data-media="video" title="Insert video">
+              <i data-lucide="video" class="w-4 h-4"></i>
+            </button>
+            <button class="tool-btn" data-media="link" title="Rich link">
+              <i data-lucide="globe" class="w-4 h-4"></i>
+            </button>
+            <button class="tool-btn" data-media="file" title="Attach file">
+              <i data-lucide="paperclip" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <div class="tool-group">
+            <button class="tool-btn" data-cmd="removeFormat" title="Clear formatting">
+              <i data-lucide="remove-formatting" class="w-4 h-4"></i>
+            </button>
           </div>
         </div>
-        <div class="editor-toolbar" id="formatBar">
-          <div class="font-style-picker" id="fontStylePicker" style="position:relative;display:inline-flex">
-            <button class="tool-btn" id="fontStyleBtn" title="System Font Style" style="min-width:68px;font-size:12px;gap:4px">
-              <span id="fontStyleLabel">Sans</span>
-              <i data-lucide="chevron-down" class="w-3 h-3"></i>
-            </button>
-            <div class="font-style-dropdown" id="fontStyleDropdown">
-              <button class="fs-opt active" data-fontstyle="sans">
-                <span class="font-sans font-medium">Sans</span>
-                <span class="text-xs text-fg-muted">Inter / System</span>
-              </button>
-              <button class="fs-opt" data-fontstyle="serif" style="font-family: Georgia, 'Times New Roman', serif;">
-                <span class="font-semibold">Serif</span>
-                <span class="text-xs text-fg-muted">Editorial</span>
-              </button>
-              <button class="fs-opt" data-fontstyle="mono" style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">
-                <span class="font-semibold">Mono</span>
-                <span class="text-xs text-fg-muted">Code / Tech</span>
-              </button>
-              <button class="fs-opt" data-fontstyle="rounded" style="font-family: 'SF Pro Rounded', 'Quicksand', system-ui, sans-serif;">
-                <span class="font-semibold">Rounded</span>
-                <span class="text-xs text-fg-muted">Modern / Soft</span>
-              </button>
-            </div>
-          </div>
-          <div class="hl-picker" id="hlPicker" style="position:relative;display:inline-flex">
-            <button class="tool-btn" id="hlBtn" title="Highlight" style="min-width:32px">
-              <i data-lucide="highlighter" class="w-4 h-4"></i>
-            </button>
-            <div class="hl-dropdown" id="hlDropdown">
-              <button class="hl-swatch" data-cmd="hilite" data-val="#fef08a" style="background:#fef08a" title="Yellow"></button>
-              <button class="hl-swatch" data-cmd="hilite" data-val="#bbf7d0" style="background:#bbf7d0" title="Green"></button>
-              <button class="hl-swatch" data-cmd="hilite" data-val="#bfdbfe" style="background:#bfdbfe" title="Blue"></button>
-              <button class="hl-swatch" data-cmd="hilite" data-val="#fbcfe8" style="background:#fbcfe8" title="Pink"></button>
-              <button class="hl-swatch" data-cmd="hilite" data-val="#fed7aa" style="background:#fed7aa" title="Orange"></button>
-              <button class="hl-swatch" data-cmd="hilite" data-val="#fca5a5" style="background:#fca5a5" title="Red"></button>
-              <div class="hl-divider"></div>
-              <button class="hl-swatch hl-none" data-cmd="hilite" data-val="remove" title="Remove highlight">✕</button>
-            </div>
-          </div>
-          <div class="sz-picker" style="position:relative;display:inline-flex">
-            <button class="tool-btn" id="szBtn" title="Font size" style="min-width:54px;font-size:12px;gap:2px">
-              <span>Size</span>
-              <i data-lucide="chevron-down" class="w-3 h-3"></i>
-            </button>
-            <div class="sz-dropdown" id="szDropdown">
-              <button class="sz-opt" data-cmd="fontSize" data-val="13px" style="font-size:11px">Small</button>
-              <button class="sz-opt active" data-cmd="fontSize" data-val="15px" style="font-size:13px">Normal</button>
-              <button class="sz-opt" data-cmd="fontSize" data-val="18px" style="font-size:15px">Large</button>
-              <button class="sz-opt" data-cmd="fontSize" data-val="22px" style="font-size:18px">Huge</button>
-              <button class="sz-opt" data-cmd="fontSize" data-val="28px" style="font-size:22px">Massive</button>
-            </div>
-          </div>
+        <button class="toolbar-collapse-toggle" id="toolbarCollapseBtn" title="Expand toolbar" aria-label="Toggle toolbar">
+          <i data-lucide="chevron-down" class="w-4 h-4"></i>
+        </button>
+        <input type="file" id="mediaImageInput" accept="image/*" hidden>
+        <input type="file" id="mediaVideoInput" accept="video/*" hidden>
+        <input type="file" id="mediaFileInput" hidden>
+        <div class="editor-scroll" id="editorScroll">
+          <div class="note-editor" id="noteBody" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" data-placeholder="Start writing… Select text and use the toolbar to format it."></div>
+        </div>
+        <div class="editor-footer">
+          <div class="save-status" id="saveStatus"><span class="dot"></span><span>Saved</span></div>
           <div class="page-layout-picker" id="pageLayoutPicker" style="position:relative;display:inline-flex">
-            <button class="tool-btn" id="pageLayoutBtn" title="Page Setup" style="min-width:64px;font-size:12px;gap:2px">
+            <button class="tool-btn" id="pageLayoutBtn" title="Page Setup" style="min-width:64px;font-size:12px;gap:4px">
               <i data-lucide="layout-template" class="w-3.5 h-3.5"></i>
-              <span>Page</span>
+              <span>Page Setup</span>
               <i data-lucide="chevron-down" class="w-3 h-3"></i>
             </button>
             <div class="page-layout-dropdown" id="pageLayoutDropdown">
@@ -315,78 +389,11 @@
               <button class="pl-opt" id="insertPageBreakBtn"><i data-lucide="scissors" class="w-3.5 h-3.5"></i> Insert Page Break</button>
             </div>
           </div>
-          <span class="tool-sep"></span>
-          <button class="tool-btn" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
-          <button class="tool-btn" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
-          <button class="tool-btn" data-cmd="underline" title="Underline (Ctrl+U)"><u>U</u></button>
-          <button class="tool-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
-          <span class="tool-sep"></span>
-          <button class="tool-btn" data-cmd="insertUnorderedList" title="Bullet list">
-            <i data-lucide="list" class="w-4 h-4"></i>
-          </button>
-          <button class="tool-btn" data-cmd="insertOrderedList" title="Numbered list">
-            <i data-lucide="list-ordered" class="w-4 h-4"></i>
-          </button>
-          <button class="tool-btn" data-cmd="task" title="Task list">
-            <i data-lucide="check-square" class="w-4 h-4"></i>
-          </button>
-          <button class="tool-btn" data-cmd="formatBlock" data-val="blockquote" title="Quote">
-            <i data-lucide="quote" class="w-4 h-4"></i>
-          </button>
-          <button class="tool-btn" id="alignBtn" data-cmd="align" data-align="left" title="Alignment (click to cycle)">
-            <i data-lucide="align-left" class="w-4 h-4"></i>
-          </button>
-          <span class="tool-sep"></span>
-          <button class="tool-btn" data-cmd="code" title="Inline code">
-            <i data-lucide="code" class="w-4 h-4"></i>
-          </button>
-          <button class="tool-btn" data-cmd="createLink" title="Link">
-            <i data-lucide="link" class="w-4 h-4"></i>
-          </button>
-          <button class="tool-btn" data-cmd="removeFormat" title="Clear formatting">
-            <i data-lucide="remove-formatting" class="w-4 h-4"></i>
-          </button>
-          <span class="tool-sep"></span>
-          <button class="tool-btn" data-cmd="divider" title="Insert divider">
-            <i data-lucide="minus" class="w-4 h-4"></i>
-          </button>
-          <div class="tbl-picker" id="tablePicker" style="position:relative;display:inline-flex">
-            <button class="tool-btn" id="tableBtn" title="Insert table">
-              <i data-lucide="table" class="w-4 h-4"></i>
-            </button>
-            <div class="table-grid-picker" id="tableGridPicker">
-              <div class="tgp-grid" id="tgpGrid"></div>
-              <div class="tgp-label" id="tgpLabel">Pick size</div>
-            </div>
+          <div class="tag-input-wrap" style="margin-left:8px">
+            <i data-lucide="tag" class="w-3.5 h-3.5 text-fg-muted"></i>
+            <span id="tagChips"></span>
+            <input type="text" id="tagInput" placeholder="add tag…">
           </div>
-          <span class="tool-sep"></span>
-          <button class="tool-btn" data-media="image" title="Insert image">
-            <i data-lucide="image" class="w-4 h-4"></i>
-          </button>
-          <button class="tool-btn" data-media="audio" title="Record voice">
-            <i data-lucide="mic" class="w-4 h-4"></i>
-          </button>
-          <button class="tool-btn" data-media="video" title="Insert video">
-            <i data-lucide="video" class="w-4 h-4"></i>
-          </button>
-          <button class="tool-btn" data-media="link" title="Rich link">
-            <i data-lucide="globe" class="w-4 h-4"></i>
-          </button>
-          <button class="tool-btn" data-media="file" title="Attach file">
-            <i data-lucide="paperclip" class="w-4 h-4"></i>
-          </button>
-        </div>
-        <button class="toolbar-collapse-toggle" id="toolbarCollapseBtn" title="Expand toolbar" aria-label="Toggle toolbar">
-          <i data-lucide="chevron-down" class="w-4 h-4"></i>
-        </button>
-        <input type="file" id="mediaImageInput" accept="image/*" hidden>
-        <input type="file" id="mediaVideoInput" accept="video/*" hidden>
-        <input type="file" id="mediaFileInput" hidden>
-        <div class="editor-scroll" id="editorScroll">
-          <div class="note-editor" id="noteBody" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" data-placeholder="Start writing… Select text and use the toolbar to format it."></div>
-        </div>
-        <div class="editor-footer">
-          <div class="save-status" id="saveStatus"><span class="dot"></span><span>Saved</span></div>
           <div class="stats">
             <span id="wordCount">0 words</span>
             <span id="charCount">0 chars</span>

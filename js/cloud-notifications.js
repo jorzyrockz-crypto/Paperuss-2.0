@@ -58,6 +58,7 @@ function initFirebase(){
     fbAuth.onAuthStateChanged(user=>{
       if(user){
         saveSession({mode:'auth', uid:user.uid, name:user.displayName||user.email||'Account', email:user.email||'', photoURL:user.photoURL||''});
+        hideAuthLanding();
         renderProfileMenu();
         syncNow({silent:true});
       }
@@ -832,6 +833,21 @@ async function resetCloudWorkspace(){
   }
   try{
     const docRef=fbDb.collection('paperuss_users').doc(session.uid);
+
+    // Delete all documents in Firestore subcollections (notes, tasks, media)
+    try {
+      const notesSnap = await docRef.collection('notes').get();
+      await Promise.all(notesSnap.docs.map(d=>d.ref.delete()));
+    } catch(_) {}
+    try {
+      const tasksSnap = await docRef.collection('tasks').get();
+      await Promise.all(tasksSnap.docs.map(d=>d.ref.delete()));
+    } catch(_) {}
+    try {
+      const mediaSnap = await docRef.collection('media').get();
+      await Promise.all(mediaSnap.docs.map(d=>d.ref.delete()));
+    } catch(_) {}
+
     const snap=await docRef.get();
     const manifest=snap.exists?(snap.data().mediaManifest||[]):[];
     if(fbStorage){
@@ -839,8 +855,6 @@ async function resetCloudWorkspace(){
         try{ await mediaStorageRef(session.uid,item.id).delete(); }
         catch(err){ if(!String(err?.code||'').includes('object-not-found')) throw err; }
       }));
-    }else if(manifest.length){
-      throw new Error('Firebase Storage SDK is unavailable');
     }
     await docRef.delete();
     return true;
