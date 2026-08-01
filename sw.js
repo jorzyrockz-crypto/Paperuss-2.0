@@ -12,6 +12,7 @@ const APP_SHELL = [
   "./assets/icons/paperuss-logo.png",
   "./assets/icons/paperuss-192.png",
   "./assets/icons/paperuss-512.png",
+  "./assets/icons/russ-apps-banner.png",
   "./js/core.js",
   "./js/productivity.js",
   "./js/editor-ui.js",

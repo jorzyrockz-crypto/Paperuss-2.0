@@ -106,10 +106,12 @@ function toast(msg, action, label='Undo'){
    ============================================================ */
 function seedNotes(){
   const now=Date.now();
+  const bannerHtml = `<p><img src="assets/icons/russ-apps-banner.png" alt="Russ Apps - Smart Document &amp; Productivity Tools" style="max-width:100%;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.15);"></p>`;
   return [
     {
       id:uid(), title:'Welcome to PapeRuss 👋', pinned:true, archived:false, tags:['intro','overview'],
-      content: `<h1>Welcome to PapeRuss 👋</h1>
+      content: `${bannerHtml}
+<h1>Welcome to PapeRuss 👋</h1>
 <p>A fast, <strong>offline-first</strong> document editor with a modern flat design.</p>
 <h2>🎨 Rich Text &amp; Typography</h2>
 <p>Customize your writing with built-in font styles and sizes:</p>
@@ -148,7 +150,8 @@ function seedNotes(){
     },
     {
       id:uid(), title:'Toolbar & Formatting Cheatsheet', pinned:false, archived:false, tags:['reference','guide'],
-      content: `<h1>Toolbar &amp; Formatting Cheatsheet</h1>
+      content: `${bannerHtml}
+<h1>Toolbar &amp; Formatting Cheatsheet</h1>
 <h2>✏️ Text Formatting</h2>
 <ul>
 <li><strong>Keyboard Shortcuts</strong>: Ctrl+B (Bold), Ctrl+I (Italic), Ctrl+U (Underline).</li>
@@ -181,7 +184,8 @@ function seedNotes(){
     },
     {
       id:uid(), title:'Financial Budget & Project Plan', pinned:false, archived:false, tags:['finance','planning'],
-      content: `<h1>Financial Budget &amp; Project Plan</h1>
+      content: `${bannerHtml}
+<h1>Financial Budget &amp; Project Plan</h1>
 <h2>📈 Quarterly Project Budget</h2>
 <div class="table-wrapper" contenteditable="false"><table contenteditable="true">
   <tbody>
