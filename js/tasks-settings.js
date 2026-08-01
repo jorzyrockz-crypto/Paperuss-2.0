@@ -534,11 +534,16 @@ function bindSettings(){
   if(resetBtn) resetBtn.onclick=()=>{
     confirmDialog('Reset everything?','ALL notes, media, tasks, notifications and settings will be permanently erased. This cannot be undone.','Reset App',async ()=>{
       if(typeof resetCloudWorkspace==='function' && !(await resetCloudWorkspace())) return;
+      if(typeof fbAuth!=='undefined' && fbAuth){
+        try{ await fbAuth.signOut(); }catch(_){}
+      }
+      if(typeof saveSession==='function') saveSession(null);
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(TASKS_KEY);
       localStorage.removeItem(NOTIF_KEY);
       localStorage.removeItem(SETTINGS_KEY);
       localStorage.removeItem(THEME_KEY);
+      localStorage.removeItem('octonotes:session');
       localStorage.removeItem('octonotes:calendarView');
       localStorage.removeItem('octonotes:calendarSelectedDate');
       localStorage.removeItem('paperuss:cloudDeletions');
@@ -549,6 +554,12 @@ function bindSettings(){
         const all=await mediaAll();
         for(const rec of all) await mediaDel(rec.id);
       }catch(e){}
+      try{
+        await new Promise(resolve=>{
+          const req=indexedDB.deleteDatabase('firebaseLocalStorageDb');
+          req.onsuccess=req.onerror=req.onblocked=()=>resolve();
+        });
+      }catch(e){}
       location.reload();
     });
   };
@@ -556,18 +567,31 @@ function bindSettings(){
 
 async function clearLocalAppCacheAndData(){
   try{
-    // Keep cloud records intact: deleting IndexedDB directly avoids recording
-    // media deletions that would otherwise be synchronized to Firebase.
-    if(mediaDB){ mediaDB.close(); mediaDB=null; }
-    await new Promise(resolve=>{
-      const request=indexedDB.deleteDatabase(MEDIA_DB);
-      request.onsuccess=request.onerror=request.onblocked=()=>resolve();
-    });
+    // 1. Sign out of Firebase Auth so the app brings the user back to the sign-in / welcome page
+    if(typeof fbAuth !== 'undefined' && fbAuth){
+      try { await fbAuth.signOut(); } catch(_){}
+    }
+    if(typeof saveSession === 'function') saveSession(null);
 
+    // 2. Clear IndexedDB (both app media and firebase token storage)
+    if(mediaDB){ mediaDB.close(); mediaDB=null; }
+    await Promise.all([
+      new Promise(resolve=>{
+        const request=indexedDB.deleteDatabase(MEDIA_DB);
+        request.onsuccess=request.onerror=request.onblocked=()=>resolve();
+      }),
+      new Promise(resolve=>{
+        const request=indexedDB.deleteDatabase('firebaseLocalStorageDb');
+        request.onsuccess=request.onerror=request.onblocked=()=>resolve();
+      })
+    ]);
+
+    // 3. Clear localStorage keys
     Object.keys(localStorage)
       .filter(key=>key.startsWith('octonotes:')||key.startsWith('paperuss:'))
       .forEach(key=>localStorage.removeItem(key));
 
+    // 4. Clear service worker caches & unregister
     if('caches' in window){
       const keys=await caches.keys();
       await Promise.all(keys
