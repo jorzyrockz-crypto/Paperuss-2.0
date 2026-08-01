@@ -305,6 +305,11 @@ function bind(){
     const b=e.target.closest('[data-rmtag]'); if(b) removeTag(b.dataset.rmtag);
   };
 
+  const undoBtn = document.getElementById('undoBtn');
+  if(undoBtn) undoBtn.onclick = () => window.HistoryManager && window.HistoryManager.undo();
+  const redoBtn = document.getElementById('redoBtn');
+  if(redoBtn) redoBtn.onclick = () => window.HistoryManager && window.HistoryManager.redo();
+
   document.getElementById('pinBtn').onclick=togglePin;
   document.getElementById('archiveBtn').onclick=toggleArchive;
   document.getElementById('restoreBtn').onclick=()=>restoreNote(state.currentId);

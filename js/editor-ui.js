@@ -265,7 +265,7 @@ function initBlockTools(){
       touchGhost = null;
     }
     // Safety sweep: remove any lingering ghost clones left in document body
-    document.querySelectorAll('body > [style*="z-index:9999"], body > [style*="z-index: 9999"]').forEach(el => el.remove());
+    document.querySelectorAll('body > .touch-ghost-clone').forEach(el => el.remove());
   }
 
   function createTouchGhost(block, touchX, touchY){
@@ -885,9 +885,12 @@ function applyPageLayoutToEditor(note) {
 
     edBody.style.width = w + 'px';
     edBody.style.maxWidth = '100%';
-    edBody.style.minHeight = (orient === 'landscape' ? dim.w : dim.h) + 'px';
+    const pageH = (orient === 'landscape' ? dim.w : dim.h);
+    edBody.style.minHeight = pageH + 'px';
     edBody.style.padding = pad;
     edBody.style.margin = '0 auto';
+    // Visual auto pagebreak guidelines
+    edBody.style.background = `repeating-linear-gradient(to bottom, transparent, transparent calc(${pageH}px - 2px), #cbd5e1 calc(${pageH}px - 2px), #cbd5e1 ${pageH}px), #fff`;
   } else {
     edScroll.classList.remove('wysiwyg-mode');
     edBody.classList.remove('wysiwyg-paper');
@@ -896,6 +899,7 @@ function applyPageLayoutToEditor(note) {
     edBody.style.minHeight = '';
     edBody.style.padding = '';
     edBody.style.margin = '';
+    edBody.style.background = '';
   }
 }
 
