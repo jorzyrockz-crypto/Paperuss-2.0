@@ -250,113 +250,210 @@ function renderCalendarScheduleView(){
 }
 
 function openCalendarEventCreator(year, month, day){
+  const now = new Date();
+  if(!year) year = now.getFullYear();
+  if(month === undefined) month = now.getMonth();
+  if(day === undefined) day = now.getDate();
+
   const dateLabel=new Date(year, month, day).toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric', year:'numeric'});
   const root=document.getElementById('modalRoot');
-  root.innerHTML=`<div class="modal-overlay"><div class="modal" style="max-width:460px">
-    <h3>📅 New Event / Planner Note</h3>
-    <p style="font-size:13px;color:var(--fg-secondary);margin-bottom:14px">${dateLabel}</p>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
-      <input id="evTitle" placeholder="Event title" value="" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;outline:none;color:var(--fg)">
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <input id="evStartDate" type="date" value="${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:120px" title="Start date">
-        <input id="evStartTime" type="time" value="09:00" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:100px" title="Start time">
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <input id="evEndDate" type="date" value="${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:120px" title="End date">
-        <input id="evEndTime" type="time" value="10:00" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:100px" title="End time">
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <select id="evType" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:110px">
-          <option value="event">🗓️ General Event</option>
-          <option value="meeting">👥 Meeting</option>
-          <option value="deadline">⏰ Deadline</option>
-          <option value="planner">📝 Planner Note</option>
-        </select>
-        <select id="evRepeat" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:120px">
-          <option value="none">🔁 Does not repeat</option>
-          <option value="daily">🔄 Every day</option>
-          <option value="weekly">📅 Every week</option>
-          <option value="monthly">📆 Every month</option>
-          <option value="yearly">🗓️ Every year</option>
-        </select>
-      </div>
-      <textarea id="evDesc" placeholder="Optional description…" rows="2" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;outline:none;color:var(--fg);resize:vertical"></textarea>
-      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg-secondary);cursor:pointer">
-        <input type="checkbox" id="evNotify" checked> Notify me when this event starts
-      </label>
-    </div>
-    <div class="modal-actions">
-      <button class="btn" id="evCancel">Cancel</button>
-      <button class="btn btn-primary" id="evCreate">Create Event</button>
-    </div>
-  </div></div>`;
 
-  const close=()=>root.innerHTML='';
-  document.getElementById('evCancel').onclick=close;
-  document.getElementById('evCreate').onclick=()=>{
-    const titleEl=document.getElementById('evTitle');
-    const startDateEl=document.getElementById('evStartDate');
-    const startTimeEl=document.getElementById('evStartTime');
-    const endDateEl=document.getElementById('evEndDate');
-    const endTimeEl=document.getElementById('evEndTime');
-    const typeEl=document.getElementById('evType');
-    const repeatEl=document.getElementById('evRepeat');
-    const descEl=document.getElementById('evDesc');
-    const notifyEl=document.getElementById('evNotify');
-    const title=titleEl.value.trim()||'Untitled Event';
-    const startTimeStr=startTimeEl.value||'09:00';
-    const [sh,sm]=startTimeStr.split(':').map(Number);
-    const startDateVal=startDateEl.value||`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    const startTs=new Date(startDateVal+'T'+startTimeStr+':00').getTime();
-    const endDateVal=endDateEl.value||startDateVal;
-    const endTimeStr=endTimeEl.value||'10:00';
-    const [eh,em]=endTimeStr.split(':').map(Number);
-    const endTs=new Date(endDateVal+'T'+endTimeStr+':00').getTime();
-    const type=typeEl.value;
-    const repeatVal=repeatEl.value;
-    const notify=notifyEl.checked;
-    let tags=['calendar'];
-    if(type==='meeting') tags.push('meeting');
-    if(type==='deadline') tags.push('deadline');
-    if(type==='planner') tags.push('planner');
-    if(repeatVal!=='none'){ tags.push('recurring'); tags.push('repeat-'+repeatVal); }
-    const startFmt=new Date(startTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-    const endFmt=new Date(endTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-    const content=`<p><strong>📅 ${startFmt}</strong></p><p>→ ${endFmt}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${repeatVal}</p>`:''}${descEl.value?`<p>${descEl.value}</p>`:''}`;
-    const n={
-      id:uid(), title, content, tags, pinned:type==='deadline',
-      archived:false,
-      createdAt:startTs, updatedAt:startTs,
-      calendarStart:startTs,
-      calendarEnd:endTs,
-      calendarRepeat:repeatVal!=='none'?repeatVal:null,
-      calendarNotify:notify,
-      fontStyle:'sans'
-    };
-    notes.unshift(n);
-    // If user wrote a description, also create a linked "Notes" block for this event
-    if(descEl.value && descEl.value.trim()){
-      const linkedNote={
-        id:uid(), title:title+' · Notes', content:`<p><strong>${startFmt} → ${endFmt}</strong></p><p>${descEl.value}</p>`,
-        tags:['calendar','planner'],
-        pinned:false, archived:false,
-        createdAt:startTs, updatedAt:startTs,
-        calendarStart:startTs, calendarEnd:endTs,
-        calendarRepeat:null, calendarNotify:false,
-        fontStyle:'sans'
+  let activeTab = 'select';
+  let selectedEventNoteId = null;
+  const existingEvents = typeof getCalendarEvents === 'function' ? getCalendarEvents() : [];
+
+  function renderModalContent() {
+    const hasEvents = existingEvents.length > 0;
+    if(!hasEvents && activeTab === 'select') activeTab = 'create';
+
+    root.innerHTML=`<div class="modal-overlay"><div class="modal" style="max-width:500px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <h3 style="margin:0">📅 Calendar Events & Planner</h3>
+      </div>
+
+      <div class="modal-tabs">
+        <button type="button" class="modal-tab-btn ${activeTab==='select'?'active':''}" id="tabSelectEv">
+          <i data-lucide="calendar" class="w-4 h-4"></i> Select Existing (${existingEvents.length})
+        </button>
+        <button type="button" class="modal-tab-btn ${activeTab==='create'?'active':''}" id="tabCreateEv">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i> Create New
+        </button>
+      </div>
+
+      ${activeTab === 'select' ? `
+        <input id="evSearchInput" class="modal-search-input" placeholder="Search calendar events…" value="">
+        <div class="modal-item-list" id="evList">
+          ${renderEventListRows('')}
+        </div>
+        <div class="modal-actions">
+          <button class="btn" id="evCancel">Cancel</button>
+          <button class="btn btn-primary" id="evInsertSelected">Insert Selected Event</button>
+        </div>
+      ` : `
+        <p style="font-size:12.5px;color:var(--fg-secondary);margin-bottom:12px">${dateLabel}</p>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+          <input id="evTitle" placeholder="Event title" value="" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;outline:none;color:var(--fg)">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="evStartDate" type="date" value="${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:120px" title="Start date">
+            <input id="evStartTime" type="time" value="09:00" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:100px" title="Start time">
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="evEndDate" type="date" value="${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:120px" title="End date">
+            <input id="evEndTime" type="time" value="10:00" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:100px" title="End time">
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="evType" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:110px">
+              <option value="event">🗓️ General Event</option>
+              <option value="meeting">👥 Meeting</option>
+              <option value="deadline">⏰ Deadline</option>
+              <option value="planner">📝 Planner Note</option>
+            </select>
+            <select id="evRepeat" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:120px">
+              <option value="none">🔁 Does not repeat</option>
+              <option value="daily">🔄 Every day</option>
+              <option value="weekly">📅 Every week</option>
+              <option value="monthly">📆 Every month</option>
+              <option value="yearly">🗓️ Every year</option>
+            </select>
+          </div>
+          <textarea id="evDesc" placeholder="Optional description…" rows="2" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;outline:none;color:var(--fg);resize:vertical"></textarea>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg-secondary);cursor:pointer">
+            <input type="checkbox" id="evNotify" checked> Notify me when this event starts
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="btn" id="evCancel">Cancel</button>
+          <button class="btn btn-primary" id="evCreate">Create Event</button>
+        </div>
+      `}
+    </div></div>`;
+
+    if(typeof refreshIcons === 'function') refreshIcons();
+
+    const close=()=>root.innerHTML='';
+    const cancelBtn = document.getElementById('evCancel');
+    if(cancelBtn) cancelBtn.onclick=close;
+    const overlay = root.querySelector('.modal-overlay');
+    if(overlay) overlay.onclick=e=>{ if(e.target===e.currentTarget) close(); };
+
+    // Tab buttons
+    const btnTabSel = document.getElementById('tabSelectEv');
+    const btnTabCre = document.getElementById('tabCreateEv');
+    if(btnTabSel) btnTabSel.onclick = () => { activeTab = 'select'; renderModalContent(); };
+    if(btnTabCre) btnTabCre.onclick = () => { activeTab = 'create'; renderModalContent(); };
+
+    if(activeTab === 'select') {
+      const searchInput = document.getElementById('evSearchInput');
+      if(searchInput) {
+        searchInput.oninput = (e) => {
+          const listEl = document.getElementById('evList');
+          if(listEl) listEl.innerHTML = renderEventListRows(e.target.value);
+          wireEventRowEvents();
+        };
+      }
+      wireEventRowEvents();
+
+      const btnInsertSel = document.getElementById('evInsertSelected');
+      if(btnInsertSel) {
+        btnInsertSel.onclick = () => {
+          if(!selectedEventNoteId) { toast('Select an event first'); return; }
+          const evObj = existingEvents.find(e => e.note.id === selectedEventNoteId);
+          if(!evObj) return;
+
+          const title = titleOf(evObj.note);
+          const startFmt = new Date(evObj.start).toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+          const eventHtml = `<div class="callout callout-info" style="margin:12px 0"><span class="callout-badge">📅 Event</span> <strong>${esc(title)}</strong> &nbsp;·&nbsp; <span style="font-size:12px;opacity:0.8">${startFmt}</span></div><p><br></p>`;
+          
+          const ed = document.getElementById('noteBody');
+          if(ed) {
+            ed.focus();
+            document.execCommand('insertHTML', false, eventHtml);
+            if(typeof handleBodyInput === 'function') handleBodyInput();
+          }
+          toast(`Inserted event "${title}" into note`);
+          close();
+        };
+      }
+    } else {
+      document.getElementById('evCreate').onclick=()=>{
+        const titleEl=document.getElementById('evTitle');
+        const startDateEl=document.getElementById('evStartDate');
+        const startTimeEl=document.getElementById('evStartTime');
+        const endDateEl=document.getElementById('evEndDate');
+        const endTimeEl=document.getElementById('evEndTime');
+        const typeEl=document.getElementById('evType');
+        const repeatEl=document.getElementById('evRepeat');
+        const descEl=document.getElementById('evDesc');
+        const notifyEl=document.getElementById('evNotify');
+        const title=titleEl.value.trim()||'Untitled Event';
+        const startTimeStr=startTimeEl.value||'09:00';
+        const [sh,sm]=startTimeStr.split(':').map(Number);
+        const startDateVal=startDateEl.value||`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const startTs=new Date(startDateVal+'T'+startTimeStr+':00').getTime();
+        const endDateVal=endDateEl.value||startDateVal;
+        const endTimeStr=endTimeEl.value||'10:00';
+        const [eh,em]=endTimeStr.split(':').map(Number);
+        const endTs=new Date(endDateVal+'T'+endTimeStr+':00').getTime();
+        const type=typeEl.value;
+        const repeatVal=repeatEl.value;
+        const notify=notifyEl.checked;
+        let tags=['calendar'];
+        if(type==='meeting') tags.push('meeting');
+        if(type==='deadline') tags.push('deadline');
+        if(type==='planner') tags.push('planner');
+        if(repeatVal!=='none'){ tags.push('recurring'); tags.push('repeat-'+repeatVal); }
+        const startFmt=new Date(startTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+        const endFmt=new Date(endTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+        const content=`<p><strong>📅 ${startFmt}</strong></p><p>→ ${endFmt}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${repeatVal}</p>`:''}${descEl.value?`<p>${descEl.value}</p>`:''}`;
+
+        const n={
+          id:uid(), title, content, tags, pinned:false, archived:false,
+          createdAt:Date.now(), updatedAt:Date.now(), fontStyle:'sans',
+          calendarStart:startTs, calendarEnd:endTs
+        };
+        notes.unshift(n);
+        save();
+        if(notify && typeof addNotification==='function'){
+          addNotification({type:'calendar',title:'Event Created: '+title,body:startFmt,icon:'calendar'});
+        }
+        renderCalendarView(); renderAll();
+        toast('Event created');
+        close();
       };
-      notes.unshift(linkedNote);
     }
-    state.filter='calendar';
-    state.currentId=n.id;
-    save();
-    renderAll();
-    if(notify){ scheduleEventNotification(n); }
-    addNotification({type:'note',title:'Event created',body:`"${title}" — ${startFmt}${repeatVal!=='none'?` (repeats ${repeatVal})`:''}`,icon:'calendar'});
-    close();
-  };
-  root.querySelector('.modal-overlay').onclick=e=>{ if(e.target===e.currentTarget) close(); };
-  setTimeout(()=>document.getElementById('evTitle').focus(),50);
+  }
+
+  function renderEventListRows(query) {
+    const q = query.toLowerCase().trim();
+    const filtered = existingEvents.filter(e => !q || titleOf(e.note).toLowerCase().includes(q));
+    if(!filtered.length) return `<div style="padding:16px;text-align:center;color:var(--fg-muted);font-size:13px">No calendar events found.</div>`;
+
+    return filtered.map(ev => {
+      const isSel = selectedEventNoteId === ev.note.id;
+      const title = titleOf(ev.note);
+      const startFmt = new Date(ev.start).toLocaleString(undefined, {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+      return `<div class="modal-item-row ${isSel?'selected':''}" data-event-id="${ev.note.id}">
+        <i data-lucide="calendar" class="w-4 h-4" style="color:var(--accent)"></i>
+        <div style="flex:1;font-size:13px;font-weight:600;color:var(--fg)">${esc(title)}</div>
+        <span style="font-size:11px;color:var(--fg-muted);background:var(--hover);padding:2px 6px;border-radius:4px">${startFmt}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function wireEventRowEvents() {
+    const listEl = document.getElementById('evList');
+    if(!listEl) return;
+    listEl.querySelectorAll('.modal-item-row[data-event-id]').forEach(row => {
+      row.onclick = () => {
+        selectedEventNoteId = row.dataset.eventId;
+        const searchVal = document.getElementById('evSearchInput')?.value || '';
+        listEl.innerHTML = renderEventListRows(searchVal);
+        wireEventRowEvents();
+      };
+    });
+  }
+
+  renderModalContent();
 }
 
 let eventNotifTimers=[];

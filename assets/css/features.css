@@ -1396,3 +1396,138 @@ blockquote.note-callout.callout-info {
   color: #fff;
   border-color: var(--accent);
 }
+
+/* ============ FLOATING VOICE RECORDING DOCK PILL ============ */
+.rec-dock-pill {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 990;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: rgba(18, 24, 38, 0.88);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--accent);
+  border-radius: 99px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 16px var(--accent-ring);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  user-select: none;
+  animation: pillSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes pillSlideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.rec-dock-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 10px #ef4444;
+  animation: pulseDot 1s infinite alternate;
+}
+@keyframes pulseDot {
+  0% { transform: scale(0.85); opacity: 0.7; }
+  100% { transform: scale(1.2); opacity: 1; }
+}
+.rec-dock-time {
+  font-family: monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: #f3f4f6;
+  letter-spacing: 0.5px;
+}
+.rec-dock-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  color: #fff;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.rec-dock-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.08);
+}
+
+/* ============ MODAL TABS (SELECT EXISTING VS CREATE NEW) ============ */
+.modal-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--subtle);
+  padding: 4px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+.modal-tab-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fg-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.modal-tab-btn.active {
+  background: var(--canvas);
+  color: var(--fg);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.modal-search-input {
+  width: 100%;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  outline: none;
+  color: var(--fg);
+  margin-bottom: 12px;
+}
+.modal-item-list {
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.modal-item-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  user-select: none;
+}
+.modal-item-row:hover {
+  border-color: var(--accent);
+  background: var(--hover);
+}
+.modal-item-row.selected {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.12);
+}
+

@@ -292,27 +292,92 @@ function insertRichLink(){
 }
 
 /* Voice recording modal */
-let recStream=null, recRecorder=null, recChunks=[], recStart=0, recTimer=null;
+let recStream=null, recRecorder=null, recChunks=[], recStart=0, recTimer=null, isRecMinimized=false;
+
+function removeRecDockPill(){
+  const dock=document.getElementById('voiceRecDock');
+  if(dock) dock.remove();
+}
+
+function updateRecTimerDisplay(timeStr){
+  const elModal=document.getElementById('recTime');
+  const elDock=document.getElementById('recDockTime');
+  if(elModal) elModal.textContent=timeStr;
+  if(elDock) elDock.textContent=timeStr;
+}
+
+function renderRecDockPill(){
+  removeRecDockPill();
+  const dock=document.createElement('div');
+  dock.id='voiceRecDock';
+  dock.className='rec-dock-pill';
+  dock.innerHTML=`
+    <div class="rec-dock-dot"></div>
+    <span style="font-size:11px;font-weight:700;text-transform:uppercase;color:#f87171">REC</span>
+    <span class="rec-dock-time" id="recDockTime">0:00</span>
+    <button type="button" class="rec-dock-btn" id="recDockStop" title="Stop & save recording">■</button>
+    <button type="button" class="rec-dock-btn" id="recDockMaximize" title="Expand recorder modal">⤢</button>
+  `;
+  document.body.appendChild(dock);
+
+  document.getElementById('recDockStop').onclick=()=>{
+    if(recRecorder && recRecorder.state!=='inactive') recRecorder.stop();
+    removeRecDockPill();
+  };
+  document.getElementById('recDockMaximize').onclick=()=>{
+    isRecMinimized=false;
+    removeRecDockPill();
+    openRecordingModal();
+  };
+}
+
 function openRecordingModal(){
   const root=document.getElementById('modalRoot');
-  root.innerHTML=`<div class="modal-overlay"><div class="modal rec-modal">
+  isRecMinimized=false;
+  removeRecDockPill();
+
+  const isRecordingActive = recRecorder && recRecorder.state === 'recording';
+
+  root.innerHTML=`<div class="modal-overlay"><div class="modal rec-modal" style="position:relative">
+    <button id="recMinimize" title="Minimize to dock pill" style="position:absolute;top:14px;right:14px;background:none;border:none;color:var(--fg-secondary);font-size:18px;cursor:pointer;padding:2px 8px;border-radius:4px;line-height:1" ${isRecordingActive?'':'disabled style="opacity:0.4;cursor:not-allowed"'}>–</button>
     <h3>Voice Recording</h3>
-    <div class="rec-dot idle" id="recDot"></div>
+    <div class="rec-dot ${isRecordingActive?'':'idle'}" id="recDot"></div>
     <div class="rec-time" id="recTime">0:00</div>
-    <div class="rec-hint" id="recHint">Click Start to begin recording</div>
+    <div class="rec-hint" id="recHint">${isRecordingActive?'Recording… speak now':'Click Start to begin recording'}</div>
     <div class="modal-actions" style="justify-content:center">
       <button class="btn" id="recCancel">Cancel</button>
-      <button class="btn btn-primary" id="recStart">● Start</button>
-      <button class="btn btn-danger" id="recStop" style="display:none">■ Stop</button>
+      <button class="btn btn-primary" id="recStart" style="${isRecordingActive?'display:none':''}">● Start</button>
+      <button class="btn btn-danger" id="recStop" style="${isRecordingActive?'':'display:none'}">■ Stop</button>
     </div>
   </div></div>`;
+
   const cleanup=()=>{
     if(recTimer){ clearInterval(recTimer); recTimer=null; }
     if(recStream){ recStream.getTracks().forEach(t=>t.stop()); recStream=null; }
-    recRecorder=null; recChunks=[];
+    recRecorder=null; recChunks=[]; isRecMinimized=false;
+    removeRecDockPill();
   };
+
   const close=()=>{ cleanup(); root.innerHTML=''; };
   document.getElementById('recCancel').onclick=close;
+
+  const minBtn = document.getElementById('recMinimize');
+  if(minBtn) {
+    minBtn.onclick = () => {
+      if(!recRecorder || recRecorder.state !== 'recording') return;
+      isRecMinimized = true;
+      root.innerHTML = '';
+      renderRecDockPill();
+      toast('Voice recorder minimized to dock pill');
+    };
+  }
+
+  // If already recording (re-opened via Maximize)
+  if(isRecordingActive) {
+    const s = Math.floor((Date.now() - recStart) / 1000);
+    updateRecTimerDisplay(Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'));
+  }
+
   document.getElementById('recStart').onclick=async ()=>{
     try{
       recStream=await navigator.mediaDevices.getUserMedia({audio:true});
@@ -344,16 +409,22 @@ function openRecordingModal(){
     document.getElementById('recDot').classList.remove('idle');
     document.getElementById('recStart').style.display='none';
     document.getElementById('recStop').style.display='';
+    const minBtnActive = document.getElementById('recMinimize');
+    if(minBtnActive) { minBtnActive.disabled = false; minBtnActive.style.opacity = '1'; minBtnActive.style.cursor = 'pointer'; }
     document.getElementById('recHint').textContent='Recording… speak now';
+
+    if(recTimer) clearInterval(recTimer);
     recTimer=setInterval(()=>{
       const s=Math.floor((Date.now()-recStart)/1000);
-      document.getElementById('recTime').textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+      const timeStr=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+      updateRecTimerDisplay(timeStr);
     },200);
   };
+
   document.getElementById('recStop').onclick=()=>{
     if(recRecorder && recRecorder.state!=='inactive') recRecorder.stop();
   };
-  root.querySelector('.modal-overlay').onclick=e=>{ if(e.target===e.currentTarget) close(); };
+  root.querySelector('.modal-overlay').onclick=e=>{ if(e.target===e.currentTarget && !isRecordingActive) close(); };
 }
 
 /* Dispatcher for the media toolbar buttons */

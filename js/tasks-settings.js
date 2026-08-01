@@ -15,69 +15,176 @@ function saveTasks(){
 
 function openTaskCreatorModal(){
   const root=document.getElementById('modalRoot');
-  root.innerHTML=`<div class="modal-overlay"><div class="modal" style="max-width:480px">
-    <h3>✅ Create Tasks</h3>
-    <p style="color:var(--fg-secondary);font-size:12.5px;margin-bottom:14px">
-      Add multiple tasks — one per line. They will be grouped as a single block.
-    </p>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
-      <textarea id="tmTasks" rows="5" placeholder="Buy groceries&#10;Email the client&#10;Review pull request" style="background:var(--subtle);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:13.5px;outline:none;color:var(--fg);resize:vertical;line-height:1.6"></textarea>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <select id="tmPriority" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:100px">
-          <option value="low">🟢 Low</option>
-          <option value="medium" selected>🟡 Medium</option>
-          <option value="high">🔴 High</option>
-        </select>
-        <input id="tmDue" type="datetime-local" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:160px" title="Shared reminder for all tasks">
+  let activeTab = 'select'; // 'select' or 'create'
+  let selectedTaskIds = new Set();
+
+  function renderModalContent() {
+    const hasStandalone = standaloneTasks && standaloneTasks.length > 0;
+    if(!hasStandalone && activeTab === 'select') activeTab = 'create';
+
+    root.innerHTML=`<div class="modal-overlay"><div class="modal" style="max-width:500px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <h3 style="margin:0">✅ Tasks & Checklists</h3>
       </div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg-secondary);cursor:pointer">
-        <input type="checkbox" id="tmInsertNote" checked> Also insert as a checklist in a new note
-      </label>
-    </div>
-    <div class="modal-actions">
-      <button class="btn" id="tmCancel">Cancel</button>
-      <button class="btn btn-primary" id="tmCreate">Create Tasks</button>
-    </div>
-  </div></div>`;
-  const close=()=>root.innerHTML='';
-  document.getElementById('tmCancel').onclick=close;
-  root.querySelector('.modal-overlay').onclick=e=>{ if(e.target===e.currentTarget) close(); };
-  document.getElementById('tmCreate').onclick=()=>{
-    const raw=document.getElementById('tmTasks').value;
-    const lines=raw.split('\n').map(s=>s.trim()).filter(Boolean);
-    if(!lines.length){ toast('Enter at least one task'); return; }
-    const prio=document.getElementById('tmPriority').value;
-    const dueVal=document.getElementById('tmDue').value;
-    const due=dueVal?new Date(dueVal).getTime():null;
-    const insertNote=document.getElementById('tmInsertNote').checked;
-    const groupId='g_'+Date.now().toString(36);
-    lines.forEach(txt=>{
-      standaloneTasks.unshift({
-        id:'t_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
-        text:txt, completed:false,
-        priority:prio, due, notified:false,
-        groupId,
-        createdAt:Date.now(), updatedAt:Date.now()
-      });
-    });
-    saveTasks();
-    // Also create a note with checkboxes if checked
-    if(insertNote){
-      const checklistHtml=lines.map(t=>`<li data-task="1"><input type="checkbox"> ${esc(t)}</li>`).join('');
-      const noteContent=`<p><strong>Task Block</strong></p><ul>${checklistHtml}</ul>`;
-      const n={
-        id:uid(), title:'Task Block · '+lines[0], content:noteContent,
-        tags:['tasks'], pinned:false, archived:false,
-        createdAt:Date.now(), updatedAt:Date.now(), fontStyle:'sans'
-      };
-      notes.unshift(n);
-      save();
+
+      <div class="modal-tabs">
+        <button type="button" class="modal-tab-btn ${activeTab==='select'?'active':''}" id="tabSelectTask">
+          <i data-lucide="check-square" class="w-4 h-4"></i> Select Existing (${standaloneTasks.length})
+        </button>
+        <button type="button" class="modal-tab-btn ${activeTab==='create'?'active':''}" id="tabCreateTask">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i> Create New
+        </button>
+      </div>
+
+      ${activeTab === 'select' ? `
+        <input id="tmSearchInput" class="modal-search-input" placeholder="Search tasks from Task Page…" value="">
+        <div class="modal-item-list" id="tmTaskList">
+          ${renderTaskListRows('')}
+        </div>
+        <div class="modal-actions">
+          <button class="btn" id="tmCancel">Cancel</button>
+          <button class="btn btn-primary" id="tmInsertSelected">Insert Selected Task(s)</button>
+        </div>
+      ` : `
+        <p style="color:var(--fg-secondary);font-size:12.5px;margin-bottom:12px">
+          Add multiple tasks — one per line. They will be saved to your Task Manager.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+          <textarea id="tmTasks" rows="4" placeholder="Buy groceries&#10;Email the client&#10;Review pull request" style="background:var(--subtle);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:13.5px;outline:none;color:var(--fg);resize:vertical;line-height:1.6"></textarea>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="tmPriority" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:100px">
+              <option value="low">🟢 Low</option>
+              <option value="medium" selected>🟡 Medium</option>
+              <option value="high">🔴 High</option>
+            </select>
+            <input id="tmDue" type="datetime-local" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:160px" title="Shared reminder for all tasks">
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg-secondary);cursor:pointer">
+            <input type="checkbox" id="tmInsertNote" checked> Also insert as a checklist block in active note
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="btn" id="tmCancel">Cancel</button>
+          <button class="btn btn-primary" id="tmCreate">Create & Insert Tasks</button>
+        </div>
+      `}
+    </div></div>`;
+
+    if(typeof refreshIcons === 'function') refreshIcons();
+
+    const close=()=>root.innerHTML='';
+    const cancelBtn = document.getElementById('tmCancel');
+    if(cancelBtn) cancelBtn.onclick=close;
+    const overlay = root.querySelector('.modal-overlay');
+    if(overlay) overlay.onclick=e=>{ if(e.target===e.currentTarget) close(); };
+
+    // Tab buttons
+    const btnTabSel = document.getElementById('tabSelectTask');
+    const btnTabCre = document.getElementById('tabCreateTask');
+    if(btnTabSel) btnTabSel.onclick = () => { activeTab = 'select'; renderModalContent(); };
+    if(btnTabCre) btnTabCre.onclick = () => { activeTab = 'create'; renderModalContent(); };
+
+    if(activeTab === 'select') {
+      const searchInput = document.getElementById('tmSearchInput');
+      if(searchInput) {
+        searchInput.oninput = (e) => {
+          const listEl = document.getElementById('tmTaskList');
+          if(listEl) listEl.innerHTML = renderTaskListRows(e.target.value);
+          wireTaskRowEvents();
+        };
+      }
+      wireTaskRowEvents();
+
+      const btnInsertSel = document.getElementById('tmInsertSelected');
+      if(btnInsertSel) {
+        btnInsertSel.onclick = () => {
+          if(selectedTaskIds.size === 0) { toast('Select at least one task'); return; }
+          const selectedItems = standaloneTasks.filter(t => selectedTaskIds.has(t.id));
+          const checklistHtml = selectedItems.map(t => `<li data-task="1"><input type="checkbox" ${t.completed?'checked':''}> ${esc(t.text)}</li>`).join('');
+          
+          const ed = document.getElementById('noteBody');
+          if(ed) {
+            ed.focus();
+            document.execCommand('insertHTML', false, `<ul>${checklistHtml}</ul><p><br></p>`);
+            if(typeof handleBodyInput === 'function') handleBodyInput();
+          }
+          toast(`Inserted ${selectedItems.length} task(s) into note`);
+          close();
+        };
+      }
+    } else {
+      const btnCreate = document.getElementById('tmCreate');
+      if(btnCreate) {
+        btnCreate.onclick = () => {
+          const raw=document.getElementById('tmTasks').value;
+          const lines=raw.split('\n').map(s=>s.trim()).filter(Boolean);
+          if(!lines.length){ toast('Enter at least one task'); return; }
+          const prio=document.getElementById('tmPriority').value;
+          const dueVal=document.getElementById('tmDue').value;
+          const due=dueVal?new Date(dueVal).getTime():null;
+          const insertNote=document.getElementById('tmInsertNote').checked;
+          const groupId='g_'+Date.now().toString(36);
+          lines.forEach(txt=>{
+            standaloneTasks.unshift({
+              id:'t_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+              text:txt, completed:false,
+              priority:prio, due, notified:false,
+              groupId,
+              createdAt:Date.now(), updatedAt:Date.now()
+            });
+          });
+          saveTasks();
+          if(insertNote){
+            const checklistHtml=lines.map(t=>`<li data-task="1"><input type="checkbox"> ${esc(t)}</li>`).join('');
+            const ed = document.getElementById('noteBody');
+            if(ed) {
+              ed.focus();
+              document.execCommand('insertHTML', false, `<ul>${checklistHtml}</ul><p><br></p>`);
+              if(typeof handleBodyInput === 'function') handleBodyInput();
+            }
+          }
+          renderTasksView(); updateTasksCount(); renderAll();
+          addNotification({type:'task',title:`${lines.length} tasks created`,body:lines.slice(0,3).join(', ')+(lines.length>3?'…':''),icon:'check-square'});
+          close();
+        };
+      }
+      setTimeout(()=>document.getElementById('tmTasks')?.focus(), 50);
     }
-    renderTasksView(); updateTasksCount(); renderAll();
-    addNotification({type:'task',title:`${lines.length} tasks created`,body:lines.slice(0,3).join(', ')+(lines.length>3?'…':''),icon:'check-square'});
-    close();
-  };
-  setTimeout(()=>document.getElementById('tmTasks').focus(),50);
+  }
+
+  function renderTaskListRows(query) {
+    const q = query.toLowerCase().trim();
+    const filtered = standaloneTasks.filter(t => !q || t.text.toLowerCase().includes(q));
+    if(!filtered.length) return `<div style="padding:16px;text-align:center;color:var(--fg-muted);font-size:13px">No tasks found.</div>`;
+
+    return filtered.map(t => {
+      const isSel = selectedTaskIds.has(t.id);
+      const prioColor = t.priority==='high'?'🔴':t.priority==='medium'?'🟡':'🟢';
+      return `<div class="modal-item-row ${isSel?'selected':''}" data-task-id="${t.id}">
+        <input type="checkbox" ${isSel?'checked':''} style="pointer-events:none">
+        <span style="font-size:12px">${prioColor}</span>
+        <div style="flex:1;font-size:13px;color:var(--fg);${t.completed?'text-decoration:line-through;opacity:0.6':''}">${esc(t.text)}</div>
+        ${t.due?`<span style="font-size:11px;color:var(--fg-muted)">${new Date(t.due).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>`:''}
+      </div>`;
+    }).join('');
+  }
+
+  function wireTaskRowEvents() {
+    const listEl = document.getElementById('tmTaskList');
+    if(!listEl) return;
+    listEl.querySelectorAll('.modal-item-row[data-task-id]').forEach(row => {
+      row.onclick = () => {
+        const id = row.dataset.taskId;
+        if(selectedTaskIds.has(id)) selectedTaskIds.delete(id);
+        else selectedTaskIds.add(id);
+        const searchVal = document.getElementById('tmSearchInput')?.value || '';
+        listEl.innerHTML = renderTaskListRows(searchVal);
+        wireTaskRowEvents();
+      };
+    });
+  }
+
+  renderModalContent();
 }
 
 let taskAudioCtx=null;
