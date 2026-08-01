@@ -387,7 +387,7 @@
   -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
 }
 .template-dropdown { bottom: auto; top: 100%; margin-top: 6px; }
-.footer-tags-dropdown { left: auto; right: 0; min-width: 260px; max-width: 320px; }
+.footer-tags-dropdown { min-width: 260px; max-width: 320px; }
 .page-layout-dropdown.show,
 .footer-tags-dropdown.show,
 .template-dropdown.show { display:flex; }
