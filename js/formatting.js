@@ -308,8 +308,7 @@ const DROPDOWN_TRIGGERS={
   hlDropdown:'hlBtn',
   szDropdown:'szBtn',
   fontStyleDropdown:'fontStyleBtn',
-  tableGridPicker:'tableBtn',
-  pageLayoutDropdown:'pageLayoutBtn'
+  tableGridPicker:'tableBtn'
 };
 
 /**
@@ -352,8 +351,8 @@ function toggleDropdown(id){
   const drop=document.getElementById(id);
   if(!drop) return;
   const was=drop.classList.contains('show');
-  // Close all toolbar dropdowns first.
-  document.querySelectorAll('.hl-dropdown,.sz-dropdown,.font-style-dropdown,.table-grid-picker')
+  // Close all toolbar and footer dropdowns first.
+  document.querySelectorAll('.hl-dropdown, .sz-dropdown, .font-style-dropdown, .table-grid-picker, .page-layout-dropdown, .footer-tags-dropdown, .template-dropdown')
     .forEach(d=>{
       d.classList.remove('show');
       // Reset any inline positioning from a previous portal call.
@@ -361,8 +360,11 @@ function toggleDropdown(id){
       d.style.right=''; d.style.zIndex='';
     });
   if(!was){
-    // Position as a fixed portal BEFORE adding .show so the measure is accurate.
-    positionDropdownAsPortal(drop, DROPDOWN_TRIGGERS[id] || '');
+    // Position as a fixed portal ONLY if it is a floating toolbar dropdown.
+    // Footer menus rely on native CSS positioning (bottom: 100%).
+    if(DROPDOWN_TRIGGERS[id]){
+      positionDropdownAsPortal(drop, DROPDOWN_TRIGGERS[id]);
+    }
     drop.classList.add('show');
   }
 }
