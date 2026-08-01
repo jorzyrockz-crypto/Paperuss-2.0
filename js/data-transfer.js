@@ -204,3 +204,88 @@ function seedNotes(){
     }
   ];
 }
+
+/* ============================================================
+   INCOMING SHARE TARGET & FILE HANDLING API
+   ============================================================ */
+async function checkIncomingSharedData(){
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const title = params.get('title');
+    const text = params.get('text');
+    const url = params.get('url');
+    const isShared = params.get('shared');
+
+    // 1. Direct GET share parameters
+    if (title || text || url) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      createNoteFromSharedData({ title, text, url });
+      return;
+    }
+
+    // 2. POST share payload cached by Service Worker
+    if (isShared === '1' && 'caches' in window) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      const cacheName = typeof CACHE_NAME !== 'undefined' ? CACHE_NAME : "paperuss-shell-v20";
+      const cache = await caches.open(cacheName);
+      const match = await cache.match('./__pending_shared_payload__');
+      if (match) {
+        const data = await match.json();
+        await cache.delete('./__pending_shared_payload__');
+        createNoteFromSharedData(data);
+      }
+    }
+  } catch (err) {
+    console.error('Error handling incoming shared data:', err);
+  }
+}
+
+function createNoteFromSharedData(payload){
+  if (!payload) return;
+  const now = Date.now();
+  let noteTitle = payload.title || (payload.text ? payload.text.substring(0, 30) : 'Shared Content');
+  let body = '';
+
+  if (payload.text) {
+    body += `<p>${esc(payload.text)}</p>`;
+  }
+  if (payload.url) {
+    body += `<p><a href="${esc(payload.url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 12px;background:var(--hover);border-radius:8px;text-decoration:none;color:var(--accent);margin-top:6px;">🔗 ${esc(payload.url)}</a></p>`;
+  }
+
+  if (payload.files && payload.files.length > 0) {
+    payload.files.forEach(f => {
+      try {
+        const u8 = new Uint8Array(f.buffer);
+        const blob = new Blob([u8], { type: f.type || 'application/octet-stream' });
+        const blobUrl = URL.createObjectURL(blob);
+        if (f.type && f.type.startsWith('image/')) {
+          body += `<p><img src="${blobUrl}" alt="${esc(f.name)}" style="max-width:100%;border-radius:8px;margin-top:8px;"></p>`;
+        } else {
+          body += `<p><a href="${blobUrl}" download="${esc(f.name)}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;background:var(--hover);border-radius:6px;margin-top:6px;">📎 ${esc(f.name)}</a></p>`;
+        }
+      } catch (e) {
+        console.error('Error parsing shared file:', e);
+      }
+    });
+  }
+
+  const newNote = {
+    id: uid(),
+    title: noteTitle,
+    content: body || '<p></p>',
+    pinned: false,
+    archived: false,
+    tags: ['shared'],
+    createdAt: now,
+    updatedAt: now
+  };
+
+  notes.unshift(newNote);
+  saveNotesLocally();
+  renderNotesList();
+  selectNote(newNote.id);
+  if (typeof showToast === 'function') {
+    showToast('Saved shared content to new note!');
+  }
+}

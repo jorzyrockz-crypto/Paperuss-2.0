@@ -840,5 +840,20 @@ function bind(){
   updateNotifBar();
   updateNotifBadge();
   startReminderWatcher();
+  if(typeof checkIncomingSharedData === 'function') setTimeout(checkIncomingSharedData, 300);
+  if('launchQueue' in window){
+    window.launchQueue.setConsumer(async (launchParams)=>{
+      if(!launchParams.files || !launchParams.files.length) return;
+      for(const handle of launchParams.files){
+        try{
+          const file = await handle.getFile();
+          const text = await file.text();
+          if(typeof createNoteFromSharedData === 'function'){
+            createNoteFromSharedData({ title: file.name.replace(/\.[^/.]+$/, ""), text: text });
+          }
+        }catch(e){ console.error('Launch file error:', e); }
+      }
+    });
+  }
   if(typeof checkWhatsNewAutoPopup === 'function') setTimeout(checkWhatsNewAutoPopup, 1500);
 })();

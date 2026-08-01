@@ -55,9 +55,47 @@ self.addEventListener("message", event => {
 
 self.addEventListener("fetch", event => {
   const request = event.request;
-  if (request.method !== "GET") return;
-
   const url = new URL(request.url);
+
+  // Web Share Target POST Handler
+  if (request.method === "POST" && url.pathname.endsWith("/share-target")) {
+    event.respondWith(
+      (async () => {
+        try {
+          const formData = await request.formData();
+          const title = formData.get("title") || "";
+          const text = formData.get("text") || "";
+          const sharedUrl = formData.get("url") || "";
+          const mediaFiles = formData.getAll("media");
+
+          const filesData = [];
+          for (const file of mediaFiles) {
+            if (file && typeof file === "object" && file.name) {
+              const buffer = await file.arrayBuffer();
+              filesData.push({
+                name: file.name,
+                type: file.type,
+                buffer: Array.from(new Uint8Array(buffer))
+              });
+            }
+          }
+
+          const cache = await caches.open(CACHE_NAME);
+          const payloadResponse = new Response(JSON.stringify({
+            title, text, url: sharedUrl, files: filesData, timestamp: Date.now()
+          }), { headers: { "Content-Type": "application/json" } });
+          await cache.put("./__pending_shared_payload__", payloadResponse);
+
+          return Response.redirect("./index.html?shared=1", 303);
+        } catch (err) {
+          return Response.redirect("./index.html", 303);
+        }
+      })()
+    );
+    return;
+  }
+
+  if (request.method !== "GET") return;
 
   // Release notes change independently from the app shell. Always attempt a
   // fresh request first, then fall back to the most recently cached document.
