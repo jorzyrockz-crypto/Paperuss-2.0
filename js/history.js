@@ -111,6 +111,7 @@ window.HistoryManager = {
     // Trigger any downstream recalculations / UI updates
     if(typeof window.normalizeEditorTables === 'function') window.normalizeEditorTables();
     if(typeof window.normalizeEditorImages === 'function') window.normalizeEditorImages();
+    if(typeof window.hydrateMediaInEditor === 'function') window.hydrateMediaInEditor();
     if(typeof window.recalculateTableFormulas === 'function') {
       document.querySelectorAll('.editor-content table').forEach(tbl => {
         window.recalculateTableFormulas(tbl);

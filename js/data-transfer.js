@@ -49,6 +49,11 @@ function importNotes(file){
             id:uid(), title:String(n.title||''), content,
             tags:Array.isArray(n.tags)?n.tags.filter(t=>typeof t==='string'):[],
             pinned:!!n.pinned, archived:!!n.archived,
+            fontStyle:n.fontStyle||'sans',
+            pageViewEnabled:!!n.pageViewEnabled,
+            pageSize:n.pageSize||'a4',
+            pageOrientation:n.pageOrientation||'portrait',
+            pageMargins:n.pageMargins||'normal',
             createdAt:n.createdAt||Date.now(), updatedAt:n.updatedAt||Date.now()
           });
           added++;
