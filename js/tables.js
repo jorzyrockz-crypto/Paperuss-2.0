@@ -1356,13 +1356,14 @@ function getCellValue(cell) {
 
 function evaluateCellFormula(tbl, formulaStr, positions) {
   const expr = formulaStr.substring(1).toUpperCase().trim();
+  if (!expr) return 0;
   
   // Custom functions
   const sumMatch = expr.match(/^SUM\(([^)]+)\)$/);
   if (sumMatch) {
     const refs = sumMatch[1].split(',');
     let total = 0;
-    refs.forEach(r => resolveCellRange(tbl, r, positions).forEach(c => total += getCellValue(c)));
+    refs.forEach(r => resolveCellRange(tbl, r.trim(), positions).forEach(c => total += getCellValue(c)));
     return total;
   }
   
@@ -1370,29 +1371,37 @@ function evaluateCellFormula(tbl, formulaStr, positions) {
   if (avgMatch) {
     const refs = avgMatch[1].split(',');
     let total = 0, count = 0;
-    refs.forEach(r => resolveCellRange(tbl, r, positions).forEach(c => { total += getCellValue(c); count++; }));
-    return count > 0 ? total / count : 0;
+    refs.forEach(r => resolveCellRange(tbl, r.trim(), positions).forEach(c => { total += getCellValue(c); count++; }));
+    return count > 0 ? total / count : '#DIV/0!';
+  }
+
+  const prodMatch = expr.match(/^(?:PRODUCT|PROD)\(([^)]+)\)$/);
+  if (prodMatch) {
+    const refs = prodMatch[1].split(',');
+    let prod = 1, count = 0;
+    refs.forEach(r => resolveCellRange(tbl, r.trim(), positions).forEach(c => { prod *= getCellValue(c); count++; }));
+    return count > 0 ? prod : 0;
   }
 
   const countMatch = expr.match(/^COUNT\(([^)]+)\)$/);
   if (countMatch) {
     const refs = countMatch[1].split(',');
     let count = 0;
-    refs.forEach(r => resolveCellRange(tbl, r, positions).forEach(c => { if (!isNaN(parseFloat(c.textContent.replace(/[^0-9.\-()]/g, '')))) count++; }));
+    refs.forEach(r => resolveCellRange(tbl, r.trim(), positions).forEach(c => { if (!isNaN(parseFloat(c.textContent.replace(/[^0-9.\-()]/g, '')))) count++; }));
     return count;
   }
 
   const minMatch = expr.match(/^MIN\(([^)]+)\)$/);
   if (minMatch) {
     let min = Infinity;
-    minMatch[1].split(',').forEach(r => resolveCellRange(tbl, r, positions).forEach(c => min = Math.min(min, getCellValue(c))));
+    minMatch[1].split(',').forEach(r => resolveCellRange(tbl, r.trim(), positions).forEach(c => min = Math.min(min, getCellValue(c))));
     return min === Infinity ? 0 : min;
   }
 
   const maxMatch = expr.match(/^MAX\(([^)]+)\)$/);
   if (maxMatch) {
     let max = -Infinity;
-    maxMatch[1].split(',').forEach(r => resolveCellRange(tbl, r, positions).forEach(c => max = Math.max(max, getCellValue(c))));
+    maxMatch[1].split(',').forEach(r => resolveCellRange(tbl, r.trim(), positions).forEach(c => max = Math.max(max, getCellValue(c))));
     return max === -Infinity ? 0 : max;
   }
 
@@ -1407,7 +1416,7 @@ function evaluateCellFormula(tbl, formulaStr, positions) {
     try {
       if (new Function(`return ${cond}`)()) return tVal;
       return fVal;
-    } catch(e) { return '#ERROR!'; }
+    } catch(e) { return '#VALUE!'; }
   }
 
   const roundMatch = expr.match(/^ROUND\(([^,]+),(\d+)\)$/);
@@ -1420,7 +1429,7 @@ function evaluateCellFormula(tbl, formulaStr, positions) {
        let val = new Function(`return ${valExpr}`)();
        let dec = parseInt(roundMatch[2]);
        return Number(Math.round(val+'e'+dec)+'e-'+dec);
-    }catch(e) { return '#ERROR!'; }
+    }catch(e) { return '#VALUE!'; }
   }
 
   // Basic Arithmetic
@@ -1430,7 +1439,10 @@ function evaluateCellFormula(tbl, formulaStr, positions) {
       return cells.length > 0 ? getCellValue(cells[0]) : 0;
     });
     if (/^[0-9+\-*/(). ]+$/.test(replacedExpr)) {
-      return new Function(`return ${replacedExpr}`)();
+      if(/\/0(?![0-9.])/.test(replacedExpr)) return '#DIV/0!';
+      const res = new Function(`return ${replacedExpr}`)();
+      if(!isFinite(res)) return '#DIV/0!';
+      return res;
     }
   } catch (e) {
     return '#ERROR!';
@@ -1474,12 +1486,88 @@ window.handleBodyInput = function(e) {
   });
 };
 
+/* ==================== EXCEL-LIKE FORMULA AUTOCOMPLETE POPUP ==================== */
+const FORMULA_LIST = [
+  { name: 'SUM', sig: '=SUM(range)', desc: 'Sum of cells' },
+  { name: 'AVERAGE', sig: '=AVERAGE(range)', desc: 'Average of cells' },
+  { name: 'COUNT', sig: '=COUNT(range)', desc: 'Count numeric cells' },
+  { name: 'PRODUCT', sig: '=PRODUCT(range)', desc: 'Product of cells' },
+  { name: 'MIN', sig: '=MIN(range)', desc: 'Minimum value' },
+  { name: 'MAX', sig: '=MAX(range)', desc: 'Maximum value' },
+  { name: 'IF', sig: '=IF(cond, true, false)', desc: 'Conditional evaluation' },
+  { name: 'ROUND', sig: '=ROUND(val, decimals)', desc: 'Round number' }
+];
+
+let formulaMenuEl = null;
+let formulaSelectedIdx = 0;
+let formulaActiveCell = null;
+
+function ensureFormulaMenu() {
+  if (!formulaMenuEl) {
+    formulaMenuEl = document.createElement('div');
+    formulaMenuEl.className = 'formula-autocomplete-menu';
+    document.body.appendChild(formulaMenuEl);
+  }
+  return formulaMenuEl;
+}
+
+function hideFormulaMenu() {
+  if (formulaMenuEl) formulaMenuEl.classList.remove('show');
+  formulaActiveCell = null;
+}
+
+function showFormulaMenu(cell, query) {
+  const menu = ensureFormulaMenu();
+  formulaActiveCell = cell;
+  query = (query || '').toUpperCase().trim();
+
+  const matches = FORMULA_LIST.filter(f => f.name.startsWith(query));
+  if (!matches.length) { hideFormulaMenu(); return; }
+
+  formulaSelectedIdx = Math.min(formulaSelectedIdx, matches.length - 1);
+  if (formulaSelectedIdx < 0) formulaSelectedIdx = 0;
+
+  menu.innerHTML = matches.map((f, i) => `
+    <button class="formula-opt ${i === formulaSelectedIdx ? 'selected' : ''}" data-func="${f.name}">
+      <span class="formula-sig">${f.sig}</span>
+      <span class="formula-desc">${f.desc}</span>
+    </button>
+  `).join('');
+
+  const rect = cell.getBoundingClientRect();
+  menu.style.top = `${rect.bottom + window.scrollY + 4}px`;
+  menu.style.left = `${rect.left + window.scrollX}px`;
+  menu.classList.add('show');
+
+  menu.querySelectorAll('.formula-opt').forEach((btn, idx) => {
+    btn.onclick = e => {
+      e.stopPropagation();
+      applyFormulaAutocomplete(matches[idx].name);
+    };
+  });
+}
+
+function applyFormulaAutocomplete(funcName) {
+  if (!formulaActiveCell) return;
+  formulaActiveCell.textContent = `=${funcName}(`;
+  hideFormulaMenu();
+  
+  // Set cursor to end
+  const range = document.createRange();
+  const sel = window.getSelection();
+  range.selectNodeContents(formulaActiveCell);
+  range.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
 document.addEventListener('focusin', e => {
   const cell = e.target.closest('td,th');
   if (cell && cell.getAttribute('data-formula')) {
     cell.textContent = cell.getAttribute('data-formula');
   }
 });
+
 document.addEventListener('focusout', e => {
   const cell = e.target.closest('td,th');
   if (cell && cell.isContentEditable) {
@@ -1489,6 +1577,78 @@ document.addEventListener('focusout', e => {
       recalculateTableFormulas(cell.closest('table'));
     } else if (cell.hasAttribute('data-formula')) {
       cell.removeAttribute('data-formula');
+    }
+  }
+  setTimeout(hideFormulaMenu, 200);
+});
+
+/* Input listener for formula autocomplete & keyboard navigation */
+document.addEventListener('input', e => {
+  const cell = e.target.closest('td,th');
+  if (cell && cell.isContentEditable) {
+    const text = cell.textContent.trim();
+    if (text.startsWith('=')) {
+      const query = text.substring(1).replace(/\(.*/, '');
+      showFormulaMenu(cell, query);
+    } else {
+      hideFormulaMenu();
+    }
+  }
+});
+
+/* Table Cell Keyboard Navigation (ArrowUp, ArrowDown, Tab, Enter) */
+document.addEventListener('keydown', e => {
+  const cell = e.target.closest('td,th');
+  if (!cell || !cell.isContentEditable) return;
+
+  const menuVisible = formulaMenuEl && formulaMenuEl.classList.contains('show');
+  if (menuVisible) {
+    const opts = formulaMenuEl.querySelectorAll('.formula-opt');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      formulaSelectedIdx = (formulaSelectedIdx + 1) % opts.length;
+      opts.forEach((o, i) => o.classList.toggle('selected', i === formulaSelectedIdx));
+      return;
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      formulaSelectedIdx = (formulaSelectedIdx - 1 + opts.length) % opts.length;
+      opts.forEach((o, i) => o.classList.toggle('selected', i === formulaSelectedIdx));
+      return;
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      const selected = opts[formulaSelectedIdx];
+      if (selected) applyFormulaAutocomplete(selected.getAttribute('data-func'));
+      return;
+    } else if (e.key === 'Escape') {
+      hideFormulaMenu();
+      return;
+    }
+  }
+
+  // Cell Navigation: ArrowUp & ArrowDown
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    const tr = cell.parentElement;
+    const tbl = tr ? tr.parentElement : null;
+    if (!tr || !tbl) return;
+
+    const colIdx = Array.from(tr.children).indexOf(cell);
+    let targetRow = null;
+
+    if (e.key === 'ArrowUp') targetRow = tr.previousElementSibling;
+    else if (e.key === 'ArrowDown') targetRow = tr.nextElementSibling;
+
+    if (targetRow && targetRow.children.length > 0) {
+      e.preventDefault();
+      const targetCell = targetRow.children[Math.min(colIdx, targetRow.children.length - 1)];
+      if (targetCell) {
+        targetCell.focus();
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.selectNodeContents(targetCell);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
     }
   }
 });

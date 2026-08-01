@@ -711,6 +711,21 @@ function bind(){
   const plBtn = document.getElementById('pageLayoutBtn');
   if(plBtn) plBtn.onclick = e => { e.stopPropagation(); toggleDropdown('pageLayoutDropdown'); };
 
+  // Templates dropdown
+  const tplBtn = document.getElementById('templateBtn');
+  if(tplBtn) tplBtn.onclick = e => { e.stopPropagation(); toggleDropdown('templateDropdown'); };
+  const tplDrop = document.getElementById('templateDropdown');
+  if(tplDrop) tplDrop.onclick = e => {
+    const opt = e.target.closest('[data-tpl]');
+    if(!opt) return;
+    tplDrop.classList.remove('show');
+    if(typeof insertFinancialTemplate === 'function') insertFinancialTemplate(opt.dataset.tpl);
+  };
+
+  // Footer Tags dropdown
+  const tagsBtn = document.getElementById('footerTagsBtn');
+  if(tagsBtn) tagsBtn.onclick = e => { e.stopPropagation(); toggleDropdown('footerTagsDropdown'); };
+
 
   /* ---------- NOTIFICATION BELL & PANEL ---------- */
   const notifBell=document.getElementById('notifBellBtn');
@@ -748,20 +763,17 @@ function bind(){
 
   // Close dropdowns when clicking outside
   const closeAllDropdowns=()=>{
-    ['hlDropdown','szDropdown','fontStyleDropdown','tableGridPicker','pageLayoutDropdown'].forEach(id=>{
+    ['hlDropdown','szDropdown','fontStyleDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown'].forEach(id=>{
       const el=document.getElementById(id);
-      if(!el) return;
-      el.classList.remove('show');
-      // Reset portal positioning so the element returns to its CSS default.
-      el.style.position=''; el.style.top=''; el.style.left='';
-      el.style.right=''; el.style.zIndex='';
+      if(el) el.classList.remove('show');
     });
     if(notifPanel) notifPanel.classList.remove('show');
   };
   document.addEventListener('click', e=>{
     if(!e.target.closest('#hlPicker') && !e.target.closest('.sz-picker')
       && !e.target.closest('#fontStylePicker') && !e.target.closest('#tablePicker')
-      && !e.target.closest('#pageLayoutPicker')
+      && !e.target.closest('#pageLayoutPicker') && !e.target.closest('#templatePicker')
+      && !e.target.closest('#footerTagsPicker')
       && !e.target.closest('#notifBellWrap') && !e.target.closest('#notifPanel')){
       closeAllDropdowns();
     }
