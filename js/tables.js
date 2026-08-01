@@ -1098,6 +1098,7 @@ function initResponsiveImages(){
     const start=e=>{
       if(!selectedImg) return;
       e.preventDefault();
+      e.stopPropagation();
       const pt=e.touches?e.touches[0]:e;
       imgResize={
         startX:pt.clientX,

@@ -455,6 +455,11 @@ function initBlockTools(){
 
   // Wire long-press and Stylus/Pen on drag handle
   if(dragHandle){
+    dragHandle.addEventListener('mousedown', () => {
+      touchDragReady = false;
+      isTouchDragging = false;
+    });
+
     // Prevent default native HTML5 drag on touch start so no browser preview image interferes
     dragHandle.addEventListener('dragstart', e => {
       if(isTouchDragging || touchDragReady) {
