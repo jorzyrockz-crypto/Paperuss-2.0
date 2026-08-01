@@ -255,8 +255,14 @@ function initBlockTools(){
   let touchGhostOffsetY = 0;
   let touchLongPressTimer = null;  // 140ms hold before drag activates
   let touchDragReady = false;      // becomes true after long-press fires
+  let touchStartX = 0, touchStartY = 0;
+  let ghostCleanupTimer = null;
 
   function removeTouchGhost(specificGhost){
+    if(ghostCleanupTimer){
+      clearTimeout(ghostCleanupTimer);
+      ghostCleanupTimer = null;
+    }
     if(specificGhost){
       if(specificGhost.parentElement) specificGhost.remove();
       if(touchGhost === specificGhost) touchGhost = null;
@@ -264,8 +270,10 @@ function initBlockTools(){
       if(touchGhost && touchGhost.parentElement) touchGhost.remove();
       touchGhost = null;
     }
-    // Safety sweep: remove any lingering ghost clones left in document body
-    document.querySelectorAll('body > .touch-ghost-clone').forEach(el => el.remove());
+    // Only perform sweep if we are NOT currently in an active touch drag
+    if(!isTouchDragging){
+      document.querySelectorAll('body > .touch-ghost-clone').forEach(el => el.remove());
+    }
   }
 
   function createTouchGhost(block, touchX, touchY){
@@ -278,8 +286,8 @@ function initBlockTools(){
     touchGhost.className += ' touch-ghost-clone';
     touchGhost.style.cssText = `
       position:fixed;
-      left:${rect.left}px;
-      top:${rect.top}px;
+      left:${touchX - touchGhostOffsetX}px;
+      top:${touchY - touchGhostOffsetY}px;
       width:${rect.width}px;
       z-index:9999;
       pointer-events:none;
@@ -328,9 +336,22 @@ function initBlockTools(){
 
   let touchMoveRaf = null;
   function handleTouchDragMove(e){
-    if(!isTouchDragging || !activeDragBlock) return;
     const touch = e.touches ? e.touches[0] : (e.clientX !== undefined ? e : null);
     if(!touch) return;
+
+    // If long press is pending, check if user scrolled/moved more than 6px
+    if(!isTouchDragging && touchLongPressTimer){
+      const dx = Math.abs(touch.clientX - touchStartX);
+      const dy = Math.abs(touch.clientY - touchStartY);
+      if(dx > 6 || dy > 6){
+        clearTimeout(touchLongPressTimer);
+        touchLongPressTimer = null;
+        touchDragReady = false;
+        return;
+      }
+    }
+
+    if(!isTouchDragging || !activeDragBlock) return;
     if(e.cancelable) e.preventDefault();
 
     moveTouchGhost(touch.clientX, touch.clientY);
@@ -360,26 +381,40 @@ function initBlockTools(){
   }
 
   function handleTouchDragEnd(){
-    if(!isTouchDragging || !activeDragBlock) return;
+    clearTimeout(touchLongPressTimer);
+    touchLongPressTimer = null;
+
+    if(!isTouchDragging && !touchGhost){
+      touchDragReady = false;
+      return;
+    }
     stopAutoScroll();
     if(touchMoveRaf){ cancelAnimationFrame(touchMoveRaf); touchMoveRaf = null; }
 
     const ind = dropIndicator;
     const target = activeDragBlock;
     const currentGhost = touchGhost;
+    touchGhost = null;
+    isTouchDragging = false;
 
-    // Animate ghost snapping to drop position
-    if(currentGhost && ind && ind.parentElement){
-      const dropRect = ind.getBoundingClientRect();
-      currentGhost.style.transition = 'left 0.2s cubic-bezier(.34,1.1,.64,1), top 0.2s cubic-bezier(.34,1.1,.64,1), opacity 0.18s ease, transform 0.18s ease';
-      currentGhost.style.left = `${dropRect.left}px`;
-      currentGhost.style.top  = `${dropRect.top}px`;
-      currentGhost.style.transform = 'scale(1) rotate(0deg)';
-      currentGhost.style.opacity = '0';
+    // Animate ghost snapping to drop position or fading out
+    if(currentGhost){
+      if(ind && ind.parentElement){
+        const dropRect = ind.getBoundingClientRect();
+        currentGhost.style.transition = 'left 0.18s cubic-bezier(.34,1.1,.64,1), top 0.18s cubic-bezier(.34,1.1,.64,1), opacity 0.15s ease, transform 0.15s ease';
+        currentGhost.style.left = `${dropRect.left}px`;
+        currentGhost.style.top  = `${dropRect.top}px`;
+        currentGhost.style.transform = 'scale(1) rotate(0deg)';
+        currentGhost.style.opacity = '0';
+      } else {
+        currentGhost.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
+        currentGhost.style.opacity = '0';
+        currentGhost.style.transform = 'scale(0.95)';
+      }
     }
 
     // Commit the DOM move
-    if(ind && ind.parentElement){
+    if(target && ind && ind.parentElement){
       ind.parentElement.insertBefore(target, ind);
       ind.remove();
       handleBodyInput();
@@ -388,13 +423,14 @@ function initBlockTools(){
     }
 
     // Restore original element
-    target.style.opacity = '';
-    target.style.transform = '';
-    target.style.transition = '';
+    if(target){
+      target.style.opacity = '';
+      target.style.transform = '';
+      target.style.transition = '';
+    }
 
     gutter.classList.remove('touch-dragging');
-    setTimeout(() => removeTouchGhost(currentGhost), 220);
-    isTouchDragging = false;
+    ghostCleanupTimer = setTimeout(() => removeTouchGhost(currentGhost), 200);
     activeDragBlock = null;
     if(dropIndicator && dropIndicator.parentElement) dropIndicator.remove();
     dropIndicator = null;
@@ -403,6 +439,8 @@ function initBlockTools(){
   }
 
   function handleTouchCancel(){
+    clearTimeout(touchLongPressTimer);
+    touchLongPressTimer = null;
     if(touchMoveRaf){ cancelAnimationFrame(touchMoveRaf); touchMoveRaf = null; }
     if(activeDragBlock){
       activeDragBlock.style.opacity = '';
@@ -413,16 +451,24 @@ function initBlockTools(){
     removeTouchGhost();
     cleanupDragState();
     touchDragReady = false;
-    clearTimeout(touchLongPressTimer);
   }
 
   // Wire long-press and Stylus/Pen on drag handle
   if(dragHandle){
+    // Prevent default native HTML5 drag on touch start so no browser preview image interferes
+    dragHandle.addEventListener('dragstart', e => {
+      if(isTouchDragging || touchDragReady) {
+        e.preventDefault();
+      }
+    });
+
     // Stylus (Apple Pencil / S-Pen) instant lift
     dragHandle.addEventListener('pointerdown', e => {
       if(e.pointerType === 'pen') {
         clearTimeout(touchLongPressTimer);
         touchDragReady = true;
+        touchStartX = e.clientX;
+        touchStartY = e.clientY;
         handleTouchDragStart({ clientX: e.clientX, clientY: e.clientY }, activeGutterBlock);
       }
     }, {passive:true});
@@ -430,8 +476,11 @@ function initBlockTools(){
     // Touch screen quick-hold drag
     dragHandle.addEventListener('touchstart', e=>{
       const touch = e.touches[0];
+      if(!touch) return;
       clearTimeout(touchLongPressTimer);
       touchDragReady = false;
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
       triggerHaptic('light');
       touchLongPressTimer = setTimeout(() => {
         if(activeGutterBlock){
@@ -442,17 +491,12 @@ function initBlockTools(){
     }, {passive:true});
 
     dragHandle.addEventListener('touchmove', e=>{
-      if(!touchDragReady){
-        clearTimeout(touchLongPressTimer);
-        return;
-      }
       handleTouchDragMove(e);
     }, {passive:false});
 
     dragHandle.addEventListener('touchend', e=>{
       clearTimeout(touchLongPressTimer);
-      if(touchDragReady) handleTouchDragEnd();
-      else touchDragReady = false;
+      handleTouchDragEnd();
     });
 
     dragHandle.addEventListener('touchcancel', ()=>{
@@ -463,13 +507,13 @@ function initBlockTools(){
 
   // Global window listeners for drag safety (catches touch release outside handle)
   window.addEventListener('touchmove', e => {
-    if(isTouchDragging) handleTouchDragMove(e);
+    handleTouchDragMove(e);
   }, {passive:false});
   window.addEventListener('touchend', () => {
-    if(isTouchDragging) handleTouchDragEnd();
+    handleTouchDragEnd();
   });
   window.addEventListener('touchcancel', () => {
-    if(isTouchDragging) handleTouchCancel();
+    handleTouchCancel();
   });
 
 
