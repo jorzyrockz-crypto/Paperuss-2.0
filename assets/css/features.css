@@ -380,22 +380,25 @@
 .footer-tags-dropdown,
 .template-dropdown {
   display:none;position:absolute;bottom:100%;left:0;margin-bottom:6px;
-  background:var(--overlay, #1e293b);border:1px solid var(--border);border-radius:10px;
-  padding:6px;box-shadow:0 12px 32px rgba(0,0,0,0.45);z-index:220;
-  flex-direction:column;min-width:200px;
-  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  background:var(--overlay, rgba(30, 41, 59, 0.96));border:1px solid var(--border);border-radius:12px;
+  padding:8px;box-shadow:0 16px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);z-index:220;
+  flex-direction:column;min-width:220px;
+  max-height: calc(100vh - 90px); overflow-y: auto; scrollbar-width: thin;
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
 }
 .template-dropdown { bottom: auto; top: 100%; margin-top: 6px; }
+.footer-tags-dropdown { left: auto; right: 0; min-width: 260px; max-width: 320px; }
 .page-layout-dropdown.show,
 .footer-tags-dropdown.show,
 .template-dropdown.show { display:flex; }
 .pl-section-title { font-size: 10px; font-weight: 600; color: var(--fg-muted); text-transform: uppercase; margin: 6px 6px 4px; letter-spacing: 0.5px; }
 .pl-opt, .tpl-opt {
-  display:flex;align-items:center;gap:8px;padding:6px 8px;border:none;background:transparent;
-  font-size:13px;color:var(--fg);border-radius:4px;cursor:pointer;text-align:left;width:100%;
+  display:flex;align-items:center;gap:8px;padding:7px 10px;border:none;background:transparent;
+  font-size:13px;color:var(--fg);border-radius:6px;cursor:pointer;text-align:left;width:100%;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 .pl-opt:hover, .tpl-opt:hover { background:var(--hover); }
-.pl-opt.active, .tpl-opt.active { background:var(--accent-hover); color:var(--accent); font-weight:600; }
+.pl-opt.active, .tpl-opt.active { background:var(--accent-soft); color:var(--accent); font-weight:600; }
 
 /* Excel-like Formula Autocomplete Menu */
 .formula-autocomplete-menu {
