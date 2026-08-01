@@ -1278,7 +1278,7 @@ function initResponsiveImages(){
       setTimeout(()=>{ if(document.getElementById('imgFullscreen')?.classList.contains('show')) applyFs(); }, 100);
     }
   });
-})();
+}
 
 /* ============================================================
    TABLE FORMULAS & FINANCIAL TOOLS

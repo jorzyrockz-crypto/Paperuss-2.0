@@ -808,21 +808,52 @@
   padding:3px 5px;border-radius:10px;background:var(--overlay);
   border:1px solid var(--border);box-shadow:0 6px 20px rgba(0,0,0,.35);
   touch-action:none;
+  will-change:transform, left, top, opacity;
+  transition:opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.15s ease;
 }
 .block-gutter.show{display:flex!important}
+
+/* Phone Glassmorphism Semi-Transparency (< 640px) */
 @media (max-width:640px){
   .block-gutter{
-    padding:6px 8px;gap:6px;
-    background:var(--overlay);
+    padding:5px 7px;gap:5px;
+    background:rgba(20, 26, 40, 0.68);
+    -webkit-backdrop-filter:blur(14px);
+    backdrop-filter:blur(14px);
+    border:1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:0 8px 28px rgba(0,0,0,.4), 0 0 0 1px rgba(99, 102, 241, 0.25);
+    opacity:0.75;
+    min-height:42px;
+  }
+  .block-gutter:hover,
+  .block-gutter:active,
+  .block-gutter.touch-active,
+  .block-gutter.touch-dragging{
+    opacity:1!important;
+    background:rgba(20, 26, 40, 0.92);
     border-color:var(--accent);
-    /* Larger hit target on touch devices */
-    min-height:44px;
+    box-shadow:0 10px 32px rgba(0,0,0,.5), 0 0 12px var(--accent-ring);
   }
   .block-gutter-btn{
-    width:36px!important;height:36px!important;
+    width:34px!important;height:34px!important;
     border-radius:8px!important;
   }
 }
+
+/* Tablet Touch Targets (641px - 1024px) */
+@media (min-width:641px) and (max-width:1024px){
+  .block-gutter{
+    padding:4px 6px;gap:4px;
+    min-height:38px;
+    border-color:var(--border);
+    box-shadow:0 8px 24px rgba(0,0,0,.38);
+  }
+  .block-gutter-btn{
+    width:30px!important;height:30px!important;
+    border-radius:7px!important;
+  }
+}
+
 .block-gutter-btn{
   width:24px;height:24px;border-radius:6px;display:inline-flex;align-items:center;
   justify-content:center;color:var(--fg-secondary);cursor:pointer;
@@ -831,15 +862,17 @@
 .block-gutter-btn:hover,.block-gutter-btn:active{background:var(--hover);color:var(--fg)}
 .block-drag-handle{cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none}
 .block-drag-handle:active{cursor:grabbing}
-/* Gutter pulse feedback when drag lifts */
+
+/* Pen / Touch Drag active feedback */
 .block-gutter.touch-dragging{
-  border-color:var(--accent);
+  border-color:var(--accent)!important;
+  opacity:1!important;
   box-shadow:0 0 0 2px var(--accent-ring),0 8px 24px rgba(0,0,0,.5);
   animation:gutterPulse 0.6s ease forwards;
 }
 @keyframes gutterPulse{
   0%{transform:scale(1)}
-  35%{transform:scale(1.1)}
+  35%{transform:scale(1.08)}
   100%{transform:scale(1)}
 }
 

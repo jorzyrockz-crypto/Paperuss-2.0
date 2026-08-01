@@ -74,6 +74,8 @@ function initBlockTools(){
 
   const blockSelector='p, h1, h2, h3, h4, ul, ol, blockquote, pre, .media-card, div[data-media-id]';
   let gutterHideTimer=null;
+  let isLastInputTouch=false;
+
   const hideGutter=()=>{
     clearTimeout(gutterHideTimer);
     gutter.classList.remove('show');
@@ -96,7 +98,18 @@ function initBlockTools(){
     const vpHeight=window.visualViewport?window.visualViewport.height:window.innerHeight;
 
     let left=rect.left-gutterWidth-6;
-    if(left < 6) left=Math.max(6, rect.left + 4);
+    const isMobileTablet = window.innerWidth <= 1024 || 'ontouchstart' in window;
+    if(left < 6 || isMobileTablet){
+      if(rect.left - gutterWidth < 8){
+        left=Math.max(6, rect.left + 4);
+        gutter.classList.add('touch-active');
+      } else {
+        left=rect.left-gutterWidth-4;
+        gutter.classList.remove('touch-active');
+      }
+    } else {
+      gutter.classList.remove('touch-active');
+    }
     let top=rect.top;
     if(top < vpTop + 6) top=vpTop + 6;
     if(top + gutterHeight > vpTop + vpHeight - 8) top=vpTop + vpHeight - gutterHeight - 8;
@@ -105,48 +118,71 @@ function initBlockTools(){
     gutter.style.top=`${Math.round(top)}px`;
   };
 
-  if(window.visualViewport){
-    window.visualViewport.addEventListener('resize', ()=>{
-      if(activeGutterBlock?.isConnected) showGutterForBlock(activeGutterBlock);
-    });
-    window.visualViewport.addEventListener('scroll', ()=>{
-      if(activeGutterBlock?.isConnected) showGutterForBlock(activeGutterBlock);
-    });
-  }
-
-  /* ---------- Auto-scroll state during drag ---------- */
-  let autoScrollRaf=null;
-  function stopAutoScroll(){ if(autoScrollRaf){ cancelAnimationFrame(autoScrollRaf); autoScrollRaf=null; } }
-  function scheduleAutoScroll(clientY){
-    stopAutoScroll();
-    const scrollZone=56; // px from top/bottom edge
-    const maxSpeed=14;   // px per frame
-    const rect=scrollHost.getBoundingClientRect();
-    const step=()=>{
-      let dy=0;
-      if(clientY < rect.top + scrollZone) dy=-(1-(clientY-rect.top)/scrollZone)*maxSpeed;
-      else if(clientY > rect.bottom - scrollZone) dy=((clientY-(rect.bottom-scrollZone))/scrollZone)*maxSpeed;
-      if(dy!==0) scrollHost.scrollTop+=dy;
-      autoScrollRaf=requestAnimationFrame(step);
-    };
-    autoScrollRaf=requestAnimationFrame(step);
-  }
-
-  ed.addEventListener('pointermove', e=>showGutterForBlock(blockForNode(e.target)));
-  ed.addEventListener('focusin', e=>showGutterForBlock(blockForNode(e.target)));
-  ed.addEventListener('keyup', ()=>{
+  const syncGutterToActiveSelection=()=>{
     const selection=window.getSelection();
-    showGutterForBlock(blockForNode(selection?.anchorNode));
+    if(selection && selection.anchorNode){
+      const b=blockForNode(selection.anchorNode);
+      if(b) showGutterForBlock(b);
+    }
+  };
+
+  if(window.visualViewport){
+    const handleViewportUpdate=()=>{
+      if(activeGutterBlock?.isConnected) showGutterForBlock(activeGutterBlock);
+      else syncGutterToActiveSelection();
+    };
+    window.visualViewport.addEventListener('resize', handleViewportUpdate, {passive:true});
+    window.visualViewport.addEventListener('scroll', handleViewportUpdate, {passive:true});
+  }
+
+  ed.addEventListener('pointerdown', e=>{
+    if(e.pointerType==='touch'||e.pointerType==='pen') isLastInputTouch=true;
+    else isLastInputTouch=false;
+  }, {passive:true});
+
+  ed.addEventListener('pointermove', e=>{
+    if(e.pointerType==='mouse'){
+      isLastInputTouch=false;
+      showGutterForBlock(blockForNode(e.target));
+    }
+  }, {passive:true});
+
+  ed.addEventListener('focusin', e=>{
+    showGutterForBlock(blockForNode(e.target));
   });
+
+  ed.addEventListener('touchstart', e=>{
+    isLastInputTouch=true;
+    const touch=e.touches[0];
+    if(touch){
+      const targetEl=document.elementFromPoint(touch.clientX, touch.clientY);
+      const b=blockForNode(targetEl);
+      if(b) showGutterForBlock(b);
+    }
+  }, {passive:true});
+
+  document.addEventListener('selectionchange', ()=>{
+    if(document.activeElement===ed || ed.contains(document.activeElement)){
+      syncGutterToActiveSelection();
+    }
+  }, {passive:true});
+
+  ed.addEventListener('keyup', syncGutterToActiveSelection);
+
   ed.addEventListener('pointerleave', ()=>{
-    gutterHideTimer=setTimeout(()=>{ if(!gutter.matches(':hover')) hideGutter(); },150);
+    if(isLastInputTouch) return;
+    gutterHideTimer=setTimeout(()=>{ if(!gutter.matches(':hover')) hideGutter(); },180);
   });
+
   scrollHost.addEventListener('scroll',()=>{
     if(activeGutterBlock?.isConnected) showGutterForBlock(activeGutterBlock);
-    else hideGutter();
+    else syncGutterToActiveSelection();
   },{passive:true});
+
   gutter.addEventListener('pointerenter',()=>clearTimeout(gutterHideTimer));
-  gutter.addEventListener('pointerleave',hideGutter);
+  gutter.addEventListener('pointerleave',()=>{
+    if(!isLastInputTouch) hideGutter();
+  });
 
   // Keep the insert-block menu inside the visible viewport. It flips above
   // the anchor near the bottom of a long document and remains scrollable.
@@ -281,36 +317,43 @@ function initBlockTools(){
     triggerHaptic('heavy');
   }
 
+  let touchMoveRaf = null;
   function handleTouchDragMove(e){
     if(!isTouchDragging || !activeDragBlock) return;
-    const touch = e.touches[0];
+    const touch = e.touches[0] || (e.clientX !== undefined ? e : null);
     if(!touch) return;
-    e.preventDefault();
+    if(e.cancelable) e.preventDefault();
 
     moveTouchGhost(touch.clientX, touch.clientY);
     scheduleAutoScroll(touch.clientY);
 
-    // Hide ghost temporarily to hit-test the element underneath
-    if(touchGhost) touchGhost.style.display = 'none';
-    const overEl = document.elementFromPoint(touch.clientX, touch.clientY);
-    if(touchGhost) touchGhost.style.display = '';
+    if(touchMoveRaf) return;
+    touchMoveRaf = requestAnimationFrame(() => {
+      touchMoveRaf = null;
+      if(!isTouchDragging || !touchGhost) return;
+      // Hide ghost temporarily to hit-test the element underneath
+      touchGhost.style.display = 'none';
+      const overEl = document.elementFromPoint(touch.clientX, touch.clientY);
+      touchGhost.style.display = '';
 
-    if(overEl && ed.contains(overEl)){
-      const ind = ensureDropIndicator();
-      const overBlock = overEl.closest('p, div, h1, h2, h3, h4, blockquote, table, figure, .media-card, img, video, audio') || overEl;
-      const validBlock = overBlock ? (overBlock.closest('.note-editor > *') || overBlock) : null;
-      if(validBlock && validBlock !== activeDragBlock && validBlock !== ind && ed.contains(validBlock)){
-        const r = validBlock.getBoundingClientRect();
-        const isBottom = (touch.clientY - r.top) > (r.height / 2);
-        if(isBottom) validBlock.parentElement.insertBefore(ind, validBlock.nextSibling);
-        else validBlock.parentElement.insertBefore(ind, validBlock);
+      if(overEl && ed.contains(overEl)){
+        const ind = ensureDropIndicator();
+        const overBlock = overEl.closest('p, div, h1, h2, h3, h4, blockquote, table, figure, .media-card, img, video, audio') || overEl;
+        const validBlock = overBlock ? (overBlock.closest('.note-editor > *') || overBlock) : null;
+        if(validBlock && validBlock !== activeDragBlock && validBlock !== ind && ed.contains(validBlock)){
+          const r = validBlock.getBoundingClientRect();
+          const isBottom = (touch.clientY - r.top) > (r.height / 2);
+          if(isBottom) validBlock.parentElement.insertBefore(ind, validBlock.nextSibling);
+          else validBlock.parentElement.insertBefore(ind, validBlock);
+        }
       }
-    }
+    });
   }
 
   function handleTouchDragEnd(){
     if(!isTouchDragging || !activeDragBlock) return;
     stopAutoScroll();
+    if(touchMoveRaf){ cancelAnimationFrame(touchMoveRaf); touchMoveRaf = null; }
 
     const ind = dropIndicator;
     const target = activeDragBlock;
@@ -350,6 +393,7 @@ function initBlockTools(){
   }
 
   function handleTouchCancel(){
+    if(touchMoveRaf){ cancelAnimationFrame(touchMoveRaf); touchMoveRaf = null; }
     if(activeDragBlock){
       activeDragBlock.style.opacity = '';
       activeDragBlock.style.transform = '';
@@ -362,18 +406,29 @@ function initBlockTools(){
     clearTimeout(touchLongPressTimer);
   }
 
-  // Wire long-press on drag handle: 350ms hold activates drag
+  // Wire long-press and Stylus/Pen on drag handle
   if(dragHandle){
+    // Stylus (Apple Pencil / S-Pen) instant lift
+    dragHandle.addEventListener('pointerdown', e => {
+      if(e.pointerType === 'pen') {
+        clearTimeout(touchLongPressTimer);
+        touchDragReady = true;
+        handleTouchDragStart({ clientX: e.clientX, clientY: e.clientY }, activeGutterBlock);
+      }
+    }, {passive:true});
+
+    // Touch screen quick-hold drag
     dragHandle.addEventListener('touchstart', e=>{
       const touch = e.touches[0];
       clearTimeout(touchLongPressTimer);
       touchDragReady = false;
+      triggerHaptic('light');
       touchLongPressTimer = setTimeout(() => {
         if(activeGutterBlock){
           touchDragReady = true;
           handleTouchDragStart(touch, activeGutterBlock);
         }
-      }, 200);
+      }, 140);
     }, {passive:true});
 
     dragHandle.addEventListener('touchmove', e=>{
@@ -697,6 +752,7 @@ function openResizeDialog(img){
       handleBodyInput();
       close();
       toast(`Image resized to ${w}px`);
+    }
   };
 }
 
