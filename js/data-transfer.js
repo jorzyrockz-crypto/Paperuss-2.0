@@ -108,92 +108,97 @@ function seedNotes(){
   const now=Date.now();
   return [
     {
-      id:uid(), title:'Welcome to PapeRuss 👋', pinned:true, archived:false, tags:['intro'],
+      id:uid(), title:'Welcome to PapeRuss 👋', pinned:true, archived:false, tags:['intro','overview'],
       content: mdToHtml(`# Welcome to PapeRuss 👋
 
-A fast, **offline-first** note-taking app with a sleek **modern flat** design.
+A fast, **offline-first** document editor with a modern flat design.
 
-## What you see is what you get
-- Notes auto-save to your browser, with cross-device sync when you sign in
-- Toggle between dark and light themes
-- Organize with **tags**, pin important notes, and archive old ones
-- Instant search across titles, content, and tags
+## 🎨 Rich Text & Typography
+Customize your writing with built-in font styles and sizes:
+- **Sans**, *Serif*, \`Mono\`, and **Rounded** font families.
+- <span style="font-size:13px">Small</span>, <span style="font-size:15px">Normal</span>, <span style="font-size:18px">Large</span>, and <span style="font-size:22px">Huge</span> text sizes.
+- **Bold**, *Italic*, <u>Underline</u>, ~~Strikethrough~~, and <mark style="background:#fef08a;color:#0f172a">Highlighter colors</mark> (Yellow, Green, Blue, Pink, Orange, Red).
 
-## Rich media, right in your notes 📎
-Use the toolbar buttons on the right to add:
-- 🖼️ **Images** — click, or just **drag and drop** / **paste** them
-- 🎤 **Voice recordings** — record directly from your microphone
-- 🎬 **Videos** — attach a clip and play it inline
-- 🔗 **Rich link cards** — paste a URL to embed a preview card
-- 📎 **Attachments** — any file, downloadable later
+## 📊 Interactive Tables & Excel Formulas
+Type **\`=\`** inside any table cell to trigger the Excel-style formula autocomplete!
 
-Guest work stays **local**. Signed-in work is encrypted in transit and synced through your Firebase project.
+<div class="table-wrapper" contenteditable="false"><table contenteditable="true">
+  <tbody>
+    <tr><th>Category</th><th>Budgeted</th><th>Actual</th><th>Variance</th></tr>
+    <tr><td>Travel & Flights</td><td data-format="currency" data-currency="$">500.00</td><td data-format="currency" data-currency="$">420.00</td><td data-format="currency" data-currency="$" data-formula="=C2-B2">-$80.00</td></tr>
+    <tr><td>Hotel & Lodging</td><td data-format="currency" data-currency="$">600.00</td><td data-format="currency" data-currency="$">550.00</td><td data-format="currency" data-currency="$" data-formula="=C3-B3">-$50.00</td></tr>
+    <tr><td>Meals & Dining</td><td data-format="currency" data-currency="$">250.00</td><td data-format="currency" data-currency="$">290.00</td><td data-format="currency" data-currency="$" data-formula="=C4-B4">$40.00</td></tr>
+    <tr style="border-top:2px solid currentColor; font-weight:bold;">
+      <td>TOTAL EXPENSES</td><td data-format="currency" data-currency="$" data-formula="=SUM(B2:B4)">$1,350.00</td><td data-format="currency" data-currency="$" data-formula="=SUM(C2:C4)">$1,260.00</td><td data-format="currency" data-currency="$" data-formula="=C5-B5">-$90.00</td>
+    </tr>
+  </tbody>
+</table></div>
 
-## Try it out
-1. Click **New** to create a note
-2. Type normally — formatting appears as you apply it
-3. Drop an image onto the editor, or click the picture button
-4. Pin this note so it stays on top
+<p><br></p>
 
-> Tip: press \`/\` to jump to search, or Ctrl/Cmd+N for a new note.
+## 📎 Media & Insert Toolbar
+Use the toolbar to quickly insert:
+- 🖼️ **Images** — paste or drag & drop directly onto the page
+- 🎤 **Voice Recordings** & 🎬 **Inline Videos**
+- 🔗 **Rich Link Cards** & 📎 **File Attachments**
+- 📐 **Templates** — Expense Tracker, Budget Summary, and Variance Analysis
 
-Happy writing!`),
+> Tip: Press \`/\` to search or Ctrl/Cmd + N to create a new note!`),
       createdAt:now-60000, updatedAt:now-30000
     },
     {
-      id:uid(), title:'Formatting Cheatsheet', pinned:false, archived:false, tags:['reference'],
-      content: mdToHtml(`# Formatting Cheatsheet
+      id:uid(), title:'Toolbar & Formatting Cheatsheet', pinned:false, archived:false, tags:['reference','guide'],
+      content: mdToHtml(`# Toolbar & Formatting Cheatsheet
 
-## Text styles
-Use the toolbar for **bold**, *italic*, underline, and ~~strikethrough~~.
+## ✏️ Text Formatting
+- **Keyboard Shortcuts**: Ctrl+B (Bold), Ctrl+I (Italic), Ctrl+U (Underline).
+- **Inline Code**: Use \`code\` blocks for technical snippets.
+- **Highlights**: Apply Yellow, Green, Blue, Pink, Orange, or Red mark highlights.
 
-You can also:
-- Ctrl/Cmd + B → bold
-- Ctrl/Cmd + I → italic
-- Ctrl/Cmd + U → underline
+## 📝 Lists & Structures
+- Bullet item 1
+- Bullet item 2
 
-## Font size
-Use the **Size** dropdown to change text size:
-- **Sm** — Small / compact
-- **N** — Normal (default)
-- **Lg** — Large
-- **Hg** — Huge
-- **Mx** — Massive
+1. First step
+2. Second step
 
-## Highlighting
-Pick a colour from the **highlighter** tool: Yellow, Green, Blue, Pink, Orange, Red. Click the same colour again to remove it.
+- [x] Completed task item
+- [ ] Active task item
 
-## Lists
-- Bullet item
-- Another item
+## 💬 Quotes & Dividers
+> "Design is not just what it looks like — it's how it works." — Steve Jobs
 
-1. First
-2. Second
+<hr>
 
-- [x] Completed task
-- [ ] Todo item
-
-## Quote
-> Design is not just what it looks like — it's how it works.
-
-Select any text and click a toolbar button to format it instantly.`),
+## 🖨️ Page Setup & Print Layout
+Use **Page Setup** in the bottom bar to switch between:
+- **Continuous Flow** vs **Print Layout** (A4, US Letter, US Legal)
+- Portrait vs Landscape orientations & Custom Margins`),
       createdAt:now-120000, updatedAt:now-100000
     },
     {
-      id:uid(), title:'Project Roadmap', pinned:false, archived:false, tags:['work','planning'],
-      content: mdToHtml(`# Project Roadmap
+      id:uid(), title:'Financial Budget & Project Plan', pinned:false, archived:false, tags:['finance','planning'],
+      content: mdToHtml(`# Financial Budget & Project Plan
 
-## This week
-- [ ] Finalize the design system
-- [ ] Ship the onboarding flow
-- [x] Set up analytics
+## 📈 Quarterly Project Budget
+<div class="table-wrapper" contenteditable="false"><table contenteditable="true">
+  <tbody>
+    <tr><th>Item</th><th>Qty</th><th>Unit Cost</th><th>Total Cost</th></tr>
+    <tr><td>Software Licenses</td><td>5</td><td data-format="currency" data-currency="$">120.00</td><td data-format="currency" data-currency="$" data-formula="=B2*C2">$600.00</td></tr>
+    <tr><td>Hardware Upgrade</td><td>2</td><td data-format="currency" data-currency="$">850.00</td><td data-format="currency" data-currency="$" data-formula="=B3*C3">$1,700.00</td></tr>
+    <tr><td>Cloud Infrastructure</td><td>1</td><td data-format="currency" data-currency="$">450.00</td><td data-format="currency" data-currency="$" data-formula="=B4*C4">$450.00</td></tr>
+    <tr style="border-top:2px solid currentColor; font-weight:bold;">
+      <td colspan="3">TOTAL ESTIMATED COST</td><td data-format="currency" data-currency="$" data-formula="=SUM(D2:D4)">$2,750.00</td>
+    </tr>
+  </tbody>
+</table></div>
 
-## Next sprint
-- [ ] Mobile layout polish
-- [ ] Keyboard shortcuts
-- [ ] Export to PDF
+<p><br></p>
 
-> **Reminder:** review with the team before Friday.`),
+## 📌 Deliverables
+- [x] Finalize spreadsheet formula calculations
+- [ ] Review budget with finance team
+- [ ] Deploy v2.0 update`),
       createdAt:now-200000, updatedAt:now-150000
     }
   ];
