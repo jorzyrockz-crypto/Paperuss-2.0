@@ -253,16 +253,29 @@ function initBlockTools(){
   let touchGhost = null;           // floating clone that follows the finger
   let touchGhostOffsetX = 0;       // where on the element the finger landed
   let touchGhostOffsetY = 0;
-  let touchLongPressTimer = null;  // 350ms hold before drag activates
+  let touchLongPressTimer = null;  // 140ms hold before drag activates
   let touchDragReady = false;      // becomes true after long-press fires
 
+  function removeTouchGhost(specificGhost){
+    if(specificGhost){
+      if(specificGhost.parentElement) specificGhost.remove();
+      if(touchGhost === specificGhost) touchGhost = null;
+    } else {
+      if(touchGhost && touchGhost.parentElement) touchGhost.remove();
+      touchGhost = null;
+    }
+    // Safety sweep: remove any lingering ghost clones left in document body
+    document.querySelectorAll('body > [style*="z-index:9999"], body > [style*="z-index: 9999"]').forEach(el => el.remove());
+  }
+
   function createTouchGhost(block, touchX, touchY){
-    if(touchGhost) touchGhost.remove();
+    removeTouchGhost(); // Wipe any existing ghosts first
     const rect = block.getBoundingClientRect();
     touchGhostOffsetX = touchX - rect.left;
     touchGhostOffsetY = touchY - rect.top;
 
     touchGhost = block.cloneNode(true);
+    touchGhost.className += ' touch-ghost-clone';
     touchGhost.style.cssText = `
       position:fixed;
       left:${rect.left}px;
@@ -288,10 +301,6 @@ function initBlockTools(){
     const newTop  = touchY - touchGhostOffsetY;
     touchGhost.style.left = `${newLeft}px`;
     touchGhost.style.top  = `${newTop}px`;
-  }
-
-  function removeTouchGhost(){
-    if(touchGhost){ touchGhost.remove(); touchGhost = null; }
   }
 
   function triggerHaptic(type='light'){
@@ -320,7 +329,7 @@ function initBlockTools(){
   let touchMoveRaf = null;
   function handleTouchDragMove(e){
     if(!isTouchDragging || !activeDragBlock) return;
-    const touch = e.touches[0] || (e.clientX !== undefined ? e : null);
+    const touch = e.touches ? e.touches[0] : (e.clientX !== undefined ? e : null);
     if(!touch) return;
     if(e.cancelable) e.preventDefault();
 
@@ -357,15 +366,16 @@ function initBlockTools(){
 
     const ind = dropIndicator;
     const target = activeDragBlock;
+    const currentGhost = touchGhost;
 
     // Animate ghost snapping to drop position
-    if(touchGhost && ind && ind.parentElement){
+    if(currentGhost && ind && ind.parentElement){
       const dropRect = ind.getBoundingClientRect();
-      touchGhost.style.transition = 'left 0.2s cubic-bezier(.34,1.1,.64,1), top 0.2s cubic-bezier(.34,1.1,.64,1), opacity 0.18s ease, transform 0.18s ease';
-      touchGhost.style.left = `${dropRect.left}px`;
-      touchGhost.style.top  = `${dropRect.top}px`;
-      touchGhost.style.transform = 'scale(1) rotate(0deg)';
-      touchGhost.style.opacity = '0';
+      currentGhost.style.transition = 'left 0.2s cubic-bezier(.34,1.1,.64,1), top 0.2s cubic-bezier(.34,1.1,.64,1), opacity 0.18s ease, transform 0.18s ease';
+      currentGhost.style.left = `${dropRect.left}px`;
+      currentGhost.style.top  = `${dropRect.top}px`;
+      currentGhost.style.transform = 'scale(1) rotate(0deg)';
+      currentGhost.style.opacity = '0';
     }
 
     // Commit the DOM move
@@ -383,7 +393,7 @@ function initBlockTools(){
     target.style.transition = '';
 
     gutter.classList.remove('touch-dragging');
-    setTimeout(removeTouchGhost, 220);
+    setTimeout(() => removeTouchGhost(currentGhost), 220);
     isTouchDragging = false;
     activeDragBlock = null;
     if(dropIndicator && dropIndicator.parentElement) dropIndicator.remove();
@@ -450,6 +460,17 @@ function initBlockTools(){
       handleTouchCancel();
     });
   }
+
+  // Global window listeners for drag safety (catches touch release outside handle)
+  window.addEventListener('touchmove', e => {
+    if(isTouchDragging) handleTouchDragMove(e);
+  }, {passive:false});
+  window.addEventListener('touchend', () => {
+    if(isTouchDragging) handleTouchDragEnd();
+  });
+  window.addEventListener('touchcancel', () => {
+    if(isTouchDragging) handleTouchCancel();
+  });
 
 
 
@@ -808,7 +829,7 @@ function initPageLayoutUI() {
     
     // Save metadata
     note.updatedAt = Date.now();
-    saveData();
+    if(typeof save === 'function') save();
     if(typeof updateNoteList === 'function') updateNoteList();
     
     applyPageLayoutToEditor(note);
@@ -835,13 +856,13 @@ function syncPageLayoutDropdown(note) {
 }
 
 function applyPageLayoutToEditor(note) {
-  const edContent = document.getElementById('editorContent');
+  const edScroll = document.getElementById('editorScroll');
   const edBody = document.getElementById('noteBody');
-  if(!edContent || !edBody || !note) return;
+  if(!edScroll || !edBody || !note) return;
 
   const isWysiwyg = !!note.pageViewEnabled;
   if(isWysiwyg) {
-    edContent.classList.add('wysiwyg-mode');
+    edScroll.classList.add('wysiwyg-mode');
     edBody.classList.add('wysiwyg-paper');
     
     // Dimensions map (at 96 DPI approximation for web)
@@ -868,7 +889,7 @@ function applyPageLayoutToEditor(note) {
     edBody.style.padding = pad;
     edBody.style.margin = '0 auto';
   } else {
-    edContent.classList.remove('wysiwyg-mode');
+    edScroll.classList.remove('wysiwyg-mode');
     edBody.classList.remove('wysiwyg-paper');
     edBody.style.width = '';
     edBody.style.maxWidth = '';
