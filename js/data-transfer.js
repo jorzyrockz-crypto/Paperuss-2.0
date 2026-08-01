@@ -109,25 +109,24 @@ function seedNotes(){
   return [
     {
       id:uid(), title:'Welcome to PapeRuss 👋', pinned:true, archived:false, tags:['intro','overview'],
-      content: mdToHtml(`# Welcome to PapeRuss 👋
-
-A fast, **offline-first** document editor with a modern flat design.
-
-## 🎨 Rich Text & Typography
-Customize your writing with built-in font styles and sizes:
-- **Sans**, *Serif*, \`Mono\`, and **Rounded** font families.
-- <span style="font-size:13px">Small</span>, <span style="font-size:15px">Normal</span>, <span style="font-size:18px">Large</span>, and <span style="font-size:22px">Huge</span> text sizes.
-- **Bold**, *Italic*, <u>Underline</u>, ~~Strikethrough~~, and <mark style="background:#fef08a;color:#0f172a">Highlighter colors</mark> (Yellow, Green, Blue, Pink, Orange, Red).
-
-## 📊 Interactive Tables & Excel Formulas
-Type **\`=\`** inside any table cell to trigger the Excel-style formula autocomplete!
+      content: `<h1>Welcome to PapeRuss 👋</h1>
+<p>A fast, <strong>offline-first</strong> document editor with a modern flat design.</p>
+<h2>🎨 Rich Text &amp; Typography</h2>
+<p>Customize your writing with built-in font styles and sizes:</p>
+<ul>
+<li><strong>Sans</strong>, <em>Serif</em>, <code>Mono</code>, and <strong>Rounded</strong> font families.</li>
+<li><span style="font-size:13px">Small</span>, <span style="font-size:15px">Normal</span>, <span style="font-size:18px">Large</span>, and <span style="font-size:22px">Huge</span> text sizes.</li>
+<li><strong>Bold</strong>, <em>Italic</em>, <u>Underline</u>, <s>Strikethrough</s>, and <mark style="background:#fef08a;color:#0f172a">Highlighter colors</mark> (Yellow, Green, Blue, Pink, Orange, Red).</li>
+</ul>
+<h2>📊 Interactive Tables &amp; Excel Formulas</h2>
+<p>Type <strong><code>=</code></strong> inside any table cell to trigger the Excel-style formula autocomplete!</p>
 
 <div class="table-wrapper" contenteditable="false"><table contenteditable="true">
   <tbody>
     <tr><th>Category</th><th>Budgeted</th><th>Actual</th><th>Variance</th></tr>
-    <tr><td>Travel & Flights</td><td data-format="currency" data-currency="$">500.00</td><td data-format="currency" data-currency="$">420.00</td><td data-format="currency" data-currency="$" data-formula="=C2-B2">-$80.00</td></tr>
-    <tr><td>Hotel & Lodging</td><td data-format="currency" data-currency="$">600.00</td><td data-format="currency" data-currency="$">550.00</td><td data-format="currency" data-currency="$" data-formula="=C3-B3">-$50.00</td></tr>
-    <tr><td>Meals & Dining</td><td data-format="currency" data-currency="$">250.00</td><td data-format="currency" data-currency="$">290.00</td><td data-format="currency" data-currency="$" data-formula="=C4-B4">$40.00</td></tr>
+    <tr><td>Travel &amp; Flights</td><td data-format="currency" data-currency="$">500.00</td><td data-format="currency" data-currency="$">420.00</td><td data-format="currency" data-currency="$" data-formula="=C2-B2">-$80.00</td></tr>
+    <tr><td>Hotel &amp; Lodging</td><td data-format="currency" data-currency="$">600.00</td><td data-format="currency" data-currency="$">550.00</td><td data-format="currency" data-currency="$" data-formula="=C3-B3">-$50.00</td></tr>
+    <tr><td>Meals &amp; Dining</td><td data-format="currency" data-currency="$">250.00</td><td data-format="currency" data-currency="$">290.00</td><td data-format="currency" data-currency="$" data-formula="=C4-B4">$40.00</td></tr>
     <tr style="border-top:2px solid currentColor; font-weight:bold;">
       <td>TOTAL EXPENSES</td><td data-format="currency" data-currency="$" data-formula="=SUM(B2:B4)">$1,350.00</td><td data-format="currency" data-currency="$" data-formula="=SUM(C2:C4)">$1,260.00</td><td data-format="currency" data-currency="$" data-formula="=C5-B5">-$90.00</td>
     </tr>
@@ -136,51 +135,54 @@ Type **\`=\`** inside any table cell to trigger the Excel-style formula autocomp
 
 <p><br></p>
 
-## 📎 Media & Insert Toolbar
-Use the toolbar to quickly insert:
-- 🖼️ **Images** — paste or drag & drop directly onto the page
-- 🎤 **Voice Recordings** & 🎬 **Inline Videos**
-- 🔗 **Rich Link Cards** & 📎 **File Attachments**
-- 📐 **Templates** — Expense Tracker, Budget Summary, and Variance Analysis
-
-> Tip: Press \`/\` to search or Ctrl/Cmd + N to create a new note!`),
+<h2>📎 Media &amp; Insert Toolbar</h2>
+<p>Use the toolbar to quickly insert:</p>
+<ul>
+<li>🖼️ <strong>Images</strong> — paste or drag &amp; drop directly onto the page</li>
+<li>🎤 <strong>Voice Recordings</strong> &amp; 🎬 <strong>Inline Videos</strong></li>
+<li>🔗 <strong>Rich Link Cards</strong> &amp; 📎 <strong>File Attachments</strong></li>
+<li>📐 <strong>Templates</strong> — Expense Tracker, Budget Summary, and Variance Analysis</li>
+</ul>
+<blockquote><p>Tip: Press <code>/</code> to search or Ctrl/Cmd + N to create a new note!</p></blockquote>`,
       createdAt:now-60000, updatedAt:now-30000
     },
     {
       id:uid(), title:'Toolbar & Formatting Cheatsheet', pinned:false, archived:false, tags:['reference','guide'],
-      content: mdToHtml(`# Toolbar & Formatting Cheatsheet
-
-## ✏️ Text Formatting
-- **Keyboard Shortcuts**: Ctrl+B (Bold), Ctrl+I (Italic), Ctrl+U (Underline).
-- **Inline Code**: Use \`code\` blocks for technical snippets.
-- **Highlights**: Apply Yellow, Green, Blue, Pink, Orange, or Red mark highlights.
-
-## 📝 Lists & Structures
-- Bullet item 1
-- Bullet item 2
-
-1. First step
-2. Second step
-
-- [x] Completed task item
-- [ ] Active task item
-
-## 💬 Quotes & Dividers
-> "Design is not just what it looks like — it's how it works." — Steve Jobs
-
+      content: `<h1>Toolbar &amp; Formatting Cheatsheet</h1>
+<h2>✏️ Text Formatting</h2>
+<ul>
+<li><strong>Keyboard Shortcuts</strong>: Ctrl+B (Bold), Ctrl+I (Italic), Ctrl+U (Underline).</li>
+<li><strong>Inline Code</strong>: Use <code>code</code> blocks for technical snippets.</li>
+<li><strong>Highlights</strong>: Apply Yellow, Green, Blue, Pink, Orange, or Red mark highlights.</li>
+</ul>
+<h2>📝 Lists &amp; Structures</h2>
+<ul>
+<li>Bullet item 1</li>
+<li>Bullet item 2</li>
+</ul>
+<ol>
+<li>First step</li>
+<li>Second step</li>
+</ol>
+<ul>
+<li data-task="1"><input type="checkbox" checked> Completed task item</li>
+<li data-task="1"><input type="checkbox"> Active task item</li>
+</ul>
+<h2>💬 Quotes &amp; Dividers</h2>
+<blockquote><p>"Design is not just what it looks like — it's how it works." — Steve Jobs</p></blockquote>
 <hr>
-
-## 🖨️ Page Setup & Print Layout
-Use **Page Setup** in the bottom bar to switch between:
-- **Continuous Flow** vs **Print Layout** (A4, US Letter, US Legal)
-- Portrait vs Landscape orientations & Custom Margins`),
+<h2>🖨️ Page Setup &amp; Print Layout</h2>
+<p>Use <strong>Page Setup</strong> in the bottom bar to switch between:</p>
+<ul>
+<li><strong>Continuous Flow</strong> vs <strong>Print Layout</strong> (A4, US Letter, US Legal)</li>
+<li>Portrait vs Landscape orientations &amp; Custom Margins</li>
+</ul>`,
       createdAt:now-120000, updatedAt:now-100000
     },
     {
       id:uid(), title:'Financial Budget & Project Plan', pinned:false, archived:false, tags:['finance','planning'],
-      content: mdToHtml(`# Financial Budget & Project Plan
-
-## 📈 Quarterly Project Budget
+      content: `<h1>Financial Budget &amp; Project Plan</h1>
+<h2>📈 Quarterly Project Budget</h2>
 <div class="table-wrapper" contenteditable="false"><table contenteditable="true">
   <tbody>
     <tr><th>Item</th><th>Qty</th><th>Unit Cost</th><th>Total Cost</th></tr>
@@ -192,14 +194,13 @@ Use **Page Setup** in the bottom bar to switch between:
     </tr>
   </tbody>
 </table></div>
-
 <p><br></p>
-
-## 📌 Deliverables
-- [x] Finalize spreadsheet formula calculations
-- [ ] Review budget with finance team
-- [ ] Deploy v2.0 update`),
-      createdAt:now-200000, updatedAt:now-150000
+<h2>📌 Deliverables</h2>
+<ul>
+<li data-task="1"><input type="checkbox" checked> Finalize spreadsheet formula calculations</li>
+<li data-task="1"><input type="checkbox"> Review budget with finance team</li>
+</ul>`,
+      createdAt:now-180000, updatedAt:now-150000
     }
   ];
 }
