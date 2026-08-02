@@ -156,7 +156,7 @@ function authErrorMessage(error){
     'auth/network-request-failed':'Network unavailable. Check your connection and try again.',
     'auth/operation-not-allowed':'Email/password sign-in is not enabled for this Firebase project.'
   };
-  return messages[code]||'Authentication failed. Please try again.';
+  return messages[code]||`Authentication failed. Please try again. (${code})`;
 }
 
 function setEmailAuthMessage(message,isError){
