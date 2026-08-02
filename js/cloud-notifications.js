@@ -75,12 +75,19 @@ function initFirebase(){
         renderProfileMenu();
         syncNow({silent:true});
       } else {
-        // User signed out – if there's no valid persisted session, show auth landing
+        // User signed out or Firebase lost the session
         const sess=loadSession();
-        if(!sess || sess.mode==='auth'){
+        if(!sess || sess.mode!=='auth'){
+          // They are a new user or already signed out locally
           saveSession(null);
           renderProfileMenu();
           showAuthLanding();
+        } else {
+          // Firebase token dropped (e.g. third-party cookie blocked or token expired),
+          // but they previously signed in. Do NOT kick them out of their notes.
+          // Let them continue offline. syncNow() will abort safely.
+          console.warn('Firebase session dropped, but local auth session remains. Pausing sync.');
+          updateSyncStatus('error', 'Cloud disconnected (please sign in again later)');
         }
       }
     });
