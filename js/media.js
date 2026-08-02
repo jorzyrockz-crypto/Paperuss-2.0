@@ -493,13 +493,20 @@ function updateAlignmentButton(){
 }
 
 function updateToolbarState(){
-  const cmds=['bold','italic','underline','strikeThrough','insertUnorderedList','insertOrderedList'];
-  document.querySelectorAll('#formatBar .tool-btn').forEach(btn=>{
+  const cmds=['bold','italic','underline','strikeThrough'];
+  const listCtx = typeof getListContext === 'function' ? getListContext() : null;
+  document.querySelectorAll('#formatBar .tool-btn, .overflow-dropdown .tool-btn').forEach(btn=>{
     const cmd=btn.dataset.cmd;
     if(cmds.includes(cmd)){
       try{ btn.classList.toggle('active', document.queryCommandState(cmd)); }
       catch(e){ btn.classList.remove('active'); }
-    } else {
+    } else if(cmd === 'insertUnorderedList') {
+      btn.classList.toggle('active', !!(listCtx && listCtx.type === 'ul'));
+    } else if(cmd === 'insertOrderedList') {
+      btn.classList.toggle('active', !!(listCtx && listCtx.type === 'ol'));
+    } else if(cmd === 'task') {
+      btn.classList.toggle('active', !!(listCtx && listCtx.type === 'task'));
+    } else if(!['hilite','textColor','fontSize','formatBlock'].includes(cmd)) {
       btn.classList.remove('active');
     }
   });

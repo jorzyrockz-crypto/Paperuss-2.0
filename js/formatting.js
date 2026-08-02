@@ -352,7 +352,8 @@ const DROPDOWN_TRIGGERS={
   hlDropdown:'hlBtn',
   szDropdown:'szBtn',
   fontStyleDropdown:'fontStyleBtn',
-  tableGridPicker:'tableBtn'
+  tableGridPicker:'tableBtn',
+  templateDropdown:'templateBtn'
 };
 
 /**
@@ -396,7 +397,7 @@ function toggleDropdown(id){
   if(!drop) return;
   const was=drop.classList.contains('show');
   // Close all toolbar and footer dropdowns first.
-  document.querySelectorAll('.hl-dropdown, .sz-dropdown, .font-style-dropdown, .table-grid-picker, .page-layout-dropdown, .footer-tags-dropdown, .template-dropdown')
+  document.querySelectorAll('.hl-dropdown, .sz-dropdown, .font-style-dropdown, .table-grid-picker, .page-layout-dropdown, .footer-tags-dropdown, .template-dropdown, .overflow-dropdown')
     .forEach(d=>{
       d.classList.remove('show');
       // Reset any inline positioning from a previous portal call.
@@ -482,7 +483,7 @@ function _addTask(li){
 /* Detect the "current list type" the caret is inside.
    Returns {list, li, type} or null if not in a list.
    type is 'ul' | 'ol' | 'task'. */
-function _listContext(){
+function getListContext(){
   const sel=window.getSelection();
   const ed=bodyEl();
   if(!sel || !sel.anchorNode || !ed.contains(sel.anchorNode)) return null;
@@ -545,7 +546,7 @@ function toggleList(targetType){
   const ed=bodyEl();
   if(!sel || !ed) return;
 
-  const ctx=_listContext();
+  const ctx=getListContext();
   const wantTag=(targetType==='ol')?'OL':'UL';
 
   /* ---------- CASE 2: already in the same type → toggle OFF ---------- */

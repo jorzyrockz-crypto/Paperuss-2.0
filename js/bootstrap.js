@@ -82,6 +82,10 @@ function bind(){
 
   const ed=bodyEl();
   ed.addEventListener('input', handleBodyInput);
+  ed.addEventListener('input', () => {
+    const ov = document.getElementById('overflowDropdown');
+    if(ov && ov.classList.contains('show')) ov.classList.remove('show');
+  });
   ed.addEventListener('keyup', updateToolbarState);
   ed.addEventListener('mouseup', updateToolbarState);
   ed.addEventListener('focus', updateToolbarState);
@@ -848,7 +852,10 @@ function bind(){
 
   // Overflow Menu dropdown
   const ovfBtn = document.getElementById('overflowBtn');
-  if(ovfBtn) ovfBtn.onclick = e => { e.stopPropagation(); toggleDropdown('overflowDropdown'); };
+  if(ovfBtn) {
+    ovfBtn.onmousedown = e => { e.preventDefault(); };
+    ovfBtn.onclick = e => { e.stopPropagation(); toggleDropdown('overflowDropdown'); };
+  }
 
   // Responsive Toolbar Overflow
   function initResponsiveToolbar() {
@@ -942,7 +949,7 @@ function bind(){
 
   // Close dropdowns when clicking outside
   const closeAllDropdowns=()=>{
-    ['tcDropdown','paraStyleDropdown','hlDropdown','szDropdown','fontStyleDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown'].forEach(id=>{
+    ['tcDropdown','paraStyleDropdown','hlDropdown','szDropdown','fontStyleDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown','overflowDropdown'].forEach(id=>{
       const el=document.getElementById(id);
       if(el) el.classList.remove('show');
     });
@@ -952,7 +959,7 @@ function bind(){
     if(!e.target.closest('#tcPicker') && !e.target.closest('#paraStylePicker') && !e.target.closest('#hlPicker') && !e.target.closest('.sz-picker')
       && !e.target.closest('#fontStylePicker') && !e.target.closest('#tablePicker')
       && !e.target.closest('#pageLayoutPicker') && !e.target.closest('#templatePicker')
-      && !e.target.closest('#footerTagsPicker')
+      && !e.target.closest('#footerTagsPicker') && !e.target.closest('#overflowPicker')
       && !e.target.closest('#notifBellWrap') && !e.target.closest('#notifPanel')){
       closeAllDropdowns();
     }
