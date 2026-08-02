@@ -104,8 +104,38 @@ async function leafGet(id) {
     const tx = db.transaction(LEAVES_STORE, 'readonly');
     const store = tx.objectStore(LEAVES_STORE);
     const req = store.get(id);
-    req.onsuccess = () => resolve(req.result || null);
+    req.onsuccess = () => {
+      const res = req.result || null;
+      if (res && res.deletedAt && res.deletedAt > 0) resolve(null);
+      else resolve(res);
+    };
     req.onerror = () => reject(req.error || tx.error || new Error('leafGet failed'));
+  });
+}
+
+async function leafGetRaw(id) {
+  if (!id) return null;
+  const db = await openLeavesDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(LEAVES_STORE, 'readonly');
+    const store = tx.objectStore(LEAVES_STORE);
+    const req = store.get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error || tx.error || new Error('leafGetRaw failed'));
+  });
+}
+
+/**
+ * Get all Leaf records from the database.
+ */
+async function leafGetAll() {
+  const db = await openLeavesDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(LEAVES_STORE, 'readonly');
+    const store = tx.objectStore(LEAVES_STORE);
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error || tx.error || new Error('leafGetAll failed'));
   });
 }
 
@@ -122,7 +152,7 @@ async function leafGetByNoteId(noteId) {
     const index = store.index('noteId');
     const req = index.getAll(IDBKeyRange.only(noteId));
     req.onsuccess = () => {
-      const arr = req.result || [];
+      const arr = (req.result || []).filter(leaf => !leaf.deletedAt);
       arr.sort((a, b) => (a.order || 0) - (b.order || 0));
       resolve(arr);
     };
@@ -136,11 +166,18 @@ async function leafGetByNoteId(noteId) {
  */
 async function leafDel(id) {
   if (!id) return;
+  const existing = await leafGetRaw(id);
   const db = await openLeavesDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(LEAVES_STORE, 'readwrite');
     const store = tx.objectStore(LEAVES_STORE);
-    const req = store.delete(id);
+    const tombstone = {
+      id: id,
+      noteId: (existing && existing.noteId) || 'unknown',
+      deletedAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    const req = store.put(tombstone);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error || tx.error || new Error('leafDel failed'));
   });
@@ -231,7 +268,10 @@ async function leafQueueClear() {
  * @returns {string[]} Array of Leaf IDs
  */
 function getNoteLeafOrder(note) {
-  if (!note || !Array.isArray(note.leafOrder)) return [];
+  if (!note) return [];
+  if (!Array.isArray(note.leafOrder) || note.leafOrder.length === 0) {
+    return ['virtual_main_' + note.id];
+  }
   return note.leafOrder.slice();
 }
 
@@ -241,8 +281,8 @@ function getNoteLeafOrder(note) {
  * @returns {string|null}
  */
 function getNoteDefaultLeafId(note) {
-  if (!note || !note.defaultLeafId) return null;
-  return note.defaultLeafId;
+  if (!note) return null;
+  return note.defaultLeafId || ('virtual_main_' + note.id);
 }
 
 /**
@@ -326,6 +366,8 @@ if (typeof window !== 'undefined') {
     deleteLeavesDB,
     leafPut,
     leafGet,
+    leafGetAll,
+    leafGetRaw,
     leafGetByNoteId,
     leafDel,
     leafQueuePut,

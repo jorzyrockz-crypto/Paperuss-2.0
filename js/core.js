@@ -521,6 +521,7 @@ let notes = [];
 // Queued remote note update to apply on next editor blur (set by scheduleActiveNoteRefresh)
 let _pendingRemoteNote = null;
 let state = {
+  listMode: 'notes',
   currentId: null,
   filter: 'all',
   tag: null,
@@ -792,20 +793,41 @@ async function updateMediaCount(){
 
 
 function filteredNotes(){
-  let arr=notes.filter(n=>{
+  let arr = [];
+  notes.forEach(n=>{
     if(state.filter==='trash'){
-      if(!n.deletedAt) return false;
-    }else if(n.deletedAt) return false;
-    if(state.filter==='all' && n.archived) return false;
-    if(state.filter==='pinned' && (!n.pinned || n.archived)) return false;
-    if(state.filter==='archived' && !n.archived) return false;
-    if(state.tag && !(n.tags||[]).includes(state.tag)) return false;
+      if(!n.deletedAt) return;
+    }else if(n.deletedAt) return;
+    if(state.filter==='all' && n.archived) return;
+    if(state.filter==='pinned' && (!n.pinned || n.archived)) return;
+    if(state.filter==='archived' && !n.archived) return;
+    if(state.tag && !(n.tags||[]).includes(state.tag)) return;
+    
     if(state.query){
       const q=state.query.toLowerCase();
-      if(!titleOf(n).toLowerCase().includes(q) && !stripHtml(n.content).toLowerCase().includes(q) && !(n.tags||[]).join(' ').toLowerCase().includes(q)) return false;
+      let mainMatch = titleOf(n).toLowerCase().includes(q) || stripHtml(n.content).toLowerCase().includes(q) || (n.tags||[]).join(' ').toLowerCase().includes(q);
+      
+      let firstLeafMatch = null;
+      if (state.leafSearchResults) {
+        firstLeafMatch = state.leafSearchResults.find(l => l.noteId === n.id && !l.deletedAt && ( (l.title||'').toLowerCase().includes(q) || stripHtml(l.content||'').toLowerCase().includes(q) ));
+      }
+      
+      if (!mainMatch && !firstLeafMatch) return;
+      
+      if (!mainMatch && firstLeafMatch) {
+         arr.push({
+           ...n, 
+           isVirtualSearchMatch: true, 
+           searchMatchedLeafId: firstLeafMatch.id, 
+           searchMatchedLeafTitle: firstLeafMatch.title || 'Leaf',
+           searchMatchedLeafContent: firstLeafMatch.content || ''
+         });
+         return;
+      }
     }
-    return true;
+    arr.push(n);
   });
+
   const s=state.sort;
   arr.sort((a,b)=>{
     if(s==='title') return titleOf(a).localeCompare(titleOf(b));
@@ -832,8 +854,8 @@ function getChecklistStats(html){
 }
 
 function renderNoteCard(n){
-  const prev=stripHtml(n.content).slice(0,140);
-  const content=n.content||'';
+  const content = n.isVirtualSearchMatch ? n.searchMatchedLeafContent : (n.content||'');
+  const prev=stripHtml(content).slice(0,140);
   const hasImage=content.includes('data-media-kind="image"')||content.includes('<img');
   const hasVideo=content.includes('data-media-kind="video"')||content.includes('<video');
   const hasAudio=content.includes('data-media-kind="audio"')||content.includes('<audio');
@@ -843,53 +865,60 @@ function renderNoteCard(n){
   const isV2 = (typeof appSettings !== 'undefined' && appSettings && appSettings.previewV2 === true);
   const density = (typeof appSettings !== 'undefined' && appSettings && appSettings.previewDensity === 'compact') ? 'compact' : 'comfortable';
 
+  let displayTitle = n.pinned ? '<i data-lucide="pin" class="w-3 h-3 pinned-icon" style="flex-shrink:0;"></i>' : '';
+  if (n.isVirtualSearchMatch) {
+    displayTitle += esc(titleOf(n)) + ' — Leaf: ' + esc(n.searchMatchedLeafTitle);
+  } else {
+    displayTitle += esc(titleOf(n));
+  }
+
   if(isV2){
     const thumbUrl = extractNoteThumbnail(content);
     const checklistStats = getChecklistStats(content);
     const hasReminder = n.reminder || n.due || n.reminderAt;
-    const notebookName = n.notebook || n.folder;
-    const metaTop = (n.pinned || hasReminder) ? `<div class="v2-meta-top">
-      ${n.pinned ? '<i data-lucide="pin" class="w-3.5 h-3.5 note-pin" title="Pinned"></i>' : ''}
-      ${hasReminder ? '<i data-lucide="alarm-clock" class="w-3.5 h-3.5 text-accent" title="Has reminder"></i>' : ''}
-    </div>` : '';
 
-    return `<div class="note-card v2 v2-${density} ${n.id===state.currentId?'active':''}" data-id="${n.id}">
-      <div class="v2-header">
-        <div class="v2-title">${esc(titleOf(n))}</div>
-        ${metaTop}
-      </div>
-      <div class="v2-body">
-        <div class="v2-excerpt">${prev ? esc(prev) : '<span style="color:var(--fg-muted)">Empty note</span>'}</div>
-        ${thumbUrl ? `<img class="v2-thumbnail" src="${esc(thumbUrl)}" alt="" loading="lazy">` : ''}
-      </div>
-      <div class="v2-footer">
-        ${notebookName ? `<span class="v2-badge" title="Notebook"><i data-lucide="book" class="w-3 h-3"></i> ${esc(notebookName)}</span>` : ''}
-        ${checklistStats ? `<span class="v2-badge" title="Checklist progress"><i data-lucide="check-square" class="w-3 h-3"></i> ${checklistStats.checked}/${checklistStats.total}</span>` : ''}
-        ${mediaCount ? `<span class="v2-badge" title="${mediaCount} attachment${mediaCount!==1?'s':''}"><i data-lucide="paperclip" class="w-3 h-3"></i> ${mediaCount}</span>` : ''}
-        ${(n.tags||[]).slice(0,3).map(t=>`<span class="chip">${esc(t)}</span>`).join('')}
-        <span>${n.deletedAt ? 'Deleted '+timeAgo(n.deletedAt) : timeAgo(n.updatedAt)}</span>
-        ${n.deletedAt ? '<span class="archived">In Trash</span>' : (n.archived ? '<span class="archived">Archived</span>' : '')}
+    let mediaRow = '';
+    if(hasImage || hasVideo || hasAudio || hasFile || checklistStats || hasReminder) {
+      mediaRow = `<div class="note-card-badges">`;
+      if(checklistStats) mediaRow += `<span class="badge"><i data-lucide="check-square" class="w-3 h-3"></i> ${checklistStats.checked}/${checklistStats.total}</span>`;
+      if(hasReminder) mediaRow += `<span class="badge" style="color:var(--accent)"><i data-lucide="bell" class="w-3 h-3"></i></span>`;
+      if(hasImage) mediaRow += `<span class="badge"><i data-lucide="image" class="w-3 h-3"></i></span>`;
+      if(hasVideo) mediaRow += `<span class="badge"><i data-lucide="video" class="w-3 h-3"></i></span>`;
+      if(hasAudio) mediaRow += `<span class="badge"><i data-lucide="headphones" class="w-3 h-3"></i></span>`;
+      if(hasFile) mediaRow += `<span class="badge"><i data-lucide="file" class="w-3 h-3"></i></span>`;
+      mediaRow += `</div>`;
+    }
+
+    return `<div class="note-card v2 ${density} ${n.id===state.currentId?'active':''}" data-id="${n.id}" ${n.isVirtualSearchMatch ? `data-leaf-id="${n.searchMatchedLeafId}"` : ''}>
+      ${thumbUrl ? `<div class="note-card-thumb"><img src="${thumbUrl}" alt="thumbnail"></div>` : ''}
+      <div class="note-card-body">
+        <div class="note-title">${displayTitle}</div>
+        <div class="note-preview">${prev?esc(prev):'<span style="opacity:0.5;font-style:italic">Empty note</span>'}</div>
+        <div class="note-meta">
+          ${n.deletedAt?'<span class="archived">In Trash</span>':(n.archived?'<span class="archived">Archived</span>':'')}
+          <span>${n.deletedAt?'Deleted '+timeAgo(n.deletedAt):timeAgo(n.updatedAt)}</span>
+        </div>
+        ${mediaRow}
+        ${n.tags && n.tags.length ? `<div class="note-tags">${n.tags.slice(0,3).map(t=>'<span class="chip">'+esc(t)+'</span>').join('')}</div>` : ''}
       </div>
     </div>`;
   }
 
   let mediaIcon='';
-  if(hasImage) mediaIcon='<i data-lucide="image" class="w-3.5 h-3.5 text-accent" title="Has images"></i>';
-  else if(hasVideo) mediaIcon='<i data-lucide="video" class="w-3.5 h-3.5 text-accent" title="Has video"></i>';
-  else if(hasAudio) mediaIcon='<i data-lucide="mic" class="w-3.5 h-3.5 text-accent" title="Has audio"></i>';
-  else if(hasFile) mediaIcon='<i data-lucide="paperclip" class="w-3.5 h-3.5 text-accent" title="Has attachments"></i>';
-  return `<div class="note-card ${n.id===state.currentId?'active':''}" data-id="${n.id}">
+  if(hasImage) mediaIcon='<i data-lucide="image" class="w-3 h-3 media-icon"></i>';
+  else if(hasVideo) mediaIcon='<i data-lucide="video" class="w-3 h-3 media-icon"></i>';
+  else if(hasAudio) mediaIcon='<i data-lucide="headphones" class="w-3 h-3 media-icon"></i>';
+  else if(hasFile) mediaIcon='<i data-lucide="file" class="w-3 h-3 media-icon"></i>';
+  
+  return `<div class="note-card ${n.id===state.currentId?'active':''}" data-id="${n.id}" ${n.isVirtualSearchMatch ? `data-leaf-id="${n.searchMatchedLeafId}"` : ''}>
     <div class="note-title">
-      ${n.pinned?'<i data-lucide="pin" class="w-3.5 h-3.5 note-pin"></i>':''}
-      ${esc(titleOf(n))}
-      ${mediaIcon}
+      ${displayTitle} ${mediaIcon}
     </div>
-    <div class="note-preview">${prev?esc(prev):'<span style="color:var(--fg-muted)">Empty note</span>'}</div>
+    <div class="note-preview">${prev?esc(prev):'<span style="opacity:0.5;font-style:italic">Empty note</span>'}</div>
     <div class="note-meta">
       ${n.deletedAt?'<span class="archived">In Trash</span>':(n.archived?'<span class="archived">Archived</span>':'')}
       <span>${n.deletedAt?'Deleted '+timeAgo(n.deletedAt):timeAgo(n.updatedAt)}</span>
-      ${mediaCount?`<span class="media-badge" title="${mediaCount} attachment${mediaCount!==1?'s':''}">
-        <i data-lucide="paperclip" class="w-3 h-3"></i>${mediaCount}</span>`:''}
+      ${mediaCount?`<span class="media-badge">${mediaCount}</span>`:''}
       ${(n.tags||[]).slice(0,2).map(t=>'<span class="chip">'+esc(t)+'</span>').join('')}
     </div>
   </div>`;
@@ -905,6 +934,10 @@ function renderList(){
     return;
   }
   const c=document.getElementById('notesContainer');
+  if (state.listMode === 'leaves') {
+    renderLeavesList(c);
+    return;
+  }
   let arr=filteredNotes();
   let titleText=state.tag?('#'+state.tag) : ({all:'All Notes',pinned:'Pinned',archived:'Archived',trash:'Trash',calendar:'Events / Planner',tasks:'Tasks & Todos',settings:'Settings'}[state.filter]);
   document.getElementById('listTitle').textContent = titleText || 'All Notes';
@@ -1042,6 +1075,7 @@ function renderEditor(){
     empty.style.display='flex';
     content.classList.remove('show','trash-preview');
     revokeCachedURLs();
+    if (window.updateLeafTitleBar) window.updateLeafTitleBar();
     return;
   }
   const emptyCreate=empty.querySelector('button');
@@ -1054,83 +1088,130 @@ function renderEditor(){
   titleInput.readOnly=trashMode;
   state.suppressInput=true;
   revokeCachedURLs();
-  const ed=bodyEl();
-  // Background sync refreshes the editor after a paste or edit. Keep the live
-  // range so replacing innerHTML cannot send the caret back to the first block.
-  const savedSelection=!trashMode && document.activeElement===ed ? captureEditorSelection(ed) : null;
-  ed.setAttribute('contenteditable',trashMode?'false':'true');
-  const tagInput=document.getElementById('tagInput');
-  if(tagInput) tagInput.disabled=trashMode;
-  const fontStyle = n.fontStyle || 'sans';
-  ed.setAttribute('data-fontstyle', fontStyle);
-  const fsLabel = document.getElementById('fontStyleLabel');
-  const fsMap = {'sans':'Sans', 'serif':'Serif', 'mono':'Mono', 'rounded':'Rounded'};
-  if(fsLabel) fsLabel.textContent = fsMap[fontStyle] || 'Sans';
-  document.querySelectorAll('#fontStyleDropdown .fs-opt').forEach(opt=>{
-    opt.classList.toggle('active', opt.dataset.fontstyle === fontStyle);
-  });
+  
+  // LEAVES: Instead of grabbing n.content, load the leaf!
+  (async () => {
+    try {
+      let leafToRender = null;
+      if (window.paperussLeaves) {
+        if (window.paperussLeaves.isNoteMigratedToLeaves(n)) {
+          // Real materialized note: load the active leaf from IDB
+          const activeLeafId = window.paperussLeaves.getNoteActiveLeafId(n);
+          leafToRender = await window.paperussLeaves.leafGet(activeLeafId);
+          if (typeof session !== 'undefined' && session && session.uid && window.paperussLeafManager && typeof window.paperussLeafManager.syncNoteLeavesFromCloud === 'function') {
+            window.paperussLeafManager.syncNoteLeavesFromCloud(n.id, session.uid).then(() => {
+              window.paperussLeaves.leafGet(activeLeafId).then(updated => {
+                if (updated && updated.updatedAt > (leafToRender ? leafToRender.updatedAt : 0)) {
+                  leafToRender = updated;
+                  window.currentActiveLeaf = leafToRender;
+                  const ed = bodyEl();
+                  if (ed && document.activeElement !== ed) ed.innerHTML = leafToRender.content || '';
+                }
+              });
+            }).catch(e => {});
+          }
+        }
+        if (!leafToRender) {
+          // Legacy unmigrated note or IDB miss — use virtual Main leaf (no IDB roundtrip)
+          leafToRender = window.paperussLeaves.getVirtualMainLeaf(n);
+        }
+      } else {
+        leafToRender = { id: 'virtual_main', title: 'Main', content: n.content, isVirtual: true };
+      }
+      
+      window.currentActiveLeaf = leafToRender;
+      if (window.updateLeafTitleBar) window.updateLeafTitleBar();
+      const ed=bodyEl();
+      // Tag the editor with the active leaf id so flushActiveLeaf can detect DOM ownership
+      if (ed && leafToRender && leafToRender.id) {
+        ed.setAttribute('data-active-leaf-id', leafToRender.id);
+      } else if (ed) {
+        ed.removeAttribute('data-active-leaf-id');
+      }
+      // Background sync refreshes the editor after a paste or edit. Keep the live
+      // range so replacing innerHTML cannot send the caret back to the first block.
+      const savedSelection=!trashMode && document.activeElement===ed ? captureEditorSelection(ed) : null;
+      ed.setAttribute('contenteditable',trashMode?'false':'true');
+      const tagInput=document.getElementById('tagInput');
+      if(tagInput) tagInput.disabled=trashMode;
+      const fontStyle = n.fontStyle || 'sans';
+      ed.setAttribute('data-fontstyle', fontStyle);
+      const fsLabel = document.getElementById('fontStyleLabel');
+      const fsMap = {'sans':'Sans', 'serif':'Serif', 'mono':'Mono', 'rounded':'Rounded'};
+      if(fsLabel) fsLabel.textContent = fsMap[fontStyle] || 'Sans';
+      document.querySelectorAll('#fontStyleDropdown .fs-opt').forEach(opt=>{
+        opt.classList.toggle('active', opt.dataset.fontstyle === fontStyle);
+      });
 
-  // Only replace the DOM when content actually changed. This prevents the
-  // 60-second cloud sync from resetting the cursor / scrollposition when no
-  // remote data has arrived. Also preserve scroll position across real swaps.
-  const incomingContent = typeof sanitizeNoteHTML==='function'?sanitizeNoteHTML(n.content||''):(n.content||'');
-  if(incomingContent!==n.content) n.content=incomingContent;
-  const editorScroll = document.getElementById('editorScroll');
-  if(ed.innerHTML !== incomingContent){
-    const savedScroll = editorScroll ? editorScroll.scrollTop : 0;
-    ed.innerHTML = incomingContent;
-    if(editorScroll) editorScroll.scrollTop = savedScroll;
-  }
-  if(typeof normalizeEditorTables==='function') normalizeEditorTables();
-  if(trashMode){
-    ed.querySelectorAll('input,button,select,textarea').forEach(control=>{ control.disabled=true; });
-    ed.querySelectorAll('table').forEach(table=>table.setAttribute('contenteditable','false'));
-  }
-  state.suppressInput=false;
-  hydrateMediaInEditor();
-  if(window.HistoryManager && window.HistoryManager.activeNoteId !== n.id) {
-    window.HistoryManager.reset(n.id);
-  }
-  if(typeof renderNotebookCover==='function') renderNotebookCover();
-  if(typeof normalizeEditorImages==='function') normalizeEditorImages();
-  if(typeof applyPageLayoutToEditor==='function') applyPageLayoutToEditor(n);
-  if(typeof syncPageLayoutDropdown==='function') syncPageLayoutDropdown(n);
-  restoreEditorSelection(ed,savedSelection);
-  if(typeof clearImageSelection==='function') clearImageSelection();
-  if(trashMode&&typeof clearCellSelection==='function'){
-    clearCellSelection();
-    activeCell=null;
-    positionTableTools();
-  }
-  renderTags(n);
-  renderStats(n);
-  const pinBtn=document.getElementById('pinBtn');
-  const archiveBtn=document.getElementById('archiveBtn');
-  const restoreBtn=document.getElementById('restoreBtn');
-  const deleteBtn=document.getElementById('deleteBtn');
-  pinBtn.style.display=trashMode?'none':'';
-  archiveBtn.style.display=trashMode?'none':'';
-  restoreBtn.style.display=trashMode?'inline-flex':'none';
-  pinBtn.style.color = n.pinned?'var(--attention)':'';
-  archiveBtn.style.color = n.archived?'var(--attention)':'';
-  deleteBtn.title=trashMode?'Delete permanently':'Move to Trash';
-  deleteBtn.setAttribute('aria-label',deleteBtn.title);
-  const morePinBtn=document.getElementById('morePinBtn');
-  const moreArchiveBtn=document.getElementById('moreArchiveBtn');
-  const moreDeleteBtn=document.getElementById('moreDeleteBtn');
-  if(morePinBtn) morePinBtn.style.display=trashMode?'none':'';
-  if(moreArchiveBtn) moreArchiveBtn.innerHTML=trashMode
-    ? '<i data-lucide="rotate-ccw" class="w-4 h-4"></i> Restore note'
-    : '<i data-lucide="archive" class="w-4 h-4"></i> Archive / Restore';
-  if(moreDeleteBtn) moreDeleteBtn.innerHTML=trashMode
-    ? '<i data-lucide="trash-2" class="w-4 h-4"></i> Delete permanently'
-    : '<i data-lucide="trash-2" class="w-4 h-4"></i> Move to Trash';
-  document.getElementById('saveStatus').className='save-status';
-  document.getElementById('saveStatus').innerHTML=trashMode
-    ? '<span class="dot"></span><span>Deleted '+timeAgo(n.deletedAt)+'</span>'
-    : '<span class="dot"></span><span>Saved '+timeAgo(n.updatedAt)+'</span>';
-  updateToolbarState();
-  refreshIcons();
+      // Only replace the DOM when content actually changed. This prevents the
+      // 60-second cloud sync from resetting the cursor / scrollposition when no
+      // remote data has arrived. Also preserve scroll position across real swaps.
+      const incomingContent = typeof sanitizeNoteHTML==='function'?sanitizeNoteHTML(leafToRender.content||''):(leafToRender.content||'');
+      if (leafToRender.isVirtual || leafToRender.id === window.paperussLeaves.getNoteDefaultLeafId(n)) {
+        if(incomingContent!==n.content) n.content=incomingContent;
+      }
+      
+      const editorScroll = document.getElementById('editorScroll');
+      if(ed.innerHTML !== incomingContent){
+        const savedScroll = editorScroll ? editorScroll.scrollTop : 0;
+        ed.innerHTML = incomingContent;
+        if(editorScroll) editorScroll.scrollTop = savedScroll;
+      }
+      if(typeof normalizeEditorTables==='function') normalizeEditorTables();
+      if(trashMode){
+        ed.querySelectorAll('input,button,select,textarea').forEach(control=>{ control.disabled=true; });
+        ed.querySelectorAll('table').forEach(table=>table.setAttribute('contenteditable','false'));
+      }
+      state.suppressInput=false;
+      hydrateMediaInEditor();
+      if(window.HistoryManager && window.HistoryManager.activeNoteId !== n.id) {
+        window.HistoryManager.reset(n.id);
+      }
+      if(typeof renderNotebookCover==='function') renderNotebookCover();
+      if(typeof normalizeEditorImages==='function') normalizeEditorImages();
+      if(typeof applyPageLayoutToEditor==='function') applyPageLayoutToEditor(n);
+      if(typeof syncPageLayoutDropdown==='function') syncPageLayoutDropdown(n);
+      restoreEditorSelection(ed,savedSelection);
+      if(typeof clearImageSelection==='function') clearImageSelection();
+      if(trashMode&&typeof clearCellSelection==='function'){
+        clearCellSelection();
+        activeCell=null;
+        positionTableTools();
+      }
+      
+      renderTags(n);
+      renderStats(n);
+      const pinBtn=document.getElementById('pinBtn');
+      const archiveBtn=document.getElementById('archiveBtn');
+      const restoreBtn=document.getElementById('restoreBtn');
+      const deleteBtn=document.getElementById('deleteBtn');
+      pinBtn.style.display=trashMode?'none':'';
+      archiveBtn.style.display=trashMode?'none':'';
+      restoreBtn.style.display=trashMode?'inline-flex':'none';
+      pinBtn.style.color = n.pinned?'var(--attention)':'';
+      archiveBtn.style.color = n.archived?'var(--attention)':'';
+      deleteBtn.title=trashMode?'Delete permanently':'Move to Trash';
+      deleteBtn.setAttribute('aria-label',deleteBtn.title);
+      const morePinBtn=document.getElementById('morePinBtn');
+      const moreArchiveBtn=document.getElementById('moreArchiveBtn');
+      const moreDeleteBtn=document.getElementById('moreDeleteBtn');
+      if(morePinBtn) morePinBtn.style.display=trashMode?'none':'';
+      if(moreArchiveBtn) moreArchiveBtn.innerHTML=trashMode
+        ? '<i data-lucide="rotate-ccw" class="w-4 h-4"></i> Restore note'
+        : '<i data-lucide="archive" class="w-4 h-4"></i> Archive / Restore';
+      if(moreDeleteBtn) moreDeleteBtn.innerHTML=trashMode
+        ? '<i data-lucide="trash-2" class="w-4 h-4"></i> Delete permanently'
+        : '<i data-lucide="trash-2" class="w-4 h-4"></i> Move to Trash';
+      document.getElementById('saveStatus').className='save-status';
+      document.getElementById('saveStatus').innerHTML=trashMode
+        ? '<span class="dot"></span><span>Deleted '+timeAgo(n.deletedAt)+'</span>'
+        : '<span class="dot"></span><span>Saved '+timeAgo(n.updatedAt)+'</span>';
+      updateToolbarState();
+      refreshIcons();
+    } catch (e) {
+      console.error("renderEditor IIFE Error:", e);
+    }
+  })();
 }
 
 async function renderMediaList(){
@@ -1433,3 +1514,515 @@ function scheduleActiveNoteRefresh(remoteNote){
   _pendingRemoteNote=remoteNote;
 }
 
+
+
+
+window.paperussLeafManager = {
+  async switchLeaf(noteId, targetLeafId) {
+    if (!window.paperussLeaves) return false;
+    const n = getNote(noteId);
+    if (!n) return false;
+
+    // Flush current leaf before switching (already done by autosave, but we can await any pending puts)
+    if (window.flushActiveLeaf) {
+       await window.flushActiveLeaf();
+    } else if (window.currentActiveLeaf && !window.currentActiveLeaf.isVirtual) {
+       await window.paperussLeaves.leafPut(window.currentActiveLeaf);
+    }
+    
+    window.paperussLeaves.setNoteActiveLeafId(n.id, targetLeafId);
+    
+    // If the note is currently open in editor, refresh it
+    if (state.currentId === n.id) {
+       renderEditor();
+    }
+    return true;
+  },
+  
+  async materializeVirtualNote(n) {
+    if (!n || window.paperussLeaves.isNoteMigratedToLeaves(n)) return true; // Already materialized
+    const mainLeaf = window.paperussLeaves.getVirtualMainLeaf(n);
+    const newId = 'leaf_' + Date.now() + '_' + Math.random().toString(36).substr(2,6);
+    mainLeaf.id = newId;
+    delete mainLeaf.isVirtual;
+    
+    try {
+      await window.paperussLeaves.leafPut(mainLeaf);
+      // Queue materialization action (cloud will execute as batch)
+      await window.paperussLeaves.leafQueuePut({
+        id: 'mut_mat_' + Date.now(),
+        noteId: n.id,
+        action: 'materialize',
+        data: Object.assign({}, mainLeaf),
+        timestamp: Date.now()
+      });
+      // Safety gate passed, update Note metadata
+      n.defaultLeafId = newId;
+      n.leafOrder = [newId];
+      n.leafCount = 1;
+      n.updatedAt = Date.now();
+      window.paperussLeaves.setNoteActiveLeafId(n.id, newId);
+      persist();
+      return true;
+    } catch (e) {
+      console.error('Migration failed, Note untouched', e);
+      return false; // Leave note untouched
+    }
+  },
+
+  async addLeaf(noteId, title = 'New Leaf') {
+    const n = getNote(noteId);
+    if (!n) return null;
+    
+    // Step 1: Materialize if virtual
+    const materialized = await this.materializeVirtualNote(n);
+    if (!materialized) return null;
+
+    // Step 2: Create the second leaf
+    const newLeaf = {
+      id: 'leaf_' + Date.now() + '_' + Math.random().toString(36).substr(2,6),
+      noteId: n.id,
+      title: title,
+      content: '',
+      order: n.leafCount,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    
+    await window.paperussLeaves.leafPut(newLeaf);
+    await window.paperussLeaves.leafQueuePut({
+        id: 'mut_' + Date.now(),
+        noteId: n.id,
+        action: 'put',
+        data: Object.assign({}, newLeaf),
+        timestamp: Date.now()
+    });
+    
+    if (!Array.isArray(n.leafOrder)) n.leafOrder = [];
+    n.leafOrder.push(newLeaf.id);
+    n.leafCount = n.leafOrder.length;
+    n.updatedAt = Date.now();
+    persist();
+    
+    return newLeaf.id;
+  },
+
+  async renameLeaf(noteId, leafId, newTitle) {
+    if (!window.paperussLeaves) return false;
+    const n = getNote(noteId);
+    if (!n) return false;
+    const materialized = await this.materializeVirtualNote(n);
+    if (!materialized) return false;
+
+    const leaf = await window.paperussLeaves.leafGet(leafId);
+    if (!leaf) return false;
+    leaf.title = newTitle;
+    leaf.updatedAt = Date.now();
+    await window.paperussLeaves.leafPut(leaf);
+    await window.paperussLeaves.leafQueuePut({
+      id: 'mut_ren_' + Date.now(),
+      noteId: n.id,
+      action: 'put',
+      data: Object.assign({}, leaf),
+      timestamp: Date.now()
+    });
+
+    n.updatedAt = Date.now();
+    persist();
+    if (state.currentId === noteId && window.updateLeafTitleBar) {
+      window.updateLeafTitleBar();
+    }
+    return true;
+  },
+
+  async duplicateLeaf(noteId, leafId) {
+    if (!window.paperussLeaves) return null;
+    const n = getNote(noteId);
+    if (!n) return null;
+    const materialized = await this.materializeVirtualNote(n);
+    if (!materialized) return null;
+
+    const leaf = await window.paperussLeaves.leafGet(leafId);
+    if (!leaf) return null;
+
+    const newLeaf = {
+      id: 'leaf_' + Date.now() + '_' + Math.random().toString(36).substr(2,6),
+      noteId: n.id,
+      title: (leaf.title || 'Leaf') + ' (Copy)',
+      content: leaf.content || '',
+      order: n.leafCount || n.leafOrder.length,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    await window.paperussLeaves.leafPut(newLeaf);
+    await window.paperussLeaves.leafQueuePut({
+      id: 'mut_dup_' + Date.now(),
+      noteId: n.id,
+      action: 'put',
+      data: Object.assign({}, newLeaf),
+      timestamp: Date.now()
+    });
+
+    n.leafOrder.push(newLeaf.id);
+    n.leafCount = n.leafOrder.length;
+    n.updatedAt = Date.now();
+    persist();
+
+    return newLeaf.id;
+  },
+
+  async deleteLeaf(noteId, leafId) {
+    if (!window.paperussLeaves) return false;
+    const n = getNote(noteId);
+    if (!n) return false;
+    const order = window.paperussLeaves.getNoteLeafOrder(n);
+    if (!order || order.length <= 1) {
+      console.error('Cannot delete the final leaf');
+      return false;
+    }
+    const idx = order.indexOf(leafId);
+    if (idx === -1) return false;
+
+    const activeLeafId = window.paperussLeaves.getNoteActiveLeafId(n);
+    if (activeLeafId === leafId) {
+      const nextLeafId = order[idx + 1] || order[idx - 1];
+      await this.switchLeaf(noteId, nextLeafId);
+    }
+
+    const defaultLeafId = window.paperussLeaves.getNoteDefaultLeafId(n);
+    if (defaultLeafId === leafId) {
+      const nextDefaultId = order.find(id => id !== leafId);
+      if (nextDefaultId) {
+        n.defaultLeafId = nextDefaultId;
+        const nextLeafObj = await window.paperussLeaves.leafGet(nextDefaultId);
+        if (nextLeafObj) {
+          n.content = nextLeafObj.content || '';
+        }
+      }
+    }
+
+    n.leafOrder.splice(idx, 1);
+    n.leafCount = Math.max(1, n.leafOrder.length);
+    n.updatedAt = Date.now();
+
+    await window.paperussLeaves.leafDel(leafId);
+    await window.paperussLeaves.leafQueuePut({
+      id: 'mut_del_' + Date.now(),
+      noteId: n.id,
+      action: 'delete',
+      data: { id: leafId, noteId: n.id },
+      timestamp: Date.now()
+    });
+
+    persist();
+    if (state.currentId === noteId) {
+      renderEditor();
+    }
+    return true;
+  },
+
+  async reorderLeaves(noteId, newOrderArray) {
+    if (!window.paperussLeaves) return false;
+    const n = getNote(noteId);
+    if (!n) return false;
+    if (!Array.isArray(newOrderArray)) return false;
+    n.leafOrder = newOrderArray;
+    n.updatedAt = Date.now();
+    persist();
+    return true;
+  },
+
+  async reorderLeaf(noteId, leafId, direction) {
+    const n = getNote(noteId);
+    if (!n || !n.leafOrder) return false;
+    const idx = n.leafOrder.indexOf(leafId);
+    if (idx === -1) return false;
+    const targetIdx = idx + direction;
+    if (targetIdx < 0 || targetIdx >= n.leafOrder.length) return false;
+    const newOrder = n.leafOrder.slice();
+    const [moved] = newOrder.splice(idx, 1);
+    newOrder.splice(targetIdx, 0, moved);
+    return await this.reorderLeaves(noteId, newOrder);
+  },
+
+  async syncLeavesWithCloud(uid, db) {
+    if (!uid || !window.paperussLeaves) return false;
+    const fireDb = db || (typeof fbDb !== 'undefined' ? fbDb : (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null));
+    if (!fireDb) return false;
+
+    try {
+      const queue = await window.paperussLeaves.leafQueueGetAll();
+      if (!queue || queue.length === 0) return true;
+
+      // Coalesce repeated pending updates for the same Leaf
+      const coalesced = new Map();
+      for (const item of queue) {
+        const key = (item.data && item.data.id) ? item.data.id : item.id;
+        if (!coalesced.has(key)) {
+          coalesced.set(key, []);
+        }
+        coalesced.get(key).push(item);
+      }
+
+      for (const [leafId, items] of coalesced.entries()) {
+        items.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        const matItem = items.find(x => x.action === 'materialize');
+
+        if (matItem) {
+          // Atomic legacy-Note materialization using a Firestore batch
+          try {
+            const batch = fireDb.batch();
+            const leafRef = fireDb.collection('paperuss_users').doc(uid).collection('notes').doc(matItem.noteId).collection('leaves').doc(matItem.data.id);
+            const noteRef = fireDb.collection('paperuss_users').doc(uid).collection('notes').doc(matItem.noteId);
+            const cleanLeaf = {
+              id: matItem.data.id,
+              noteId: matItem.noteId,
+              title: matItem.data.title || 'Main',
+              content: matItem.data.content || '',
+              order: typeof matItem.data.order === 'number' ? matItem.data.order : 0,
+              createdAt: matItem.data.createdAt || Date.now(),
+              updatedAt: matItem.data.updatedAt || Date.now(),
+              deletedAt: null
+            };
+            batch.set(leafRef, cleanLeaf, { merge: true });
+            batch.set(noteRef, {
+              defaultLeafId: matItem.data.id,
+              leafOrder: [matItem.data.id],
+              leafCount: 1,
+              updatedAt: matItem.timestamp || Date.now()
+            }, { merge: true });
+            await batch.commit();
+            for (const i of items) {
+              await window.paperussLeaves.leafQueueDel(i.id);
+            }
+          } catch (e) {
+            console.warn('Batch materialization failed, leaving local note/leaf intact for retry:', e);
+          }
+        } else {
+          const latest = items[items.length - 1];
+          const targetLeafId = (latest.data && latest.data.id) ? latest.data.id : leafId;
+          const leafRef = fireDb.collection('paperuss_users').doc(uid).collection('notes').doc(latest.noteId).collection('leaves').doc(targetLeafId);
+
+          if (latest.action === 'delete') {
+            try {
+              // Deletion writes deletedAt tombstones
+              await leafRef.set({
+                id: targetLeafId,
+                noteId: latest.noteId,
+                deletedAt: latest.timestamp || Date.now(),
+                updatedAt: latest.timestamp || Date.now()
+              }, { merge: true });
+              for (const i of items) {
+                await window.paperussLeaves.leafQueueDel(i.id);
+              }
+            } catch (e) {
+              console.warn('Leaf tombstone upload failed, keeping queue for retry:', e);
+            }
+          } else {
+            try {
+              // Never upload activeLeafId, Leaf scroll position, or drawer state
+              const cleanLeaf = {
+                id: targetLeafId,
+                noteId: latest.noteId,
+                title: (latest.data && latest.data.title) || 'Leaf',
+                content: (latest.data && latest.data.content) || '',
+                order: (latest.data && typeof latest.data.order === 'number') ? latest.data.order : 0,
+                createdAt: (latest.data && latest.data.createdAt) || Date.now(),
+                updatedAt: (latest.data && latest.data.updatedAt) || Date.now(),
+                deletedAt: null
+              };
+              await leafRef.set(cleanLeaf, { merge: true });
+              for (const i of items) {
+                await window.paperussLeaves.leafQueueDel(i.id);
+              }
+            } catch (e) {
+              console.warn('Leaf put upload failed, keeping queue for retry:', e);
+            }
+          }
+        }
+      }
+      return true;
+    } catch (err) {
+      console.error('syncLeavesWithCloud error:', err);
+      return false;
+    }
+  },
+
+  async syncNoteLeavesFromCloud(noteId, uid, db) {
+    if (!noteId || !uid || !window.paperussLeaves) return false;
+    const fireDb = db || (typeof fbDb !== 'undefined' ? fbDb : (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null));
+    if (!fireDb) return false;
+
+    try {
+      const leavesRef = fireDb.collection('paperuss_users').doc(uid).collection('notes').doc(noteId).collection('leaves');
+      const snap = await leavesRef.get();
+      if (!snap || snap.empty) return true;
+
+      const n = getNote(noteId);
+      for (const doc of snap.docs) {
+        const remoteLeaf = doc.data();
+        if (!remoteLeaf || !remoteLeaf.id) continue;
+
+        const localLeaf = await window.paperussLeaves.leafGet(remoteLeaf.id);
+
+        if (remoteLeaf.deletedAt && (remoteLeaf.deletedAt > 0)) {
+          // A deleted Leaf must not reappear from older cloud or offline data
+          if (localLeaf) {
+            await window.paperussLeaves.leafDel(remoteLeaf.id);
+          }
+          if (n && n.leafOrder) {
+            const idx = n.leafOrder.indexOf(remoteLeaf.id);
+            if (idx !== -1) {
+              n.leafOrder.splice(idx, 1);
+              n.leafCount = Math.max(1, n.leafOrder.length);
+            }
+          }
+        } else {
+          // Normal leaf
+          const queue = await window.paperussLeaves.leafQueueGetAll();
+          const hasPendingDelete = queue.some(x => ((x.data && x.data.id === remoteLeaf.id) || x.id === remoteLeaf.id) && x.action === 'delete');
+          if (hasPendingDelete) {
+            continue; // Don't resurrect a locally deleted leaf
+          }
+          if (!localLeaf || (remoteLeaf.updatedAt || 0) > (localLeaf.updatedAt || 0)) {
+            await window.paperussLeaves.leafPut({
+              id: remoteLeaf.id,
+              noteId: remoteLeaf.noteId || noteId,
+              title: remoteLeaf.title || 'Leaf',
+              content: remoteLeaf.content || '',
+              order: typeof remoteLeaf.order === 'number' ? remoteLeaf.order : 0,
+              createdAt: remoteLeaf.createdAt || Date.now(),
+              updatedAt: remoteLeaf.updatedAt || Date.now()
+            });
+          }
+        }
+      }
+      return true;
+    } catch (err) {
+      console.warn('syncNoteLeavesFromCloud warning:', err);
+      return false;
+    }
+  }
+};
+
+window.flushActiveLeaf = async function() {
+  if (window.currentActiveLeaf && !window.currentActiveLeaf.isVirtual && window.paperussLeaves) {
+    const ed = document.getElementById('editorContent');
+    const contentEl = ed ? (ed.querySelector('.editor-body') || ed) : null;
+    // Only read from DOM if the editor is currently rendering this specific leaf
+    // (prevents stale DOM from overwriting programmatic in-memory edits done via editField)
+    const editorIsForThisLeaf = contentEl && window.currentActiveLeaf.id &&
+      document.querySelector('[data-active-leaf-id="' + window.currentActiveLeaf.id + '"]') !== null;
+    if (editorIsForThisLeaf) {
+      window.currentActiveLeaf.content = contentEl.innerHTML;
+      window.currentActiveLeaf.updatedAt = Date.now();
+    }
+    await window.paperussLeaves.leafPut(window.currentActiveLeaf);
+  }
+};
+
+function setListMode(mode) {
+  state.listMode = mode;
+  const notesBtn = document.getElementById('modeNotesBtn');
+  const leavesBtn = document.getElementById('modeLeavesBtn');
+  if (notesBtn) notesBtn.classList.toggle('active', mode === 'notes');
+  if (leavesBtn) leavesBtn.classList.toggle('active', mode === 'leaves');
+  const sortSelect = document.getElementById('sortSelect');
+  if (sortSelect) sortSelect.style.display = mode === 'leaves' ? 'none' : '';
+  renderList();
+}
+window.setListMode = setListMode;
+
+async function renderLeavesList(c) {
+  const n = getNote(state.currentId);
+  const listTitle = document.getElementById('listTitle');
+  if (listTitle) listTitle.textContent = 'Leaves';
+  if (!n) {
+    c.innerHTML = '<div class="list-empty">Select a note to view its Leaves</div>';
+    return;
+  }
+  const order = window.paperussLeaves ? window.paperussLeaves.getNoteLeafOrder(n) : null;
+  const leaves = order && order.length > 0 ? order : [n.defaultLeafId || 'virtual_main_' + n.id];
+  const activeLeafId = window.paperussLeaves ? window.paperussLeaves.getNoteActiveLeafId(n) : (n.defaultLeafId || 'virtual_main_' + n.id);
+
+  let html = '<div style="padding: 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); margin-bottom: 6px;">';
+  html += '<span style="font-size:12px; font-weight:600; color:var(--fg-muted);">Leaves (' + leaves.length + ')</span>';
+  html += '<button class="btn btn-primary" id="newLeafBtn" onclick="createNewLeafAction()" style="padding: 4px 10px; font-size:12px;">+ New Leaf</button>';
+  html += '</div>';
+
+  html += '<div class="leaves-list-rows">';
+  for (let idx = 0; idx < leaves.length; idx++) {
+    const leafId = leaves[idx];
+    const isVirtual = typeof leafId === 'string' && leafId.startsWith('virtual_main');
+    let title = isVirtual ? 'Main' : 'Leaf ' + (idx + 1);
+    if (!isVirtual && window.paperussLeaves) {
+      const leafObj = await window.paperussLeaves.leafGet(leafId);
+      if (leafObj && leafObj.title) title = leafObj.title;
+    }
+    const isActive = leafId === activeLeafId;
+    const canDelete = leaves.length > 1;
+
+    html += `<div class="note-card leaf-row ${isActive ? 'active' : ''}" data-leaf-id="${leafId}" onclick="switchLeafAction('${leafId}')" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">`;
+    html += `<div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">`;
+    html += `<i data-lucide="file-text" class="w-4 h-4 text-fg-muted"></i>`;
+    html += `<span class="leaf-row-title" style="font-size:13.5px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(title)}</span>`;
+    html += `</div>`;
+    html += `<div class="leaf-actions" style="display:flex; align-items:center; gap:2px;" onclick="event.stopPropagation();">`;
+    html += `<button class="btn btn-icon leaf-reorder-up" onclick="reorderLeafAction('${leafId}', -1)" title="Move up" style="padding:4px;"><i data-lucide="chevron-up" class="w-3.5 h-3.5"></i></button>`;
+    html += `<button class="btn btn-icon leaf-reorder-down" onclick="reorderLeafAction('${leafId}', 1)" title="Move down" style="padding:4px;"><i data-lucide="chevron-down" class="w-3.5 h-3.5"></i></button>`;
+    html += `<button class="btn btn-icon leaf-rename-btn" onclick="renameLeafAction('${leafId}')" title="Rename" style="padding:4px;"><i data-lucide="edit-2" class="w-3.5 h-3.5"></i></button>`;
+    html += `<button class="btn btn-icon leaf-duplicate-btn" onclick="duplicateLeafAction('${leafId}')" title="Duplicate" style="padding:4px;"><i data-lucide="copy" class="w-3.5 h-3.5"></i></button>`;
+    html += `<button class="btn btn-icon leaf-delete-btn" onclick="deleteLeafAction('${leafId}', false)" title="Delete" style="padding:4px; color:${canDelete?'var(--danger)':'var(--fg-muted)'};" ${!canDelete ? 'disabled' : ''}><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>`;
+    html += `</div>`;
+    html += `</div>`;
+  }
+  html += '</div>';
+
+  c.innerHTML = html;
+  refreshIcons();
+}
+window.renderLeavesList = renderLeavesList;
+
+function updateLeafTitleBar() {
+  const bar = document.getElementById('leafTitleBar');
+  if (!bar) return;
+  const n = getNote(state.currentId);
+  const nonNoteView = ['media','calendar','tasks','settings'].includes(state.filter);
+  if (!n || nonNoteView) {
+    bar.style.display = 'none';
+    return;
+  }
+  const noteNameEl = document.getElementById('leafTitleNoteName');
+  const leafNameEl = document.getElementById('leafTitleLeafName');
+  if (noteNameEl) noteNameEl.textContent = n.title || 'Untitled';
+  if (leafNameEl) {
+    const activeLeaf = window.currentActiveLeaf;
+    leafNameEl.textContent = activeLeaf && activeLeaf.title ? activeLeaf.title : 'Main';
+  }
+  bar.style.display = 'flex';
+}
+window.updateLeafTitleBar = updateLeafTitleBar;
+
+function openLeavesDrawer() {
+  const overlay = document.getElementById('leavesDrawerOverlay');
+  if (!overlay) return;
+  const contentEl = document.getElementById('leavesDrawerContent');
+  if (contentEl) {
+    renderLeavesList(contentEl);
+  }
+  overlay.classList.remove('hidden');
+  overlay.classList.add('show');
+}
+window.openLeavesDrawer = openLeavesDrawer;
+
+function closeLeavesDrawer() {
+  const overlay = document.getElementById('leavesDrawerOverlay');
+  if (!overlay) return;
+  overlay.classList.add('hidden');
+  overlay.classList.remove('show');
+}
+window.closeLeavesDrawer = closeLeavesDrawer;
+
+window.paperussState = state;
+window.paperussNotes = notes;

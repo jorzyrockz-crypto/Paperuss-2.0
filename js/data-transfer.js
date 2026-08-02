@@ -12,24 +12,46 @@ async function exportNotes(){
       media[id]={ name:rec.name, type:rec.type, kind:rec.kind, size:rec.size, dataURL:await blobToDataURL(rec.blob) };
     }
   }
-  const payload={ version:2, exportedAt:Date.now(), notes, media };
+
+  // v3: also export all Leaf records from IndexedDB
+  let leavesExport = {};
+  if (window.paperussLeaves) {
+    try {
+      for (const n of notes) {
+        if (window.paperussLeaves.isNoteMigratedToLeaves(n)) {
+          const noteLeaves = await window.paperussLeaves.leafGetByNoteId(n.id);
+          if (noteLeaves && noteLeaves.length > 0) {
+            leavesExport[n.id] = noteLeaves;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('exportNotes: leaf export partial failure', e);
+    }
+  }
+
+  const payload={ version:3, exportedAt:Date.now(), notes, leaves:leavesExport, media };
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
   a.download='paperuss-'+new Date().toISOString().slice(0,10)+'.json';
   a.click(); URL.revokeObjectURL(a.href);
-  toast('Exported '+notes.length+' notes'+(Object.keys(media).length?` + ${Object.keys(media).length} media`:''));
+  const leafNoteCount = Object.keys(leavesExport).length;
+  toast('Exported '+notes.length+' notes'+(Object.keys(media).length?` + ${Object.keys(media).length} media`:'')+(leafNoteCount?` + leaves for ${leafNoteCount} notes`:''));
 }
+
 function importNotes(file){
   const r=new FileReader();
   r.onload=async ()=>{
     try{
       if(file.size>100*1024*1024) throw new Error('Import file is larger than 100 MB');
       const data=JSON.parse(r.result);
-      // Support both legacy (array) and v2 ({notes, media}) formats
+      // Support v1 (array), v2 ({notes, media}), and v3 ({version:3, notes, leaves, media})
       const importedNotes = Array.isArray(data) ? data : (data.notes||[]);
       const importedMedia = (!Array.isArray(data) && data.media) ? data.media : {};
+      const importedLeaves = (data.version === 3 && data.leaves && typeof data.leaves === 'object') ? data.leaves : {};
       if(!Array.isArray(importedNotes)) throw 0;
+
       // Import media first, mapping old->new IDs to avoid collisions
       const idMap={};
       for(const [oldId, m] of Object.entries(importedMedia)){
@@ -39,37 +61,96 @@ function importNotes(file){
           idMap[oldId]=newId;
         }catch(e){}
       }
+
       let added=0;
+      // Map of old note ID -> new note ID for leaf remapping
+      const noteIdMap = {};
+
       importedNotes.forEach(n=>{
         if(n && typeof n==='object'){
           let content=String(n.content||'');
           if(content && !looksLikeHtml(content)) content=mdToHtml(content);
           content=typeof sanitizeNoteHTML==='function'?sanitizeNoteHTML(content):content;
           // Remap media IDs referenced in the note HTML
-          content=content.replace(/data-media-id="([^"]+)"/g,(m,id)=> idMap[id]?`data-media-id="${idMap[id]}"`:m);
-          notes.push({
-            id:uid(), title:String(n.title||''), content,
-            tags:Array.isArray(n.tags)?n.tags.filter(t=>typeof t==='string'):[],
-            pinned:!!n.pinned, archived:!!n.archived,
-            fontStyle:n.fontStyle||'sans',
-            pageViewEnabled:!!n.pageViewEnabled,
-            pageSize:n.pageSize||'a4',
-            pageOrientation:n.pageOrientation||'portrait',
-            pageMargins:n.pageMargins||'normal',
-            createdAt:n.createdAt||Date.now(), updatedAt:n.updatedAt||Date.now(),
-            calendarStart:Number.isFinite(+n.calendarStart)?+n.calendarStart:null,
-            calendarEnd:Number.isFinite(+n.calendarEnd)?+n.calendarEnd:null,
-            calendarRepeat:['daily','weekly','monthly','yearly'].includes(n.calendarRepeat)?n.calendarRepeat:null,
-            calendarNotify:n.calendarNotify===true,
-            coverImage:n.coverImage&&typeof n.coverImage==='object'?n.coverImage:null
-          });
+          content=content.replace(/data-media-id="([^"]+)"/g,(m,id)=>idMap[id]?`data-media-id="${idMap[id]}"`:m);
+          const newNoteId = uid();
+          noteIdMap[n.id] = newNoteId;
+
+          // Determine if this note had leaves in the export
+          const noteLeafExport = importedLeaves[n.id];
+          const hadLeaves = Array.isArray(noteLeafExport) && noteLeafExport.length > 0;
+
+          // Remap leafOrder and defaultLeafId
+          let leafIdRemap = {};
+          let newLeafOrder = undefined;
+          let newDefaultLeafId = undefined;
+          let newLeafCount = undefined;
+
+          if (hadLeaves) {
+            noteLeafExport.forEach(lf => {
+              const newLeafId = 'leaf_' + Date.now() + '_' + Math.random().toString(36).substr(2,6);
+              leafIdRemap[lf.id] = newLeafId;
+            });
+            newLeafOrder = Array.isArray(n.leafOrder) ? n.leafOrder.map(id => leafIdRemap[id] || id) : noteLeafExport.map(lf => leafIdRemap[lf.id]);
+            newDefaultLeafId = n.defaultLeafId ? (leafIdRemap[n.defaultLeafId] || newLeafOrder[0]) : newLeafOrder[0];
+            newLeafCount = newLeafOrder.length;
+          }
+
+          const newNote = {
+            id: newNoteId,
+            title: String(n.title||''),
+            content: hadLeaves ? content : content, // main content kept for compat
+            tags: Array.isArray(n.tags)?n.tags.filter(t=>typeof t==='string'):[],
+            pinned: !!n.pinned, archived: !!n.archived,
+            fontStyle: n.fontStyle||'sans',
+            pageViewEnabled: !!n.pageViewEnabled,
+            pageSize: n.pageSize||'a4',
+            pageOrientation: n.pageOrientation||'portrait',
+            pageMargins: n.pageMargins||'normal',
+            createdAt: n.createdAt||Date.now(), updatedAt: n.updatedAt||Date.now(),
+            calendarStart: Number.isFinite(+n.calendarStart)?+n.calendarStart:null,
+            calendarEnd: Number.isFinite(+n.calendarEnd)?+n.calendarEnd:null,
+            calendarRepeat: ['daily','weekly','monthly','yearly'].includes(n.calendarRepeat)?n.calendarRepeat:null,
+            calendarNotify: n.calendarNotify===true,
+            coverImage: n.coverImage&&typeof n.coverImage==='object'?n.coverImage:null,
+            ...(hadLeaves ? { leafOrder: newLeafOrder, defaultLeafId: newDefaultLeafId, leafCount: newLeafCount } : {})
+          };
+          notes.push(newNote);
+
+          // Import Leaf records into IDB if v3 and paperussLeaves is available
+          if (hadLeaves && window.paperussLeaves) {
+            noteLeafExport.forEach(async lf => {
+              try {
+                const newLeafId = leafIdRemap[lf.id];
+                if (!newLeafId) return;
+                const newOrder = newLeafOrder.indexOf(newLeafId);
+                // Remap media IDs in leaf content
+                let leafContent = String(lf.content || '');
+                leafContent = leafContent.replace(/data-media-id="([^"]+)"/g,(m,id)=>idMap[id]?`data-media-id="${idMap[id]}"`:m);
+                await window.paperussLeaves.leafPut({
+                  id: newLeafId,
+                  noteId: newNoteId,
+                  title: lf.title || 'Leaf',
+                  content: leafContent,
+                  order: newOrder >= 0 ? newOrder : (lf.order || 0),
+                  createdAt: lf.createdAt || Date.now(),
+                  updatedAt: lf.updatedAt || Date.now()
+                });
+              } catch(e) {
+                console.warn('importNotes: leaf IDB import error', e);
+              }
+            });
+          }
+
           added++;
         }
       });
+
       if(typeof sanitizeNoteCollection==='function') notes=sanitizeNoteCollection(notes);
       save(); renderAll();
       const mediaCount=Object.keys(idMap).length;
-      toast('Imported '+added+' note'+(added!==1?'s':'')+(mediaCount?` + ${mediaCount} media`:''));
+      const leafNoteCount = Object.keys(importedLeaves).length;
+      toast('Imported '+added+' note'+(added!==1?'s':'')+(mediaCount?` + ${mediaCount} media`:'')+(leafNoteCount?` + leaves for ${leafNoteCount} notes`:''));
     }catch(e){ toast(e?.message||'Invalid file — need a PapeRuss JSON export'); }
   };
   r.readAsText(file);
