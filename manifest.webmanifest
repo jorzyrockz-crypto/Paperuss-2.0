@@ -1,15 +1,18 @@
 {
   "id": "./",
-  "name": "PapeRuss 2.0",
+  "name": "PapeRuss 2.0 Stabilization",
   "short_name": "PapeRuss 2.0",
-  "description": "Offline-first notes, tasks, calendar, media, and planning.",
+  "description": "Stabilized offline-first notes, tasks, calendar, media, and planning workspace.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#0b0e14",
   "theme_color": "#0b0e14",
-  "categories": ["productivity", "utilities"],
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
   "share_target": {
     "action": "./share-target",
     "method": "POST",
@@ -21,7 +24,11 @@
       "files": [
         {
           "name": "media",
-          "accept": ["image/*", "text/*", "application/pdf"]
+          "accept": [
+            "image/*",
+            "text/*",
+            "application/pdf"
+          ]
         }
       ]
     }
@@ -38,9 +45,16 @@
         }
       ],
       "accept": {
-        "text/plain": [".txt"],
-        "text/markdown": [".md", ".markdown"],
-        "application/json": [".json"]
+        "text/plain": [
+          ".txt"
+        ],
+        "text/markdown": [
+          ".md",
+          ".markdown"
+        ],
+        "application/json": [
+          ".json"
+        ]
       }
     }
   ],

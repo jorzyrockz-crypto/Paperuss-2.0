@@ -522,6 +522,7 @@ async function renderNotebookCover(){
   if(n.coverImage.mediaId){
     try{coverSrc=await getMediaURL(n.coverImage.mediaId)||coverSrc;}catch(e){}
   }
+  if(typeof paperussSafeUrl==='function' && !paperussSafeUrl(coverSrc,'src','IMG')) coverSrc='';
   coverEl.innerHTML=`
     <img src="${esc(coverSrc)}" alt="Cover" style="object-position: center ${n.coverImage.positionY??50}%">
     <div class="cover-btn-overlay">

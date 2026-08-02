@@ -24,6 +24,7 @@ function importNotes(file){
   const r=new FileReader();
   r.onload=async ()=>{
     try{
+      if(file.size>100*1024*1024) throw new Error('Import file is larger than 100 MB');
       const data=JSON.parse(r.result);
       // Support both legacy (array) and v2 ({notes, media}) formats
       const importedNotes = Array.isArray(data) ? data : (data.notes||[]);
@@ -43,6 +44,7 @@ function importNotes(file){
         if(n && typeof n==='object'){
           let content=String(n.content||'');
           if(content && !looksLikeHtml(content)) content=mdToHtml(content);
+          content=typeof sanitizeNoteHTML==='function'?sanitizeNoteHTML(content):content;
           // Remap media IDs referenced in the note HTML
           content=content.replace(/data-media-id="([^"]+)"/g,(m,id)=> idMap[id]?`data-media-id="${idMap[id]}"`:m);
           notes.push({
@@ -54,15 +56,21 @@ function importNotes(file){
             pageSize:n.pageSize||'a4',
             pageOrientation:n.pageOrientation||'portrait',
             pageMargins:n.pageMargins||'normal',
-            createdAt:n.createdAt||Date.now(), updatedAt:n.updatedAt||Date.now()
+            createdAt:n.createdAt||Date.now(), updatedAt:n.updatedAt||Date.now(),
+            calendarStart:Number.isFinite(+n.calendarStart)?+n.calendarStart:null,
+            calendarEnd:Number.isFinite(+n.calendarEnd)?+n.calendarEnd:null,
+            calendarRepeat:['daily','weekly','monthly','yearly'].includes(n.calendarRepeat)?n.calendarRepeat:null,
+            calendarNotify:n.calendarNotify===true,
+            coverImage:n.coverImage&&typeof n.coverImage==='object'?n.coverImage:null
           });
           added++;
         }
       });
+      if(typeof sanitizeNoteCollection==='function') notes=sanitizeNoteCollection(notes);
       save(); renderAll();
       const mediaCount=Object.keys(idMap).length;
       toast('Imported '+added+' note'+(added!==1?'s':'')+(mediaCount?` + ${mediaCount} media`:''));
-    }catch(e){ toast('Invalid file — need a JSON export'); }
+    }catch(e){ toast(e?.message||'Invalid file — need a PapeRuss JSON export'); }
   };
   r.readAsText(file);
 }
@@ -73,10 +81,10 @@ function importNotes(file){
 function confirmDialog(title,text,okLabel,onOk){
   const root=document.getElementById('modalRoot');
   root.innerHTML=`<div class="modal-overlay"><div class="modal">
-    <h3>${title}</h3><p>${text}</p>
+    <h3>${esc(title)}</h3><p>${esc(text)}</p>
     <div class="modal-actions">
       <button class="btn" id="mCancel">Cancel</button>
-      <button class="btn btn-danger" id="mOk">${okLabel}</button>
+      <button class="btn btn-danger" id="mOk">${esc(okLabel)}</button>
     </div></div></div>`;
   const close=()=>root.innerHTML='';
   document.getElementById('mCancel').onclick=close;
@@ -85,20 +93,45 @@ function confirmDialog(title,text,okLabel,onOk){
 }
 function openImageLightbox(src){
   const root=document.getElementById('modalRoot');
-  root.innerHTML=`<div class="modal-overlay" style="cursor:zoom-out">
-    <img src="${src}" style="max-width:92vw;max-height:92vh;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.6)">
-  </div>`;
-  root.querySelector('.modal-overlay').onclick=()=>root.innerHTML='';
+  if(!root) return;
+  if(typeof paperussSafeUrl==='function' && !paperussSafeUrl(src,'src','IMG')){
+    toast('This image source is not allowed'); return;
+  }
+  root.replaceChildren();
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.style.cursor='zoom-out';
+  overlay.setAttribute('role','dialog');
+  overlay.setAttribute('aria-label','Image preview');
+  const image=document.createElement('img');
+  image.src=String(src||'');
+  image.alt='Image preview';
+  image.style.cssText='max-width:92vw;max-height:92vh;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.6)';
+  overlay.appendChild(image);
+  overlay.addEventListener('click',()=>root.replaceChildren());
+  root.appendChild(overlay);
 }
-function toast(msg, action, label='Undo'){
+function toast(msg, action, label='Undo', options={}){
+  if(!options.force && typeof appSettings==='object' && appSettings.notifToasts===false) return null;
   const c=document.getElementById('toast-container');
+  if(!c) return null;
   const t=document.createElement('div');
   t.className='toast';
-  t.innerHTML='<span>'+msg+'</span>'+(action?`<button class="toast-action">${label}</button>`:'');
+  const span=document.createElement('span');
+  span.textContent=String(msg||'');
+  t.appendChild(span);
+  if(action){
+    const button=document.createElement('button');
+    button.className='toast-action';
+    button.type='button';
+    button.textContent=String(label||'Undo');
+    t.appendChild(button);
+  }
   c.appendChild(t);
   const remove=()=>{ t.style.transition='opacity .2s'; t.style.opacity='0'; setTimeout(()=>t.remove(),200); };
   if(action) t.querySelector('.toast-action').onclick=()=>{ remove(); action(); };
   setTimeout(remove, 4500);
+  return t;
 }
 
 /* ============================================================
@@ -230,7 +263,7 @@ async function checkIncomingSharedData(){
     // 2. POST share payload cached by Service Worker
     if (isShared === '1' && 'caches' in window) {
       window.history.replaceState({}, document.title, window.location.pathname);
-      const cacheName = typeof CACHE_NAME !== 'undefined' ? CACHE_NAME : "paperuss-shell-v20";
+      const cacheName = window.PAPERUSS_BUILD?.cacheName || 'paperuss-shell-v21';
       const cache = await caches.open(cacheName);
       const match = await cache.match('./__pending_shared_payload__');
       if (match) {

@@ -80,7 +80,7 @@ function renderCalendarPlannerList(){
   datedNotes.forEach(n=>{
     html+=`<div class="note-card ${n.id===state.currentId?'active':''}" data-id="${n.id}"><div class="note-title"><i data-lucide="file-text" class="w-4 h-4 text-accent"></i>${esc(titleOf(n))}</div><div class="note-preview">${esc(stripHtml(n.content||'').slice(0,120))}</div><div class="note-meta"><span>Note / Journal</span></div></div>`;
   });
-  if(!html)html=`<div class="list-empty"><i data-lucide="calendar-check" style="width:30px;height:30px;margin:0 auto 10px;opacity:.45"></i>No items for this date.<br>Double-click the date to create an event.</div>`;
+  if(!html)html=`<div class="list-empty"><i data-lucide="calendar-check" style="width:30px;height:30px;margin:0 auto 10px;opacity:.45"></i>No items for this date.<br>Select the date, then use Add Event.</div>`;
   c.innerHTML=html;refreshIcons();
 }
 
@@ -320,6 +320,7 @@ function openCalendarEventCreator(year, month, day){
           <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg-secondary);cursor:pointer">
             <input type="checkbox" id="evNotify" checked> Notify me when this event starts
           </label>
+          <small style="color:var(--fg-muted);line-height:1.4">Reminder checks run while PapeRuss is open.</small>
         </div>
         <div class="modal-actions">
           <button class="btn" id="evCancel">Cancel</button>
@@ -387,16 +388,16 @@ function openCalendarEventCreator(year, month, day){
         const notifyEl=document.getElementById('evNotify');
         const title=titleEl.value.trim()||'Untitled Event';
         const startTimeStr=startTimeEl.value||'09:00';
-        const [sh,sm]=startTimeStr.split(':').map(Number);
         const startDateVal=startDateEl.value||`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
         const startTs=new Date(startDateVal+'T'+startTimeStr+':00').getTime();
         const endDateVal=endDateEl.value||startDateVal;
         const endTimeStr=endTimeEl.value||'10:00';
-        const [eh,em]=endTimeStr.split(':').map(Number);
         const endTs=new Date(endDateVal+'T'+endTimeStr+':00').getTime();
         const type=typeEl.value;
         const repeatVal=repeatEl.value;
         const notify=notifyEl.checked;
+        if(!Number.isFinite(startTs)||!Number.isFinite(endTs)){ toast('Enter valid event dates and times'); return; }
+        if(endTs<startTs){ toast('Event end must be after its start'); return; }
         let tags=['calendar'];
         if(type==='meeting') tags.push('meeting');
         if(type==='deadline') tags.push('deadline');
@@ -404,17 +405,21 @@ function openCalendarEventCreator(year, month, day){
         if(repeatVal!=='none'){ tags.push('recurring'); tags.push('repeat-'+repeatVal); }
         const startFmt=new Date(startTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
         const endFmt=new Date(endTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-        const content=`<p><strong>📅 ${startFmt}</strong></p><p>→ ${endFmt}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${repeatVal}</p>`:''}${descEl.value?`<p>${descEl.value}</p>`:''}`;
+        const safeDescription=esc(descEl.value.trim());
+        const content=sanitizeNoteHTML(`<p><strong>📅 ${esc(startFmt)}</strong></p><p>→ ${esc(endFmt)}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${esc(repeatVal)}</p>`:''}${safeDescription?`<p>${safeDescription}</p>`:''}`);
 
         const n={
           id:uid(), title, content, tags, pinned:false, archived:false,
           createdAt:Date.now(), updatedAt:Date.now(), fontStyle:'sans',
-          calendarStart:startTs, calendarEnd:endTs
+          calendarStart:startTs, calendarEnd:endTs,
+          calendarRepeat:repeatVal==='none'?null:repeatVal,
+          calendarNotify:notify, calendarLastNotifiedAt:null
         };
         notes.unshift(n);
         save();
-        if(notify && typeof addNotification==='function'){
-          addNotification({type:'calendar',title:'Event Created: '+title,body:startFmt,icon:'calendar'});
+        if(notify && typeof scheduleEventNotification==='function') scheduleEventNotification(n);
+        if(typeof addNotification==='function'){
+          addNotification({type:'calendar',title:'Event Created: '+title,body:startFmt,icon:'calendar',activity:true});
         }
         renderCalendarView(); renderAll();
         toast('Event created');
@@ -456,21 +461,60 @@ function openCalendarEventCreator(year, month, day){
   renderModalContent();
 }
 
-let eventNotifTimers=[];
-function scheduleEventNotification(note){
-  if(!note.calendarStart || !note.calendarNotify) return;
-  const msUntil=note.calendarStart - Date.now();
-  if(msUntil<=0) return;
-  // Store timer so we can cancel on note delete
+const eventNotifTimers=new Map();
+const EVENT_TIMER_MAX_DELAY=6*60*60*1000;
+function nextEventOccurrenceStart(note,after=Date.now()){
+  const start=Number(note?.calendarStart);
+  if(!Number.isFinite(start)) return null;
+  const repeat=note.calendarRepeat;
+  if(!repeat) return start>=after?start:null;
+  let cursor=new Date(start),guard=0;
+  while(cursor.getTime()<after && guard++<5000){
+    const next=new Date(cursor);
+    if(repeat==='daily') next.setDate(next.getDate()+1);
+    else if(repeat==='weekly') next.setDate(next.getDate()+7);
+    else if(repeat==='monthly') next.setMonth(next.getMonth()+1);
+    else if(repeat==='yearly') next.setFullYear(next.getFullYear()+1);
+    else return null;
+    if(next.getTime()<=cursor.getTime()) return null;
+    cursor=next;
+  }
+  return cursor.getTime();
+}
+function scheduleEventNotification(note,after=Date.now()-5000){
+  cancelEventTimers(note?.id);
+  const current=getNote(note?.id)||note;
+  if(!current?.id || !current.calendarNotify || appSettings?.notifEvents===false) return;
+  const occurrence=nextEventOccurrenceStart(current,after);
+  if(!occurrence || current.calendarLastNotifiedAt===occurrence) return;
+  const delay=occurrence-Date.now();
+  if(delay>EVENT_TIMER_MAX_DELAY){
+    eventNotifTimers.set(current.id,setTimeout(()=>scheduleEventNotification(current),EVENT_TIMER_MAX_DELAY));
+    return;
+  }
   const timer=setTimeout(()=>{
-    fireNotification('📅 '+titleOf(note), note.content?stripHtml(note.content).slice(0,100):'');
-    addNotification({type:'task',title:'Event starting: '+titleOf(note),body:new Date(note.calendarStart).toLocaleString(),icon:'alarm-clock'});
-  }, msUntil);
-  eventNotifTimers.push({id:note.id, timer});
+    eventNotifTimers.delete(current.id);
+    const latest=getNote(current.id)||current;
+    if(appSettings?.notifEvents===false || latest.deletedAt || !latest.calendarNotify) return;
+    latest.calendarLastNotifiedAt=occurrence;
+    latest.updatedAt=Math.max(latest.updatedAt||0,Date.now());
+    save();
+    fireNotification('📅 '+titleOf(latest),latest.content?stripHtml(latest.content).slice(0,100):'');
+    addNotification({type:'calendar',title:'Event starting: '+titleOf(latest),body:new Date(occurrence).toLocaleString(),icon:'alarm-clock'});
+    if(latest.calendarRepeat) scheduleEventNotification(latest,occurrence+1);
+  },Math.max(0,delay));
+  eventNotifTimers.set(current.id,timer);
 }
 function cancelEventTimers(noteId){
-  const found=eventNotifTimers.find(t=>t.id===noteId);
-  if(found){ clearTimeout(found.timer); eventNotifTimers=eventNotifTimers.filter(t=>t.id!==noteId); }
+  const timer=eventNotifTimers.get(noteId);
+  if(timer) clearTimeout(timer);
+  eventNotifTimers.delete(noteId);
+}
+function rescheduleAllEventNotifications(){
+  eventNotifTimers.forEach(timer=>clearTimeout(timer));
+  eventNotifTimers.clear();
+  if(appSettings?.notifEvents===false) return;
+  notes.forEach(note=>{ if(!note.deletedAt && note.calendarNotify) scheduleEventNotification(note); });
 }
 
 function createQuickEvent(year, month, day){

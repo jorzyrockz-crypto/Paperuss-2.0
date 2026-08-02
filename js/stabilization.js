@@ -1,0 +1,250 @@
+/* ============================================================
+   PAPERUSS 2.0 STABILIZATION RUNTIME
+   Shared release metadata, data normalization, and HTML safety.
+   ============================================================ */
+(function initPaperussStabilization(global){
+  'use strict';
+
+  const BUILD=Object.freeze({
+    name:'PapeRuss 2.0 Stabilization',
+    version:'2.0.1-stabilization',
+    cacheName:'paperuss-shell-v21',
+    schemaVersion:4
+  });
+
+  const ALLOWED_TAGS=new Set([
+    'A','ABBR','AUDIO','B','BLOCKQUOTE','BR','BUTTON','CAPTION','CODE','COL','COLGROUP',
+    'DEL','DIV','EM','FIGCAPTION','FIGURE','H1','H2','H3','H4','H5','H6','HR','I','IMG',
+    'INPUT','INS','KBD','LI','MARK','OL','P','PRE','S','SMALL','SOURCE','SPAN','STRIKE',
+    'STRONG','SUB','SUP','TABLE','TBODY','TD','TFOOT','TH','THEAD','TR','U','UL','VIDEO'
+  ]);
+  const DROP_CONTENT_TAGS=new Set([
+    'APPLET','BASE','EMBED','FORM','FRAME','FRAMESET','HEAD','IFRAME','LINK','META','NOSCRIPT',
+    'OBJECT','SCRIPT','STYLE','TEMPLATE','TITLE','SVG','MATH'
+  ]);
+  const COMMON_ATTRS=new Set([
+    'alt','aria-label','aria-hidden','aria-describedby','aria-labelledby','class','contenteditable',
+    'dir','download','draggable','height','hidden','lang','role','spellcheck','style','title','width'
+  ]);
+  const TAG_ATTRS={
+    A:new Set(['href','target','rel']),
+    AUDIO:new Set(['controls','loop','muted','preload','src']),
+    BUTTON:new Set(['type','disabled']),
+    COL:new Set(['span']),
+    INPUT:new Set(['type','checked','disabled']),
+    IMG:new Set(['src','loading','decoding']),
+    LI:new Set(['value']),
+    OL:new Set(['start','reversed','type']),
+    SOURCE:new Set(['src','type']),
+    TABLE:new Set(['cellpadding','cellspacing']),
+    TD:new Set(['colspan','rowspan']),
+    TH:new Set(['colspan','rowspan','scope']),
+    VIDEO:new Set(['controls','loop','muted','playsinline','poster','preload','src'])
+  };
+  const URL_ATTRS=new Set(['href','src','poster']);
+  const BOOLEAN_ATTRS=new Set(['checked','controls','disabled','hidden','loop','muted','playsinline','reversed']);
+  const VALID_REPEAT=new Set(['daily','weekly','monthly','yearly']);
+  const VALID_PRIORITY=new Set(['low','medium','high']);
+  const SAFE_ID=/^[A-Za-z0-9_.:-]{1,200}$/;
+
+  function isSafeUrl(raw,attr,tag){
+    const value=String(raw||'').trim();
+    if(!value) return true;
+    if(value.startsWith('#') || value.startsWith('./') || value.startsWith('../') || value.startsWith('/')) return true;
+    const lower=value.replace(/[\u0000-\u0020]+/g,'').toLowerCase();
+    if(lower.startsWith('javascript:') || lower.startsWith('vbscript:') || lower.startsWith('file:')) return false;
+    if(lower.startsWith('data:')){
+      if(attr==='href') return false;
+      if(tag==='IMG') return /^data:image\/(?:png|gif|jpe?g|webp|avif);/i.test(value);
+      if(tag==='AUDIO' || tag==='SOURCE') return /^data:(?:audio|video)\/[a-z0-9.+-]+;/i.test(value);
+      if(tag==='VIDEO') return /^data:video\/[a-z0-9.+-]+;/i.test(value);
+      return false;
+    }
+    if(lower.startsWith('blob:')) return ['href','src','poster'].includes(attr);
+    try{
+      const url=new URL(value,global.location?.href||'https://paperuss.invalid/');
+      return ['http:','https:','mailto:','tel:'].includes(url.protocol) || url.origin===(global.location?.origin||'https://paperuss.invalid');
+    }catch(_){
+      return false;
+    }
+  }
+
+  function sanitizeStyle(raw){
+    const value=String(raw||'');
+    if(!value) return '';
+    const lower=value.toLowerCase();
+    if(/expression\s*\(|javascript\s*:|vbscript\s*:|@import|behavior\s*:|-moz-binding|url\s*\(/i.test(lower)) return '';
+    const probe=document.createElement('span');
+    probe.setAttribute('style',value);
+    const safe=[];
+    for(let i=0;i<probe.style.length;i++){
+      const prop=probe.style[i];
+      const propValue=probe.style.getPropertyValue(prop);
+      const priority=probe.style.getPropertyPriority(prop);
+      if(!prop || /behavior|-moz-binding/i.test(prop)) continue;
+      if(/expression\s*\(|javascript\s*:|vbscript\s*:|@import|url\s*\(/i.test(propValue)) continue;
+      safe.push(`${prop}:${propValue}${priority?' !important':''}`);
+    }
+    return safe.join(';');
+  }
+
+  function sanitizeElementAttributes(el){
+    const tag=el.tagName;
+    const tagAllowed=TAG_ATTRS[tag]||new Set();
+    Array.from(el.attributes).forEach(attr=>{
+      const name=attr.name.toLowerCase();
+      const value=attr.value;
+      if(name.startsWith('on') || name==='id' || name==='srcdoc' || name==='formaction' || name==='autofocus'){
+        el.removeAttribute(attr.name); return;
+      }
+      const isData=name.startsWith('data-') && /^data-[a-z0-9_.:-]+$/i.test(name);
+      const isAria=name.startsWith('aria-') && /^aria-[a-z0-9_.:-]+$/i.test(name);
+      if(!COMMON_ATTRS.has(name) && !tagAllowed.has(name) && !isData && !isAria){
+        el.removeAttribute(attr.name); return;
+      }
+      if(URL_ATTRS.has(name) && !isSafeUrl(value,name,tag)){
+        el.removeAttribute(attr.name); return;
+      }
+      if(name==='style'){
+        const safe=sanitizeStyle(value);
+        if(safe) el.setAttribute('style',safe); else el.removeAttribute('style');
+      }
+      if(name==='target' && value!=='_blank' && value!=='_self') el.removeAttribute('target');
+      if(name==='contenteditable' && value!=='true' && value!=='false') el.removeAttribute('contenteditable');
+      if(BOOLEAN_ATTRS.has(name) && value==='false') el.removeAttribute(attr.name);
+    });
+
+    if(tag==='A' && el.getAttribute('target')==='_blank') el.setAttribute('rel','noopener noreferrer');
+    if(tag==='BUTTON') el.setAttribute('type','button');
+    if(tag==='INPUT'){
+      if((el.getAttribute('type')||'').toLowerCase()!=='checkbox'){
+        el.replaceWith(document.createTextNode(''));
+      }else{
+        el.setAttribute('type','checkbox');
+      }
+    }
+    if((tag==='AUDIO'||tag==='VIDEO') && !el.hasAttribute('controls')) el.setAttribute('controls','');
+    if(tag==='IMG'){
+      if(!el.hasAttribute('loading')) el.setAttribute('loading','lazy');
+      if(!el.hasAttribute('decoding')) el.setAttribute('decoding','async');
+    }
+  }
+
+  function sanitizeNoteHTML(input){
+    const html=String(input||'');
+    if(!html) return '';
+    const parsed=new DOMParser().parseFromString(`<body>${html}</body>`,'text/html');
+    const body=parsed.body;
+    const walk=document.createTreeWalker(body,NodeFilter.SHOW_ELEMENT);
+    const nodes=[];
+    while(walk.nextNode()) nodes.push(walk.currentNode);
+    nodes.reverse().forEach(el=>{
+      const tag=el.tagName;
+      if(DROP_CONTENT_TAGS.has(tag)){
+        el.remove(); return;
+      }
+      if(!ALLOWED_TAGS.has(tag)){
+        el.replaceWith(...Array.from(el.childNodes)); return;
+      }
+      sanitizeElementAttributes(el);
+    });
+    return body.innerHTML;
+  }
+
+  function sanitizeId(value){
+    const id=String(value||'').trim();
+    return SAFE_ID.test(id)?id:'';
+  }
+
+  function safeNumber(value,fallback=null){
+    const num=Number(value);
+    return Number.isFinite(num)?num:fallback;
+  }
+
+  function sanitizeNoteRecord(note){
+    if(!note || typeof note!=='object') return null;
+    note.id=sanitizeId(note.id);
+    if(!note.id) return null;
+    note.title=String(note.title||'').slice(0,500);
+    note.content=sanitizeNoteHTML(note.content||'');
+    note.tags=Array.isArray(note.tags)
+      ? Array.from(new Set(note.tags.filter(t=>typeof t==='string').map(t=>t.trim()).filter(Boolean).slice(0,100)))
+      : [];
+    note.pinned=!!note.pinned;
+    note.archived=!!note.archived;
+    note.fontStyle=['sans','serif','mono','rounded'].includes(note.fontStyle)?note.fontStyle:'sans';
+    note.pageViewEnabled=note.pageViewEnabled===true;
+    note.pageSize=['auto','a4','letter','legal'].includes(note.pageSize)?note.pageSize:'a4';
+    note.pageOrientation=['portrait','landscape'].includes(note.pageOrientation)?note.pageOrientation:'portrait';
+    note.pageMargins=['narrow','normal','wide'].includes(note.pageMargins)?note.pageMargins:'normal';
+    if(note.coverImage && typeof note.coverImage==='object'){
+      const source=String(note.coverImage.src||'').slice(0,5_000_000);
+      const mediaId=sanitizeId(note.coverImage.mediaId);
+      const positionY=Math.max(0,Math.min(100,safeNumber(note.coverImage.positionY,50)));
+      note.coverImage={
+        src:isSafeUrl(source,'src','IMG')?source:'',
+        mediaId:mediaId||'',
+        cropParams:note.coverImage.cropParams&&typeof note.coverImage.cropParams==='object'?note.coverImage.cropParams:null,
+        positionY
+      };
+      if(!note.coverImage.src && !note.coverImage.mediaId) delete note.coverImage;
+    }else if(note.coverImage!=null){
+      delete note.coverImage;
+    }
+    note.createdAt=safeNumber(note.createdAt,Date.now());
+    note.updatedAt=safeNumber(note.updatedAt,note.createdAt);
+    if(note.deletedAt!=null) note.deletedAt=safeNumber(note.deletedAt,null);
+    if(note.calendarStart!=null) note.calendarStart=safeNumber(note.calendarStart,null);
+    if(note.calendarEnd!=null) note.calendarEnd=safeNumber(note.calendarEnd,note.calendarStart);
+    note.calendarNotify=note.calendarNotify===true;
+    const taggedRepeat=note.tags.find(tag=>tag.startsWith('repeat-'))?.slice(7);
+    note.calendarRepeat=VALID_REPEAT.has(note.calendarRepeat)
+      ? note.calendarRepeat
+      : (VALID_REPEAT.has(taggedRepeat)?taggedRepeat:null);
+    if(note.calendarLastNotifiedAt!=null) note.calendarLastNotifiedAt=safeNumber(note.calendarLastNotifiedAt,null);
+    return note;
+  }
+
+  function sanitizeNoteCollection(value){
+    if(!Array.isArray(value)) return [];
+    const seen=new Set();
+    return value.map(sanitizeNoteRecord).filter(note=>{
+      if(!note || seen.has(note.id)) return false;
+      seen.add(note.id); return true;
+    });
+  }
+
+
+  function sanitizeTaskRecord(task){
+    if(!task || typeof task!=='object') return null;
+    task.id=sanitizeId(task.id);
+    if(!task.id) return null;
+    task.text=String(task.text||'').slice(0,2000);
+    task.completed=task.completed===true;
+    task.priority=VALID_PRIORITY.has(task.priority)?task.priority:'medium';
+    task.due=task.due==null?null:safeNumber(task.due,null);
+    task.notified=task.notified===true;
+    task.groupId=task.groupId==null?'':sanitizeId(task.groupId);
+    task.createdAt=safeNumber(task.createdAt,Date.now());
+    task.updatedAt=safeNumber(task.updatedAt,task.createdAt);
+    return task;
+  }
+
+  function sanitizeTaskCollection(value){
+    if(!Array.isArray(value)) return [];
+    const seen=new Set();
+    return value.map(sanitizeTaskRecord).filter(task=>{
+      if(!task || seen.has(task.id)) return false;
+      seen.add(task.id); return true;
+    });
+  }
+
+  global.PAPERUSS_BUILD=BUILD;
+  global.sanitizeNoteHTML=sanitizeNoteHTML;
+  global.sanitizeNoteRecord=sanitizeNoteRecord;
+  global.sanitizeNoteCollection=sanitizeNoteCollection;
+  global.sanitizeTaskRecord=sanitizeTaskRecord;
+  global.sanitizeTaskCollection=sanitizeTaskCollection;
+  global.paperussSafeId=sanitizeId;
+  global.paperussSafeUrl=isSafeUrl;
+})(window);

@@ -16,7 +16,7 @@ document.addEventListener('selectionchange', ()=>{
 });
 
 function openLinkInAppOrTab(url){
-  if(!url) return;
+  if(!url || (typeof paperussSafeUrl==='function' && !paperussSafeUrl(url,'href','A'))) return;
   // Allow OS deep-linking / registered app protocol handlers to launch directly
   const a=document.createElement('a');
   a.href=url;
@@ -270,6 +270,7 @@ function insertRichLink(){
   if(!url) return;
   let u;
   try{ u=new URL(url); }catch(e){ toast('Invalid URL'); return; }
+  if(!['http:','https:'].includes(u.protocol)){ toast('Only http:// and https:// links are supported'); return; }
   const host=u.hostname.replace(/^www\./,'');
   const path=(u.pathname==='/'?'':u.pathname).replace(/\/$/,'');
   const title=prompt('Title (optional):', decodeURIComponent(path.split('/').pop()||host)) || host;
@@ -279,7 +280,7 @@ function insertRichLink(){
   insertHTMLAtCaret(
     `<a class="media-card link-card" contenteditable="false" data-media-id="${id}" data-media-kind="link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">
       <div class="mc-top">
-        <div class="mc-icon"><img src="${favicon}" alt="" onerror="this.style.display='none'"></div>
+        <div class="mc-icon"><img src="${esc(favicon)}" alt="" loading="lazy" decoding="async"></div>
         <div class="mc-body">
           <div class="mc-title">${esc(title)}</div>
           <div class="mc-meta">${esc(host)}</div>

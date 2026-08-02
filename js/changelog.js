@@ -81,7 +81,6 @@ function openChangelogModal(){
     body.querySelector('[data-changelog-retry]').onclick=()=>openChangelogModal();
   });
 }
-}
 
 async function checkWhatsNewAutoPopup(){
   try {

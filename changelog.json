@@ -1,7 +1,16 @@
 {
-  "generatedAt": "2026-07-30T03:54:11.185Z",
+  "generatedAt": "2026-08-02T01:10:00.000Z",
   "source": "https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases",
   "releases": [
+    {
+      "tagName": "v2.0.1-stabilization",
+      "name": "PapeRuss 2.0 Stabilization",
+      "title": "Reliability, Reminder, Security, and PWA Stabilization",
+      "publishedAt": "2026-08-02T01:10:00.000Z",
+      "body": "### PapeRuss 2.0 Stabilization\n- Fixed the changelog parse error and added release validation.\n- Repaired calendar recurrence and reminder persistence.\n- Made notification switches and test results reliable.\n- Added sanitization for imported, pasted, local, and cloud note content.\n- Normalized task, settings, cover, and notification records.\n- Aligned and hardened the PWA cache at paperuss-shell-v21.\n\n**Reminder limitation:** alerts are checked while PapeRuss is open; closed-app push delivery is not included.",
+      "url": "https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases",
+      "prerelease": false
+    },
     {
       "tagName": "v2.0.0",
       "name": "PapeRuss 2.0 Official Release",

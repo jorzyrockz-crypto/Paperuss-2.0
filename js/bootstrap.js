@@ -48,6 +48,8 @@ function bind(){
   };
   const mhGridEl=document.getElementById('mhGrid');
   if(mhGridEl) mhGridEl.onclick=e=>{
+    const jump=e.target.closest('[data-jump-note]');
+    if(jump){ e.stopPropagation(); jumpToNote(jump.dataset.jumpNote); return; }
     const c=e.target.closest('[data-mh-select]'); if(!c) return;
     selectMediaAsset(c.dataset.mhSelect);
   };
@@ -526,7 +528,7 @@ function bind(){
       e.preventDefault();
       const doc = new DOMParser().parseFromString(html, 'text/html');
       normalizeAIPasteHTML(doc);
-      const cleanHTML = doc.body.innerHTML;
+      const cleanHTML = typeof sanitizeNoteHTML==='function'?sanitizeNoteHTML(doc.body.innerHTML):doc.body.innerHTML;
       document.execCommand('insertHTML', false, cleanHTML);
       showPasteAsPlainTextChip(text || doc.body.textContent);
       if(typeof autoCaptureExternalImages==='function') setTimeout(autoCaptureExternalImages, 50);
@@ -749,7 +751,7 @@ function bind(){
       const actEl=e.target.closest('[data-notif-action]');
       if(actEl){
         const url=actEl.dataset.notifUrl;
-        if(url) window.open(url, '_blank');
+        if(url && (typeof paperussSafeUrl!=='function' || paperussSafeUrl(url,'href','A'))) window.open(url, '_blank','noopener,noreferrer');
         markNotifRead(actEl.dataset.notifAction);
         notifPanel.classList.remove('show');
         return;
@@ -834,7 +836,7 @@ function bind(){
   bindSettings();
   initAuthAndSync();
   // Schedule event notifications for any existing notes that have them
-  notes.forEach(n=>{ if(!n.deletedAt && n.calendarNotify && n.calendarStart) scheduleEventNotification(n); });
+  if(typeof rescheduleAllEventNotifications==='function') rescheduleAllEventNotifications();
   state.currentId = filteredNotes()[0]?.id || null;
   renderAll();
   updateNotifBar();

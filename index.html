@@ -7,15 +7,15 @@
 <meta name="theme-color" content="#0b0e14">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="application-name" content="PapeRuss 2.0">
-<meta name="apple-mobile-web-app-title" content="PapeRuss 2.0">
-<title>PapeRuss 2.0 · Offline Notes</title>
+<meta name="application-name" content="PapeRuss 2.0 Stabilization">
+<meta name="apple-mobile-web-app-title" content="PapeRuss 2.0 Stabilization">
+<title>PapeRuss 2.0 Stabilization · Offline Notes</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/paperuss-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/paperuss-512.png">
 <link rel="apple-touch-icon" href="assets/icons/paperuss-192.png">
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <!-- Firebase (optional cloud sync). App works fully offline if these fail to load or are unconfigured. -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" onerror="window.__fbLoadFailed=true"></script>
@@ -572,6 +572,7 @@
 
           <div class="settings-section">
             <h3><i data-lucide="bell" class="w-4 h-4"></i> Notifications & Reminders</h3>
+            <p class="settings-note" role="note">Reminders are checked while PapeRuss is open. Browser or operating-system suspension can delay or miss them; true closed-app push delivery is not included in this stabilization release.</p>
             <div class="settings-row">
               <div class="settings-label">
                 <span>Browser notifications</span>
@@ -778,7 +779,7 @@
 </div>
 
 <div id="modalRoot"></div>
-<div id="toast-container"></div>
+<div id="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <!-- ============ TABLE QUICK TOOLBAR (fix #7) ============ -->
 <!-- Grouped table toolbar: primary 6 buttons + submenus -->
@@ -1056,6 +1057,7 @@
   </div>
 </div>
 
+<script src="js/stabilization.js"></script>
 <script src="js/history.js"></script>
 <script src="js/core.js"></script>
 <script src="js/productivity.js"></script>

@@ -169,7 +169,7 @@ async function shareCurrentNote(){
       }else{
         await navigator.share({title:titleOf(note),text,url:location.href});
       }
-      addNotification({type:'note',title:'Note shared',body:`"${titleOf(note)}" was sent from the native share sheet.`,icon:'share-2'});
+      addNotification({type:'note',title:'Note shared',body:`"${titleOf(note)}" was sent from the native share sheet.`,icon:'share-2',activity:true});
       return;
     }
     await navigator.clipboard.writeText(text);
@@ -391,7 +391,7 @@ function sanitizeForStorage(html){
   temp.querySelectorAll('.table-selection-mode,.table-moving').forEach(el=>{
     el.classList.remove('table-selection-mode','table-moving');
   });
-  return temp.innerHTML;
+  return typeof sanitizeNoteHTML==='function'?sanitizeNoteHTML(temp.innerHTML):temp.innerHTML;
 }
 function handleBodyInput(){
   if(state.suppressInput) return;

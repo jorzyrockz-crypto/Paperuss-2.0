@@ -5,10 +5,13 @@ const TASKS_KEY='octonotes:tasks';
 let standaloneTasks=[];
 
 function loadTasks(){
-  try{ standaloneTasks=JSON.parse(localStorage.getItem(TASKS_KEY))||[]; }
-  catch(e){ standaloneTasks=[]; }
+  try{
+    const parsed=JSON.parse(localStorage.getItem(TASKS_KEY))||[];
+    standaloneTasks=typeof sanitizeTaskCollection==='function'?sanitizeTaskCollection(parsed):parsed;
+  }catch(e){ standaloneTasks=[]; }
 }
 function saveTasks(){
+  if(typeof sanitizeTaskCollection==='function') standaloneTasks=sanitizeTaskCollection(standaloneTasks);
   localStorage.setItem(TASKS_KEY, JSON.stringify(standaloneTasks));
   if(typeof queueCloudSync==='function') queueCloudSync();
 }
@@ -144,7 +147,7 @@ function openTaskCreatorModal(){
             }
           }
           renderTasksView(); updateTasksCount(); renderAll();
-          addNotification({type:'task',title:`${lines.length} tasks created`,body:lines.slice(0,3).join(', ')+(lines.length>3?'…':''),icon:'check-square'});
+          addNotification({type:'task',title:`${lines.length} tasks created`,body:lines.slice(0,3).join(', ')+(lines.length>3?'…':''),icon:'check-square',activity:true});
           close();
         };
       }
@@ -283,24 +286,35 @@ function updateNotifBar(){
   else bar.style.display='none';
 }
 
-function requestNotifPermission(){
-  if(!notifSupported()){ toast('Notifications not supported here'); return; }
-  Notification.requestPermission().then(p=>{
+async function requestNotifPermission(){
+  if(!notifSupported()){ toast('System notifications are not supported in this browser',null,'Undo',{force:true}); return 'unsupported'; }
+  try{
+    const permission=await Notification.requestPermission();
     updateNotifBar();
-    if(p==='granted'){
-      toast('Reminders enabled');
-        fireNotification('PapeRuss reminders on', 'You will be notified when tasks are due.');
-        addNotification({type:'task',title:'Reminders enabled',body:'You will be notified when tasks are due.',icon:'bell'});
-    } else toast('Notifications blocked');
-  });
+    if(permission==='granted'){
+      toast('Browser reminders enabled',null,'Undo',{force:true});
+      fireNotification('PapeRuss reminders on','You will be notified while PapeRuss is allowed to run.');
+      addNotification({type:'system',title:'Reminders enabled',body:'Browser notification permission was granted.',icon:'bell'});
+    }else if(permission==='denied'){
+      toast('Notifications are blocked in browser settings',null,'Undo',{force:true});
+    }
+    return permission;
+  }catch(error){
+    toast('Could not request notification permission',null,'Undo',{force:true});
+    return 'error';
+  }
 }
 
-function fireNotification(title, body){
+function fireNotification(title,body){
+  if(!notifSupported()) return {ok:false,status:'unsupported'};
+  if(Notification.permission!=='granted') return {ok:false,status:Notification.permission||'unavailable'};
   try{
-    if(notifSupported() && Notification.permission==='granted'){
-      new Notification(title, {body, icon:'', badge:''});
-    }
-  }catch(e){}
+    const notification=new Notification(String(title||'PapeRuss'),{body:String(body||''),icon:'assets/icons/paperuss-192.png',badge:'assets/icons/paperuss-192.png'});
+    return {ok:true,status:'shown',notification};
+  }catch(error){
+    console.warn('Notification display failed',error);
+    return {ok:false,status:'error',error};
+  }
 }
 
 let reminderTimer=null;
@@ -323,26 +337,36 @@ function startReminderWatcher(){
         addNotification({type:'task',title:'⏰ Task due: '+t.text,body:prio+' — open Tasks to complete it.',icon:'alarm-clock'});
       });
       // Only one banner at a time, so repeated cycles never stack.
-      document.querySelectorAll('.task-due-toast').forEach(el=>el.remove());
-      const msg=dueTasks.length===1
-        ? '⏰ Task due: '+esc(dueTasks[0].text)
-        : `⏰ ${dueTasks.length} tasks due!`;
-      const toastEl=document.createElement('div');
-      toastEl.className='toast task-due-toast';
-      toastEl.innerHTML=`<span style="font-size:14px;font-weight:600;flex:1">${msg}</span><button class="toast-action" style="font-size:13px;font-weight:700;color:#fff">View</button>`;
-      toastEl.style.cssText='position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:999;min-width:260px;max-width:calc(100vw - 32px);background:var(--danger);color:#fff;border:none;box-shadow:0 12px 40px rgba(239,68,68,.45);opacity:1;transition:opacity .3s ease';
-      document.body.appendChild(toastEl);
-      toastEl.querySelector('.toast-action').onclick=()=>{
-        state.filter='tasks'; state.taskFilter='today';
-        document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter==='tasks'));
-        renderAll();
-        if(window.innerWidth<=640) showMobileEditor();
-        toastEl.remove();
-      };
-      setTimeout(()=>{
-        toastEl.style.opacity='0';
-        setTimeout(()=>toastEl.remove(),300);
-      }, 10000);
+      if(appSettings.notifBanner!==false){
+        document.querySelectorAll('.task-due-toast').forEach(el=>el.remove());
+        const msg=dueTasks.length===1
+          ? '⏰ Task due: '+dueTasks[0].text
+          : `⏰ ${dueTasks.length} tasks due!`;
+        const toastEl=document.createElement('div');
+        toastEl.className='toast task-due-toast';
+        const message=document.createElement('span');
+        message.style.cssText='font-size:14px;font-weight:600;flex:1';
+        message.textContent=msg;
+        const viewButton=document.createElement('button');
+        viewButton.className='toast-action';
+        viewButton.type='button';
+        viewButton.style.cssText='font-size:13px;font-weight:700;color:#fff';
+        viewButton.textContent='View';
+        toastEl.append(message,viewButton);
+        toastEl.style.cssText='position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:999;min-width:260px;max-width:calc(100vw - 32px);background:var(--danger);color:#fff;border:none;box-shadow:0 12px 40px rgba(239,68,68,.45);opacity:1;transition:opacity .3s ease';
+        document.body.appendChild(toastEl);
+        viewButton.onclick=()=>{
+          state.filter='tasks'; state.taskFilter='today';
+          document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter==='tasks'));
+          renderAll();
+          if(window.innerWidth<=640) showMobileEditor();
+          toastEl.remove();
+        };
+        setTimeout(()=>{
+          toastEl.style.opacity='0';
+          setTimeout(()=>toastEl.remove(),300);
+        }, 10000);
+      }
     }
     if(changed){ saveTasks(); if(state.filter==='tasks') renderTasksView(); }
   };
@@ -359,14 +383,32 @@ let appSettings={
   notifBanner:true, notifSound:true, notifEvents:true, notifActivity:true, notifToasts:true
 };
 
+function normalizeAppSettings(value){
+  const input=value&&typeof value==='object'?value:{};
+  const intervals=new Set([15000,30000,60000,300000]);
+  const accents=new Set(['blue','purple','green','rose','amber','teal','pink','slate']);
+  return {
+    defaultFont:['sans','serif','mono','rounded'].includes(input.defaultFont)?input.defaultFont:'sans',
+    editorWidth:'auto',
+    reminderInterval:intervals.has(+input.reminderInterval)?+input.reminderInterval:30000,
+    accent:accents.has(input.accent)?input.accent:'blue',
+    notifBanner:input.notifBanner!==false,
+    notifSound:input.notifSound!==false,
+    notifEvents:input.notifEvents!==false,
+    notifActivity:input.notifActivity!==false,
+    notifToasts:input.notifToasts!==false
+  };
+}
+
 function loadSettings(){
   try{
     const saved=JSON.parse(localStorage.getItem(SETTINGS_KEY));
-    if(saved && typeof saved==='object') appSettings={...appSettings, ...saved};
-  }catch(e){}
+    appSettings=normalizeAppSettings({...appSettings,...(saved&&typeof saved==='object'?saved:{})});
+  }catch(e){ appSettings=normalizeAppSettings(appSettings); }
   applySettingsEffects();
 }
 function saveSettings(){
+  appSettings=normalizeAppSettings(appSettings);
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(appSettings));
   localStorage.setItem('octonotes:settingsUpdatedAt', String(Date.now()));
   applySettingsEffects();
@@ -457,7 +499,7 @@ function bindSettings(){
   };
 
   const permBtn=document.getElementById('setNotifPerm');
-  if(permBtn) permBtn.onclick=()=>{ requestNotifPermission(); setTimeout(renderSettingsView, 800); };
+  if(permBtn) permBtn.onclick=async()=>{ await requestNotifPermission(); renderSettingsView(); };
 
   // Notification & reminder toggles
   [['setNotifBanner','notifBanner','Due-task banner'],
@@ -469,16 +511,26 @@ function bindSettings(){
     if(el) el.onchange=e=>{
       appSettings[key]=e.target.checked;
       saveSettings();
-      toast(`${label} ${e.target.checked?'enabled':'disabled'}`);
+      if(key==='notifEvents' && typeof rescheduleAllEventNotifications==='function') rescheduleAllEventNotifications();
+      toast(`${label} ${e.target.checked?'enabled':'disabled'}`,null,'Undo',{force:key==='notifToasts'});
     };
   });
 
   const testBtn=document.getElementById('setNotifTest');
-  if(testBtn) testBtn.onclick=()=>{
+  if(testBtn) testBtn.onclick=async()=>{
     if(appSettings.notifSound!==false) playTaskCompleteSound();
-    fireNotification('🔔 PapeRuss test', 'Notifications are working correctly.');
-    addNotification({type:'system',title:'🔔 Test notification',body:'This is what a reminder looks like.',icon:'bell-ring'});
-    toast('Test notification sent');
+    if(notifSupported() && Notification.permission==='default') await requestNotifPermission();
+    const result=fireNotification('🔔 PapeRuss test','System notifications are available while the app is allowed to run.');
+    addNotification({type:'system',title:'🔔 Test notification',body:'The in-app notification center is working.',icon:'bell-ring'});
+    const message=result.ok
+      ? 'System and in-app test notifications sent'
+      : result.status==='denied'
+        ? 'In-app test added; browser notifications are blocked'
+        : result.status==='unsupported'
+          ? 'In-app test added; system notifications are unsupported'
+          : 'In-app test added; grant browser permission for system alerts';
+    toast(message,null,'Undo',{force:true});
+    renderSettingsView();
   };
 
   const expBtn=document.getElementById('setExportBtn');

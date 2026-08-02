@@ -30,7 +30,7 @@ const MAX_UPLOAD_FAILURES=5;   // give up after this many consecutive failed att
 // This deployment keeps attachment data in Firestore. Set to false only after
 // Firebase Storage is intentionally configured and deployed for this project.
 const FIRESTORE_ONLY_MEDIA=true;
-const UPLOAD_RETRY_BASE_MS=30000; // 30s base; doubles each failure: 30sâ†’1mâ†’2mâ†’4mâ†’8m
+const UPLOAD_RETRY_BASE_MS=30000; // 30s base; doubles each failure: 30s→1m→2m→4m→8m
 
 let fbApp=null, fbAuth=null, fbDb=null, fbStorage=null, fbAnalytics=null, firebaseReady=false;
 let currentSession=null; // {mode:'guest'} | {mode:'auth', uid, name, email, photoURL}
@@ -166,7 +166,7 @@ async function signInWithEmailPassword(){
   if(!firebaseReady){ setEmailAuthMessage('Cloud sign-in is unavailable right now.',true); return; }
   const {email,password}=readEmailCredentials();
   if(!email || !password){ setEmailAuthMessage('Enter your email and password.',true); return; }
-  setEmailAuthBusy(true); setEmailAuthMessage('Signing inâ€¦');
+  setEmailAuthBusy(true); setEmailAuthMessage('Signing in…');
   try{
     const result=await fbAuth.signInWithEmailAndPassword(email,password);
     const user=result.user;
@@ -184,7 +184,7 @@ async function createEmailPasswordAccount(){
   if(!firebaseReady){ setEmailAuthMessage('Cloud sign-up is unavailable right now.',true); return; }
   const {email,password}=readEmailCredentials();
   if(!email || !password){ setEmailAuthMessage('Enter an email and password.',true); return; }
-  setEmailAuthBusy(true); setEmailAuthMessage('Creating accountâ€¦');
+  setEmailAuthBusy(true); setEmailAuthMessage('Creating account…');
   try{
     const result=await fbAuth.createUserWithEmailAndPassword(email,password);
     const user=result.user;
@@ -204,7 +204,7 @@ async function sendPasswordReset(){
   if(!firebaseReady){ setEmailAuthMessage('Password reset is unavailable right now.',true); return; }
   const email=(document.getElementById('authEmail')?.value||'').trim();
   if(!email){ setEmailAuthMessage('Enter your email address first.',true); return; }
-  setEmailAuthBusy(true); setEmailAuthMessage('Sending reset linkâ€¦');
+  setEmailAuthBusy(true); setEmailAuthMessage('Sending reset link…');
   try{
     await fbAuth.sendPasswordResetEmail(email);
     setEmailAuthMessage('If an account uses that email, a reset link has been sent.');
@@ -330,7 +330,7 @@ function updateSyncStatus(newState, customText){
     offline: customText||(session.mode==='auth'?'Offline · will sync when online':'Offline · local only'),
     synced: customText||('Synced · '+(getLastSyncLabel())),
     partial: customText||('Synced (Partial) · '+(getLastSyncLabel())),
-    syncing: customText||'Syncingâ€¦',
+    syncing: customText||'Syncing…',
     error: customText||'Sync error · retry later'
   };
   const msg=labels[newState]||labels.offline;
@@ -747,7 +747,7 @@ async function syncMedia(uid,deletions,requiredMediaIds){
       const isPermDenied = String(errMsg).includes('permission-denied');
       const isAuthExpired = isPermDenied && (!fbAuth || !fbAuth.currentUser);
       if(isPermDenied && !isAuthExpired){
-        toast('âš ï¸ Access denied by Firestore security rules. Please check your sign-in session.');
+        toast('⚠️ Access denied by Firestore security rules. Please check your sign-in session.');
       }
       const failures = (record.uploadFailures||0) + 1;
       const failedRecord = {...record, pendingUpload: true, uploadFailures: failures, lastUploadAttempt: Date.now()};
@@ -762,9 +762,9 @@ async function syncMedia(uid,deletions,requiredMediaIds){
         detail:{ id:record.id, percent:0, error:true, failures }
       }));
       if(failures === 1){
-        toast('âš ï¸ Media upload failed: ' + errMsg + ' — will retry automatically');
+        toast('⚠️ Media upload failed: ' + errMsg + ' — will retry automatically');
       } else if(failures >= MAX_UPLOAD_FAILURES){
-        toast('âŒ "' + label + '" could not be uploaded after ' + failures + ' attempts.', () => {
+        toast('❌ "' + label + '" could not be uploaded after ' + failures + ' attempts.', () => {
           if(typeof syncNow === 'function') syncNow();
         }, 'Retry Now');
       }
@@ -931,14 +931,14 @@ async function _syncNowInner(opts){
         if(seedIds.size) localNotes=notes.filter(note=>!seedIds.has(note.id));
       }catch(_){}
     }
-    const mergedNotes=mergeById(localNotes,remoteNotes,'updatedAt',mergedDeletions.notes);
-    const mergedTasks=mergeById(standaloneTasks,remoteTasks,'updatedAt',mergedDeletions.tasks);
+    const mergedNotes=sanitizeNoteCollection(mergeById(localNotes,remoteNotes,'updatedAt',mergedDeletions.notes));
+    const mergedTasks=sanitizeTaskCollection(mergeById(standaloneTasks,remoteTasks,'updatedAt',mergedDeletions.tasks));
 
     const localSettingsUpdated=+localStorage.getItem('octonotes:settingsUpdatedAt')||0;
     const mergedSettingsUpdated=Math.max(localSettingsUpdated,+remote.settingsUpdatedAt||0)||Date.now();
-    const mergedSettings = (+remote.settingsUpdatedAt||0)>localSettingsUpdated
+    const mergedSettings = normalizeAppSettings((+remote.settingsUpdatedAt||0)>localSettingsUpdated
       ? {...appSettings, ...(remote.settings||{})}
-      : appSettings;
+      : appSettings);
     const localPortableUpdated=+localStorage.getItem(PORTABLE_STATE_UPDATED_KEY)||0;
     const mergedPortableUpdated=Math.max(localPortableUpdated,+remote.portableStateUpdatedAt||0)||Date.now();
     const mergedPortable=(+remote.portableStateUpdatedAt||0)>localPortableUpdated
@@ -985,7 +985,7 @@ async function _syncNowInner(opts){
           const mergedActive=mergedNotes.find(n=>n.id===activeId);
           const preMergeTs=preMergeMap.get(activeId)||0;
           if(mergedActive && (mergedActive.updatedAt||0) > preMergeTs){
-            changedRemoteNote=mergedActive;
+            changedRemoteNote=sanitizeNoteRecord(mergedActive);
           }
         }
 
@@ -1005,6 +1005,7 @@ async function _syncNowInner(opts){
       // If nothing changed: skip all DOM work (silent no-op for background poll)
 
       renderStorageStats();
+      if(typeof rescheduleAllEventNotifications==='function') rescheduleAllEventNotifications();
     }finally{
       cloudSyncApplyingRemote=false;
     }
@@ -1193,18 +1194,40 @@ function initAuthAndSync(){
 const NOTIF_KEY='octonotes:notifications';
 let appNotifications=[];
 
+const NOTIF_TYPES=new Set(['task','note','media','system','edit','reminder','calendar','export','import','pin','delete','tag','archive']);
+function normalizeNotification(item){
+  if(!item || typeof item!=='object') return null;
+  const id=typeof paperussSafeId==='function'?paperussSafeId(item.id):String(item.id||'');
+  if(!id) return null;
+  const action=String(item.action||'').slice(0,5000);
+  return {
+    id,
+    type:NOTIF_TYPES.has(item.type)?item.type:'system',
+    title:String(item.title||'').slice(0,500),
+    body:String(item.body||'').slice(0,2000),
+    icon:String(item.icon||'bell').replace(/[^A-Za-z0-9-]/g,'').slice(0,50)||'bell',
+    action:action && (typeof paperussSafeUrl!=='function'||paperussSafeUrl(action,'href','A'))?action:null,
+    actionLabel:String(item.actionLabel||'').slice(0,100)||null,
+    read:item.read===true,
+    createdAt:Number.isFinite(+item.createdAt)?+item.createdAt:Date.now()
+  };
+}
 function loadNotifications(){
-  try{ appNotifications=JSON.parse(localStorage.getItem(NOTIF_KEY))||[]; }
-  catch(e){ appNotifications=[]; }
+  try{
+    const parsed=JSON.parse(localStorage.getItem(NOTIF_KEY))||[];
+    appNotifications=Array.isArray(parsed)?parsed.map(normalizeNotification).filter(Boolean).slice(0,200):[];
+  }catch(e){ appNotifications=[]; }
 }
 function saveNotifications(){
-  localStorage.setItem(NOTIF_KEY, JSON.stringify(appNotifications.slice(0,200)));
+  appNotifications=appNotifications.map(normalizeNotification).filter(Boolean).slice(0,200);
+  localStorage.setItem(NOTIF_KEY, JSON.stringify(appNotifications));
   markPortableStateChanged();
 }
 
-function addNotification({type,title,body,icon,action,actionLabel}){
+function addNotification({type,title,body,icon,action,actionLabel,activity=false}){
   if(!title) return;
-  const n={
+  if(activity && typeof appSettings==='object' && appSettings.notifActivity===false) return;
+  const n=normalizeNotification({
     id:'n_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
     type:type||'system',
     title, body:body||'',
@@ -1213,7 +1236,8 @@ function addNotification({type,title,body,icon,action,actionLabel}){
     actionLabel:actionLabel||null,
     read:false,
     createdAt:Date.now()
-  };
+  });
+  if(!n) return;
   appNotifications.unshift(n);
   saveNotifications();
   updateNotifBadge();

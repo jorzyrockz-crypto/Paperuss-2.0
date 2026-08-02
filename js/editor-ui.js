@@ -582,7 +582,7 @@ function initBlockTools(){
       ind.remove();
       handleBodyInput();
       save();
-      addNotification({type:'edit',title:'Block rearranged',body:'A media or content block was moved.',icon:'grip-vertical'});
+      addNotification({type:'edit',title:'Block rearranged',body:'A media or content block was moved.',icon:'grip-vertical',activity:true});
     }
     cleanupDragState();
   });
