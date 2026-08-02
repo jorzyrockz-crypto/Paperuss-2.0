@@ -167,16 +167,21 @@
     </aside>
 
     <section class="note-list" id="noteList">
-      <div class="list-header">
-        <h2 id="listTitle">All Notes</h2>
+      <div class="list-header" style="gap:8px">
+        <h2 id="listTitle" style="flex:1">All Notes</h2>
         <select id="sortSelect" title="Sort">
           <option value="updated">Updated</option>
           <option value="created">Created</option>
           <option value="title">Title</option>
         </select>
+        <button class="btn btn-icon sidebar-rail-toggle tablet-list-collapse" id="noteListToggle" title="Toggle note list" style="display:none;padding:6px;min-width:32px;min-height:32px;justify-content:center">
+          <i data-lucide="panel-left-close" class="w-4 h-4"></i>
+        </button>
       </div>
       <div class="notes" id="notesContainer"></div>
     </section>
+
+    <div class="resizer" id="noteListResizer" style="display:none"></div>
 
     <section class="editor" id="editor">
       <div class="editor-empty" id="editorEmpty">
@@ -198,6 +203,9 @@
           </button>
           <button class="btn btn-icon" id="redoBtn" title="Redo (Ctrl+Y)">
             <i data-lucide="redo" class="w-4 h-4"></i>
+          </button>
+          <button class="btn btn-icon" id="distractionFreeBtn" title="Focus Mode (F11)">
+            <i data-lucide="maximize" id="distractionFreeIcon" class="w-4 h-4"></i>
           </button>
           <button class="btn btn-icon" id="pinBtn" title="Pin note">
             <i data-lucide="pin" class="w-4 h-4"></i>
@@ -226,7 +234,62 @@
             </div>
           </div>
         </div>
-        <div class="editor-toolbar" id="formatBar">
+        
+        <div class="find-panel hidden" id="findPanel" role="dialog" aria-label="Find and Replace">
+          <div class="find-row">
+            <div class="find-input-wrap">
+              <i data-lucide="search" class="w-4 h-4 text-fg-muted"></i>
+              <input type="text" id="findInput" placeholder="Find in note (Ctrl+F)" aria-label="Search text">
+              <span id="findMatchCount" class="find-count text-xs text-fg-muted">0/0</span>
+            </div>
+            <button class="tool-btn" id="findPrevBtn" title="Previous match (Shift+Enter)">
+              <i data-lucide="chevron-up" class="w-4 h-4"></i>
+            </button>
+            <button class="tool-btn" id="findNextBtn" title="Next match (Enter)">
+              <i data-lucide="chevron-down" class="w-4 h-4"></i>
+            </button>
+            <span class="tool-sep"></span>
+            <button class="tool-btn danger" id="findCloseBtn" title="Close (Esc)">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+          <div class="find-row mt-1">
+            <div class="find-input-wrap">
+              <i data-lucide="replace" class="w-4 h-4 text-fg-muted"></i>
+              <input type="text" id="replaceInput" placeholder="Replace with..." aria-label="Replace text">
+            </div>
+            <button class="tool-btn text-xs" id="replaceBtn" title="Replace (Ctrl+Enter)" style="width:auto;padding:0 8px">Replace</button>
+            <button class="tool-btn text-xs" id="replaceAllBtn" title="Replace All" style="width:auto;padding:0 8px">All</button>
+          </div>
+        </div>
+
+        <div class="editor-toolbar" id="formatBar" role="toolbar" aria-label="Text Formatting">
+          <div class="para-style-picker" id="paraStylePicker" style="position:relative;display:inline-flex">
+            <button class="tool-btn" id="paraStyleBtn" title="Paragraph Style" aria-label="Paragraph Style" aria-haspopup="true" aria-expanded="false" style="min-width:90px;font-size:12px;gap:4px;justify-content:space-between">
+              <span id="paraStyleLabel" class="truncate" style="max-width:70px">Normal</span>
+              <i data-lucide="chevron-down" class="w-3 h-3 flex-shrink-0"></i>
+            </button>
+            <div class="para-style-dropdown" id="paraStyleDropdown" role="menu">
+              <button class="ps-opt active" data-cmd="formatBlock" data-val="p" role="menuitem">
+                <span style="font-size: 13px;">Normal text</span>
+              </button>
+              <button class="ps-opt" data-cmd="formatBlock" data-val="h1-title" role="menuitem">
+                <span style="font-size: 20px; font-weight: 700; line-height: 1.2;">Title</span>
+              </button>
+              <button class="ps-opt" data-cmd="formatBlock" data-val="p-subtitle" role="menuitem">
+                <span style="font-size: 15px; color: var(--fg-muted);">Subtitle</span>
+              </button>
+              <button class="ps-opt" data-cmd="formatBlock" data-val="h2" role="menuitem">
+                <span style="font-size: 16px; font-weight: 600;">Heading 1</span>
+              </button>
+              <button class="ps-opt" data-cmd="formatBlock" data-val="h3" role="menuitem">
+                <span style="font-size: 14px; font-weight: 600;">Heading 2</span>
+              </button>
+              <button class="ps-opt" data-cmd="formatBlock" data-val="h4" role="menuitem">
+                <span style="font-size: 13px; font-weight: 600;">Heading 3</span>
+              </button>
+            </div>
+          </div>
           <div class="font-style-picker" id="fontStylePicker" style="position:relative;display:inline-flex">
             <button class="tool-btn" id="fontStyleBtn" title="System Font Style" style="min-width:64px;font-size:12px;gap:4px">
               <span id="fontStyleLabel">Sans</span>
@@ -283,6 +346,22 @@
               <button class="hl-swatch hl-none" data-cmd="hilite" data-val="remove" title="Remove highlight">✕</button>
             </div>
           </div>
+          <div class="tc-picker" id="tcPicker" style="position:relative;display:inline-flex">
+            <button class="tool-btn" id="tcBtn" title="Text Color" aria-label="Text Color" aria-haspopup="true" aria-expanded="false" style="min-width:32px">
+              <i data-lucide="palette" class="w-4 h-4"></i>
+            </button>
+            <div class="hl-dropdown tc-dropdown" id="tcDropdown" role="menu">
+              <button class="hl-swatch" data-cmd="textColor" data-val="var(--fg)" style="background:var(--fg)" title="Theme Default"></button>
+              <button class="hl-swatch" data-cmd="textColor" data-val="#e11d48" style="background:#e11d48" title="Red"></button>
+              <button class="hl-swatch" data-cmd="textColor" data-val="#ea580c" style="background:#ea580c" title="Orange"></button>
+              <button class="hl-swatch" data-cmd="textColor" data-val="#16a34a" style="background:#16a34a" title="Green"></button>
+              <button class="hl-swatch" data-cmd="textColor" data-val="#2563eb" style="background:#2563eb" title="Blue"></button>
+              <button class="hl-swatch" data-cmd="textColor" data-val="#9333ea" style="background:#9333ea" title="Purple"></button>
+              <button class="hl-swatch" data-cmd="textColor" data-val="#64748b" style="background:#64748b" title="Slate"></button>
+              <div class="hl-divider"></div>
+              <button class="hl-swatch hl-none" data-cmd="textColor" data-val="remove" title="Remove Text Color">✕</button>
+            </div>
+          </div>
 
           <span class="tool-sep"></span>
 
@@ -294,6 +373,12 @@
           </button>
           <button class="tool-btn" data-cmd="task" title="Task list">
             <i data-lucide="check-square" class="w-4 h-4"></i>
+          </button>
+          <button class="tool-btn" data-cmd="outdent" title="Decrease indent">
+            <i data-lucide="outdent" class="w-4 h-4"></i>
+          </button>
+          <button class="tool-btn" data-cmd="indent" title="Increase indent">
+            <i data-lucide="indent" class="w-4 h-4"></i>
           </button>
           <button class="tool-btn" id="alignBtn" data-cmd="align" data-align="left" title="Alignment (click to cycle)">
             <i data-lucide="align-left" class="w-4 h-4"></i>
@@ -360,6 +445,14 @@
           <button class="tool-btn" data-cmd="removeFormat" title="Clear formatting">
             <i data-lucide="remove-formatting" class="w-4 h-4"></i>
           </button>
+          
+          <div class="overflow-picker" id="overflowPicker" style="position:relative;display:none">
+            <button class="tool-btn" id="overflowBtn" title="More tools">
+              <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+            </button>
+            <div class="overflow-dropdown" id="overflowDropdown" role="menu">
+            </div>
+          </div>
         </div>
         <button class="toolbar-collapse-toggle" id="toolbarCollapseBtn" title="Expand toolbar" aria-label="Toggle toolbar">
           <i data-lucide="chevron-down" class="w-4 h-4"></i>
@@ -372,6 +465,17 @@
         </div>
         <div class="editor-footer">
           <div class="save-status" id="saveStatus"><span class="dot"></span><span>Saved</span></div>
+          
+          <button class="tool-btn" id="findReplaceTriggerBtn" title="Find & Replace" style="min-width:32px;padding:0 6px;margin-left:auto">
+            <i data-lucide="search" class="w-4 h-4"></i>
+          </button>
+          
+          <div class="zoom-controls hidden" id="zoomControls" style="display:none;align-items:center;gap:2px;background:var(--subtle);border-radius:4px;padding:2px;margin-right:6px">
+            <button class="tool-btn" id="zoomOutBtn" title="Zoom Out" style="min-width:24px;height:24px;padding:0"><i data-lucide="minus" class="w-3 h-3"></i></button>
+            <span id="zoomLevelLabel" style="font-size:11px;min-width:36px;text-align:center;font-variant-numeric:tabular-nums">100%</span>
+            <button class="tool-btn" id="zoomInBtn" title="Zoom In" style="min-width:24px;height:24px;padding:0"><i data-lucide="plus" class="w-3 h-3"></i></button>
+          </div>
+
           <div class="page-layout-picker" id="pageLayoutPicker" style="position:relative;display:inline-flex">
             <button class="tool-btn" id="pageLayoutBtn" title="Page Setup" style="min-width:32px;padding:0 6px">
               <i data-lucide="layout-template" class="w-4 h-4"></i>
@@ -689,6 +793,32 @@
               <button class="settings-btn" id="runStorageSenseBtn">
                 <i data-lucide="zap" class="w-4 h-4"></i> Run Cleanup
               </button>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-row">
+              <div class="settings-label">
+                <i data-lucide="flask-conical" class="w-4 h-4 text-accent"></i> Experimental Features
+                <small>Early access to new functionality</small>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Note Preview V2</span>
+                <small>Enable the new richer note card design</small>
+              </div>
+              <label class="settings-switch"><input type="checkbox" id="setPreviewV2"><span></span></label>
+            </div>
+            <div class="settings-row" id="previewDensityRow" style="display:none">
+              <div class="settings-label">
+                <span>Preview Density</span>
+                <small>Spacing for Note Preview V2</small>
+              </div>
+              <select id="setPreviewDensity" class="settings-control">
+                <option value="compact">Compact</option>
+                <option value="comfortable">Comfortable</option>
+              </select>
             </div>
           </div>
 

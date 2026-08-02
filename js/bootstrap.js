@@ -608,6 +608,61 @@ function bind(){
     }
   };
 
+  // Note-list tablet panel toggle
+  const listToggleBtn = document.getElementById('noteListToggle');
+  if(listToggleBtn) listToggleBtn.onclick = () => {
+    const listEl = document.getElementById('noteList');
+    if(listEl) {
+      if(window.innerWidth <= 900) {
+        listEl.classList.toggle('open');
+      } else {
+        listEl.classList.toggle('collapsed');
+      }
+    }
+  };
+
+  // Resizer logic
+  const resizer = document.getElementById('noteListResizer');
+  if(resizer) {
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 0;
+    const listEl = document.getElementById('noteList');
+
+    resizer.addEventListener('mousedown', e => {
+      isResizing = true;
+      startX = e.clientX;
+      startWidth = listEl.getBoundingClientRect().width;
+      resizer.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+
+    window.addEventListener('mousemove', e => {
+      if (!isResizing) return;
+      const dx = e.clientX - startX;
+      let newWidth = startWidth + dx;
+      if (newWidth < 220) newWidth = 220;
+      if (newWidth > 600) newWidth = 600;
+      document.documentElement.style.setProperty('--list-width', `${newWidth}px`);
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isResizing) {
+        isResizing = false;
+        resizer.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        // optionally save width to localStorage
+        localStorage.setItem('octonotes:listWidth', document.documentElement.style.getPropertyValue('--list-width'));
+      }
+    });
+    
+    // Restore saved width
+    const savedWidth = localStorage.getItem('octonotes:listWidth');
+    if(savedWidth) document.documentElement.style.setProperty('--list-width', savedWidth);
+  }
+
   // Mobile FAB
   const fab=document.getElementById('mobileFab');
   if(fab) fab.onclick=()=>{ closeSidebarMobile(); contextualNew(); };
@@ -685,11 +740,39 @@ function bind(){
     if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='n'){ e.preventDefault(); createNote(); }
     if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='s'){ e.preventDefault(); save(); toast('All notes saved'); }
     if(e.key==='Escape'){ document.getElementById('modalRoot').innerHTML=''; document.getElementById('searchInput').blur(); }
+    if(e.key==='F11'){
+      e.preventDefault();
+      toggleDistractionFree();
+    }
   });
+
+  const dfBtn = document.getElementById('distractionFreeBtn');
+  if(dfBtn) dfBtn.onclick = toggleDistractionFree;
+
+  function toggleDistractionFree() {
+    const isDf = document.body.classList.toggle('distraction-free');
+    const icon = document.getElementById('distractionFreeIcon');
+    if(icon) {
+      icon.setAttribute('data-lucide', isDf ? 'minimize' : 'maximize');
+      refreshIcons();
+    }
+    toast(isDf ? 'Distraction-free mode on (F11 to exit)' : 'Distraction-free mode off');
+  }
 
   document.addEventListener('selectionchange', ()=>{
     if(document.activeElement===bodyEl()) updateToolbarState();
   });
+
+  // Paragraph Style dropdown
+  const paraStyleBtn = document.getElementById('paraStyleBtn');
+  if(paraStyleBtn) paraStyleBtn.onclick=e=>{ e.stopPropagation(); toggleDropdown('paraStyleDropdown'); };
+  const paraStyleDropdown = document.getElementById('paraStyleDropdown');
+  if(paraStyleDropdown) paraStyleDropdown.onclick=e=>{
+    const opt=e.target.closest('[data-cmd]');
+    if(!opt) return;
+    paraStyleDropdown.classList.remove('show');
+    applyCommand(opt.dataset.cmd, opt.dataset.val);
+  };
 
   // Highlight dropdown
   document.getElementById('hlBtn').onclick=e=>{ e.stopPropagation(); toggleDropdown('hlDropdown'); };
@@ -697,6 +780,15 @@ function bind(){
     const sw=e.target.closest('[data-cmd]');
     if(!sw) return;
     document.getElementById('hlDropdown').classList.remove('show');
+    applyCommand(sw.dataset.cmd, sw.dataset.val);
+  };
+
+  // Text Color dropdown
+  document.getElementById('tcBtn').onclick=e=>{ e.stopPropagation(); toggleDropdown('tcDropdown'); };
+  document.getElementById('tcDropdown').onclick=e=>{
+    const sw=e.target.closest('[data-cmd]');
+    if(!sw) return;
+    document.getElementById('tcDropdown').classList.remove('show');
     applyCommand(sw.dataset.cmd, sw.dataset.val);
   };
 
@@ -727,6 +819,65 @@ function bind(){
   // Footer Tags dropdown
   const tagsBtn = document.getElementById('footerTagsBtn');
   if(tagsBtn) tagsBtn.onclick = e => { e.stopPropagation(); toggleDropdown('footerTagsDropdown'); };
+
+  // Overflow Menu dropdown
+  const ovfBtn = document.getElementById('overflowBtn');
+  if(ovfBtn) ovfBtn.onclick = e => { e.stopPropagation(); toggleDropdown('overflowDropdown'); };
+
+  // Responsive Toolbar Overflow
+  function initResponsiveToolbar() {
+    const scrollBar = document.getElementById('formatBar');
+    const overflowDropdown = document.getElementById('overflowDropdown');
+    const overflowPicker = document.getElementById('overflowPicker');
+    if(!scrollBar || !overflowDropdown || !overflowPicker) return;
+    
+    // Tools that we can move (lower priority items, right-to-left)
+    const movableTools = Array.from(scrollBar.children).filter(el => 
+      el.id !== 'overflowPicker' && 
+      el.id !== 'toolbarCollapseBtn' &&
+      !el.classList.contains('para-style-picker') && 
+      !el.classList.contains('font-style-picker')
+    ).reverse();
+
+    const resizeObserver = new ResizeObserver(() => {
+      // Allow DOM to update first
+      requestAnimationFrame(() => {
+        // Move items into overflow if toolbar is overflowing horizontally
+        if(scrollBar.scrollWidth > scrollBar.clientWidth + 2) { 
+          for(let el of movableTools) {
+            if (el.parentElement === scrollBar) {
+              overflowDropdown.insertBefore(el, overflowDropdown.firstChild);
+              overflowPicker.style.display = 'inline-flex';
+              if (scrollBar.scrollWidth <= scrollBar.clientWidth + 2) break;
+            }
+          }
+        } else {
+          // Try moving items back if there is space
+          let hasOverflow = overflowDropdown.children.length > 0;
+          if(hasOverflow) {
+            const items = Array.from(overflowDropdown.children);
+            for(let el of items) {
+              // Put it back right before the overflow picker
+              scrollBar.insertBefore(el, overflowPicker);
+              if (scrollBar.scrollWidth > scrollBar.clientWidth + 2) {
+                // It overflowed again! Move it back and stop
+                overflowDropdown.insertBefore(el, overflowDropdown.firstChild);
+                break;
+              }
+            }
+            if(overflowDropdown.children.length === 0) {
+              overflowPicker.style.display = 'none';
+            }
+          }
+        }
+      });
+    });
+    
+    resizeObserver.observe(scrollBar);
+  }
+  
+  // Wait a moment for DOM and styles to settle before measuring
+  setTimeout(initResponsiveToolbar, 100);
 
 
   /* ---------- NOTIFICATION BELL & PANEL ---------- */
@@ -765,14 +916,14 @@ function bind(){
 
   // Close dropdowns when clicking outside
   const closeAllDropdowns=()=>{
-    ['hlDropdown','szDropdown','fontStyleDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown'].forEach(id=>{
+    ['tcDropdown','paraStyleDropdown','hlDropdown','szDropdown','fontStyleDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown'].forEach(id=>{
       const el=document.getElementById(id);
       if(el) el.classList.remove('show');
     });
     if(notifPanel) notifPanel.classList.remove('show');
   };
   document.addEventListener('click', e=>{
-    if(!e.target.closest('#hlPicker') && !e.target.closest('.sz-picker')
+    if(!e.target.closest('#tcPicker') && !e.target.closest('#paraStylePicker') && !e.target.closest('#hlPicker') && !e.target.closest('.sz-picker')
       && !e.target.closest('#fontStylePicker') && !e.target.closest('#tablePicker')
       && !e.target.closest('#pageLayoutPicker') && !e.target.closest('#templatePicker')
       && !e.target.closest('#footerTagsPicker')
@@ -796,6 +947,13 @@ function bind(){
   // Re-running the mobile layout switch there would kick the user out of the
   // editor mid-typing, so we only react when the WIDTH actually changes.
   let lastViewportWidth=window.innerWidth;
+  
+  // init Page Layout defaults
+  if(typeof initPageLayoutUI === 'function') initPageLayoutUI();
+
+  // init Find in Note
+  if(typeof initFindInNote === 'function') initFindInNote();
+
   window.addEventListener('resize', ()=>{
     const width=window.innerWidth;
     if(width===lastViewportWidth) return;   // keyboard show/hide → ignore

@@ -518,6 +518,15 @@ function updateToolbarState(){
   const activeSz=getActiveFontSize();
   document.querySelectorAll('.sz-opt').forEach(o=>o.classList.toggle('active', o.dataset.val===(activeSz||'')));
   if(typeof updateAlignmentButton==='function') updateAlignmentButton();
+  
+  // Update Paragraph Style label
+  const paraStyleBtn = document.getElementById('paraStyleLabel');
+  if(paraStyleBtn) {
+    const activeBlock = typeof getActiveParagraphStyle === 'function' ? getActiveParagraphStyle() : 'p';
+    const psLabels = {'p':'Normal text','h1-title':'Title','p-subtitle':'Subtitle','h2':'Heading 1','h3':'Heading 2','h4':'Heading 3'};
+    paraStyleBtn.textContent = psLabels[activeBlock] || 'Normal text';
+    document.querySelectorAll('.ps-opt').forEach(o => o.classList.toggle('active', o.dataset.val === activeBlock));
+  }
 }
 
 /* ============================================================

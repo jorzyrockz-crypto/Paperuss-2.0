@@ -183,6 +183,90 @@ svg{display:block;flex-shrink:0}
 }
 .list-empty{padding:60px 24px;text-align:center;color:var(--fg-muted);font-size:13.5px;line-height:1.6}
 
+/* Note Preview V2 */
+.note-card.v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.note-card.v2:hover { background: var(--subtle); border-color: var(--border-hover, var(--border)); }
+.note-card.v2.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: var(--subtle); }
+.note-card.v2.active::before { display: none; }
+
+.v2-compact { padding: 10px 12px; border-radius: 8px; }
+.v2-comfortable { padding: 16px; border-radius: 12px; margin-bottom: 12px; }
+
+.v2-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.v2-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+.v2-meta-top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.v2-body {
+  display: flex;
+  gap: 12px;
+}
+.v2-excerpt {
+  flex: 1;
+  font-size: 13px;
+  color: var(--fg-secondary);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.v2-thumbnail {
+  width: 60px;
+  height: 60px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--border-muted);
+  background: var(--subtle);
+}
+.v2-comfortable .v2-thumbnail { width: 80px; height: 80px; border-radius: 8px; }
+
+.v2-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  margin-top: 4px;
+}
+.v2-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--subtle);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+  border: 1px solid var(--border-muted);
+}
+
 /* Modern Flat Editor */
 .editor{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;background:var(--canvas);min-width:0}
 .editor-empty{
@@ -226,7 +310,8 @@ svg{display:block;flex-shrink:0}
 .toolbar-collapse-toggle{display:none}
 .editor-toolbar{
   display:flex;align-items:center;gap:6px;padding:8px 20px;
-  border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;
+  border-bottom:1px solid var(--border);flex-shrink:0;
+  flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
   background:var(--canvas);
 }
 .tool-group{
@@ -281,6 +366,8 @@ svg{display:block;flex-shrink:0}
 .note-editor h2{font-size:1.5em;padding-bottom:.3em;border-bottom:1px solid var(--border)}
 .note-editor h3{font-size:1.25em}
 .note-editor h4{font-size:1em}
+.note-editor h1.editor-title { font-size: 2.5em; border-bottom: none; margin-bottom: 0.1em; line-height: 1.1; letter-spacing: -0.04em; }
+.note-editor p.editor-subtitle { font-size: 1.35em; color: var(--fg-muted); margin-bottom: 1.2em; font-weight: 400; line-height: 1.4; letter-spacing: -0.01em; }
 .note-editor p{margin:0 0 .85em}
 .note-editor a{color:var(--accent)}
 .note-editor a:hover{text-decoration:underline}
@@ -321,3 +408,50 @@ svg{display:block;flex-shrink:0}
 .save-status .dot{width:7px;height:7px;border-radius:50%;background:var(--success)}
 .save-status.saving .dot{background:var(--attention)}
 .stats{margin-left:auto;display:flex;gap:16px;font-weight:500}
+
+/* Distraction-Free Mode */
+body.distraction-free .header,
+body.distraction-free .sidebar,
+body.distraction-free .note-list,
+body.distraction-free .resizer {
+  display: none !important;
+}
+body.distraction-free .app-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+body.distraction-free .editor {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  border: none;
+  box-shadow: none;
+}
+
+/* Distraction-Free Sizing for Landscape Tablets & Desktop */
+@media (min-width: 901px) {
+  body.distraction-free .note-editor {
+    width: min(92vw, 1400px);
+    max-width: 1400px;
+    margin-inline: auto;
+    padding-inline: clamp(24px, 4vw, 64px);
+  }
+  
+  /* Constrain readability for text blocks, leaving auto margins to center them */
+  body.distraction-free .note-editor > p,
+  body.distraction-free .note-editor > h1,
+  body.distraction-free .note-editor > h2,
+  body.distraction-free .note-editor > h3,
+  body.distraction-free .note-editor > h4,
+  body.distraction-free .note-editor > h5,
+  body.distraction-free .note-editor > h6,
+  body.distraction-free .note-editor > ul,
+  body.distraction-free .note-editor > ol,
+  body.distraction-free .note-editor > blockquote,
+  body.distraction-free .note-editor > hr {
+    max-width: 850px;
+    margin-inline: auto;
+  }
+}

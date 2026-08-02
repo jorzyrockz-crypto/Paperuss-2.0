@@ -8,7 +8,7 @@
   const BUILD=Object.freeze({
     name:'PapeRuss 2.0 Stabilization',
     version:'2.0.1-stabilization',
-    cacheName:'paperuss-shell-v21',
+    cacheName:'paperuss-shell-v25',
     schemaVersion:4
   });
 
@@ -77,12 +77,19 @@
     const probe=document.createElement('span');
     probe.setAttribute('style',value);
     const safe=[];
+    const ALLOWED = new Set(['color', 'background-color', 'margin-left']);
     for(let i=0;i<probe.style.length;i++){
       const prop=probe.style[i];
+      if(!ALLOWED.has(prop)) continue;
       const propValue=probe.style.getPropertyValue(prop);
       const priority=probe.style.getPropertyPriority(prop);
-      if(!prop || /behavior|-moz-binding/i.test(prop)) continue;
       if(/expression\s*\(|javascript\s*:|vbscript\s*:|@import|url\s*\(/i.test(propValue)) continue;
+      
+      if(prop === 'margin-left'){
+        const px = parseInt(propValue, 10);
+        if(isNaN(px) || px < 0 || px > 400 || !propValue.endsWith('px')) continue;
+      }
+      
       safe.push(`${prop}:${propValue}${priority?' !important':''}`);
     }
     return safe.join(';');
