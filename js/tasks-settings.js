@@ -380,7 +380,8 @@ function startReminderWatcher(){
 const SETTINGS_KEY='octonotes:settings';
 let appSettings={
   defaultFont:'sans', editorWidth:'auto', reminderInterval:30000, accent:'blue',
-  notifBanner:true, notifSound:true, notifEvents:true, notifActivity:true, notifToasts:true
+  notifBanner:true, notifSound:true, notifEvents:true, notifActivity:true, notifToasts:true,
+  previewV2:false, previewDensity:'comfortable'
 };
 
 function normalizeAppSettings(value){
@@ -396,7 +397,9 @@ function normalizeAppSettings(value){
     notifSound:input.notifSound!==false,
     notifEvents:input.notifEvents!==false,
     notifActivity:input.notifActivity!==false,
-    notifToasts:input.notifToasts!==false
+    notifToasts:input.notifToasts!==false,
+    previewV2:input.previewV2===true,
+    previewDensity:input.previewDensity==='compact'?'compact':'comfortable'
   };
 }
 
@@ -441,6 +444,14 @@ async function renderSettingsView(){
   if(fontSel) fontSel.value=appSettings.defaultFont||'sans';
   const intSel=document.getElementById('setReminderInterval');
   if(intSel) intSel.value=String(appSettings.reminderInterval||30000);
+
+  // Note Preview V2
+  const prevV2Check=document.getElementById('setPreviewV2');
+  if(prevV2Check) prevV2Check.checked=appSettings.previewV2===true;
+  const prevDensitySel=document.getElementById('setPreviewDensity');
+  if(prevDensitySel) prevDensitySel.value=appSettings.previewDensity||'comfortable';
+  const densityRow=document.getElementById('previewDensityRow');
+  if(densityRow) densityRow.style.display=appSettings.previewV2?'flex':'none';
 
   // Notification toggles
   [['setNotifBanner','notifBanner'],['setNotifSound','notifSound'],
@@ -500,6 +511,23 @@ function bindSettings(){
 
   const permBtn=document.getElementById('setNotifPerm');
   if(permBtn) permBtn.onclick=async()=>{ await requestNotifPermission(); renderSettingsView(); };
+
+  // Note Preview V2 toggles
+  const prevV2Check=document.getElementById('setPreviewV2');
+  if(prevV2Check) prevV2Check.onchange=e=>{
+    appSettings.previewV2=e.target.checked;
+    saveSettings();
+    const densityRow=document.getElementById('previewDensityRow');
+    if(densityRow) densityRow.style.display=e.target.checked?'flex':'none';
+    if(typeof renderList==='function') renderList();
+  };
+  
+  const prevDensitySel=document.getElementById('setPreviewDensity');
+  if(prevDensitySel) prevDensitySel.onchange=e=>{
+    appSettings.previewDensity=e.target.value;
+    saveSettings();
+    if(typeof renderList==='function') renderList();
+  };
 
   // Notification & reminder toggles
   [['setNotifBanner','notifBanner','Due-task banner'],
