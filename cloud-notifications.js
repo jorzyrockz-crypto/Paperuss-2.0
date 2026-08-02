@@ -33,7 +33,11 @@ const FIRESTORE_ONLY_MEDIA=true;
 const UPLOAD_RETRY_BASE_MS=30000; // 30s base; doubles each failure: 30s→1m→2m→4m→8m
 
 let fbApp=null, fbAuth=null, fbDb=null, fbStorage=null, fbAnalytics=null, firebaseReady=false;
-let authPersistenceReady=Promise.resolve();
+// Firebase Auth already defaults to durable LOCAL persistence in supported web
+// browsers. Keep this promise non-rejecting so a storage limitation never blocks
+// the actual sign-in request.
+let authPersistenceReady=Promise.resolve(true);
+let googleSignInPending=false;
 let currentSession=null; // {mode:'guest'} | {mode:'auth', uid, name, email, photoURL}
 let syncState='offline'; // offline | synced | syncing | error
 let syncDebounceTimer=null;
@@ -56,14 +60,11 @@ function initFirebase(){
       try{ fbAnalytics=firebase.analytics(); }catch(_){ fbAnalytics=null; }
     }
     firebaseReady=true;
-    // Explicitly restore durable browser persistence after a clean/reset cycle.
-    // Never delete Firebase's own IndexedDB manually; the SDK owns that store.
-    authPersistenceReady=typeof fbAuth.setPersistence==='function'
-      ? fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(error=>{
-          console.warn('Firebase auth persistence could not be initialized',error);
-          throw error;
-        })
-      : Promise.resolve();
+    // Do not delay OAuth behind setPersistence(). Firebase Auth's browser
+    // default is LOCAL persistence, and delaying signInWithPopup can cause the
+    // browser to treat it as no longer initiated by the user's tap/click.
+    // Keep a resolved compatibility promise for email/password call sites.
+    authPersistenceReady=Promise.resolve(true);
 
     // Redirect results are safe only when the auth helper is same-origin (for
     // example Firebase Hosting or a deliberately configured reverse proxy).
@@ -109,6 +110,8 @@ function initFirebase(){
     return true;
   }catch(e){
     firebaseReady=false;
+    window.__paperussAuthInitError=e;
+    console.error('Firebase initialization failed',e);
     return false;
   }
 }
@@ -183,52 +186,42 @@ function canUseReliableRedirect(){
 }
 
 async function signInWithGoogle(fromLanding){
-  if(!firebaseReady){
-    toast('Cloud sign-in is not configured — continuing offline');
-    if(fromLanding) continueAsGuest();
+  if(!firebaseReady || !fbAuth){
+    const detail=window.__paperussAuthInitError?.code || window.__paperussAuthInitError?.message || '';
+    const message='Google sign-in could not initialize. Reload PapeRuss and check that Firebase scripts are not blocked.'+(detail?' ('+detail+')':'');
+    toast(message);
+    setEmailAuthMessage(message,true);
     return;
   }
+  if(googleSignInPending) return;
+  googleSignInPending=true;
+  const googleBtn=document.getElementById('authGoogleBtn');
+  if(googleBtn) googleBtn.disabled=true;
+  setEmailAuthMessage('Opening Google sign-in…');
   try{
-    await authPersistenceReady;
     const provider=new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-    // Firebase redirect auth is unreliable on third-party hosts unless its
-    // helper is proxied to the app origin. On Vercel, popup is the safe path.
-    if(isMobileOrPWA() && canUseReliableRedirect()){
-      await fbAuth.signInWithRedirect(provider);
-      return;
-    }
+
+    // IMPORTANT: call signInWithPopup immediately from the button's click
+    // handler. Awaiting persistence or another async task first can lose the
+    // browser's user-activation token and cause auth/popup-blocked.
     const result=await fbAuth.signInWithPopup(provider);
-    const user=result.user;
+    const user=result && result.user;
+    if(!user) throw Object.assign(new Error('Google returned no user.'),{code:'auth/no-user'});
     saveSession({mode:'auth', uid:user.uid, name:user.displayName||user.email||'Account', email:user.email||'', photoURL:user.photoURL||''});
     hideAuthLanding();
     renderProfileMenu();
+    setEmailAuthMessage('');
     toast('Signed in as '+(user.displayName||user.email));
     syncNow();
   }catch(err){
-    if(err && err.code==='auth/popup-blocked'){
-      if(canUseReliableRedirect()){
-        try{
-          const provider2=new firebase.auth.GoogleAuthProvider();
-          provider2.setCustomParameters({ prompt: 'select_account' });
-          await fbAuth.signInWithRedirect(provider2);
-        }catch(e2){
-          console.warn('Firebase popup fallback failed',e2);
-          const message=authErrorMessage(e2);
-          toast(message);
-          setEmailAuthMessage(message,true);
-        }
-      }else{
-        const message='The browser blocked the Google sign-in window. Allow pop-ups for PapeRuss, then try again.';
-        toast(message);
-        setEmailAuthMessage(message,true);
-      }
-      return;
-    }
     console.warn('Firebase Google sign-in failed',err);
     const message=authErrorMessage(err);
     toast(message);
     setEmailAuthMessage(message,true);
+  }finally{
+    googleSignInPending=false;
+    if(googleBtn) googleBtn.disabled=false;
   }
 }
 
@@ -251,9 +244,13 @@ function authErrorMessage(error){
     'auth/operation-not-supported-in-this-environment':'This browser cannot complete Google sign-in here. Open PapeRuss in a regular browser tab and try again.',
     'auth/popup-closed-by-user':'The Google sign-in window was closed before sign-in finished.',
     'auth/cancelled-popup-request':'Another sign-in window was already open. Close it and try again.',
-    'auth/popup-blocked':'The browser blocked the Google sign-in window. Allow pop-ups for PapeRuss and try again.'
+    'auth/popup-blocked':'The browser blocked the Google sign-in window. Allow pop-ups for PapeRuss and try again.',
+    'auth/auth-domain-config-required':'Firebase Auth is missing its authDomain configuration.',
+    'auth/app-not-authorized':'This Firebase app is not authorized to use Authentication.',
+    'auth/internal-error':'Firebase could not complete sign-in. Reload the page and try once more.',
+    'auth/no-user':'Google sign-in completed without returning an account. Please try again.'
   };
-  return messages[code]||'Authentication failed. Please try again.';
+  return messages[code]||('Authentication failed'+(code?' ('+code+')':'')+'. Please try again.');
 }
 
 function setEmailAuthMessage(message,isError){
