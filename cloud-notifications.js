@@ -33,6 +33,7 @@ const FIRESTORE_ONLY_MEDIA=true;
 const UPLOAD_RETRY_BASE_MS=30000; // 30s base; doubles each failure: 30s→1m→2m→4m→8m
 
 let fbApp=null, fbAuth=null, fbDb=null, fbStorage=null, fbAnalytics=null, firebaseReady=false;
+let authPersistenceReady=Promise.resolve();
 let currentSession=null; // {mode:'guest'} | {mode:'auth', uid, name, email, photoURL}
 let syncState='offline'; // offline | synced | syncing | error
 let syncDebounceTimer=null;
@@ -55,12 +56,54 @@ function initFirebase(){
       try{ fbAnalytics=firebase.analytics(); }catch(_){ fbAnalytics=null; }
     }
     firebaseReady=true;
+    // Explicitly restore durable browser persistence after a clean/reset cycle.
+    // Never delete Firebase's own IndexedDB manually; the SDK owns that store.
+    authPersistenceReady=typeof fbAuth.setPersistence==='function'
+      ? fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(error=>{
+          console.warn('Firebase auth persistence could not be initialized',error);
+          throw error;
+        })
+      : Promise.resolve();
+
+    // Redirect results are safe only when the auth helper is same-origin (for
+    // example Firebase Hosting or a deliberately configured reverse proxy).
+    // Vercel + the default firebaseapp.com authDomain must use popup instead.
+    if(canUseReliableRedirect()){
+      authPersistenceReady
+        .then(()=>fbAuth.getRedirectResult())
+        .then(result=>{
+          if(result && result.user){
+            const u=result.user;
+            saveSession({mode:'auth', uid:u.uid, name:u.displayName||u.email||'Account', email:u.email||'', photoURL:u.photoURL||''});
+            hideAuthLanding();
+            renderProfileMenu();
+            toast('Signed in as '+(u.displayName||u.email));
+            syncNow();
+          }
+        })
+        .catch(err=>{
+          if(err && err.code){
+            console.warn('Firebase redirect sign-in failed',err);
+            const message=authErrorMessage(err);
+            toast(message);
+            setEmailAuthMessage(message,true);
+          }
+        });
+    }
     fbAuth.onAuthStateChanged(user=>{
       if(user){
         saveSession({mode:'auth', uid:user.uid, name:user.displayName||user.email||'Account', email:user.email||'', photoURL:user.photoURL||''});
         hideAuthLanding();
         renderProfileMenu();
         syncNow({silent:true});
+      } else {
+        // User signed out – if there's no valid persisted session, show auth landing
+        const sess=loadSession();
+        if(!sess || sess.mode==='auth'){
+          saveSession(null);
+          renderProfileMenu();
+          showAuthLanding();
+        }
       }
     });
     return true;
@@ -89,15 +132,54 @@ function hideAuthLanding(){
   if(el) el.classList.add('hidden');
 }
 
+async function safelySignOutFirebase(options={}){
+  if(!firebaseReady || !fbAuth || !fbAuth.currentUser){
+    saveSession(null);
+    return true;
+  }
+  try{
+    await fbAuth.signOut();
+    saveSession(null);
+    return true;
+  }catch(error){
+    console.error('Firebase sign-out failed',error);
+    if(!options.silent){
+      const message='Could not sign out securely. Check your connection and try again.';
+      toast(message);
+      setEmailAuthMessage(message,true);
+    }
+    return false;
+  }
+}
+
 async function continueAsGuest(){
-  // Explicit guest choice also clears any persisted Firebase session so auth
-  // state cannot immediately override local-only mode.
-  try{ if(firebaseReady && fbAuth && fbAuth.currentUser) await fbAuth.signOut(); }catch(e){}
+  // Explicit guest choice must also end Firebase Auth. Otherwise the auth
+  // observer can immediately restore the signed-in account over guest mode.
+  if(!(await safelySignOutFirebase())) return;
   saveSession({mode:'guest'});
   hideAuthLanding();
   renderProfileMenu();
   updateSyncStatus('offline','Offline · local only');
   toast('Continuing in guest mode — everything stays on this device');
+}
+
+function isMobileOrPWA(){
+  return window.matchMedia('(display-mode: standalone)').matches
+    || (window.navigator.standalone === true)
+    || /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
+function canUseReliableRedirect(){
+  try{
+    const appHost=String(window.location.hostname||'').toLowerCase();
+    const authHost=String(FIREBASE_CONFIG.authDomain||'').replace(/^https?:\/\//i,'').split('/')[0].toLowerCase();
+    if(!appHost || !authHost) return false;
+    // Same-origin helper, Firebase Hosting, and web.app support the redirect
+    // helper without cross-origin storage. Other hosts should use popup.
+    return appHost===authHost || appHost.endsWith('.firebaseapp.com') || appHost.endsWith('.web.app');
+  }catch(_){
+    return false;
+  }
 }
 
 async function signInWithGoogle(fromLanding){
@@ -107,8 +189,15 @@ async function signInWithGoogle(fromLanding){
     return;
   }
   try{
+    await authPersistenceReady;
     const provider=new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
+    // Firebase redirect auth is unreliable on third-party hosts unless its
+    // helper is proxied to the app origin. On Vercel, popup is the safe path.
+    if(isMobileOrPWA() && canUseReliableRedirect()){
+      await fbAuth.signInWithRedirect(provider);
+      return;
+    }
     const result=await fbAuth.signInWithPopup(provider);
     const user=result.user;
     saveSession({mode:'auth', uid:user.uid, name:user.displayName||user.email||'Account', email:user.email||'', photoURL:user.photoURL||''});
@@ -117,6 +206,26 @@ async function signInWithGoogle(fromLanding){
     toast('Signed in as '+(user.displayName||user.email));
     syncNow();
   }catch(err){
+    if(err && err.code==='auth/popup-blocked'){
+      if(canUseReliableRedirect()){
+        try{
+          const provider2=new firebase.auth.GoogleAuthProvider();
+          provider2.setCustomParameters({ prompt: 'select_account' });
+          await fbAuth.signInWithRedirect(provider2);
+        }catch(e2){
+          console.warn('Firebase popup fallback failed',e2);
+          const message=authErrorMessage(e2);
+          toast(message);
+          setEmailAuthMessage(message,true);
+        }
+      }else{
+        const message='The browser blocked the Google sign-in window. Allow pop-ups for PapeRuss, then try again.';
+        toast(message);
+        setEmailAuthMessage(message,true);
+      }
+      return;
+    }
+    console.warn('Firebase Google sign-in failed',err);
     const message=authErrorMessage(err);
     toast(message);
     setEmailAuthMessage(message,true);
@@ -136,7 +245,13 @@ function authErrorMessage(error){
     'auth/account-exists-with-different-credential':'This email already uses another sign-in method. Use the method you originally chose.',
     'auth/too-many-requests':'Too many attempts. Wait a little and try again.',
     'auth/network-request-failed':'Network unavailable. Check your connection and try again.',
-    'auth/operation-not-allowed':'Email/password sign-in is not enabled for this Firebase project.'
+    'auth/operation-not-allowed':'Email/password sign-in is not enabled for this Firebase project.',
+    'auth/unauthorized-domain':'This website is not authorized in Firebase. Add paperuss-2-0.vercel.app under Firebase Authentication > Settings > Authorized domains.',
+    'auth/web-storage-unsupported':'Browser storage is blocked. Allow site data for PapeRuss and try again.',
+    'auth/operation-not-supported-in-this-environment':'This browser cannot complete Google sign-in here. Open PapeRuss in a regular browser tab and try again.',
+    'auth/popup-closed-by-user':'The Google sign-in window was closed before sign-in finished.',
+    'auth/cancelled-popup-request':'Another sign-in window was already open. Close it and try again.',
+    'auth/popup-blocked':'The browser blocked the Google sign-in window. Allow pop-ups for PapeRuss and try again.'
   };
   return messages[code]||'Authentication failed. Please try again.';
 }
@@ -168,6 +283,7 @@ async function signInWithEmailPassword(){
   if(!email || !password){ setEmailAuthMessage('Enter your email and password.',true); return; }
   setEmailAuthBusy(true); setEmailAuthMessage('Signing in…');
   try{
+    await authPersistenceReady;
     const result=await fbAuth.signInWithEmailAndPassword(email,password);
     const user=result.user;
     saveSession({mode:'auth',uid:user.uid,name:user.displayName||user.email||'Account',email:user.email||'',photoURL:user.photoURL||''});
@@ -186,6 +302,7 @@ async function createEmailPasswordAccount(){
   if(!email || !password){ setEmailAuthMessage('Enter an email and password.',true); return; }
   setEmailAuthBusy(true); setEmailAuthMessage('Creating account…');
   try{
+    await authPersistenceReady;
     const result=await fbAuth.createUserWithEmailAndPassword(email,password);
     const user=result.user;
     try{ await user.sendEmailVerification(); }catch(_){}
@@ -223,8 +340,8 @@ function signOutUser(){
     ?'Your notes stay on this device. Cloud sync will pause until you sign in again.'
     :'Your local notes stay on this device. You will return to the welcome page.';
   confirmDialog(title,copy,isAuth?'Sign out':'Exit',async ()=>{
-    try{ if(firebaseReady && isAuth) await fbAuth.signOut(); }catch(e){}
-    saveSession(null);
+    if(isAuth && !(await safelySignOutFirebase())) return;
+    if(!isAuth) saveSession(null);
     renderProfileMenu();
     updateSyncStatus('offline','Offline · local only');
     document.getElementById('profilePanel')?.classList.remove('show');
