@@ -143,10 +143,7 @@ async function signInWithGoogle(fromLanding){
     const provider=new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     
-    if(isMobileOrPWA()){
-      await fbAuth.signInWithRedirect(provider);
-      return;
-    }
+
     
     const result=await fbAuth.signInWithPopup(provider);
     const user=result.user;
