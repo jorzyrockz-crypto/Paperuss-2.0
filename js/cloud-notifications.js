@@ -121,13 +121,6 @@ async function continueAsGuest(){
   toast('Continuing in guest mode — everything stays on this device');
 }
 
-function isMobileOrPWA(){
-  // Standalone PWA, or mobile UA — use redirect instead of popup
-  return window.matchMedia('(display-mode: standalone)').matches
-    || (window.navigator.standalone === true)
-    || /android|iphone|ipad|ipod/i.test(navigator.userAgent);
-}
-
 async function signInWithGoogle(fromLanding){
   if(!firebaseReady){
     toast('Cloud sign-in is not configured — continuing offline');
@@ -137,32 +130,11 @@ async function signInWithGoogle(fromLanding){
   try{
     const provider=new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-    if(isMobileOrPWA()){
-      // Use redirect on mobile/PWA — popups are blocked by iOS Safari & Android WebView
-      await fbAuth.signInWithRedirect(provider);
-      return; // page will reload; getRedirectResult() handles the result
-    }
-    const result=await fbAuth.signInWithPopup(provider);
-    const user=result.user;
-    saveSession({mode:'auth', uid:user.uid, name:user.displayName||user.email||'Account', email:user.email||'', photoURL:user.photoURL||''});
-    hideAuthLanding();
-    renderProfileMenu();
-    toast('Signed in as '+(user.displayName||user.email));
-    syncNow();
+    // Aggressively use redirect across all platforms to bypass popup blockers and COOP issues
+    await fbAuth.signInWithRedirect(provider);
+    // Note: Execution stops here because the browser navigates away.
+    // fbAuth.getRedirectResult() in initFirebase() handles the return payload.
   }catch(err){
-    if(err && err.code==='auth/popup-blocked'){
-      // Popup blocked — fall back to redirect automatically
-      try{
-        const provider2=new firebase.auth.GoogleAuthProvider();
-        provider2.setCustomParameters({ prompt: 'select_account' });
-        await fbAuth.signInWithRedirect(provider2);
-      }catch(e2){
-        const message=authErrorMessage(e2);
-        toast(message);
-        setEmailAuthMessage(message,true);
-      }
-      return;
-    }
     const message=authErrorMessage(err);
     toast(message);
     setEmailAuthMessage(message,true);
