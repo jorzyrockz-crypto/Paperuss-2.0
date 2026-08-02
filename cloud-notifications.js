@@ -33,11 +33,6 @@ const FIRESTORE_ONLY_MEDIA=true;
 const UPLOAD_RETRY_BASE_MS=30000; // 30s base; doubles each failure: 30s→1m→2m→4m→8m
 
 let fbApp=null, fbAuth=null, fbDb=null, fbStorage=null, fbAnalytics=null, firebaseReady=false;
-// Firebase Auth already defaults to durable LOCAL persistence in supported web
-// browsers. Keep this promise non-rejecting so a storage limitation never blocks
-// the actual sign-in request.
-let authPersistenceReady=Promise.resolve(true);
-let googleSignInPending=false;
 let currentSession=null; // {mode:'guest'} | {mode:'auth', uid, name, email, photoURL}
 let syncState='offline'; // offline | synced | syncing | error
 let syncDebounceTimer=null;
@@ -60,37 +55,19 @@ function initFirebase(){
       try{ fbAnalytics=firebase.analytics(); }catch(_){ fbAnalytics=null; }
     }
     firebaseReady=true;
-    // Do not delay OAuth behind setPersistence(). Firebase Auth's browser
-    // default is LOCAL persistence, and delaying signInWithPopup can cause the
-    // browser to treat it as no longer initiated by the user's tap/click.
-    // Keep a resolved compatibility promise for email/password call sites.
-    authPersistenceReady=Promise.resolve(true);
-
-    // Redirect results are safe only when the auth helper is same-origin (for
-    // example Firebase Hosting or a deliberately configured reverse proxy).
-    // Vercel + the default firebaseapp.com authDomain must use popup instead.
-    if(canUseReliableRedirect()){
-      authPersistenceReady
-        .then(()=>fbAuth.getRedirectResult())
-        .then(result=>{
-          if(result && result.user){
-            const u=result.user;
-            saveSession({mode:'auth', uid:u.uid, name:u.displayName||u.email||'Account', email:u.email||'', photoURL:u.photoURL||''});
-            hideAuthLanding();
-            renderProfileMenu();
-            toast('Signed in as '+(u.displayName||u.email));
-            syncNow();
-          }
-        })
-        .catch(err=>{
-          if(err && err.code){
-            console.warn('Firebase redirect sign-in failed',err);
-            const message=authErrorMessage(err);
-            toast(message);
-            setEmailAuthMessage(message,true);
-          }
-        });
-    }
+    // Handle redirect sign-in result first (mobile/PWA fallback)
+    fbAuth.getRedirectResult().then(result=>{
+      if(result && result.user){
+        const u=result.user;
+        saveSession({mode:'auth', uid:u.uid, name:u.displayName||u.email||'Account', email:u.email||'', photoURL:u.photoURL||''});
+        hideAuthLanding();
+        renderProfileMenu();
+        toast('Signed in as '+(u.displayName||u.email));
+        syncNow();
+      }
+    }).catch(err=>{
+      if(err && err.code) toast(authErrorMessage(err));
+    });
     fbAuth.onAuthStateChanged(user=>{
       if(user){
         saveSession({mode:'auth', uid:user.uid, name:user.displayName||user.email||'Account', email:user.email||'', photoURL:user.photoURL||''});
@@ -110,8 +87,6 @@ function initFirebase(){
     return true;
   }catch(e){
     firebaseReady=false;
-    window.__paperussAuthInitError=e;
-    console.error('Firebase initialization failed',e);
     return false;
   }
 }
@@ -135,30 +110,17 @@ function hideAuthLanding(){
   if(el) el.classList.add('hidden');
 }
 
-async function safelySignOutFirebase(options={}){
-  if(!firebaseReady || !fbAuth || !fbAuth.currentUser){
-    saveSession(null);
-    return true;
-  }
-  try{
-    await fbAuth.signOut();
-    saveSession(null);
-    return true;
-  }catch(error){
-    console.error('Firebase sign-out failed',error);
-    if(!options.silent){
-      const message='Could not sign out securely. Check your connection and try again.';
-      toast(message);
-      setEmailAuthMessage(message,true);
-    }
-    return false;
-  }
-}
-
 async function continueAsGuest(){
-  // Explicit guest choice must also end Firebase Auth. Otherwise the auth
-  // observer can immediately restore the signed-in account over guest mode.
-  if(!(await safelySignOutFirebase())) return;
+  // Keep Firebase and the PapeRuss session in one consistent state.
+  try{
+    if(firebaseReady && fbAuth && fbAuth.currentUser) await fbAuth.signOut();
+  }catch(error){
+    console.error('Could not leave Firebase session for guest mode:',error);
+    const message='Could not sign out of the current cloud account. Check your connection and try again.';
+    toast(message);
+    setEmailAuthMessage(message,true);
+    return;
+  }
   saveSession({mode:'guest'});
   hideAuthLanding();
   renderProfileMenu();
@@ -166,62 +128,47 @@ async function continueAsGuest(){
   toast('Continuing in guest mode — everything stays on this device');
 }
 
-function isMobileOrPWA(){
-  return window.matchMedia('(display-mode: standalone)').matches
-    || (window.navigator.standalone === true)
-    || /android|iphone|ipad|ipod/i.test(navigator.userAgent);
-}
-
-function canUseReliableRedirect(){
-  try{
-    const appHost=String(window.location.hostname||'').toLowerCase();
-    const authHost=String(FIREBASE_CONFIG.authDomain||'').replace(/^https?:\/\//i,'').split('/')[0].toLowerCase();
-    if(!appHost || !authHost) return false;
-    // Same-origin helper, Firebase Hosting, and web.app support the redirect
-    // helper without cross-origin storage. Other hosts should use popup.
-    return appHost===authHost || appHost.endsWith('.firebaseapp.com') || appHost.endsWith('.web.app');
-  }catch(_){
-    return false;
-  }
-}
+let googleSignInPending=false;
 
 async function signInWithGoogle(fromLanding){
   if(!firebaseReady || !fbAuth){
-    const detail=window.__paperussAuthInitError?.code || window.__paperussAuthInitError?.message || '';
-    const message='Google sign-in could not initialize. Reload PapeRuss and check that Firebase scripts are not blocked.'+(detail?' ('+detail+')':'');
+    const message='Firebase Authentication did not initialize. Reload the page and check your connection.';
     toast(message);
     setEmailAuthMessage(message,true);
     return;
   }
   if(googleSignInPending) return;
-  googleSignInPending=true;
-  const googleBtn=document.getElementById('authGoogleBtn');
-  if(googleBtn) googleBtn.disabled=true;
-  setEmailAuthMessage('Opening Google sign-in…');
-  try{
-    const provider=new firebase.auth.GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
 
-    // IMPORTANT: call signInWithPopup immediately from the button's click
-    // handler. Awaiting persistence or another async task first can lose the
-    // browser's user-activation token and cause auth/popup-blocked.
+  const button=document.getElementById('authGoogleBtn');
+  googleSignInPending=true;
+  if(button) button.disabled=true;
+  setEmailAuthMessage('Opening Google sign-in…',false);
+
+  try{
+    // PapeRuss is hosted on Vercel. Popup auth avoids the third-party-storage
+    // requirements of Firebase redirect auth on non-Firebase hosting.
+    // Keep this call directly inside the click-triggered function so browsers
+    // recognize it as a user-initiated popup.
+    const provider=new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({prompt:'select_account'});
     const result=await fbAuth.signInWithPopup(provider);
     const user=result && result.user;
-    if(!user) throw Object.assign(new Error('Google returned no user.'),{code:'auth/no-user'});
-    saveSession({mode:'auth', uid:user.uid, name:user.displayName||user.email||'Account', email:user.email||'', photoURL:user.photoURL||''});
+    if(!user) throw Object.assign(new Error('Firebase returned no user.'),{code:'auth/no-user-returned'});
+
+    saveSession({mode:'auth',uid:user.uid,name:user.displayName||user.email||'Account',email:user.email||'',photoURL:user.photoURL||''});
     hideAuthLanding();
     renderProfileMenu();
-    setEmailAuthMessage('');
-    toast('Signed in as '+(user.displayName||user.email));
+    setEmailAuthMessage('',false);
+    toast('Signed in as '+(user.displayName||user.email||'your account'));
     syncNow();
   }catch(err){
-    console.warn('Firebase Google sign-in failed',err);
+    console.error('Google sign-in failed:',err);
     const message=authErrorMessage(err);
     toast(message);
     setEmailAuthMessage(message,true);
   }finally{
     googleSignInPending=false;
-    if(googleBtn) googleBtn.disabled=false;
+    if(button) button.disabled=false;
   }
 }
 
@@ -238,19 +185,16 @@ function authErrorMessage(error){
     'auth/account-exists-with-different-credential':'This email already uses another sign-in method. Use the method you originally chose.',
     'auth/too-many-requests':'Too many attempts. Wait a little and try again.',
     'auth/network-request-failed':'Network unavailable. Check your connection and try again.',
-    'auth/operation-not-allowed':'Email/password sign-in is not enabled for this Firebase project.',
-    'auth/unauthorized-domain':'This website is not authorized in Firebase. Add paperuss-2-0.vercel.app under Firebase Authentication > Settings > Authorized domains.',
-    'auth/web-storage-unsupported':'Browser storage is blocked. Allow site data for PapeRuss and try again.',
-    'auth/operation-not-supported-in-this-environment':'This browser cannot complete Google sign-in here. Open PapeRuss in a regular browser tab and try again.',
+    'auth/operation-not-allowed':'This sign-in method is not enabled in Firebase Authentication.',
+    'auth/unauthorized-domain':'This website is not authorized in Firebase. Add paperuss-2-0.vercel.app under Authentication → Settings → Authorized domains.',
+    'auth/popup-blocked':'The browser blocked the Google sign-in window. Allow pop-ups for paperuss-2-0.vercel.app and try again.',
     'auth/popup-closed-by-user':'The Google sign-in window was closed before sign-in finished.',
-    'auth/cancelled-popup-request':'Another sign-in window was already open. Close it and try again.',
-    'auth/popup-blocked':'The browser blocked the Google sign-in window. Allow pop-ups for PapeRuss and try again.',
-    'auth/auth-domain-config-required':'Firebase Auth is missing its authDomain configuration.',
-    'auth/app-not-authorized':'This Firebase app is not authorized to use Authentication.',
-    'auth/internal-error':'Firebase could not complete sign-in. Reload the page and try once more.',
-    'auth/no-user':'Google sign-in completed without returning an account. Please try again.'
+    'auth/cancelled-popup-request':'Another Google sign-in window is already open.',
+    'auth/web-storage-unsupported':'Browser storage is blocked. Allow cookies/site storage for PapeRuss and try again.',
+    'auth/internal-error':'Firebase Authentication returned an internal error. Reload the page and try again.',
+    'auth/no-user-returned':'Google completed without returning a Firebase user. Check that Google is enabled in Firebase Authentication.'
   };
-  return messages[code]||('Authentication failed'+(code?' ('+code+')':'')+'. Please try again.');
+  return messages[code]||`Authentication failed${code?` (${code})`:''}. Please try again.`;
 }
 
 function setEmailAuthMessage(message,isError){
@@ -280,7 +224,6 @@ async function signInWithEmailPassword(){
   if(!email || !password){ setEmailAuthMessage('Enter your email and password.',true); return; }
   setEmailAuthBusy(true); setEmailAuthMessage('Signing in…');
   try{
-    await authPersistenceReady;
     const result=await fbAuth.signInWithEmailAndPassword(email,password);
     const user=result.user;
     saveSession({mode:'auth',uid:user.uid,name:user.displayName||user.email||'Account',email:user.email||'',photoURL:user.photoURL||''});
@@ -299,7 +242,6 @@ async function createEmailPasswordAccount(){
   if(!email || !password){ setEmailAuthMessage('Enter an email and password.',true); return; }
   setEmailAuthBusy(true); setEmailAuthMessage('Creating account…');
   try{
-    await authPersistenceReady;
     const result=await fbAuth.createUserWithEmailAndPassword(email,password);
     const user=result.user;
     try{ await user.sendEmailVerification(); }catch(_){}
@@ -337,8 +279,14 @@ function signOutUser(){
     ?'Your notes stay on this device. Cloud sync will pause until you sign in again.'
     :'Your local notes stay on this device. You will return to the welcome page.';
   confirmDialog(title,copy,isAuth?'Sign out':'Exit',async ()=>{
-    if(isAuth && !(await safelySignOutFirebase())) return;
-    if(!isAuth) saveSession(null);
+    try{
+      if(firebaseReady && isAuth && fbAuth) await fbAuth.signOut();
+    }catch(error){
+      console.error('Firebase sign-out failed:',error);
+      toast('Could not sign out of Firebase. Check your connection and try again.');
+      return;
+    }
+    saveSession(null);
     renderProfileMenu();
     updateSyncStatus('offline','Offline · local only');
     document.getElementById('profilePanel')?.classList.remove('show');
