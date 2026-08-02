@@ -55,12 +55,33 @@ function initFirebase(){
       try{ fbAnalytics=firebase.analytics(); }catch(_){ fbAnalytics=null; }
     }
     firebaseReady=true;
+    // Handle redirect sign-in result first (mobile/PWA fallback)
+    fbAuth.getRedirectResult().then(result=>{
+      if(result && result.user){
+        const u=result.user;
+        saveSession({mode:'auth', uid:u.uid, name:u.displayName||u.email||'Account', email:u.email||'', photoURL:u.photoURL||''});
+        hideAuthLanding();
+        renderProfileMenu();
+        toast('Signed in as '+(u.displayName||u.email));
+        syncNow();
+      }
+    }).catch(err=>{
+      if(err && err.code) toast(authErrorMessage(err));
+    });
     fbAuth.onAuthStateChanged(user=>{
       if(user){
         saveSession({mode:'auth', uid:user.uid, name:user.displayName||user.email||'Account', email:user.email||'', photoURL:user.photoURL||''});
         hideAuthLanding();
         renderProfileMenu();
         syncNow({silent:true});
+      } else {
+        // User signed out – if there's no valid persisted session, show auth landing
+        const sess=loadSession();
+        if(!sess || sess.mode==='auth'){
+          saveSession(null);
+          renderProfileMenu();
+          showAuthLanding();
+        }
       }
     });
     return true;
@@ -100,6 +121,13 @@ async function continueAsGuest(){
   toast('Continuing in guest mode — everything stays on this device');
 }
 
+function isMobileOrPWA(){
+  // Standalone PWA, or mobile UA — use redirect instead of popup
+  return window.matchMedia('(display-mode: standalone)').matches
+    || (window.navigator.standalone === true)
+    || /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
 async function signInWithGoogle(fromLanding){
   if(!firebaseReady){
     toast('Cloud sign-in is not configured — continuing offline');
@@ -109,6 +137,11 @@ async function signInWithGoogle(fromLanding){
   try{
     const provider=new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
+    if(isMobileOrPWA()){
+      // Use redirect on mobile/PWA — popups are blocked by iOS Safari & Android WebView
+      await fbAuth.signInWithRedirect(provider);
+      return; // page will reload; getRedirectResult() handles the result
+    }
     const result=await fbAuth.signInWithPopup(provider);
     const user=result.user;
     saveSession({mode:'auth', uid:user.uid, name:user.displayName||user.email||'Account', email:user.email||'', photoURL:user.photoURL||''});
@@ -117,6 +150,19 @@ async function signInWithGoogle(fromLanding){
     toast('Signed in as '+(user.displayName||user.email));
     syncNow();
   }catch(err){
+    if(err && err.code==='auth/popup-blocked'){
+      // Popup blocked — fall back to redirect automatically
+      try{
+        const provider2=new firebase.auth.GoogleAuthProvider();
+        provider2.setCustomParameters({ prompt: 'select_account' });
+        await fbAuth.signInWithRedirect(provider2);
+      }catch(e2){
+        const message=authErrorMessage(e2);
+        toast(message);
+        setEmailAuthMessage(message,true);
+      }
+      return;
+    }
     const message=authErrorMessage(err);
     toast(message);
     setEmailAuthMessage(message,true);
