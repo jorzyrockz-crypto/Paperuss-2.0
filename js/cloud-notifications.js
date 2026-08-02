@@ -77,18 +77,17 @@ function initFirebase(){
       } else {
         // User signed out or Firebase lost the session
         const sess=loadSession();
-        if(!sess || sess.mode!=='auth'){
-          // They are a new user or already signed out locally
-          saveSession(null);
-          renderProfileMenu();
+        if(!sess){
+          // They are a new user, no session at all
           showAuthLanding();
-        } else {
+        } else if (sess.mode==='auth') {
           // Firebase token dropped (e.g. third-party cookie blocked or token expired),
           // but they previously signed in. Do NOT kick them out of their notes.
           // Let them continue offline. syncNow() will abort safely.
           console.warn('Firebase session dropped, but local auth session remains. Pausing sync.');
           updateSyncStatus('error', 'Cloud disconnected (please sign in again later)');
         }
+        // If sess.mode === 'guest', do nothing. They are intentionally offline.
       }
     });
     return true;
@@ -128,6 +127,12 @@ async function continueAsGuest(){
   toast('Continuing in guest mode — everything stays on this device');
 }
 
+function isMobileOrPWA(){
+  return window.matchMedia('(display-mode: standalone)').matches
+    || (window.navigator.standalone === true)
+    || /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
 async function signInWithGoogle(fromLanding){
   if(!firebaseReady){
     toast('Cloud sign-in is not configured — continuing offline');
@@ -137,11 +142,32 @@ async function signInWithGoogle(fromLanding){
   try{
     const provider=new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-    // Aggressively use redirect across all platforms to bypass popup blockers and COOP issues
-    await fbAuth.signInWithRedirect(provider);
-    // Note: Execution stops here because the browser navigates away.
-    // fbAuth.getRedirectResult() in initFirebase() handles the return payload.
+    
+    if(isMobileOrPWA()){
+      await fbAuth.signInWithRedirect(provider);
+      return;
+    }
+    
+    const result=await fbAuth.signInWithPopup(provider);
+    const user=result.user;
+    saveSession({mode:'auth', uid:user.uid, name:user.displayName||user.email||'Account', email:user.email||'', photoURL:user.photoURL||''});
+    hideAuthLanding();
+    renderProfileMenu();
+    toast('Signed in as '+(user.displayName||user.email));
+    syncNow();
   }catch(err){
+    if(err && err.code==='auth/popup-blocked'){
+      try{
+        const provider2=new firebase.auth.GoogleAuthProvider();
+        provider2.setCustomParameters({ prompt: 'select_account' });
+        await fbAuth.signInWithRedirect(provider2);
+      }catch(e2){
+        const message=authErrorMessage(e2);
+        toast(message);
+        setEmailAuthMessage(message,true);
+      }
+      return;
+    }
     const message=authErrorMessage(err);
     toast(message);
     setEmailAuthMessage(message,true);
