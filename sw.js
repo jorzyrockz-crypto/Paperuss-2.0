@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'paperuss-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v28`;
+const CACHE_NAME = `${CACHE_PREFIX}v29`;
 const APP_SHELL = [
   './',
   './index.html',
@@ -27,9 +27,10 @@ const APP_SHELL = [
   './js/formatting.js',
   './js/media.js',
   './js/data-transfer.js',
+  './js/docx-import.js',
   './js/responsive-images.js',
-  './js/tables.js',
-  './js/bootstrap.js'
+  './js/bootstrap.js',
+  './assets/vendor/mammoth.browser.min.js'
 ];
 const STATIC_CDN_HOSTS = new Set([
   'cdn.jsdelivr.net',
