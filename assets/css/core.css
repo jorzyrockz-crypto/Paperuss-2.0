@@ -304,7 +304,7 @@ svg{display:block;flex-shrink:0}
   border-bottom: 1px solid var(--border);
   background: var(--canvas);
   position: relative;
-  z-index: 10;
+  z-index: 50;
   margin-top: 0;
   opacity: 1;
   transition: margin-top 0.3s cubic-bezier(0.16, 1, 0.3, 1),

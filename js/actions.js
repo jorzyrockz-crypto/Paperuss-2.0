@@ -654,9 +654,7 @@ async function createNewLeafAction() {
   if (!n) return;
   const newLeafId = await window.paperussLeafManager.addLeaf(n.id, 'New Leaf');
   if (newLeafId) {
-    await window.paperussLeafManager.switchLeaf(n.id, newLeafId);
-    renderList();
-    if (window.updateLeafTitleBar) window.updateLeafTitleBar();
+    await switchLeafAction(newLeafId);
     toast('Created new leaf');
   }
 }
@@ -674,6 +672,8 @@ async function renameLeafAction(leafId) {
   if (newTitle && newTitle.trim() !== '' && newTitle !== currentTitle) {
     await window.paperussLeafManager.renameLeaf(n.id, leafId, newTitle.trim());
     renderList();
+    const contentEl = document.getElementById('leavesDrawerContent');
+    if (contentEl && typeof renderLeavesList === 'function') renderLeavesList(contentEl);
     if (window.updateLeafTitleBar) window.updateLeafTitleBar();
     toast('Renamed leaf');
   }
@@ -685,9 +685,7 @@ async function duplicateLeafAction(leafId) {
   if (!n) return;
   const newId = await window.paperussLeafManager.duplicateLeaf(n.id, leafId);
   if (newId) {
-    await window.paperussLeafManager.switchLeaf(n.id, newId);
-    renderList();
-    if (window.updateLeafTitleBar) window.updateLeafTitleBar();
+    await switchLeafAction(newId);
     toast('Duplicated leaf');
   }
 }
@@ -699,6 +697,8 @@ async function reorderLeafAction(leafId, direction) {
   const res = await window.paperussLeafManager.reorderLeaf(n.id, leafId, direction);
   if (res) {
     renderList();
+    const contentEl = document.getElementById('leavesDrawerContent');
+    if (contentEl && typeof renderLeavesList === 'function') renderLeavesList(contentEl);
     toast('Reordered leaves');
   }
 }
@@ -716,10 +716,19 @@ async function deleteLeafAction(leafId, skipConfirm = false) {
   const doDelete = async () => {
     const res = await window.paperussLeafManager.deleteLeaf(n.id, leafId);
     if (res) {
-      renderList();
+      const activeLeafId = window.paperussLeaves ? window.paperussLeaves.getNoteActiveLeafId(n) : null;
+      if (activeLeafId) {
+        await switchLeafAction(activeLeafId);
+      } else {
+        renderList();
+        const contentEl = document.getElementById('leavesDrawerContent');
+        if (contentEl && typeof renderLeavesList === 'function') renderLeavesList(contentEl);
+      }
       if (window.updateLeafTitleBar) window.updateLeafTitleBar();
       toast('Deleted leaf');
+      return true;
     }
+    return false;
   };
   if (skipConfirm || window._skipConfirm) {
     await doDelete();

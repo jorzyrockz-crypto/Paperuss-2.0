@@ -1605,6 +1605,9 @@ window.paperussLeafManager = {
     n.leafOrder.push(newLeaf.id);
     n.leafCount = n.leafOrder.length;
     n.updatedAt = Date.now();
+    if (window.paperussLeaves && typeof window.paperussLeaves.setNoteActiveLeafId === 'function') {
+      window.paperussLeaves.setNoteActiveLeafId(n.id, newLeaf.id);
+    }
     persist();
     
     return newLeaf.id;
@@ -1952,7 +1955,16 @@ async function renderLeavesList(c) {
   const modalTitle = document.getElementById('leavesDrawerTitle');
   if (modalTitle) modalTitle.textContent = 'Leaves (' + leaves.length + ')';
 
-  let html = '<div class="leaves-list-rows" style="padding-top: 4px;">';
+  const isSidebar = !c || c.id !== 'leavesDrawerContent';
+  let html = '';
+  if (isSidebar) {
+    html += '<div style="padding: 6px 10px 8px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-muted); margin-bottom: 6px;">';
+    html += '<span style="font-size:12px; font-weight:600; color:var(--fg-muted);">Leaves (' + leaves.length + ')</span>';
+    html += '<button class="btn btn-primary" id="sidebarNewLeafBtn" onclick="createNewLeafAction()" style="padding: 3px 10px; font-size:11.5px; border-radius:14px;">+ New Leaf</button>';
+    html += '</div>';
+  }
+
+  html += '<div class="leaves-list-rows" style="padding-top: 4px;">';
   for (let idx = 0; idx < leaves.length; idx++) {
     const leafId = leaves[idx];
     const isVirtual = typeof leafId === 'string' && leafId.startsWith('virtual_main');

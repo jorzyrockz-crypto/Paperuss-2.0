@@ -257,9 +257,9 @@
 .changelog-release a{color:var(--accent)}
 .mobile-sidebar-brand{display:none}
 .profile-tools{display:block}
-.editor-more-wrap{display:block;position:relative}
+.editor-more-wrap{display:block;position:relative;z-index:500}
 .editor-more-panel{
-  display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:200;
+  display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:500 !important;
   width:190px;background:var(--overlay);border:1px solid var(--border);border-radius:12px;
   padding:6px;box-shadow:0 16px 40px rgba(0,0,0,.4)
 }
