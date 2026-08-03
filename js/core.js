@@ -1949,12 +1949,10 @@ async function renderLeavesList(c) {
   const leaves = order && order.length > 0 ? order : [n.defaultLeafId || 'virtual_main_' + n.id];
   const activeLeafId = window.paperussLeaves ? window.paperussLeaves.getNoteActiveLeafId(n) : (n.defaultLeafId || 'virtual_main_' + n.id);
 
-  let html = '<div style="padding: 6px 10px 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-muted); margin-bottom: 6px;">';
-  html += '<span style="font-size:12px; font-weight:600; color:var(--fg-muted);">Leaves (' + leaves.length + ')</span>';
-  html += '<button class="btn btn-primary" id="newLeafBtn" onclick="createNewLeafAction()" style="padding: 3px 10px; font-size:11.5px; border-radius:14px;">+ New Leaf</button>';
-  html += '</div>';
+  const modalTitle = document.getElementById('leavesDrawerTitle');
+  if (modalTitle) modalTitle.textContent = 'Leaves (' + leaves.length + ')';
 
-  html += '<div class="leaves-list-rows">';
+  let html = '<div class="leaves-list-rows" style="padding-top: 4px;">';
   for (let idx = 0; idx < leaves.length; idx++) {
     const leafId = leaves[idx];
     const isVirtual = typeof leafId === 'string' && leafId.startsWith('virtual_main');
@@ -1973,11 +1971,11 @@ async function renderLeavesList(c) {
 
     html += `<div class="note-card leaf-row ${isActive ? 'active' : ''} ${colorClass}" data-leaf-id="${leafId}" onclick="switchLeafAction('${leafId}')">`;
     html += `<div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">`;
-    html += `<i data-lucide="file-text" class="w-4 h-4 leaf-row-icon"></i>`;
+    html += `<i data-lucide="leaf" class="w-4 h-4 leaf-row-icon"></i>`;
     html += `<span class="leaf-row-title" style="font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(title)}</span>`;
     html += `</div>`;
     html += `<div class="leaf-actions" onclick="event.stopPropagation();">`;
-    html += `<button class="btn btn-icon leaf-more-btn" onclick="toggleLeafContextMenu(event, '${leafId}')" title="Leaf Options">`;
+    html += `<button class="btn btn-icon leaf-more-btn" onclick="toggleLeafContextMenu(event, '${leafId}')" title="Leaf Options" type="button">`;
     html += `<i data-lucide="more-vertical" class="w-4 h-4"></i>`;
     html += `</button>`;
     html += `</div>`;
@@ -1991,7 +1989,10 @@ async function renderLeavesList(c) {
 window.renderLeavesList = renderLeavesList;
 
 async function toggleLeafContextMenu(e, leafId) {
-  if (e) e.stopPropagation();
+  if (e) {
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+    if (typeof e.stopPropagation === 'function') e.stopPropagation();
+  }
   const menu = document.getElementById('leafContextMenu');
   if (!menu) return;
 
@@ -2000,7 +2001,8 @@ async function toggleLeafContextMenu(e, leafId) {
     return;
   }
 
-  const btn = e.currentTarget;
+  const btn = e.currentTarget || e.target.closest('.leaf-more-btn');
+  if (!btn) return;
   const rect = btn.getBoundingClientRect();
   const n = getNote(state.currentId);
   const leaves = window.paperussLeaves ? window.paperussLeaves.getNoteLeafOrder(n) : [];
@@ -2025,32 +2027,33 @@ async function toggleLeafContextMenu(e, leafId) {
 
   menu.dataset.activeLeafId = leafId;
   menu.innerHTML = `
-    <button class="leaf-menu-item" onclick="createNewLeafAction(); closeLeafContextMenu();">
+    <button class="leaf-menu-item" type="button" onclick="createNewLeafAction(); closeLeafContextMenu();">
       <i data-lucide="plus" class="w-4 h-4"></i> Add Sub-leaf
     </button>
-    <button class="leaf-menu-item" onclick="duplicateLeafAction('${leafId}'); closeLeafContextMenu();">
+    <button class="leaf-menu-item" type="button" onclick="duplicateLeafAction('${leafId}'); closeLeafContextMenu();">
       <i data-lucide="copy" class="w-4 h-4"></i> Duplicate
     </button>
-    <button class="leaf-menu-item" onclick="renameLeafAction('${leafId}'); closeLeafContextMenu();">
+    <button class="leaf-menu-item" type="button" onclick="renameLeafAction('${leafId}'); closeLeafContextMenu();">
       <i data-lucide="edit-2" class="w-4 h-4"></i> Rename
     </button>
     <div style="padding:4px 8px 2px; font-size:11px; font-weight:600; color:var(--fg-muted);">Leaf Accent Color</div>
     <div class="leaf-color-swatches">
       ${colors.map(c => `<div class="leaf-color-swatch ${c.name === currentColor ? 'active' : ''}" style="background:${c.hex};" onclick="setLeafColorAction('${leafId}', '${c.name}'); closeLeafContextMenu();" title="${c.label}"></div>`).join('')}
     </div>
-    <button class="leaf-menu-item" onclick="copyLeafLinkAction('${leafId}'); closeLeafContextMenu();">
+    <button class="leaf-menu-item" type="button" onclick="copyLeafLinkAction('${leafId}'); closeLeafContextMenu();">
       <i data-lucide="link" class="w-4 h-4"></i> Copy Link
     </button>
-    <button class="leaf-menu-item danger" onclick="deleteLeafAction('${leafId}', false); closeLeafContextMenu();" ${!canDelete ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''}>
+    <button class="leaf-menu-item danger" type="button" onclick="deleteLeafAction('${leafId}', false); closeLeafContextMenu();" ${!canDelete ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''}>
       <i data-lucide="trash-2" class="w-4 h-4"></i> Delete Leaf
     </button>
   `;
 
   menu.style.position = 'fixed';
+  menu.style.zIndex = '999999';
   let left = rect.right - 180;
   let top = rect.bottom + 4;
   if (left < 10) left = 10;
-  if (top + 220 > window.innerHeight) top = Math.max(10, rect.top - 220);
+  if (top + 230 > window.innerHeight) top = Math.max(10, rect.top - 230);
 
   menu.style.left = `${Math.round(left)}px`;
   menu.style.top = `${Math.round(top)}px`;

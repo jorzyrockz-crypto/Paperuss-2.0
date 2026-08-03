@@ -1207,10 +1207,13 @@
   <div class="leaves-drawer leaves-palette-widget" id="leavesDrawer">
     <div class="leaves-drawer-header" id="leavesDrawerHeader">
       <div class="leaves-drag-handle" id="leavesDragHandle" title="Drag to reposition widget">
-        <i data-lucide="grip-horizontal" class="w-4 h-4 text-fg-muted"></i>
-        <h3 id="leavesDrawerTitle">Leaves Palette</h3>
+        <i data-lucide="sprout" class="w-4 h-4 text-success"></i>
+        <h3 id="leavesDrawerTitle">Leaves (0)</h3>
       </div>
-      <div class="leaves-header-actions" style="display:flex;align-items:center;gap:4px">
+      <div class="leaves-header-actions" style="display:flex;align-items:center;gap:6px">
+        <button class="btn btn-icon btn-primary" id="headerNewLeafBtn" onclick="createNewLeafAction()" title="Add New Leaf" style="width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+        </button>
         <button class="btn btn-icon" id="closeLeavesDrawerBtn" onclick="closeLeavesDrawer()" title="Close widget">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
@@ -1219,10 +1222,11 @@
     <div class="leaves-drawer-content" id="leavesDrawerContent">
       <!-- Leaves list rendered here in Drawer mode -->
     </div>
-    <!-- Glassmorphic 3-Dot Context Menu Popover -->
-    <div class="leaf-context-menu hidden" id="leafContextMenu" role="menu"></div>
   </div>
 </div>
+
+<!-- Glassmorphic 3-Dot Context Menu Popover -->
+<div class="leaf-context-menu hidden" id="leafContextMenu" role="menu"></div>
 
 <script src="js/stabilization.js"></script>
 <script src="js/history.js"></script>
