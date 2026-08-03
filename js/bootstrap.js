@@ -967,26 +967,20 @@ function isMarkdownText(text) {
   if(railBtn) railBtn.onclick=e=>{ e.stopPropagation(); toggleSidebarRail(); };
 
   // Note-list panel toggle / back button
-  document.getElementById('backBtn').onclick=()=>{
-    if(window.innerWidth<=640){
-      showMobileList();
-    } else {
+  const backBtnEl = document.getElementById('backBtn');
+  if(backBtnEl){
+    backBtnEl.onclick = () => {
       toggleNoteListPanel();
-    }
-  };
+    };
+  }
 
   // Note-list tablet panel toggle
   const listToggleBtn = document.getElementById('noteListToggle');
-  if(listToggleBtn) listToggleBtn.onclick = () => {
-    const listEl = document.getElementById('noteList');
-    if(listEl) {
-      if(window.innerWidth <= 900) {
-        listEl.classList.toggle('open');
-      } else {
-        listEl.classList.toggle('collapsed');
-      }
-    }
-  };
+  if(listToggleBtn){
+    listToggleBtn.onclick = () => {
+      toggleNoteListPanel();
+    };
+  }
 
   // Resizer logic
   const resizer = document.getElementById('noteListResizer');

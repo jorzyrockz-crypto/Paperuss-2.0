@@ -71,20 +71,50 @@ function toggleSidebarRail(){
 }
 
 function toggleNoteListPanel(){
-  const listEl=document.getElementById('noteList');
-  const iconEl=document.getElementById('backBtnIcon');
+  const listEl = document.getElementById('noteList');
+  const iconEl = document.getElementById('backBtnIcon');
   if(!listEl) return;
-  const isHidden=listEl.style.display==='none';
-  if(isHidden){
-    listEl.style.display='';
-    if(iconEl) iconEl.setAttribute('data-lucide', 'panel-left-close');
-    toast('Note list shown');
-  } else {
-    listEl.style.display='none';
-    if(iconEl) iconEl.setAttribute('data-lucide', 'panel-left-open');
-    toast('Note list hidden for wider editor');
+
+  // Clear any legacy inline display style so CSS rules control layout smoothly
+  if(listEl.style.display === 'none'){
+    listEl.style.display = '';
   }
-  refreshIcons();
+
+  const w = window.innerWidth;
+  if(w <= 640){
+    showMobileList();
+    return;
+  }
+
+  let isCollapsed = false;
+
+  if(w <= 900){
+    // Tablet portrait drawer mode: toggle 'open'
+    const isOpen = listEl.classList.toggle('open');
+    isCollapsed = !isOpen;
+  } else {
+    // Desktop / Tablet landscape mode: toggle 'collapsed'
+    const collapsed = listEl.classList.toggle('collapsed');
+    isCollapsed = collapsed;
+  }
+
+  // Update backBtn icon
+  if(iconEl){
+    iconEl.setAttribute('data-lucide', isCollapsed ? 'panel-left-open' : 'panel-left-close');
+  }
+
+  // Update button titles / tooltips
+  const backBtn = document.getElementById('backBtn');
+  if(backBtn){
+    backBtn.title = isCollapsed ? 'Show note list' : 'Hide note list';
+  }
+  const listToggleBtn = document.getElementById('noteListToggle');
+  if(listToggleBtn){
+    listToggleBtn.title = isCollapsed ? 'Show note list' : 'Hide note list';
+  }
+
+  toast(isCollapsed ? 'Note list hidden for wider editor' : 'Note list shown');
+  if(typeof refreshIcons === 'function') refreshIcons();
 }
 
 function toggleSidebarMobile(){
