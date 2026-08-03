@@ -266,8 +266,42 @@ function fileIconSVG(type,name){
 
 /* Rich link cards */
 function insertRichLink(){
-  const url=prompt('Paste a URL to embed as a rich card:','https://');
-  if(!url) return;
+  if(typeof openLinkModal === 'function'){
+    openLinkModal({
+      callback: (res, linkText) => {
+        if(!res || !res.valid || !res.isExternal) {
+          if(res && !res.isExternal) toast('Link cards require http:// or https:// URLs');
+          return;
+        }
+        let u;
+        try{ u=new URL(res.url); }catch(e){ toast('Invalid URL'); return; }
+        const host=u.hostname.replace(/^www\./,'');
+        const path=(u.pathname==='/'?'':u.pathname).replace(/\/$/,'');
+        const defaultTitle = res.platformName ? `${res.platformName} Link` : decodeURIComponent(path.split('/').pop()||host) || host;
+        const title = linkText || defaultTitle;
+        const favicon=`https://www.google.com/s2/favicons?domain=${host}&sz=64`;
+        const id='l_'+Date.now().toString(36);
+        insertHTMLAtCaret(
+          `<a class="media-card link-card" contenteditable="false" data-media-id="${id}" data-media-kind="link" href="${esc(res.url)}" target="_blank" rel="noopener noreferrer">
+            <div class="mc-top">
+              <div class="mc-icon"><img src="${esc(favicon)}" alt="" loading="lazy" decoding="async"></div>
+              <div class="mc-body">
+                <div class="mc-title">${esc(title)}</div>
+                <div class="mc-meta">${esc(host)}</div>
+              </div>
+            </div>
+          </a>`
+        );
+        toast('Link card added');
+      }
+    });
+    return;
+  }
+  const raw=prompt('Paste a URL to embed as a rich card:','https://');
+  if(!raw) return;
+  const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(raw) : null;
+  if(res && !res.valid){ toast(res.error || 'Invalid URL'); return; }
+  const url = res ? res.url : raw;
   let u;
   try{ u=new URL(url); }catch(e){ toast('Invalid URL'); return; }
   if(!['http:','https:'].includes(u.protocol)){ toast('Only http:// and https:// links are supported'); return; }
@@ -493,10 +527,21 @@ function updateAlignmentButton(){
 }
 
 function updateToolbarState(){
-  const cmds=['bold','italic','underline','strikeThrough','insertUnorderedList','insertOrderedList'];
+  const listCtx = typeof _listContext === 'function' ? _listContext() : null;
+  const isTask = listCtx && listCtx.type === 'task';
+  const isUl = listCtx && listCtx.type === 'ul';
+  const isOl = listCtx && listCtx.type === 'ol';
+  const cmds=['bold','italic','underline','strikeThrough'];
+
   document.querySelectorAll('#formatBar .tool-btn').forEach(btn=>{
     const cmd=btn.dataset.cmd;
-    if(cmds.includes(cmd)){
+    if(cmd === 'task'){
+      btn.classList.toggle('active', !!isTask);
+    } else if(cmd === 'insertUnorderedList'){
+      btn.classList.toggle('active', !!isUl && !isTask);
+    } else if(cmd === 'insertOrderedList'){
+      btn.classList.toggle('active', !!isOl && !isTask);
+    } else if(cmds.includes(cmd)){
       try{ btn.classList.toggle('active', document.queryCommandState(cmd)); }
       catch(e){ btn.classList.remove('active'); }
     } else {
@@ -518,6 +563,15 @@ function updateToolbarState(){
   const activeSz=getActiveFontSize();
   document.querySelectorAll('.sz-opt').forEach(o=>o.classList.toggle('active', o.dataset.val===(activeSz||'')));
   if(typeof updateAlignmentButton==='function') updateAlignmentButton();
+  
+  // Update Paragraph Style label
+  const paraStyleBtn = document.getElementById('paraStyleLabel');
+  if(paraStyleBtn) {
+    const activeBlock = typeof getActiveParagraphStyle === 'function' ? getActiveParagraphStyle() : 'p';
+    const psLabels = {'p':'Normal text','h1-title':'Title','p-subtitle':'Subtitle','h2':'Heading 1','h3':'Heading 2','h4':'Heading 3'};
+    paraStyleBtn.textContent = psLabels[activeBlock] || 'Normal text';
+    document.querySelectorAll('.ps-opt').forEach(o => o.classList.toggle('active', o.dataset.val === activeBlock));
+  }
 }
 
 /* ============================================================

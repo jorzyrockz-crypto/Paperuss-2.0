@@ -816,6 +816,85 @@ function filteredNotes(){
   return arr;
 }
 
+function extractNoteThumbnail(html){
+  if(!html) return null;
+  const m = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+  return m ? m[1] : null;
+}
+
+function getChecklistStats(html){
+  if(!html) return null;
+  const inputs = html.match(/<input[^>]+type=["']?checkbox["']?[^>]*>/gi);
+  if(!inputs || !inputs.length) return null;
+  const total = inputs.length;
+  const checked = inputs.filter(tag => /\bchecked\b/i.test(tag)).length;
+  return { checked, total };
+}
+
+function renderNoteCard(n){
+  const prev=stripHtml(n.content).slice(0,140);
+  const content=n.content||'';
+  const hasImage=content.includes('data-media-kind="image"')||content.includes('<img');
+  const hasVideo=content.includes('data-media-kind="video"')||content.includes('<video');
+  const hasAudio=content.includes('data-media-kind="audio"')||content.includes('<audio');
+  const hasFile=content.includes('data-media-kind="file"');
+  const mediaCount=((content).match(/data-media-id="/g)||[]).length;
+
+  const isV2 = (typeof appSettings !== 'undefined' && appSettings && appSettings.previewV2 === true);
+  const density = (typeof appSettings !== 'undefined' && appSettings && appSettings.previewDensity === 'compact') ? 'compact' : 'comfortable';
+
+  if(isV2){
+    const thumbUrl = extractNoteThumbnail(content);
+    const checklistStats = getChecklistStats(content);
+    const hasReminder = n.reminder || n.due || n.reminderAt;
+    const notebookName = n.notebook || n.folder;
+    const metaTop = (n.pinned || hasReminder) ? `<div class="v2-meta-top">
+      ${n.pinned ? '<i data-lucide="pin" class="w-3.5 h-3.5 note-pin" title="Pinned"></i>' : ''}
+      ${hasReminder ? '<i data-lucide="alarm-clock" class="w-3.5 h-3.5 text-accent" title="Has reminder"></i>' : ''}
+    </div>` : '';
+
+    return `<div class="note-card v2 v2-${density} ${n.id===state.currentId?'active':''}" data-id="${n.id}">
+      <div class="v2-header">
+        <div class="v2-title">${esc(titleOf(n))}</div>
+        ${metaTop}
+      </div>
+      <div class="v2-body">
+        <div class="v2-excerpt">${prev ? esc(prev) : '<span style="color:var(--fg-muted)">Empty note</span>'}</div>
+        ${thumbUrl ? `<img class="v2-thumbnail" src="${esc(thumbUrl)}" alt="" loading="lazy">` : ''}
+      </div>
+      <div class="v2-footer">
+        ${notebookName ? `<span class="v2-badge" title="Notebook"><i data-lucide="book" class="w-3 h-3"></i> ${esc(notebookName)}</span>` : ''}
+        ${checklistStats ? `<span class="v2-badge" title="Checklist progress"><i data-lucide="check-square" class="w-3 h-3"></i> ${checklistStats.checked}/${checklistStats.total}</span>` : ''}
+        ${mediaCount ? `<span class="v2-badge" title="${mediaCount} attachment${mediaCount!==1?'s':''}"><i data-lucide="paperclip" class="w-3 h-3"></i> ${mediaCount}</span>` : ''}
+        ${(n.tags||[]).slice(0,3).map(t=>`<span class="chip">${esc(t)}</span>`).join('')}
+        <span>${n.deletedAt ? 'Deleted '+timeAgo(n.deletedAt) : timeAgo(n.updatedAt)}</span>
+        ${n.deletedAt ? '<span class="archived">In Trash</span>' : (n.archived ? '<span class="archived">Archived</span>' : '')}
+      </div>
+    </div>`;
+  }
+
+  let mediaIcon='';
+  if(hasImage) mediaIcon='<i data-lucide="image" class="w-3.5 h-3.5 text-accent" title="Has images"></i>';
+  else if(hasVideo) mediaIcon='<i data-lucide="video" class="w-3.5 h-3.5 text-accent" title="Has video"></i>';
+  else if(hasAudio) mediaIcon='<i data-lucide="mic" class="w-3.5 h-3.5 text-accent" title="Has audio"></i>';
+  else if(hasFile) mediaIcon='<i data-lucide="paperclip" class="w-3.5 h-3.5 text-accent" title="Has attachments"></i>';
+  return `<div class="note-card ${n.id===state.currentId?'active':''}" data-id="${n.id}">
+    <div class="note-title">
+      ${n.pinned?'<i data-lucide="pin" class="w-3.5 h-3.5 note-pin"></i>':''}
+      ${esc(titleOf(n))}
+      ${mediaIcon}
+    </div>
+    <div class="note-preview">${prev?esc(prev):'<span style="color:var(--fg-muted)">Empty note</span>'}</div>
+    <div class="note-meta">
+      ${n.deletedAt?'<span class="archived">In Trash</span>':(n.archived?'<span class="archived">Archived</span>':'')}
+      <span>${n.deletedAt?'Deleted '+timeAgo(n.deletedAt):timeAgo(n.updatedAt)}</span>
+      ${mediaCount?`<span class="media-badge" title="${mediaCount} attachment${mediaCount!==1?'s':''}">
+        <i data-lucide="paperclip" class="w-3 h-3"></i>${mediaCount}</span>`:''}
+      ${(n.tags||[]).slice(0,2).map(t=>'<span class="chip">'+esc(t)+'</span>').join('')}
+    </div>
+  </div>`;
+}
+
 function renderList(){
   if(state.filter==='media'){
     renderMediaList();
@@ -845,35 +924,7 @@ function renderList(){
     refreshIcons();
     return;
   }
-  c.innerHTML=arr.map(n=>{
-    const prev=stripHtml(n.content).slice(0,140);
-    const content=n.content||'';
-    const hasImage=content.includes('data-media-kind="image"')||content.includes('<img');
-    const hasVideo=content.includes('data-media-kind="video"')||content.includes('<video');
-    const hasAudio=content.includes('data-media-kind="audio"')||content.includes('<audio');
-    const hasFile=content.includes('data-media-kind="file"');
-    const mediaCount=((content).match(/data-media-id="/g)||[]).length;
-    let mediaIcon='';
-    if(hasImage) mediaIcon='<i data-lucide="image" class="w-3.5 h-3.5 text-accent" title="Has images"></i>';
-    else if(hasVideo) mediaIcon='<i data-lucide="video" class="w-3.5 h-3.5 text-accent" title="Has video"></i>';
-    else if(hasAudio) mediaIcon='<i data-lucide="mic" class="w-3.5 h-3.5 text-accent" title="Has audio"></i>';
-    else if(hasFile) mediaIcon='<i data-lucide="paperclip" class="w-3.5 h-3.5 text-accent" title="Has attachments"></i>';
-    return `<div class="note-card ${n.id===state.currentId?'active':''}" data-id="${n.id}">
-      <div class="note-title">
-        ${n.pinned?'<i data-lucide="pin" class="w-3.5 h-3.5 note-pin"></i>':''}
-        ${esc(titleOf(n))}
-        ${mediaIcon}
-      </div>
-      <div class="note-preview">${prev?esc(prev):'<span style="color:var(--fg-muted)">Empty note</span>'}</div>
-      <div class="note-meta">
-        ${n.deletedAt?'<span class="archived">In Trash</span>':(n.archived?'<span class="archived">Archived</span>':'')}
-        <span>${n.deletedAt?'Deleted '+timeAgo(n.deletedAt):timeAgo(n.updatedAt)}</span>
-        ${mediaCount?`<span class="media-badge" title="${mediaCount} attachment${mediaCount!==1?'s':''}">
-          <i data-lucide="paperclip" class="w-3 h-3"></i>${mediaCount}</span>`:''}
-        ${(n.tags||[]).slice(0,2).map(t=>'<span class="chip">'+esc(t)+'</span>').join('')}
-      </div>
-    </div>`;
-  }).join('');
+  c.innerHTML=arr.map(n=>renderNoteCard(n)).join('');
   refreshIcons();
 }
 

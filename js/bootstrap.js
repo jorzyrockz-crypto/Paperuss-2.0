@@ -107,7 +107,8 @@ function bind(){
   // Keep checkbox clicks working inside contenteditable
   ed.addEventListener('click', e=>{
     if(e.target && e.target.matches && e.target.matches('input[type=checkbox]')){
-      // let default toggle happen, then save
+      if(e.target.checked) e.target.setAttribute('checked', '');
+      else e.target.removeAttribute('checked');
       setTimeout(handleBodyInput, 0);
     }
     const badge = e.target.closest('.callout-badge');
@@ -127,8 +128,13 @@ function bind(){
     }
   });
 
-  // Intercept Undo / Redo for Custom History Manager
+  // Intercept Undo / Redo / Link shortcuts
   ed.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      if (typeof applyCommand === 'function') applyCommand('createLink');
+      return;
+    }
     if(window.HistoryManager) {
       if((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
@@ -140,7 +146,7 @@ function bind(){
     }
   });
 
-  // Enter in a task item creates a new task line
+  // Enter in a task item creates a new task line or converts empty item back to paragraph
   ed.addEventListener('keydown', e=>{
     if(e.key==='Enter' && !e.shiftKey){
       const sel=window.getSelection();
@@ -150,20 +156,25 @@ function bind(){
         const li=node.closest&&node.closest('[data-task]');
         if(li){
           e.preventDefault();
-          // Create a new sibling task item after the current one
-          const newLi=document.createElement('li');
-          newLi.setAttribute('data-task','1');
-          const cb=document.createElement('input');
-          cb.type='checkbox';
-          newLi.appendChild(cb);
-          newLi.appendChild(document.createTextNode(' '));
-          li.parentElement.insertBefore(newLi, li.nextSibling);
-          // Place cursor in the new task item
-          const r=document.createRange();
-          r.setStart(newLi, newLi.childNodes.length===2?2:1);
-          r.collapse(true);
-          sel.removeAllRanges(); sel.addRange(r);
-          setTimeout(handleBodyInput, 0);
+          const textContent = Array.from(li.childNodes).filter(n=>n.nodeType!==1||n.tagName!=='INPUT').map(n=>n.textContent).join('').trim();
+          if(textContent === '' && typeof toggleList === 'function'){
+            toggleList('task');
+          } else {
+            // Create a new sibling task item after the current one
+            const newLi=document.createElement('li');
+            newLi.setAttribute('data-task','1');
+            const cb=document.createElement('input');
+            cb.type='checkbox';
+            newLi.appendChild(cb);
+            newLi.appendChild(document.createTextNode(' '));
+            li.parentElement.insertBefore(newLi, li.nextSibling);
+            // Place cursor in the new task item
+            const r=document.createRange();
+            r.setStart(newLi, newLi.childNodes.length===2?2:1);
+            r.collapse(true);
+            sel.removeAllRanges(); sel.addRange(r);
+            setTimeout(handleBodyInput, 0);
+          }
         }
       }
     }
@@ -209,6 +220,30 @@ function bind(){
         const type = text.slice(1);
         node.textContent = node.textContent.slice(type.length + 1);
         if(typeof insertCallout === 'function') insertCallout(type);
+        setTimeout(handleBodyInput, 0);
+      } else if((text === '- [ ]' || text === '* [ ]' || text === '+ [ ]' || text === '[ ]') && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(text.length);
+        if(typeof toggleList === 'function') toggleList('task');
+        setTimeout(handleBodyInput, 0);
+      } else if((text === '- [x]' || text === '- [X]' || text === '* [x]' || text === '* [X]' || text === '+ [x]' || text === '+ [X]' || text === '[x]' || text === '[X]') && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(text.length);
+        if(typeof toggleList === 'function') toggleList('task');
+        setTimeout(() => {
+          const li = window.getSelection()?.anchorNode?.parentElement?.closest?.('li[data-task]');
+          if(li && typeof _addTask === 'function') _addTask(li, true);
+          handleBodyInput();
+        }, 0);
+      } else if((text === '-' || text === '*' || text === '+') && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(text.length);
+        if(typeof toggleList === 'function') toggleList('ul');
+        setTimeout(handleBodyInput, 0);
+      } else if(text === '1.' && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(2);
+        if(typeof toggleList === 'function') toggleList('ol');
         setTimeout(handleBodyInput, 0);
       } else {
         // Inline markdown auto-formatting for **bold**, ~~strike~~, and *italic*
@@ -476,11 +511,74 @@ function bind(){
     // 2. Remove dangerous or non-semantic tags
     doc.querySelectorAll('script, style, meta, link, iframe, object, embed, o\\:p').forEach(el => el.remove());
 
-    // 3. Normalize AI List Items (<ul><li><p>Text</p></li></ul> -> <ul><li>Text</li></ul>)
+    // 3. Normalize AI List Items & Markdown Task Markers (e.g. <li>[ ] Task</li> or <li>- [x] Task</li>)
     doc.querySelectorAll('li').forEach(li => {
       const ps = Array.from(li.querySelectorAll('p'));
       if(ps.length > 0){
         li.innerHTML = ps.map(p => p.innerHTML).join('<br>');
+      }
+      // Check for existing checkbox input
+      const cbInput = li.querySelector(':scope > input[type="checkbox"]');
+      if(cbInput){
+        li.setAttribute('data-task', '1');
+        if(li.parentElement) li.parentElement.classList.add('task-list');
+        if(cbInput.checked) cbInput.setAttribute('checked', '');
+        return;
+      }
+      // Intercept text node patterns: - [ ], * [x], [ ], [X]
+      const textMatch = li.textContent.match(/^\s*(?:[-*+]\s*|\d+\.\s*)?\[([ xX])\]\s*/);
+      if(textMatch){
+        const isChecked = textMatch[1].toLowerCase() === 'x';
+        // Strip the [ ] or [x] prefix marker
+        const taskRegex = /^\s*(?:[-*+]\s*|\d+\.\s*)?\[([ xX])\]\s*/;
+        const walker = doc.createTreeWalker(li, NodeFilter.SHOW_TEXT);
+        const firstText = walker.nextNode();
+        if(firstText){
+          firstText.textContent = firstText.textContent.replace(taskRegex, '');
+        }
+        li.setAttribute('data-task', '1');
+        if(li.parentElement) li.parentElement.classList.add('task-list');
+        const cb = doc.createElement('input');
+        cb.type = 'checkbox';
+        if(isChecked){
+          cb.checked = true;
+          cb.setAttribute('checked', '');
+        }
+        li.insertBefore(cb, li.firstChild);
+        if(!cb.nextSibling) li.appendChild(doc.createTextNode(' '));
+        else if(cb.nextSibling.nodeType === 3 && !cb.nextSibling.textContent.startsWith(' ')){
+          cb.nextSibling.textContent = ' ' + cb.nextSibling.textContent;
+        }
+      }
+    });
+
+    // 3b. Intercept paragraph/div blocks starting with Markdown tasks: e.g. <p>- [ ] Task 1</p>
+    const blockTaskRegex = /^\s*(?:[-*+]\s*|\d+\.\s*)?\[([ xX])\]\s*/;
+    doc.querySelectorAll('p, div').forEach(blk => {
+      if(blk.querySelector('ul, ol, table')) return;
+      const text = blk.textContent;
+      const match = text.match(blockTaskRegex);
+      if(match){
+        const isChecked = match[1].toLowerCase() === 'x';
+        const cleanHTML = blk.innerHTML.replace(blockTaskRegex, '');
+        const li = doc.createElement('li');
+        li.setAttribute('data-task', '1');
+        const cb = doc.createElement('input');
+        cb.type = 'checkbox';
+        if(isChecked){
+          cb.checked = true;
+          cb.setAttribute('checked', '');
+        }
+        li.appendChild(cb);
+        li.appendChild(doc.createTextNode(' '));
+        const temp = doc.createElement('span');
+        temp.innerHTML = cleanHTML;
+        while(temp.firstChild) li.appendChild(temp.firstChild);
+
+        const ul = doc.createElement('ul');
+        ul.className = 'task-list';
+        ul.appendChild(li);
+        blk.replaceWith(ul);
       }
     });
 
@@ -533,6 +631,234 @@ function bind(){
     });
   }
 
+
+function parseMarkdownInline(text) {
+  if (!text) return '';
+  let str = String(text);
+
+  const codeSpans = [];
+  str = str.replace(/`([^`]+)`/g, (_, code) => {
+    const idx = codeSpans.length;
+    codeSpans.push(`<code>${esc(code)}</code>`);
+    return `\uE000C${idx}\uE000`;
+  });
+
+  const imageSpans = [];
+  str = str.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
+    const idx = imageSpans.length;
+    const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(url) : { valid: true, url: url };
+    const src = res.valid ? res.url : url;
+    imageSpans.push(`<img src="${esc(src)}" alt="${esc(alt)}">`);
+    return `\uE000I${idx}\uE000`;
+  });
+
+  const linkSpans = [];
+  str = str.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, title, url) => {
+    const idx = linkSpans.length;
+    const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(url) : { valid: true, url: url, isExternal: true };
+    const targetAttr = (res.isExternal || !res.url.startsWith('#')) ? ' target="_blank" rel="noopener noreferrer"' : '';
+    const href = res.valid ? res.url : url;
+    const renderedTitle = parseMarkdownInline(title);
+    linkSpans.push(`<a href="${esc(href)}"${targetAttr}>${renderedTitle}</a>`);
+    return `\uE000L${idx}\uE000`;
+  });
+
+  str = esc(str);
+
+  str = str.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
+  str = str.replace(/___([^_]+)___/g, '<strong><em>$1</em></strong>');
+  str = str.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  str = str.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  str = str.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+  str = str.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+  str = str.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+  str = str.replace(/==([^=]+)==/g, '<mark>$1</mark>');
+
+  str = str.replace(/\uE000L(\d+)\uE000/g, (_, idx) => linkSpans[+idx] || '');
+  str = str.replace(/\uE000I(\d+)\uE000/g, (_, idx) => imageSpans[+idx] || '');
+  str = str.replace(/\uE000C(\d+)\uE000/g, (_, idx) => codeSpans[+idx] || '');
+
+  return str;
+}
+
+function parseMarkdownToPaperussHTML(markdown) {
+  if (!markdown || !String(markdown).trim()) return '';
+  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
+
+  let html = '';
+  let inList = null;
+  let inCodeBlock = false;
+  let codeBuffer = [];
+  let inTable = false;
+  let tableRows = [];
+
+  const closeList = () => {
+    if (inList) {
+      html += inList === 'ol' ? '</ol>' : '</ul>';
+      inList = null;
+    }
+  };
+
+  const closeTable = () => {
+    if (inTable && tableRows.length > 0) {
+      let tHtml = '<table class="note-table"><thead>';
+      tableRows.forEach((row, rIdx) => {
+        if (rIdx === 1 && row.every(cell => /^:?-+:?$/.test(cell.trim()))) return;
+        const tag = rIdx === 0 ? 'th' : 'td';
+        if (rIdx === 1) tHtml += '</thead><tbody>';
+        tHtml += '<tr>';
+        row.forEach(cell => {
+          tHtml += `<${tag}>${parseMarkdownInline(cell.trim())}</${tag}>`;
+        });
+        tHtml += '</tr>';
+      });
+      if (tableRows.length > 1) tHtml += '</tbody>';
+      tHtml += '</table>';
+      html += tHtml;
+      tableRows = [];
+      inTable = false;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const line = rawLine.trim();
+
+    if (/^```/.test(line)) {
+      if (inCodeBlock) {
+        closeList(); closeTable();
+        html += `<pre><code>${esc(codeBuffer.join('\n'))}</code></pre>`;
+        codeBuffer = [];
+        inCodeBlock = false;
+      } else {
+        closeList(); closeTable();
+        inCodeBlock = true;
+        codeBuffer = [];
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeBuffer.push(rawLine);
+      continue;
+    }
+
+    if (/^\|.*\|$/.test(line)) {
+      closeList();
+      const cells = line.slice(1, -1).split('|');
+      tableRows.push(cells);
+      inTable = true;
+      continue;
+    } else if (inTable) {
+      closeTable();
+    }
+
+    if (!line) {
+      closeList(); closeTable();
+      continue;
+    }
+
+    if (/^(?:---|\*\*\*|___)$/.test(line)) {
+      closeList(); closeTable();
+      html += '<hr>';
+      continue;
+    }
+
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      closeList(); closeTable();
+      const level = Math.min(headingMatch[1].length, 6);
+      const tag = `h${level}`;
+      html += `<${tag}>${parseMarkdownInline(headingMatch[2])}</${tag}>`;
+      continue;
+    }
+
+    const calloutMatch = line.match(/^>\s*\[!(TIP|WARNING|SUMMARY|INFO|NOTE|DANGER|CAUTION)\]\s*(.*)$/i) || line.match(/^!(tip|warning|summary|info|note|danger|caution)\s*(.*)$/i);
+    if (calloutMatch) {
+      closeList(); closeTable();
+      const type = calloutMatch[1].toLowerCase();
+      const text = calloutMatch[2];
+      const iconMap = { tip: '💡', warning: '⚠️', summary: '📋', info: 'ℹ️', note: '📌', danger: '🚨', caution: '⚠️' };
+      const title = type.toUpperCase();
+      html += `<div class="callout callout-${type}" contenteditable="true" data-callout="${type}">
+        <div class="callout-title">${iconMap[type] || '📌'} ${title}</div>
+        <div class="callout-body">${parseMarkdownInline(text)}</div>
+      </div>`;
+      continue;
+    }
+
+    const quoteMatch = line.match(/^>\s*(.+)$/);
+    if (quoteMatch) {
+      closeList(); closeTable();
+      html += `<blockquote>${parseMarkdownInline(quoteMatch[1])}</blockquote>`;
+      continue;
+    }
+
+    const taskMatch = line.match(/^(?:[-*+]\s*|\d+[.)]\s*)?\[([ xX])\]\s*(.*)$/);
+    if (taskMatch) {
+      closeTable();
+      if (inList !== 'task') {
+        closeList();
+        html += '<ul class="task-list">';
+        inList = 'task';
+      }
+      const isChecked = taskMatch[1].toLowerCase() === 'x';
+      const checkedAttr = isChecked ? ' checked=""' : '';
+      html += `<li data-task="1"><input type="checkbox"${checkedAttr}> ${parseMarkdownInline(taskMatch[2])}</li>`;
+      continue;
+    }
+
+    const bulletMatch = line.match(/^[-*+]\s+(.+)$/);
+    if (bulletMatch) {
+      closeTable();
+      if (inList !== 'ul') {
+        closeList();
+        html += '<ul>';
+        inList = 'ul';
+      }
+      html += `<li>${parseMarkdownInline(bulletMatch[1])}</li>`;
+      continue;
+    }
+
+    const orderedMatch = line.match(/^\d+[.)]\s+(.+)$/);
+    if (orderedMatch) {
+      closeTable();
+      if (inList !== 'ol') {
+        closeList();
+        html += '<ol>';
+        inList = 'ol';
+      }
+      html += `<li>${parseMarkdownInline(orderedMatch[1])}</li>`;
+      continue;
+    }
+
+    closeList(); closeTable();
+    html += `<p>${parseMarkdownInline(line)}</p>`;
+  }
+
+  if (inCodeBlock) {
+    html += `<pre><code>${esc(codeBuffer.join('\n'))}</code></pre>`;
+  }
+  closeList();
+  closeTable();
+
+  return html;
+}
+
+function isMarkdownText(text) {
+  if (!text || typeof text !== 'string') return false;
+  const str = text.trim();
+  if (!str) return false;
+  return /^[ \t]*#{1,6}\s+/m.test(str) ||
+         /^[ \t]*(?:[-*+]\s*|\d+[.)]\s*)?\[[ xX]\]/m.test(str) ||
+         /^[ \t]*(?:[-*+]\s+|\d+[.)]\s+)/m.test(str) ||
+         /^[ \t]*>\s+/m.test(str) ||
+         /```/.test(str) ||
+         /^[ \t]*(?:---|\*\*\*|___)[ \t]*$/m.test(str) ||
+         /\*\*[^\*\s][^\*]*\*\*|~~[^~\s][^~]*~~|`[^`]+`|\[[^\]]+\]\([^)]+\)|!\[[^\]]*\]\([^)]+\)|==[^=]+==/.test(str) ||
+         /^\|.*\|$/m.test(str);
+}
+
   // Paste images, spreadsheet tables, or clean formatted HTML from clipboard
   edEl.addEventListener('paste', e=>{
     if(!e.clipboardData) return;
@@ -553,6 +879,17 @@ function bind(){
         return;
       }
     }
+    if(text && isMarkdownText(text)){
+      const markdownHTML = parseMarkdownToPaperussHTML(text);
+      if(markdownHTML){
+        e.preventDefault();
+        document.execCommand('insertHTML', false, markdownHTML);
+        showPasteAsPlainTextChip(text);
+        setTimeout(handleBodyInput, 0);
+        return;
+      }
+    }
+
     const html = e.clipboardData.getData('text/html');
     if(html){
       e.preventDefault();

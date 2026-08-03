@@ -380,7 +380,8 @@ function startReminderWatcher(){
 const SETTINGS_KEY='octonotes:settings';
 let appSettings={
   defaultFont:'sans', editorWidth:'auto', reminderInterval:30000, accent:'blue',
-  notifBanner:true, notifSound:true, notifEvents:true, notifActivity:true, notifToasts:true
+  notifBanner:true, notifSound:true, notifEvents:true, notifActivity:true, notifToasts:true,
+  previewV2:false, previewDensity:'comfortable'
 };
 
 function normalizeAppSettings(value){
@@ -396,7 +397,9 @@ function normalizeAppSettings(value){
     notifSound:input.notifSound!==false,
     notifEvents:input.notifEvents!==false,
     notifActivity:input.notifActivity!==false,
-    notifToasts:input.notifToasts!==false
+    notifToasts:input.notifToasts!==false,
+    previewV2:input.previewV2===true,
+    previewDensity:input.previewDensity==='compact'?'compact':'comfortable'
   };
 }
 
@@ -441,6 +444,14 @@ async function renderSettingsView(){
   if(fontSel) fontSel.value=appSettings.defaultFont||'sans';
   const intSel=document.getElementById('setReminderInterval');
   if(intSel) intSel.value=String(appSettings.reminderInterval||30000);
+
+  // Note Preview V2
+  const prevV2Check=document.getElementById('setPreviewV2');
+  if(prevV2Check) prevV2Check.checked=appSettings.previewV2===true;
+  const prevDensitySel=document.getElementById('setPreviewDensity');
+  if(prevDensitySel) prevDensitySel.value=appSettings.previewDensity||'comfortable';
+  const densityRow=document.getElementById('previewDensityRow');
+  if(densityRow) densityRow.style.display=appSettings.previewV2?'flex':'none';
 
   // Notification toggles
   [['setNotifBanner','notifBanner'],['setNotifSound','notifSound'],
@@ -500,6 +511,23 @@ function bindSettings(){
 
   const permBtn=document.getElementById('setNotifPerm');
   if(permBtn) permBtn.onclick=async()=>{ await requestNotifPermission(); renderSettingsView(); };
+
+  // Note Preview V2 toggles
+  const prevV2Check=document.getElementById('setPreviewV2');
+  if(prevV2Check) prevV2Check.onchange=e=>{
+    appSettings.previewV2=e.target.checked;
+    saveSettings();
+    const densityRow=document.getElementById('previewDensityRow');
+    if(densityRow) densityRow.style.display=e.target.checked?'flex':'none';
+    if(typeof renderList==='function') renderList();
+  };
+  
+  const prevDensitySel=document.getElementById('setPreviewDensity');
+  if(prevDensitySel) prevDensitySel.onchange=e=>{
+    appSettings.previewDensity=e.target.value;
+    saveSettings();
+    if(typeof renderList==='function') renderList();
+  };
 
   // Notification & reminder toggles
   [['setNotifBanner','notifBanner','Due-task banner'],
@@ -586,11 +614,10 @@ function bindSettings(){
   if(resetBtn) resetBtn.onclick=()=>{
     confirmDialog('Reset everything?','ALL notes, media, tasks, notifications and settings will be permanently erased. This cannot be undone.','Reset App',async ()=>{
       if(typeof resetCloudWorkspace==='function' && !(await resetCloudWorkspace())) return;
-      if(typeof safelySignOutFirebase==='function'){
-        if(!(await safelySignOutFirebase())) return;
-      }else if(typeof saveSession==='function'){
-        saveSession(null);
+      if(typeof fbAuth!=='undefined' && fbAuth){
+        try{ await fbAuth.signOut(); }catch(_){}
       }
+      if(typeof saveSession==='function') saveSession(null);
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(TASKS_KEY);
       localStorage.removeItem(NOTIF_KEY);
@@ -607,8 +634,12 @@ function bindSettings(){
         const all=await mediaAll();
         for(const rec of all) await mediaDel(rec.id);
       }catch(e){}
-      // Firebase Auth owns firebaseLocalStorageDb. Deleting it manually can
-      // race the next page load and leave sign-in stuck after reset.
+      try{
+        await new Promise(resolve=>{
+          const req=indexedDB.deleteDatabase('firebaseLocalStorageDb');
+          req.onsuccess=req.onerror=req.onblocked=()=>resolve();
+        });
+      }catch(e){}
       location.reload();
     });
   };
@@ -616,20 +647,24 @@ function bindSettings(){
 
 async function clearLocalAppCacheAndData(){
   try{
-    // 1. Sign out through the Firebase SDK. Do not manually delete its
-    // IndexedDB store; that can race the reload and break the next sign-in.
-    if(typeof safelySignOutFirebase==='function'){
-      if(!(await safelySignOutFirebase())) return;
-    }else if(typeof saveSession==='function'){
-      saveSession(null);
+    // 1. Sign out of Firebase Auth so the app brings the user back to the sign-in / welcome page
+    if(typeof fbAuth !== 'undefined' && fbAuth){
+      try { await fbAuth.signOut(); } catch(_){}
     }
+    if(typeof saveSession === 'function') saveSession(null);
 
-    // 2. Clear only PapeRuss-owned IndexedDB media storage.
+    // 2. Clear IndexedDB (both app media and firebase token storage)
     if(mediaDB){ mediaDB.close(); mediaDB=null; }
-    await new Promise(resolve=>{
-      const request=indexedDB.deleteDatabase(MEDIA_DB);
-      request.onsuccess=request.onerror=request.onblocked=()=>resolve();
-    });
+    await Promise.all([
+      new Promise(resolve=>{
+        const request=indexedDB.deleteDatabase(MEDIA_DB);
+        request.onsuccess=request.onerror=request.onblocked=()=>resolve();
+      }),
+      new Promise(resolve=>{
+        const request=indexedDB.deleteDatabase('firebaseLocalStorageDb');
+        request.onsuccess=request.onerror=request.onblocked=()=>resolve();
+      })
+    ]);
 
     // 3. Clear localStorage keys
     Object.keys(localStorage)

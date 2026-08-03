@@ -79,7 +79,8 @@ function bind(){
   // Keep checkbox clicks working inside contenteditable
   ed.addEventListener('click', e=>{
     if(e.target && e.target.matches && e.target.matches('input[type=checkbox]')){
-      // let default toggle happen, then save
+      if(e.target.checked) e.target.setAttribute('checked', '');
+      else e.target.removeAttribute('checked');
       setTimeout(handleBodyInput, 0);
     }
     const badge = e.target.closest('.callout-badge');
@@ -99,8 +100,13 @@ function bind(){
     }
   });
 
-  // Intercept Undo / Redo for Custom History Manager
+  // Intercept Undo / Redo / Link shortcuts
   ed.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      if (typeof applyCommand === 'function') applyCommand('createLink');
+      return;
+    }
     if(window.HistoryManager) {
       if((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
@@ -112,7 +118,7 @@ function bind(){
     }
   });
 
-  // Enter in a task item creates a new task line
+  // Enter in a task item creates a new task line or converts empty item back to paragraph
   ed.addEventListener('keydown', e=>{
     if(e.key==='Enter' && !e.shiftKey){
       const sel=window.getSelection();
@@ -122,20 +128,25 @@ function bind(){
         const li=node.closest&&node.closest('[data-task]');
         if(li){
           e.preventDefault();
-          // Create a new sibling task item after the current one
-          const newLi=document.createElement('li');
-          newLi.setAttribute('data-task','1');
-          const cb=document.createElement('input');
-          cb.type='checkbox';
-          newLi.appendChild(cb);
-          newLi.appendChild(document.createTextNode(' '));
-          li.parentElement.insertBefore(newLi, li.nextSibling);
-          // Place cursor in the new task item
-          const r=document.createRange();
-          r.setStart(newLi, newLi.childNodes.length===2?2:1);
-          r.collapse(true);
-          sel.removeAllRanges(); sel.addRange(r);
-          setTimeout(handleBodyInput, 0);
+          const textContent = Array.from(li.childNodes).filter(n=>n.nodeType!==1||n.tagName!=='INPUT').map(n=>n.textContent).join('').trim();
+          if(textContent === '' && typeof toggleList === 'function'){
+            toggleList('task');
+          } else {
+            // Create a new sibling task item after the current one
+            const newLi=document.createElement('li');
+            newLi.setAttribute('data-task','1');
+            const cb=document.createElement('input');
+            cb.type='checkbox';
+            newLi.appendChild(cb);
+            newLi.appendChild(document.createTextNode(' '));
+            li.parentElement.insertBefore(newLi, li.nextSibling);
+            // Place cursor in the new task item
+            const r=document.createRange();
+            r.setStart(newLi, newLi.childNodes.length===2?2:1);
+            r.collapse(true);
+            sel.removeAllRanges(); sel.addRange(r);
+            setTimeout(handleBodyInput, 0);
+          }
         }
       }
     }
@@ -181,6 +192,30 @@ function bind(){
         const type = text.slice(1);
         node.textContent = node.textContent.slice(type.length + 1);
         if(typeof insertCallout === 'function') insertCallout(type);
+        setTimeout(handleBodyInput, 0);
+      } else if((text === '- [ ]' || text === '* [ ]' || text === '+ [ ]' || text === '[ ]') && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(text.length);
+        if(typeof toggleList === 'function') toggleList('task');
+        setTimeout(handleBodyInput, 0);
+      } else if((text === '- [x]' || text === '- [X]' || text === '* [x]' || text === '* [X]' || text === '+ [x]' || text === '+ [X]' || text === '[x]' || text === '[X]') && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(text.length);
+        if(typeof toggleList === 'function') toggleList('task');
+        setTimeout(() => {
+          const li = window.getSelection()?.anchorNode?.parentElement?.closest?.('li[data-task]');
+          if(li && typeof _addTask === 'function') _addTask(li, true);
+          handleBodyInput();
+        }, 0);
+      } else if((text === '-' || text === '*' || text === '+') && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(text.length);
+        if(typeof toggleList === 'function') toggleList('ul');
+        setTimeout(handleBodyInput, 0);
+      } else if(text === '1.' && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(2);
+        if(typeof toggleList === 'function') toggleList('ol');
         setTimeout(handleBodyInput, 0);
       } else {
         // Inline markdown auto-formatting for **bold**, ~~strike~~, and *italic*
@@ -446,11 +481,74 @@ function bind(){
     // 2. Remove dangerous or non-semantic tags
     doc.querySelectorAll('script, style, meta, link, iframe, object, embed, o\\:p').forEach(el => el.remove());
 
-    // 3. Normalize AI List Items (<ul><li><p>Text</p></li></ul> -> <ul><li>Text</li></ul>)
+    // 3. Normalize AI List Items & Markdown Task Markers (e.g. <li>[ ] Task</li> or <li>- [x] Task</li>)
     doc.querySelectorAll('li').forEach(li => {
       const ps = Array.from(li.querySelectorAll('p'));
       if(ps.length > 0){
         li.innerHTML = ps.map(p => p.innerHTML).join('<br>');
+      }
+      // Check for existing checkbox input
+      const cbInput = li.querySelector(':scope > input[type="checkbox"]');
+      if(cbInput){
+        li.setAttribute('data-task', '1');
+        if(li.parentElement) li.parentElement.classList.add('task-list');
+        if(cbInput.checked) cbInput.setAttribute('checked', '');
+        return;
+      }
+      // Intercept text node patterns: - [ ], * [x], [ ], [X]
+      const textMatch = li.textContent.match(/^\s*(?:[-*+]\s*|\d+\.\s*)?\[([ xX])\]\s*/);
+      if(textMatch){
+        const isChecked = textMatch[1].toLowerCase() === 'x';
+        // Strip the [ ] or [x] prefix marker
+        const taskRegex = /^\s*(?:[-*+]\s*|\d+\.\s*)?\[([ xX])\]\s*/;
+        const walker = doc.createTreeWalker(li, NodeFilter.SHOW_TEXT);
+        const firstText = walker.nextNode();
+        if(firstText){
+          firstText.textContent = firstText.textContent.replace(taskRegex, '');
+        }
+        li.setAttribute('data-task', '1');
+        if(li.parentElement) li.parentElement.classList.add('task-list');
+        const cb = doc.createElement('input');
+        cb.type = 'checkbox';
+        if(isChecked){
+          cb.checked = true;
+          cb.setAttribute('checked', '');
+        }
+        li.insertBefore(cb, li.firstChild);
+        if(!cb.nextSibling) li.appendChild(doc.createTextNode(' '));
+        else if(cb.nextSibling.nodeType === 3 && !cb.nextSibling.textContent.startsWith(' ')){
+          cb.nextSibling.textContent = ' ' + cb.nextSibling.textContent;
+        }
+      }
+    });
+
+    // 3b. Intercept paragraph/div blocks starting with Markdown tasks: e.g. <p>- [ ] Task 1</p>
+    const blockTaskRegex = /^\s*(?:[-*+]\s*|\d+\.\s*)?\[([ xX])\]\s*/;
+    doc.querySelectorAll('p, div').forEach(blk => {
+      if(blk.querySelector('ul, ol, table')) return;
+      const text = blk.textContent;
+      const match = text.match(blockTaskRegex);
+      if(match){
+        const isChecked = match[1].toLowerCase() === 'x';
+        const cleanHTML = blk.innerHTML.replace(blockTaskRegex, '');
+        const li = doc.createElement('li');
+        li.setAttribute('data-task', '1');
+        const cb = doc.createElement('input');
+        cb.type = 'checkbox';
+        if(isChecked){
+          cb.checked = true;
+          cb.setAttribute('checked', '');
+        }
+        li.appendChild(cb);
+        li.appendChild(doc.createTextNode(' '));
+        const temp = doc.createElement('span');
+        temp.innerHTML = cleanHTML;
+        while(temp.firstChild) li.appendChild(temp.firstChild);
+
+        const ul = doc.createElement('ul');
+        ul.className = 'task-list';
+        ul.appendChild(li);
+        blk.replaceWith(ul);
       }
     });
 
@@ -523,6 +621,264 @@ function bind(){
         return;
       }
     }
+function parseMarkdownInline(text) {
+  if (!text) return '';
+  let str = String(text);
+
+  const codeSpans = [];
+  str = str.replace(/`([^`]+)`/g, (_, code) => {
+    const idx = codeSpans.length;
+    codeSpans.push(`<code>${esc(code)}</code>`);
+    return `__MD_CODE_${idx}__`;
+  });
+
+  const imageSpans = [];
+  str = str.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
+    const idx = imageSpans.length;
+    const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(url) : { valid: true, url: url };
+    const src = res.valid ? res.url : url;
+    imageSpans.push(`<img src="${esc(src)}" alt="${esc(alt)}">`);
+    return `__MD_IMG_${idx}__`;
+  });
+
+  const linkSpans = [];
+  str = str.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, title, url) => {
+    const idx = linkSpans.length;
+    const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(url) : { valid: true, url: url, isExternal: true };
+    const targetAttr = (res.isExternal || !res.url.startsWith('#')) ? ' target="_blank" rel="noopener noreferrer"' : '';
+    const href = res.valid ? res.url : url;
+    const renderedTitle = parseMarkdownInline(title);
+    linkSpans.push(`<a href="${esc(href)}"${targetAttr}>${renderedTitle}</a>`);
+    return `__MD_LINK_${idx}__`;
+  });
+
+  str = esc(str);
+
+  str = str.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
+  str = str.replace(/___([^_]+)___/g, '<strong><em>$1</em></strong>');
+  str = str.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  str = str.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  str = str.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+  str = str.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+  str = str.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+  str = str.replace(/==([^=]+)==/g, '<mark>$1</mark>');
+
+  str = str.replace(/__MD_LINK_(\d+)__/g, (_, idx) => linkSpans[+idx] || '');
+  str = str.replace(/__MD_IMG_(\d+)__/g, (_, idx) => imageSpans[+idx] || '');
+  str = str.replace(/__MD_CODE_(\d+)__/g, (_, idx) => codeSpans[+idx] || '');
+
+  return str;
+}
+
+function parseMarkdownToPaperussHTML(markdown) {
+  if (!markdown || !String(markdown).trim()) return '';
+  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
+
+  let html = '';
+  let inList = null;
+  let inCodeBlock = false;
+  let codeBuffer = [];
+  let inTable = false;
+  let tableRows = [];
+
+  const closeList = () => {
+    if (inList) {
+      html += inList === 'ol' ? '</ol>' : '</ul>';
+      inList = null;
+    }
+  };
+
+  const closeTable = () => {
+    if (inTable && tableRows.length > 0) {
+      let tHtml = '<table class="note-table"><thead>';
+      tableRows.forEach((row, rIdx) => {
+        if (rIdx === 1 && row.every(cell => /^:?-+:?$/.test(cell.trim()))) return;
+        const tag = rIdx === 0 ? 'th' : 'td';
+        if (rIdx === 1) tHtml += '</thead><tbody>';
+        tHtml += '<tr>';
+        row.forEach(cell => {
+          tHtml += `<${tag}>${parseMarkdownInline(cell.trim())}</${tag}>`;
+        });
+        tHtml += '</tr>';
+      });
+      if (tableRows.length > 1) tHtml += '</tbody>';
+      tHtml += '</table>';
+      html += tHtml;
+      tableRows = [];
+      inTable = false;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const line = rawLine.trim();
+
+    if (/^```/.test(line)) {
+      if (inCodeBlock) {
+        closeList(); closeTable();
+        html += `<pre><code>${esc(codeBuffer.join('\n'))}</code></pre>`;
+        codeBuffer = [];
+        inCodeBlock = false;
+      } else {
+        closeList(); closeTable();
+        inCodeBlock = true;
+        codeBuffer = [];
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeBuffer.push(rawLine);
+      continue;
+    }
+
+    if (/^\|.*\|$/.test(line)) {
+      closeList();
+      const cells = line.slice(1, -1).split('|');
+      tableRows.push(cells);
+      inTable = true;
+      continue;
+    } else if (inTable) {
+      closeTable();
+    }
+
+    if (!line) {
+      closeList(); closeTable();
+      continue;
+    }
+
+    if (/^(?:---|\*\*\*|___)$/.test(line)) {
+      closeList(); closeTable();
+      html += '<hr>';
+      continue;
+    }
+
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      closeList(); closeTable();
+      const level = Math.min(headingMatch[1].length, 6);
+      const tag = `h${level}`;
+      html += `<${tag}>${parseMarkdownInline(headingMatch[2])}</${tag}>`;
+      continue;
+    }
+
+    const calloutMatch = line.match(/^>\s*\[!(TIP|WARNING|SUMMARY|INFO|NOTE|DANGER|CAUTION)\]\s*(.*)$/i) || line.match(/^!(tip|warning|summary|info|note|danger|caution)\s*(.*)$/i);
+    if (calloutMatch) {
+      closeList(); closeTable();
+      const type = calloutMatch[1].toLowerCase();
+      const text = calloutMatch[2];
+      const iconMap = { tip: '💡', warning: '⚠️', summary: '📋', info: 'ℹ️', note: '📌', danger: '🚨', caution: '⚠️' };
+      const title = type.toUpperCase();
+      html += `<div class="callout callout-${type}" contenteditable="true" data-callout="${type}">
+        <div class="callout-title">${iconMap[type] || '📌'} ${title}</div>
+        <div class="callout-body">${parseMarkdownInline(text)}</div>
+      </div>`;
+      continue;
+    }
+
+    const quoteMatch = line.match(/^>\s*(.+)$/);
+    if (quoteMatch) {
+      closeList(); closeTable();
+      html += `<blockquote>${parseMarkdownInline(quoteMatch[1])}</blockquote>`;
+      continue;
+    }
+
+    const taskMatch = line.match(/^(?:[-*+]\s*|\d+[.)]\s*)?\[([ xX])\]\s*(.*)$/);
+    if (taskMatch) {
+      closeTable();
+      if (inList !== 'task') {
+        closeList();
+        html += '<ul class="task-list">';
+        inList = 'task';
+      }
+      const isChecked = taskMatch[1].toLowerCase() === 'x';
+      const checkedAttr = isChecked ? ' checked=""' : '';
+      html += `<li data-task="1"><input type="checkbox"${checkedAttr}> ${parseMarkdownInline(taskMatch[2])}</li>`;
+      continue;
+    }
+
+    const bulletMatch = line.match(/^[-*+]\s+(.+)$/);
+    if (bulletMatch) {
+      closeTable();
+      if (inList !== 'ul') {
+        closeList();
+        html += '<ul>';
+        inList = 'ul';
+      }
+      html += `<li>${parseMarkdownInline(bulletMatch[1])}</li>`;
+      continue;
+    }
+
+    const orderedMatch = line.match(/^\d+[.)]\s+(.+)$/);
+    if (orderedMatch) {
+      closeTable();
+      if (inList !== 'ol') {
+        closeList();
+        html += '<ol>';
+        inList = 'ol';
+      }
+      html += `<li>${parseMarkdownInline(orderedMatch[1])}</li>`;
+      continue;
+    }
+
+    closeList(); closeTable();
+    html += `<p>${parseMarkdownInline(line)}</p>`;
+  }
+
+  if (inCodeBlock) {
+    html += `<pre><code>${esc(codeBuffer.join('\n'))}</code></pre>`;
+  }
+  closeList();
+  closeTable();
+
+  return html;
+}
+
+function isMarkdownText(text) {
+  if (!text || typeof text !== 'string') return false;
+  const str = text.trim();
+  if (!str) return false;
+  return /^[ \t]*#{1,6}\s+/m.test(str) ||
+         /^[ \t]*(?:[-*+]\s*|\d+[.)]\s*)?\[[ xX]\]/m.test(str) ||
+         /^[ \t]*(?:[-*+]\s+|\d+[.)]\s+)/m.test(str) ||
+         /^[ \t]*>\s+/m.test(str) ||
+         /```/.test(str) ||
+         /^[ \t]*(?:---|\*\*\*|___)[ \t]*$/m.test(str) ||
+         /\*\*[^\*\s][^\*]*\*\*|~~[^~\s][^~]*~~|`[^`]+`|\[[^\]]+\]\([^)]+\)|!\[[^\]]*\]\([^)]+\)|==[^=]+==/.test(str) ||
+         /^\|.*\|$/m.test(str);
+}
+
+  // Paste images, spreadsheet tables, or clean formatted HTML from clipboard
+  edEl.addEventListener('paste', e=>{
+    if(!e.clipboardData) return;
+    const items=e.clipboardData.items||[];
+    for(const it of items){
+      if(it.kind==='file'){
+        const f=it.getAsFile();
+        if(f && f.type.startsWith('image/')){ e.preventDefault(); insertImageFile(f); return; }
+      }
+    }
+    const text = e.clipboardData.getData('text/plain');
+    if(text && /\t/.test(text) && /\n/.test(text)){
+      const tableHtml = tsvToPaperussTable(text);
+      if(tableHtml){
+        e.preventDefault();
+        document.execCommand('insertHTML', false, tableHtml);
+        setTimeout(handleBodyInput, 0);
+        return;
+      }
+    }
+    if(text && isMarkdownText(text)){
+      const markdownHTML = parseMarkdownToPaperussHTML(text);
+      if(markdownHTML){
+        e.preventDefault();
+        document.execCommand('insertHTML', false, markdownHTML);
+        showPasteAsPlainTextChip(text);
+        setTimeout(handleBodyInput, 0);
+        return;
+      }
+    }
+
     const html = e.clipboardData.getData('text/html');
     if(html){
       e.preventDefault();
@@ -608,6 +964,61 @@ function bind(){
     }
   };
 
+  // Note-list tablet panel toggle
+  const listToggleBtn = document.getElementById('noteListToggle');
+  if(listToggleBtn) listToggleBtn.onclick = () => {
+    const listEl = document.getElementById('noteList');
+    if(listEl) {
+      if(window.innerWidth <= 900) {
+        listEl.classList.toggle('open');
+      } else {
+        listEl.classList.toggle('collapsed');
+      }
+    }
+  };
+
+  // Resizer logic
+  const resizer = document.getElementById('noteListResizer');
+  if(resizer) {
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 0;
+    const listEl = document.getElementById('noteList');
+
+    resizer.addEventListener('mousedown', e => {
+      isResizing = true;
+      startX = e.clientX;
+      startWidth = listEl.getBoundingClientRect().width;
+      resizer.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+
+    window.addEventListener('mousemove', e => {
+      if (!isResizing) return;
+      const dx = e.clientX - startX;
+      let newWidth = startWidth + dx;
+      if (newWidth < 220) newWidth = 220;
+      if (newWidth > 600) newWidth = 600;
+      document.documentElement.style.setProperty('--list-width', `${newWidth}px`);
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isResizing) {
+        isResizing = false;
+        resizer.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        // optionally save width to localStorage
+        localStorage.setItem('octonotes:listWidth', document.documentElement.style.getPropertyValue('--list-width'));
+      }
+    });
+    
+    // Restore saved width
+    const savedWidth = localStorage.getItem('octonotes:listWidth');
+    if(savedWidth) document.documentElement.style.setProperty('--list-width', savedWidth);
+  }
+
   // Mobile FAB
   const fab=document.getElementById('mobileFab');
   if(fab) fab.onclick=()=>{ closeSidebarMobile(); contextualNew(); };
@@ -685,11 +1096,39 @@ function bind(){
     if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='n'){ e.preventDefault(); createNote(); }
     if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='s'){ e.preventDefault(); save(); toast('All notes saved'); }
     if(e.key==='Escape'){ document.getElementById('modalRoot').innerHTML=''; document.getElementById('searchInput').blur(); }
+    if(e.key==='F11'){
+      e.preventDefault();
+      toggleDistractionFree();
+    }
   });
+
+  const dfBtn = document.getElementById('distractionFreeBtn');
+  if(dfBtn) dfBtn.onclick = toggleDistractionFree;
+
+  function toggleDistractionFree() {
+    const isDf = document.body.classList.toggle('distraction-free');
+    const icon = document.getElementById('distractionFreeIcon');
+    if(icon) {
+      icon.setAttribute('data-lucide', isDf ? 'minimize' : 'maximize');
+      refreshIcons();
+    }
+    toast(isDf ? 'Distraction-free mode on (F11 to exit)' : 'Distraction-free mode off');
+  }
 
   document.addEventListener('selectionchange', ()=>{
     if(document.activeElement===bodyEl()) updateToolbarState();
   });
+
+  // Paragraph Style dropdown
+  const paraStyleBtn = document.getElementById('paraStyleBtn');
+  if(paraStyleBtn) paraStyleBtn.onclick=e=>{ e.stopPropagation(); toggleDropdown('paraStyleDropdown'); };
+  const paraStyleDropdown = document.getElementById('paraStyleDropdown');
+  if(paraStyleDropdown) paraStyleDropdown.onclick=e=>{
+    const opt=e.target.closest('[data-cmd]');
+    if(!opt) return;
+    paraStyleDropdown.classList.remove('show');
+    applyCommand(opt.dataset.cmd, opt.dataset.val);
+  };
 
   // Highlight dropdown
   document.getElementById('hlBtn').onclick=e=>{ e.stopPropagation(); toggleDropdown('hlDropdown'); };
@@ -697,6 +1136,15 @@ function bind(){
     const sw=e.target.closest('[data-cmd]');
     if(!sw) return;
     document.getElementById('hlDropdown').classList.remove('show');
+    applyCommand(sw.dataset.cmd, sw.dataset.val);
+  };
+
+  // Text Color dropdown
+  document.getElementById('tcBtn').onclick=e=>{ e.stopPropagation(); toggleDropdown('tcDropdown'); };
+  document.getElementById('tcDropdown').onclick=e=>{
+    const sw=e.target.closest('[data-cmd]');
+    if(!sw) return;
+    document.getElementById('tcDropdown').classList.remove('show');
     applyCommand(sw.dataset.cmd, sw.dataset.val);
   };
 
@@ -727,6 +1175,65 @@ function bind(){
   // Footer Tags dropdown
   const tagsBtn = document.getElementById('footerTagsBtn');
   if(tagsBtn) tagsBtn.onclick = e => { e.stopPropagation(); toggleDropdown('footerTagsDropdown'); };
+
+  // Overflow Menu dropdown
+  const ovfBtn = document.getElementById('overflowBtn');
+  if(ovfBtn) ovfBtn.onclick = e => { e.stopPropagation(); toggleDropdown('overflowDropdown'); };
+
+  // Responsive Toolbar Overflow
+  function initResponsiveToolbar() {
+    const scrollBar = document.getElementById('formatBar');
+    const overflowDropdown = document.getElementById('overflowDropdown');
+    const overflowPicker = document.getElementById('overflowPicker');
+    if(!scrollBar || !overflowDropdown || !overflowPicker) return;
+    
+    // Tools that we can move (lower priority items, right-to-left)
+    const movableTools = Array.from(scrollBar.children).filter(el => 
+      el.id !== 'overflowPicker' && 
+      el.id !== 'toolbarCollapseBtn' &&
+      !el.classList.contains('para-style-picker') && 
+      !el.classList.contains('font-style-picker')
+    ).reverse();
+
+    const resizeObserver = new ResizeObserver(() => {
+      // Allow DOM to update first
+      requestAnimationFrame(() => {
+        // Move items into overflow if toolbar is overflowing horizontally
+        if(scrollBar.scrollWidth > scrollBar.clientWidth + 2) { 
+          for(let el of movableTools) {
+            if (el.parentElement === scrollBar) {
+              overflowDropdown.insertBefore(el, overflowDropdown.firstChild);
+              overflowPicker.style.display = 'inline-flex';
+              if (scrollBar.scrollWidth <= scrollBar.clientWidth + 2) break;
+            }
+          }
+        } else {
+          // Try moving items back if there is space
+          let hasOverflow = overflowDropdown.children.length > 0;
+          if(hasOverflow) {
+            const items = Array.from(overflowDropdown.children);
+            for(let el of items) {
+              // Put it back right before the overflow picker
+              scrollBar.insertBefore(el, overflowPicker);
+              if (scrollBar.scrollWidth > scrollBar.clientWidth + 2) {
+                // It overflowed again! Move it back and stop
+                overflowDropdown.insertBefore(el, overflowDropdown.firstChild);
+                break;
+              }
+            }
+            if(overflowDropdown.children.length === 0) {
+              overflowPicker.style.display = 'none';
+            }
+          }
+        }
+      });
+    });
+    
+    resizeObserver.observe(scrollBar);
+  }
+  
+  // Wait a moment for DOM and styles to settle before measuring
+  setTimeout(initResponsiveToolbar, 100);
 
 
   /* ---------- NOTIFICATION BELL & PANEL ---------- */
@@ -765,17 +1272,17 @@ function bind(){
 
   // Close dropdowns when clicking outside
   const closeAllDropdowns=()=>{
-    ['hlDropdown','szDropdown','fontStyleDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown'].forEach(id=>{
+    ['tcDropdown','paraStyleDropdown','hlDropdown','szDropdown','fontStyleDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown','overflowDropdown'].forEach(id=>{
       const el=document.getElementById(id);
       if(el) el.classList.remove('show');
     });
     if(notifPanel) notifPanel.classList.remove('show');
   };
   document.addEventListener('click', e=>{
-    if(!e.target.closest('#hlPicker') && !e.target.closest('.sz-picker')
+    if(!e.target.closest('#tcPicker') && !e.target.closest('#paraStylePicker') && !e.target.closest('#hlPicker') && !e.target.closest('.sz-picker')
       && !e.target.closest('#fontStylePicker') && !e.target.closest('#tablePicker')
       && !e.target.closest('#pageLayoutPicker') && !e.target.closest('#templatePicker')
-      && !e.target.closest('#footerTagsPicker')
+      && !e.target.closest('#footerTagsPicker') && !e.target.closest('#overflowPicker')
       && !e.target.closest('#notifBellWrap') && !e.target.closest('#notifPanel')){
       closeAllDropdowns();
     }
@@ -796,6 +1303,13 @@ function bind(){
   // Re-running the mobile layout switch there would kick the user out of the
   // editor mid-typing, so we only react when the WIDTH actually changes.
   let lastViewportWidth=window.innerWidth;
+  
+  // init Page Layout defaults
+  if(typeof initPageLayoutUI === 'function') initPageLayoutUI();
+
+  // init Find in Note
+  if(typeof initFindInNote === 'function') initFindInNote();
+
   window.addEventListener('resize', ()=>{
     const width=window.innerWidth;
     if(width===lastViewportWidth) return;   // keyboard show/hide → ignore

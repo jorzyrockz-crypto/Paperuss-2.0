@@ -7,14 +7,43 @@ function applyCommand(cmd, val){
   focusEditor();
   if(window.HistoryManager) window.HistoryManager.capture(true);
   if(cmd==='createLink'){
-    const url=prompt('Enter URL:','https://');
-    if(!url) return;
-    document.execCommand('createLink', false, url);
     const sel=window.getSelection();
-    if(sel && sel.anchorNode){
-      const a=(sel.anchorNode.nodeType===3?sel.anchorNode.parentElement:sel.anchorNode).closest?.('a');
-      if(a){ a.target='_blank'; a.rel='noopener noreferrer'; }
+    const selText=sel ? sel.toString().trim() : '';
+    if(typeof openLinkModal === 'function'){
+      openLinkModal({
+        initialText: selText,
+        callback: (res, linkText) => {
+          focusEditor();
+          if(!res || !res.url) return;
+          const ed = bodyEl();
+          const targetAttr = res.isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
+          const curSel = window.getSelection();
+          if(curSel && curSel.rangeCount && !curSel.isCollapsed && ed.contains(curSel.anchorNode)){
+            document.execCommand('createLink', false, res.url);
+            const anchor = (curSel.anchorNode.nodeType === 3 ? curSel.anchorNode.parentElement : curSel.anchorNode).closest?.('a');
+            if(anchor){
+              if(linkText && linkText !== selText) anchor.textContent = linkText;
+              if(res.isExternal){ anchor.target = '_blank'; anchor.rel = 'noopener noreferrer'; }
+              else { anchor.removeAttribute('target'); anchor.removeAttribute('rel'); }
+            }
+          } else {
+            const html = `<a href="${esc(res.url)}"${targetAttr}>${esc(linkText)}</a>`;
+            insertHTMLAtCaret(html);
+          }
+          handleBodyInput(); updateToolbarState();
+        }
+      });
+      return;
     }
+    const raw=prompt('Enter URL:','https://');
+    if(!raw) return;
+    const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(raw) : { valid: true, url: raw, isExternal: true };
+    if(!res.valid){ toast(res.error || 'Invalid URL'); return; }
+    document.execCommand('createLink', false, res.url);
+    const a=(sel && sel.anchorNode ? (sel.anchorNode.nodeType===3?sel.anchorNode.parentElement:sel.anchorNode).closest?.('a') : null);
+    if(a && res.isExternal){ a.target='_blank'; a.rel='noopener noreferrer'; }
+    handleBodyInput(); updateToolbarState();
+    return;
   } else if(cmd==='fontSize'){
     applyFontSize(val);
     return;
@@ -350,10 +379,13 @@ function getActiveFontSize(){
 /* Map each dropdown ID → its trigger button ID so we can anchor it. */
 const DROPDOWN_TRIGGERS={
   hlDropdown:'hlBtn',
+  tcDropdown:'tcBtn',
   szDropdown:'szBtn',
   fontStyleDropdown:'fontStyleBtn',
   tableGridPicker:'tableBtn',
-  templateDropdown:'templateBtn'
+  templateDropdown:'templateBtn',
+  paraStyleDropdown:'paraStyleBtn',
+  overflowDropdown:'overflowBtn'
 };
 
 /**
@@ -397,7 +429,7 @@ function toggleDropdown(id){
   if(!drop) return;
   const was=drop.classList.contains('show');
   // Close all toolbar and footer dropdowns first.
-  document.querySelectorAll('.hl-dropdown, .sz-dropdown, .font-style-dropdown, .table-grid-picker, .page-layout-dropdown, .footer-tags-dropdown, .template-dropdown, .overflow-dropdown')
+  document.querySelectorAll('.hl-dropdown, .tc-dropdown, .sz-dropdown, .font-style-dropdown, .table-grid-picker, .page-layout-dropdown, .footer-tags-dropdown, .template-dropdown, .para-style-dropdown, .overflow-dropdown')
     .forEach(d=>{
       d.classList.remove('show');
       // Reset any inline positioning from a previous portal call.
@@ -465,19 +497,30 @@ function _stripTask(li){
   }
   li.removeAttribute('data-task');
 }
-function _addTask(li){
-  if(li.querySelector(':scope > input[type=checkbox]')) return; // idempotent
-  li.setAttribute('data-task','1');
-  const cb=document.createElement('input');
-  cb.type='checkbox';
-  if(li.firstChild && li.firstChild.nodeType===3)
-    li.firstChild.textContent=li.firstChild.textContent.replace(/^\s+/,'');
-  li.insertBefore(cb, li.firstChild);
-  // Ensure exactly one space after the checkbox
-  const nxt=cb.nextSibling;
-  if(!nxt) li.appendChild(document.createTextNode(' '));
-  else if(nxt.nodeType===3 && !nxt.textContent.startsWith(' '))
-    nxt.textContent=' '+nxt.textContent;
+function _addTask(li, isChecked = false){
+  let cb = li.querySelector(':scope > input[type=checkbox]');
+  if(!cb){
+    li.setAttribute('data-task','1');
+    cb=document.createElement('input');
+    cb.type='checkbox';
+    if(li.firstChild && li.firstChild.nodeType===3)
+      li.firstChild.textContent=li.firstChild.textContent.replace(/^\s+/,'');
+    li.insertBefore(cb, li.firstChild);
+    const nxt=cb.nextSibling;
+    if(!nxt) li.appendChild(document.createTextNode(' '));
+    else if(nxt.nodeType===3 && !nxt.textContent.startsWith(' '))
+      nxt.textContent=' '+nxt.textContent;
+  }
+  if(isChecked){
+    cb.checked = true;
+    cb.setAttribute('checked', '');
+  } else {
+    cb.checked = false;
+    cb.removeAttribute('checked');
+  }
+  if(li.parentElement && (li.parentElement.tagName === 'UL' || li.parentElement.tagName === 'OL')){
+    li.parentElement.classList.add('task-list');
+  }
 }
 
 /* Detect the "current list type" the caret is inside.
