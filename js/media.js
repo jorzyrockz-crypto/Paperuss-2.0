@@ -493,10 +493,21 @@ function updateAlignmentButton(){
 }
 
 function updateToolbarState(){
-  const cmds=['bold','italic','underline','strikeThrough','insertUnorderedList','insertOrderedList'];
+  const listCtx = typeof _listContext === 'function' ? _listContext() : null;
+  const isTask = listCtx && listCtx.type === 'task';
+  const isUl = listCtx && listCtx.type === 'ul';
+  const isOl = listCtx && listCtx.type === 'ol';
+  const cmds=['bold','italic','underline','strikeThrough'];
+
   document.querySelectorAll('#formatBar .tool-btn').forEach(btn=>{
     const cmd=btn.dataset.cmd;
-    if(cmds.includes(cmd)){
+    if(cmd === 'task'){
+      btn.classList.toggle('active', !!isTask);
+    } else if(cmd === 'insertUnorderedList'){
+      btn.classList.toggle('active', !!isUl && !isTask);
+    } else if(cmd === 'insertOrderedList'){
+      btn.classList.toggle('active', !!isOl && !isTask);
+    } else if(cmds.includes(cmd)){
       try{ btn.classList.toggle('active', document.queryCommandState(cmd)); }
       catch(e){ btn.classList.remove('active'); }
     } else {

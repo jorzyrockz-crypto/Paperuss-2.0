@@ -79,7 +79,8 @@ function bind(){
   // Keep checkbox clicks working inside contenteditable
   ed.addEventListener('click', e=>{
     if(e.target && e.target.matches && e.target.matches('input[type=checkbox]')){
-      // let default toggle happen, then save
+      if(e.target.checked) e.target.setAttribute('checked', '');
+      else e.target.removeAttribute('checked');
       setTimeout(handleBodyInput, 0);
     }
     const badge = e.target.closest('.callout-badge');
@@ -112,7 +113,7 @@ function bind(){
     }
   });
 
-  // Enter in a task item creates a new task line
+  // Enter in a task item creates a new task line or converts empty item back to paragraph
   ed.addEventListener('keydown', e=>{
     if(e.key==='Enter' && !e.shiftKey){
       const sel=window.getSelection();
@@ -122,20 +123,25 @@ function bind(){
         const li=node.closest&&node.closest('[data-task]');
         if(li){
           e.preventDefault();
-          // Create a new sibling task item after the current one
-          const newLi=document.createElement('li');
-          newLi.setAttribute('data-task','1');
-          const cb=document.createElement('input');
-          cb.type='checkbox';
-          newLi.appendChild(cb);
-          newLi.appendChild(document.createTextNode(' '));
-          li.parentElement.insertBefore(newLi, li.nextSibling);
-          // Place cursor in the new task item
-          const r=document.createRange();
-          r.setStart(newLi, newLi.childNodes.length===2?2:1);
-          r.collapse(true);
-          sel.removeAllRanges(); sel.addRange(r);
-          setTimeout(handleBodyInput, 0);
+          const textContent = Array.from(li.childNodes).filter(n=>n.nodeType!==1||n.tagName!=='INPUT').map(n=>n.textContent).join('').trim();
+          if(textContent === '' && typeof toggleList === 'function'){
+            toggleList('task');
+          } else {
+            // Create a new sibling task item after the current one
+            const newLi=document.createElement('li');
+            newLi.setAttribute('data-task','1');
+            const cb=document.createElement('input');
+            cb.type='checkbox';
+            newLi.appendChild(cb);
+            newLi.appendChild(document.createTextNode(' '));
+            li.parentElement.insertBefore(newLi, li.nextSibling);
+            // Place cursor in the new task item
+            const r=document.createRange();
+            r.setStart(newLi, newLi.childNodes.length===2?2:1);
+            r.collapse(true);
+            sel.removeAllRanges(); sel.addRange(r);
+            setTimeout(handleBodyInput, 0);
+          }
         }
       }
     }
@@ -916,7 +922,7 @@ function bind(){
 
   // Close dropdowns when clicking outside
   const closeAllDropdowns=()=>{
-    ['tcDropdown','paraStyleDropdown','hlDropdown','szDropdown','fontStyleDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown'].forEach(id=>{
+    ['tcDropdown','paraStyleDropdown','hlDropdown','szDropdown','fontStyleDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown','overflowDropdown'].forEach(id=>{
       const el=document.getElementById(id);
       if(el) el.classList.remove('show');
     });
@@ -926,7 +932,7 @@ function bind(){
     if(!e.target.closest('#tcPicker') && !e.target.closest('#paraStylePicker') && !e.target.closest('#hlPicker') && !e.target.closest('.sz-picker')
       && !e.target.closest('#fontStylePicker') && !e.target.closest('#tablePicker')
       && !e.target.closest('#pageLayoutPicker') && !e.target.closest('#templatePicker')
-      && !e.target.closest('#footerTagsPicker')
+      && !e.target.closest('#footerTagsPicker') && !e.target.closest('#overflowPicker')
       && !e.target.closest('#notifBellWrap') && !e.target.closest('#notifPanel')){
       closeAllDropdowns();
     }

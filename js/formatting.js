@@ -350,9 +350,13 @@ function getActiveFontSize(){
 /* Map each dropdown ID → its trigger button ID so we can anchor it. */
 const DROPDOWN_TRIGGERS={
   hlDropdown:'hlBtn',
+  tcDropdown:'tcBtn',
   szDropdown:'szBtn',
   fontStyleDropdown:'fontStyleBtn',
-  tableGridPicker:'tableBtn'
+  tableGridPicker:'tableBtn',
+  templateDropdown:'templateBtn',
+  paraStyleDropdown:'paraStyleBtn',
+  overflowDropdown:'overflowBtn'
 };
 
 /**
@@ -396,7 +400,7 @@ function toggleDropdown(id){
   if(!drop) return;
   const was=drop.classList.contains('show');
   // Close all toolbar and footer dropdowns first.
-  document.querySelectorAll('.hl-dropdown, .sz-dropdown, .font-style-dropdown, .table-grid-picker, .page-layout-dropdown, .footer-tags-dropdown, .template-dropdown')
+  document.querySelectorAll('.hl-dropdown, .tc-dropdown, .sz-dropdown, .font-style-dropdown, .table-grid-picker, .page-layout-dropdown, .footer-tags-dropdown, .template-dropdown, .para-style-dropdown, .overflow-dropdown')
     .forEach(d=>{
       d.classList.remove('show');
       // Reset any inline positioning from a previous portal call.

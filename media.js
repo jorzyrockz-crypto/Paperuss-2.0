@@ -493,10 +493,21 @@ function updateAlignmentButton(){
 }
 
 function updateToolbarState(){
-  const cmds=['bold','italic','underline','strikeThrough','insertUnorderedList','insertOrderedList'];
+  const listCtx = typeof _listContext === 'function' ? _listContext() : null;
+  const isTask = listCtx && listCtx.type === 'task';
+  const isUl = listCtx && listCtx.type === 'ul';
+  const isOl = listCtx && listCtx.type === 'ol';
+  const cmds=['bold','italic','underline','strikeThrough'];
+
   document.querySelectorAll('#formatBar .tool-btn').forEach(btn=>{
     const cmd=btn.dataset.cmd;
-    if(cmds.includes(cmd)){
+    if(cmd === 'task'){
+      btn.classList.toggle('active', !!isTask);
+    } else if(cmd === 'insertUnorderedList'){
+      btn.classList.toggle('active', !!isUl && !isTask);
+    } else if(cmd === 'insertOrderedList'){
+      btn.classList.toggle('active', !!isOl && !isTask);
+    } else if(cmds.includes(cmd)){
       try{ btn.classList.toggle('active', document.queryCommandState(cmd)); }
       catch(e){ btn.classList.remove('active'); }
     } else {
@@ -518,6 +529,15 @@ function updateToolbarState(){
   const activeSz=getActiveFontSize();
   document.querySelectorAll('.sz-opt').forEach(o=>o.classList.toggle('active', o.dataset.val===(activeSz||'')));
   if(typeof updateAlignmentButton==='function') updateAlignmentButton();
+  
+  // Update Paragraph Style label
+  const paraStyleBtn = document.getElementById('paraStyleLabel');
+  if(paraStyleBtn) {
+    const activeBlock = typeof getActiveParagraphStyle === 'function' ? getActiveParagraphStyle() : 'p';
+    const psLabels = {'p':'Normal text','h1-title':'Title','p-subtitle':'Subtitle','h2':'Heading 1','h3':'Heading 2','h4':'Heading 3'};
+    paraStyleBtn.textContent = psLabels[activeBlock] || 'Normal text';
+    document.querySelectorAll('.ps-opt').forEach(o => o.classList.toggle('active', o.dataset.val === activeBlock));
+  }
 }
 
 /* ============================================================
