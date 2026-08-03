@@ -950,7 +950,7 @@ function initPageLayoutUI() {
   if(btnBreak) {
     btnBreak.onclick = (e) => {
       e.stopPropagation();
-      dropdown.classList.remove('show');
+      if(typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns(); else dropdown.classList.remove('show');
       const ed = document.getElementById('noteBody');
       ed.focus();
       const sel = window.getSelection();
@@ -963,7 +963,11 @@ function initPageLayoutUI() {
       // Move cursor after the page break
       const p = document.createElement('p');
       p.innerHTML = '<br>';
-      pb.parentNode.insertBefore(p, pb.nextSibling);
+      if(pb.nextSibling) {
+        pb.parentNode.insertBefore(p, pb.nextSibling);
+      } else {
+        pb.parentNode.appendChild(p);
+      }
       range.setStart(p, 0);
       range.collapse(true);
       sel.removeAllRanges();
@@ -995,6 +999,7 @@ function initPageLayoutUI() {
     
     applyPageLayoutToEditor(note);
     syncPageLayoutDropdown(note);
+    if(typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns(); else dropdown.classList.remove('show');
   });
 }
 

@@ -400,47 +400,59 @@ function positionDropdownAsPortal(drop, triggerId){
   const r=trigger ? trigger.getBoundingClientRect() : {left:8,bottom:120,top:80,right:88};
   const safe=8;
 
-  // Temporarily make it visible but off-screen to measure it correctly.
-  drop.style.visibility='hidden';
-  drop.style.display='';          // briefly un-hide so offsetWidth is real
-  const w=drop.offsetWidth || 190;
-  const h=drop.offsetHeight || 220;
-  drop.style.display='';          // restore (display is governed by .show below)
-  drop.style.visibility='';
+  // Temporarily make it visible in document flow so actual width/height can be measured accurately
+  const prevDisplay = drop.style.display;
+  const prevVisibility = drop.style.visibility;
+  drop.style.visibility = 'hidden';
+  drop.style.display = 'block';
+  const w = drop.offsetWidth || 190;
+  const h = drop.offsetHeight || 220;
+  drop.style.display = prevDisplay;
+  drop.style.visibility = prevVisibility;
 
-  // Horizontal: align with trigger left, clamped inside viewport.
-  const left=Math.max(safe, Math.min(r.left, window.innerWidth - w - safe));
+  // Horizontal: align with trigger left; flip to trigger right if overflowing right viewport edge
+  let left = r.left;
+  if(left + w > window.innerWidth - safe){
+    left = r.right - w;
+  }
+  left = Math.max(safe, Math.min(left, window.innerWidth - w - safe));
 
-  // Vertical: open below by default; flip above when there is not enough room.
-  let top=r.bottom + 6;
+  // Vertical: open below by default; flip above when there is not enough room
+  let top = r.bottom + 6;
   if(top + h > window.innerHeight - safe){
     top = Math.max(safe, r.top - h - 6);
   }
 
-  drop.style.position='fixed';
-  drop.style.top=`${Math.round(top)}px`;
-  drop.style.left=`${Math.round(left)}px`;
-  drop.style.right='auto';
-  drop.style.zIndex='220';        // above toolbars, below modals (z-200)
+  drop.style.position = 'fixed';
+  drop.style.top = `${Math.round(top)}px`;
+  drop.style.left = `${Math.round(left)}px`;
+  drop.style.right = 'auto';
+  drop.style.zIndex = '9999'; // render above editor panes, sidebars, and modals
+  if(h > window.innerHeight - 2 * safe){
+    drop.style.maxHeight = `${window.innerHeight - 2 * safe}px`;
+    drop.style.overflowY = 'auto';
+  }
 }
 
 function toggleDropdown(id){
   const drop=document.getElementById(id);
   if(!drop) return;
   const was=drop.classList.contains('show');
-  // Close all toolbar and footer dropdowns first.
-  document.querySelectorAll('.hl-dropdown, .tc-dropdown, .sz-dropdown, .font-style-dropdown, .table-grid-picker, .page-layout-dropdown, .footer-tags-dropdown, .template-dropdown, .para-style-dropdown, .overflow-dropdown')
-    .forEach(d=>{
-      d.classList.remove('show');
-      // Reset any inline positioning from a previous portal call.
-      d.style.position=''; d.style.top=''; d.style.left='';
-      d.style.right=''; d.style.zIndex='';
-    });
+  if(typeof window.closeAllEditorDropdowns === 'function'){
+    window.closeAllEditorDropdowns();
+  } else {
+    document.querySelectorAll('.hl-dropdown, .tc-dropdown, .sz-dropdown, .font-style-dropdown, .table-grid-picker, .page-layout-dropdown, .footer-tags-dropdown, .template-dropdown, .para-style-dropdown, .overflow-dropdown')
+      .forEach(d=>{
+        d.classList.remove('show');
+        d.style.position=''; d.style.top=''; d.style.left='';
+        d.style.right=''; d.style.zIndex=''; d.style.maxHeight=''; d.style.overflowY='';
+      });
+  }
   if(!was){
-    // Position as a fixed portal ONLY if it is a floating toolbar dropdown.
-    // Footer menus rely on native CSS positioning (bottom: 100%).
     if(DROPDOWN_TRIGGERS[id]){
       positionDropdownAsPortal(drop, DROPDOWN_TRIGGERS[id]);
+      const triggerBtn = document.getElementById(DROPDOWN_TRIGGERS[id]);
+      if(triggerBtn) triggerBtn.setAttribute('aria-expanded', 'true');
     }
     drop.classList.add('show');
   }

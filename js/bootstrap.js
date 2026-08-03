@@ -404,7 +404,6 @@ function bind(){
     if(!e.target.closest('#editorMoreWrap')) closeEditorMore();
   });
 
-  // Toolbar collapse / expand toggle
   const tcb=document.getElementById('toolbarCollapseBtn');
   if(tcb){
     tcb.onclick=e=>{
@@ -416,19 +415,28 @@ function bind(){
       if(tcb.querySelector('i'))
         tcb.querySelector('i').setAttribute('data-lucide', was?'chevron-up':'chevron-down');
       refreshIcons();
+      if(typeof window.recalculateToolbarOverflow === 'function') window.recalculateToolbarOverflow();
     };
   }
 
   document.getElementById('formatBar').onclick=e=>{
     const media=e.target.closest('[data-media]');
-    if(media){ e.preventDefault(); handleMediaAction(media.dataset.media); return; }
+    if(media){
+      e.preventDefault();
+      handleMediaAction(media.dataset.media);
+      if(typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
+      return;
+    }
     const b=e.target.closest('[data-cmd]'); if(!b) return;
     e.preventDefault();
     applyCommand(b.dataset.cmd, b.dataset.val);
+    if(typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
   };
   // Keep selection when clicking toolbar
   document.getElementById('formatBar').addEventListener('mousedown', e=>{
-    if(e.target.closest('[data-cmd],[data-media]')) e.preventDefault();
+    if(e.target.closest('[data-cmd],[data-media]')){
+      if(e.detail !== 0) e.preventDefault();
+    }
   });
 
   // Media file inputs
@@ -1141,6 +1149,7 @@ function isMarkdownText(text) {
       refreshIcons();
     }
     toast(isDf ? 'Distraction-free mode on (F11 to exit)' : 'Distraction-free mode off');
+    if(typeof window.recalculateToolbarOverflow === 'function') setTimeout(window.recalculateToolbarOverflow, 150);
   }
 
   document.addEventListener('selectionchange', ()=>{
@@ -1196,8 +1205,9 @@ function isMarkdownText(text) {
   if(tplDrop) tplDrop.onclick = e => {
     const opt = e.target.closest('[data-tpl]');
     if(!opt) return;
-    tplDrop.classList.remove('show');
+    if(typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
     if(typeof insertFinancialTemplate === 'function') insertFinancialTemplate(opt.dataset.tpl);
+    if(tplBtn) tplBtn.focus();
   };
 
   // Footer Tags dropdown
@@ -1207,18 +1217,29 @@ function isMarkdownText(text) {
   // Overflow Menu dropdown
   const ovfBtn = document.getElementById('overflowBtn');
   if(ovfBtn) {
-    ovfBtn.onmousedown = e => { e.preventDefault(); };
-    ovfBtn.onclick = e => { e.stopPropagation(); toggleDropdown('overflowDropdown'); };
+    ovfBtn.addEventListener('mousedown', e => {
+      if(e.detail !== 0) e.preventDefault();
+    });
+    ovfBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if(!ovfBtn.disabled && typeof toggleDropdown === 'function'){
+        toggleDropdown('overflowDropdown');
+      }
+    });
   }
 
   // Responsive Toolbar Overflow
-  function initResponsiveToolbar() {
+  window.recalculateToolbarOverflow = function() {
     const scrollBar = document.getElementById('formatBar');
     const overflowDropdown = document.getElementById('overflowDropdown');
     const overflowPicker = document.getElementById('overflowPicker');
-    if(!scrollBar || !overflowDropdown || !overflowPicker) return;
+    const overflowBtn = document.getElementById('overflowBtn');
+    if(!scrollBar || !overflowDropdown || !overflowPicker || !overflowBtn) return;
     
-    // Tools that we can move (lower priority items, right-to-left)
+    while(overflowDropdown.children.length > 0) {
+      scrollBar.insertBefore(overflowDropdown.children[0], overflowPicker);
+    }
+
     const movableTools = Array.from(scrollBar.children).filter(el => 
       el.id !== 'overflowPicker' && 
       el.id !== 'toolbarCollapseBtn' &&
@@ -1226,45 +1247,48 @@ function isMarkdownText(text) {
       !el.classList.contains('font-style-picker')
     ).reverse();
 
-    const resizeObserver = new ResizeObserver(() => {
-      // Allow DOM to update first
-      requestAnimationFrame(() => {
-        // Move items into overflow if toolbar is overflowing horizontally
-        if(scrollBar.scrollWidth > scrollBar.clientWidth + 2) { 
-          for(let el of movableTools) {
-            if (el.parentElement === scrollBar) {
-              overflowDropdown.insertBefore(el, overflowDropdown.firstChild);
-              overflowPicker.style.display = 'inline-flex';
-              if (scrollBar.scrollWidth <= scrollBar.clientWidth + 2) break;
-            }
-          }
-        } else {
-          // Try moving items back if there is space
-          let hasOverflow = overflowDropdown.children.length > 0;
-          if(hasOverflow) {
-            const items = Array.from(overflowDropdown.children);
-            for(let el of items) {
-              // Put it back right before the overflow picker
-              scrollBar.insertBefore(el, overflowPicker);
-              if (scrollBar.scrollWidth > scrollBar.clientWidth + 2) {
-                // It overflowed again! Move it back and stop
-                overflowDropdown.insertBefore(el, overflowDropdown.firstChild);
-                break;
-              }
-            }
-            if(overflowDropdown.children.length === 0) {
-              overflowPicker.style.display = 'none';
-            }
-          }
+    if(scrollBar.scrollWidth > scrollBar.clientWidth + 2) { 
+      for(let el of movableTools) {
+        if(el.parentElement === scrollBar) {
+          overflowDropdown.insertBefore(el, overflowDropdown.firstChild);
+          if(scrollBar.scrollWidth <= scrollBar.clientWidth + 2) break;
         }
+      }
+    }
+
+    const hasOverflow = overflowDropdown.children.length > 0;
+    if(hasOverflow) {
+      overflowPicker.style.display = 'inline-flex';
+      overflowBtn.disabled = false;
+    } else {
+      overflowPicker.style.display = 'none';
+      overflowBtn.disabled = true;
+      overflowBtn.setAttribute('aria-expanded', 'false');
+      overflowDropdown.classList.remove('show');
+    }
+  };
+
+  function initResponsiveToolbar() {
+    const scrollBar = document.getElementById('formatBar');
+    if(!scrollBar) return;
+    const resizeObserver = new ResizeObserver(() => {
+      requestAnimationFrame(() => {
+        if(typeof window.recalculateToolbarOverflow === 'function') window.recalculateToolbarOverflow();
       });
     });
-    
     resizeObserver.observe(scrollBar);
+    const editorScroll = document.getElementById('editorScroll');
+    if(editorScroll) resizeObserver.observe(editorScroll);
+    const mainArea = document.querySelector('.main-area');
+    if(mainArea) resizeObserver.observe(mainArea);
+    window.addEventListener('resize', () => requestAnimationFrame(window.recalculateToolbarOverflow));
+    window.addEventListener('orientationchange', () => setTimeout(window.recalculateToolbarOverflow, 150));
   }
   
-  // Wait a moment for DOM and styles to settle before measuring
-  setTimeout(initResponsiveToolbar, 100);
+  setTimeout(() => {
+    initResponsiveToolbar();
+    if(typeof window.recalculateToolbarOverflow === 'function') window.recalculateToolbarOverflow();
+  }, 100);
 
 
   /* ---------- NOTIFICATION BELL & PANEL ---------- */
@@ -1302,13 +1326,22 @@ function isMarkdownText(text) {
   if(notifClear) notifClear.onclick=clearAllNotifs;
 
   // Close dropdowns when clicking outside
-  const closeAllDropdowns=()=>{
+  window.closeAllEditorDropdowns = () => {
     ['tcDropdown','paraStyleDropdown','hlDropdown','szDropdown','fontStyleDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown','overflowDropdown'].forEach(id=>{
       const el=document.getElementById(id);
-      if(el) el.classList.remove('show');
+      if(el && el.classList.contains('show')){
+        el.classList.remove('show');
+        el.style.position=''; el.style.top=''; el.style.left='';
+        el.style.right=''; el.style.zIndex=''; el.style.maxHeight=''; el.style.overflowY='';
+      }
+    });
+    ['tcBtn','paraStyleBtn','hlBtn','szBtn','fontStyleBtn','tableBtn','pageLayoutBtn','templateBtn','footerTagsBtn','overflowBtn'].forEach(id=>{
+      const btn=document.getElementById(id);
+      if(btn) btn.setAttribute('aria-expanded', 'false');
     });
     if(notifPanel) notifPanel.classList.remove('show');
   };
+  const closeAllDropdowns = window.closeAllEditorDropdowns;
   document.addEventListener('click', e=>{
     if(!e.target.closest('#tcPicker') && !e.target.closest('#paraStylePicker') && !e.target.closest('#hlPicker') && !e.target.closest('.sz-picker')
       && !e.target.closest('#fontStylePicker') && !e.target.closest('#tablePicker')

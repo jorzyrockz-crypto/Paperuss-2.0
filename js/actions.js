@@ -68,6 +68,7 @@ function toggleSidebarRail(){
     refreshIcons();
   }
   toast(collapsed?'Sidebar collapsed':'Sidebar expanded');
+  if(typeof window.recalculateToolbarOverflow === 'function') setTimeout(window.recalculateToolbarOverflow, 150);
 }
 
 function toggleNoteListPanel(){
@@ -124,6 +125,7 @@ function toggleNoteListPanel(){
 
   toast(isCollapsed ? 'Note list hidden for wider editor' : 'Note list shown');
   if(typeof refreshIcons === 'function') refreshIcons();
+  if(typeof window.recalculateToolbarOverflow === 'function') setTimeout(window.recalculateToolbarOverflow, 150);
 }
 
 function toggleSidebarMobile(){
@@ -132,6 +134,7 @@ function toggleSidebarMobile(){
   if(!sidebar || !backdrop) return;
   const isOpen=sidebar.classList.toggle('open');
   backdrop.classList.toggle('active', isOpen);
+  if(typeof window.recalculateToolbarOverflow === 'function') setTimeout(window.recalculateToolbarOverflow, 150);
 }
 
 function closeSidebarMobile(){
