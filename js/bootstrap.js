@@ -1022,6 +1022,29 @@ function isMarkdownText(text) {
     // Restore saved width
     const savedWidth = localStorage.getItem('octonotes:listWidth');
     if(savedWidth) document.documentElement.style.setProperty('--list-width', savedWidth);
+
+    // Restore collapsed state (desktop / landscape only)
+    const savedCollapsed = localStorage.getItem('octonotes:listCollapsed');
+    if(savedCollapsed === '1' && window.innerWidth > 900){
+      const listEl2 = document.getElementById('noteList');
+      const iconEl2 = document.getElementById('backBtnIcon');
+      const backBtn2 = document.getElementById('backBtn');
+      const toggleBtn2 = document.getElementById('noteListToggle');
+      if(listEl2) listEl2.classList.add('collapsed');
+      if(iconEl2) iconEl2.setAttribute('data-lucide', 'panel-left-open');
+      const collLabel = 'Show note list';
+      if(backBtn2){
+        backBtn2.title = collLabel;
+        backBtn2.setAttribute('aria-expanded', 'false');
+        backBtn2.setAttribute('aria-label', collLabel);
+      }
+      if(toggleBtn2){
+        toggleBtn2.title = collLabel;
+        toggleBtn2.setAttribute('aria-expanded', 'false');
+        toggleBtn2.setAttribute('aria-label', collLabel);
+      }
+      if(typeof refreshIcons === 'function') setTimeout(refreshIcons, 0);
+    }
   }
 
   // Mobile FAB

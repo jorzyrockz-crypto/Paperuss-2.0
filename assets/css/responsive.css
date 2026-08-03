@@ -45,10 +45,62 @@
 @media (min-width: 901px) {
   .sidebar { position: relative; z-index: 10; }
   .tablet-list-collapse { display: inline-flex !important; }
-  .note-list { width: var(--list-width, 320px); flex-shrink: 0; position: relative; z-index: 1; overflow: hidden; transition: margin-left 0.25s var(--ease-out-expo), opacity 0.2s var(--ease-out-expo), visibility 0.25s; visibility: visible; will-change: margin-left, opacity; }
-  .note-list.collapsed { margin-left: calc(-1 * var(--list-width, 320px)); opacity: 0; visibility: hidden; pointer-events: none; }
+  .note-list {
+    /* Expanded state — all values explicit so the transition knows both ends */
+    width: var(--list-width, 320px);
+    min-width: 0;
+    max-width: none;
+    flex: 0 0 var(--list-width, 320px);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+
+    /* Containment — nothing escapes this box */
+    overflow: hidden;
+    contain: layout style;
+
+    /* Smooth animation between expanded and collapsed */
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+
+    /* Animate width + opacity simultaneously; no margin tricks */
+    transition:
+      width 0.22s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)),
+      flex-basis 0.22s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)),
+      opacity 0.18s ease,
+      visibility 0.22s ease;
+
+    will-change: width, flex-basis, opacity;
+  }
+
+  .note-list.collapsed {
+    /* Zero-width collapse — no negative margin, no transform */
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    flex: 0 0 0 !important;
+    padding: 0 !important;
+    border-width: 0 !important;
+
+    /* Fully invisible and non-interactive */
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+
+    /* Guarantee nothing bleeds out */
+    overflow: hidden !important;
+
+    /* Cancel any margin/transform from legacy overrides */
+    margin-left: 0 !important;
+    transform: none !important;
+  }
+
   .resizer { display: block !important; width: 4px; cursor: col-resize; background: transparent; transition: background 0.15s; }
   .resizer:hover, .resizer.dragging { background: var(--border-hover, var(--border)); }
+
+  /* Hide resizer when panel is collapsed */
+  .note-list.collapsed + .resizer { display: none !important; }
 }
 
 /* Sidebar toggle rail button for desktop/tablet */

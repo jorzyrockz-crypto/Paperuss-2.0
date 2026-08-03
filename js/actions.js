@@ -96,6 +96,10 @@ function toggleNoteListPanel(){
     // Desktop / Tablet landscape mode: toggle 'collapsed'
     const collapsed = listEl.classList.toggle('collapsed');
     isCollapsed = collapsed;
+    // Persist collapsed preference (desktop/landscape only)
+    try {
+      localStorage.setItem('octonotes:listCollapsed', collapsed ? '1' : '0');
+    } catch(_) {}
   }
 
   // Update backBtn icon
@@ -103,14 +107,19 @@ function toggleNoteListPanel(){
     iconEl.setAttribute('data-lucide', isCollapsed ? 'panel-left-open' : 'panel-left-close');
   }
 
-  // Update button titles / tooltips
+  // Update button titles / tooltips and aria-expanded
+  const label = isCollapsed ? 'Show note list' : 'Hide note list';
   const backBtn = document.getElementById('backBtn');
   if(backBtn){
-    backBtn.title = isCollapsed ? 'Show note list' : 'Hide note list';
+    backBtn.title = label;
+    backBtn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+    backBtn.setAttribute('aria-label', label);
   }
   const listToggleBtn = document.getElementById('noteListToggle');
   if(listToggleBtn){
-    listToggleBtn.title = isCollapsed ? 'Show note list' : 'Hide note list';
+    listToggleBtn.title = label;
+    listToggleBtn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+    listToggleBtn.setAttribute('aria-label', label);
   }
 
   toast(isCollapsed ? 'Note list hidden for wider editor' : 'Note list shown');
