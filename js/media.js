@@ -292,7 +292,7 @@ function insertRichLink(){
         insertHTMLAtCaret(
           `<a class="media-card link-card" contenteditable="false" data-media-id="${id}" data-media-kind="link" href="${esc(res.url)}" target="_blank" rel="noopener noreferrer">
             <div class="mc-top">
-              <div class="mc-icon"><img src="${esc(favicon)}" alt="" loading="lazy" decoding="async"></div>
+              <div class="mc-icon"><img src="${esc(favicon)}" alt="" loading="lazy" decoding="async" onerror="if(typeof setupBrokenImageElement==='function')setupBrokenImageElement(this);"></div>
               <div class="mc-body">
                 <div class="mc-title">${esc(title)}</div>
                 <div class="mc-meta">${esc(host)}</div>
@@ -329,7 +329,7 @@ function insertRichLink(){
   insertHTMLAtCaret(
     `<a class="media-card link-card" contenteditable="false" data-media-id="${id}" data-media-kind="link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">
       <div class="mc-top">
-        <div class="mc-icon"><img src="${esc(favicon)}" alt="" loading="lazy" decoding="async"></div>
+        <div class="mc-icon"><img src="${esc(favicon)}" alt="" loading="lazy" decoding="async" onerror="if(typeof setupBrokenImageElement==='function')setupBrokenImageElement(this);"></div>
         <div class="mc-body">
           <div class="mc-title">${esc(title)}</div>
           <div class="mc-meta">${esc(host)}</div>
@@ -608,9 +608,45 @@ function setTheme(theme,trackChange=true){
 /* ============================================================
    REMOTE & EXPIRED IMAGE AUTO-CAPTURE AND RECOVERY
    ============================================================ */
+function isPreviewImageElement(img){
+  if(!img || !(img instanceof Element)) return false;
+  if(img.closest('.link-card, .media-card[data-media-kind="link"], .mc-icon, a[data-media-kind="link"], .mh-thumb, [data-mh-preview-image]')){
+    return true;
+  }
+  if(img.classList.contains('favicon') || img.classList.contains('v2-thumbnail') || img.classList.contains('domain-icon')){
+    return true;
+  }
+  return false;
+}
+window.isPreviewImageElement = isPreviewImageElement;
+
+function repairMalformedLinkCards(container = document.getElementById('noteBody')){
+  if(!container) return;
+  const malformedCards = container.querySelectorAll('.link-card .broken-media-card, a[data-media-kind="link"] .broken-media-card, .mc-icon .broken-media-card, .media-card[data-media-kind="link"] .broken-media-card');
+  malformedCards.forEach(bmc => {
+    const placeholder = document.createElement('span');
+    placeholder.className = 'domain-icon-placeholder';
+    placeholder.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:100%;height:100%;color:inherit;';
+    placeholder.innerHTML = '<i data-lucide="globe" class="w-4 h-4"></i>';
+    bmc.replaceWith(placeholder);
+  });
+  if(typeof refreshIcons === 'function') refreshIcons();
+}
+window.repairMalformedLinkCards = repairMalformedLinkCards;
+
 function setupBrokenImageElement(img){
   if(!img || img.dataset.brokenHandled) return;
   img.dataset.brokenHandled = 'true';
+
+  if(isPreviewImageElement(img)){
+    const placeholder = document.createElement('span');
+    placeholder.className = 'domain-icon-placeholder';
+    placeholder.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:100%;height:100%;color:inherit;';
+    placeholder.innerHTML = '<i data-lucide="globe" class="w-4 h-4"></i>';
+    img.replaceWith(placeholder);
+    if(typeof refreshIcons === 'function') refreshIcons();
+    return;
+  }
 
   const src = img.getAttribute('src') || '';
   const alt = img.getAttribute('alt') || img.getAttribute('title') || 'Image attachment';
@@ -686,7 +722,7 @@ async function autoCaptureExternalImages(){
   const imgs = Array.from(ed.querySelectorAll('img')).filter(img => {
     const src = img.getAttribute('src') || '';
     const hasMediaId = img.hasAttribute('data-media-id');
-    return !hasMediaId && (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('blob:'));
+    return !hasMediaId && !isPreviewImageElement(img) && (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('blob:'));
   });
 
   for(const img of imgs){

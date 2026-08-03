@@ -278,6 +278,14 @@
       el.removeAttribute('data-active-leaf-id');
     });
 
+    clone.querySelectorAll('.link-card .broken-media-card, a[data-media-kind="link"] .broken-media-card, .mc-icon .broken-media-card, .media-card[data-media-kind="link"] .broken-media-card').forEach(bmc => {
+      const placeholder = document.createElement('span');
+      placeholder.className = 'domain-icon-placeholder';
+      placeholder.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:100%;height:100%;color:inherit;';
+      placeholder.innerHTML = '<i data-lucide="globe" class="w-4 h-4"></i>';
+      bmc.replaceWith(placeholder);
+    });
+
     return clone.innerHTML;
   }
 

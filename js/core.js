@@ -507,6 +507,7 @@ async function hydrateMediaInEditor(){
     const record = (await mediaGet(id)) || (window.__remoteMediaManifest || new Map()).get(id) || { id, cloudUrl: url };
     addMediaSyncIndicator(el, record);
   }
+  if(typeof repairMalformedLinkCards === 'function') repairMalformedLinkCards(ed);
   const deadImgs = ed.querySelectorAll('img:not([data-media-id])');
   for(const img of deadImgs){
     if(img.complete && img.naturalWidth === 0 && typeof setupBrokenImageElement==='function'){
