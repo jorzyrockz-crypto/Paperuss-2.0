@@ -472,7 +472,10 @@ function editField(field, value){
   
   if(field==='title'){ renderList(); renderSidebar(); }
   else { _debouncedRenderListSidebar(); }
-  if(field==='content') renderStats(n);
+  if(field==='content') {
+    renderStats(n);
+    if(typeof window.triggerLeaflineUpdate === 'function') window.triggerLeaflineUpdate();
+  }
 }
 
 function sanitizeForStorage(html){

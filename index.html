@@ -172,6 +172,7 @@
         <div class="mode-selector-wrap" id="listModeSelector" style="display:flex;background:var(--subtle);border:1px solid var(--border);border-radius:6px;padding:2px;gap:2px;">
           <button class="mode-btn active" id="modeNotesBtn" data-listmode="notes" onclick="setListMode('notes')" title="Notes" style="padding:2px 8px;border-radius:4px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--fg-secondary);">Notes</button>
           <button class="mode-btn" id="modeLeavesBtn" data-listmode="leaves" onclick="setListMode('leaves')" title="Leaves" style="padding:2px 8px;border-radius:4px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--fg-secondary);">Leaves</button>
+          <button class="mode-btn" id="modeLeaflineBtn" data-listmode="leafline" onclick="setListMode('leafline')" title="Leafline" style="padding:2px 8px;border-radius:4px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--fg-secondary);">Leafline</button>
         </div>
         <select id="sortSelect" title="Sort">
           <option value="updated">Updated</option>
@@ -1211,9 +1212,15 @@
   <div class="leaves-drawer leaves-palette-widget leaves-popover leaves-sheet" id="leavesDrawer" role="dialog" aria-label="Leaves Palette">
     <div class="leaves-drawer-header" id="leavesDrawerHeader">
       <div class="leaves-drag-handle" id="leavesDragHandle" title="Drag to reposition widget" style="display:flex;flex-direction:column;gap:2px;">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <i data-lucide="sprout" class="w-4 h-4 text-success"></i>
-          <h3 id="leavesDrawerTitle" style="margin:0;">Leaves (0)</h3>
+        <div class="drawer-tabs" style="display:flex;align-items:center;gap:12px;margin-bottom:2px;">
+          <div class="drawer-tab active" id="tabDrawerLeaves" onclick="if(typeof setDrawerMode==='function')setDrawerMode('leaves')" style="cursor:pointer;display:flex;align-items:center;gap:4px;font-weight:600;">
+            <i data-lucide="sprout" class="w-4 h-4 text-success"></i>
+            <h3 id="leavesDrawerTitle" style="margin:0;font-size:14px;">Leaves (0)</h3>
+          </div>
+          <div class="drawer-tab" id="tabDrawerLeafline" onclick="if(typeof setDrawerMode==='function')setDrawerMode('leafline')" style="cursor:pointer;display:flex;align-items:center;gap:4px;font-weight:600;color:var(--fg-muted);">
+            <i data-lucide="list" class="w-4 h-4"></i>
+            <span style="font-size:14px;">Leafline</span>
+          </div>
         </div>
         <div id="leavesDrawerNoteTitle" class="leaves-header-subtitle" style="font-size:11px;color:var(--fg-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;"></div>
       </div>
@@ -1239,6 +1246,7 @@
 <script src="js/history.js"></script>
 <script src="js/core.js"></script>
 <script src="js/leaves.js"></script>
+<script src="js/leafline.js"></script>
 <script src="js/productivity.js"></script>
 <script src="js/editor-ui.js"></script>
 <script src="js/tasks-settings.js"></script>
