@@ -45,8 +45,8 @@
 @media (min-width: 901px) {
   .sidebar { position: relative; z-index: 10; }
   .tablet-list-collapse { display: inline-flex !important; }
-  .note-list { width: var(--list-width, 320px); flex-shrink: 0; position: relative; z-index: 1; overflow: hidden; transition: margin-left 0.25s cubic-bezier(0.16,1,0.3,1), visibility 0.25s; visibility: visible; }
-  .note-list.collapsed { margin-left: calc(-1 * var(--list-width, 320px)); visibility: hidden; pointer-events: none; }
+  .note-list { width: var(--list-width, 320px); flex-shrink: 0; position: relative; z-index: 1; overflow: hidden; transition: margin-left 0.25s var(--ease-out-expo), opacity 0.2s var(--ease-out-expo), visibility 0.25s; visibility: visible; will-change: margin-left, opacity; }
+  .note-list.collapsed { margin-left: calc(-1 * var(--list-width, 320px)); opacity: 0; visibility: hidden; pointer-events: none; }
   .resizer { display: block !important; width: 4px; cursor: col-resize; background: transparent; transition: background 0.15s; }
   .resizer:hover, .resizer.dragging { background: var(--border-hover, var(--border)); }
 }
