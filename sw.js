@@ -29,9 +29,8 @@ const APP_SHELL = [
   './js/data-transfer.js',
   './js/docx-import.js',
   './js/responsive-images.js',
-  './js/tables.js',
   './js/bootstrap.js',
-  'https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js'
+  './assets/vendor/mammoth.browser.min.js'
 ];
 const STATIC_CDN_HOSTS = new Set([
   'cdn.jsdelivr.net',

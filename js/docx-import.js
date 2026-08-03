@@ -31,6 +31,46 @@
       return;
     }
 
+    const createdMediaIds = [];
+    let addedNote = null;
+    const prevCurrentId = (typeof state !== 'undefined') ? state.currentId : null;
+
+    async function rollback(reasonErr) {
+      console.warn('docx import rollback triggered:', reasonErr);
+      // 1. Roll back created media records
+      for (const mid of createdMediaIds) {
+        try {
+          if (typeof mediaDel === 'function') {
+            await mediaDel(mid);
+          }
+        } catch (e) {
+          console.warn('docx rollback: failed to delete media', mid, e);
+        }
+      }
+
+      // 2. Roll back created Note & Leaf if inserted
+      if (addedNote) {
+        try {
+          if (typeof notes !== 'undefined' && Array.isArray(notes)) {
+            const idx = notes.findIndex(x => x.id === addedNote.id);
+            if (idx !== -1) notes.splice(idx, 1);
+          }
+          if (typeof state !== 'undefined') {
+            state.currentId = prevCurrentId;
+          }
+          if (window.paperussLeafManager && typeof window.paperussLeafManager.deleteLeaf === 'function' && addedNote.defaultLeafId) {
+            await window.paperussLeafManager.deleteLeaf(addedNote.id, addedNote.defaultLeafId);
+          }
+        } catch (e) {
+          console.warn('docx rollback: failed to remove note/leaf', e);
+        }
+      }
+
+      if (typeof toast === 'function') {
+        toast('Import failed: Unsupported or corrupted DOCX file');
+      }
+    }
+
     try {
       const arrayBuffer = await file.arrayBuffer();
 
@@ -45,6 +85,7 @@
             const blob = new Blob([imageBuffer], { type: contentType });
 
             const id = await window.saveMediaBlob(blob, altName, 'image');
+            if (id) createdMediaIds.push(id);
             const localUrl = await window.getMediaURL(id);
             if (typeof window.urlCache !== 'undefined' && window.urlCache) {
               window.urlCache.set(id, localUrl);
@@ -58,10 +99,7 @@
             };
           } catch (e) {
             console.warn('docx import: image save error', e);
-            return {
-              src: "",
-              alt: "Failed to import image"
-            };
+            throw e;
           }
         })
       };
@@ -150,6 +188,7 @@
             const blob = dataURLToBlob(src);
             const altName = img.getAttribute('alt') || 'imported-img.png';
             const id = await window.saveMediaBlob(blob, altName, 'image');
+            if (id) createdMediaIds.push(id);
             const localUrl = await window.getMediaURL(id);
             if (typeof window.urlCache !== 'undefined' && window.urlCache) {
               window.urlCache.set(id, localUrl);
@@ -158,7 +197,9 @@
             img.setAttribute('data-media-kind', 'image');
             img.setAttribute('src', localUrl);
           }
-        } catch (e) {}
+        } catch (e) {
+          throw e;
+        }
       }
 
       // Sanitize HTML
@@ -191,10 +232,14 @@
       if (typeof state !== 'undefined') {
         state.currentId = n.id;
       }
+      addedNote = n;
 
-      // Automatically create Main Leaf
+      // Automatically create Main Leaf and ensure identical clean HTML
       if (window.paperussLeafManager && typeof window.paperussLeafManager.materializeVirtualNote === 'function') {
-        await window.paperussLeafManager.materializeVirtualNote(n);
+        const materialized = await window.paperussLeafManager.materializeVirtualNote(n);
+        if (!materialized) {
+          throw new Error('Failed to materialize Main Leaf');
+        }
       } else {
         if (typeof persist === 'function') persist();
         else if (typeof save === 'function') save();
@@ -218,10 +263,7 @@
       }
 
     } catch (err) {
-      console.error('docx import error:', err);
-      if (typeof toast === 'function') {
-        toast('Import failed: Unsupported or corrupted DOCX file');
-      }
+      await rollback(err);
     }
   }
 
