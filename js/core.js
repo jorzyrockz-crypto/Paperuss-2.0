@@ -1955,16 +1955,7 @@ async function renderLeavesList(c) {
   const modalTitle = document.getElementById('leavesDrawerTitle');
   if (modalTitle) modalTitle.textContent = 'Leaves (' + leaves.length + ')';
 
-  const isSidebar = !c || c.id !== 'leavesDrawerContent';
-  let html = '';
-  if (isSidebar) {
-    html += '<div style="padding: 6px 10px 8px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-muted); margin-bottom: 6px;">';
-    html += '<span style="font-size:12px; font-weight:600; color:var(--fg-muted);">Leaves (' + leaves.length + ')</span>';
-    html += '<button class="btn btn-primary" id="sidebarNewLeafBtn" onclick="createNewLeafAction()" style="padding: 3px 10px; font-size:11.5px; border-radius:14px;">+ New Leaf</button>';
-    html += '</div>';
-  }
-
-  html += '<div class="leaves-list-rows" style="padding-top: 4px;">';
+  let html = '<div class="leaves-list-rows" style="padding-top: 4px;">';
   for (let idx = 0; idx < leaves.length; idx++) {
     const leafId = leaves[idx];
     const isVirtual = typeof leafId === 'string' && leafId.startsWith('virtual_main');
@@ -2180,6 +2171,8 @@ function openLeavesDrawer() {
   }
   overlay.classList.remove('hidden');
   overlay.classList.add('show');
+  const toggleBtn = document.getElementById('leafToggleBtn');
+  if (toggleBtn) toggleBtn.classList.add('panel-open');
   positionLeavesWidgetBelowToggle();
 }
 window.openLeavesDrawer = openLeavesDrawer;
@@ -2189,6 +2182,8 @@ function closeLeavesDrawer() {
   if (!overlay) return;
   overlay.classList.add('hidden');
   overlay.classList.remove('show');
+  const toggleBtn = document.getElementById('leafToggleBtn');
+  if (toggleBtn) toggleBtn.classList.remove('panel-open');
   closeLeafContextMenu();
 }
 window.closeLeavesDrawer = closeLeavesDrawer;
