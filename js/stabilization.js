@@ -8,7 +8,7 @@
   const BUILD=Object.freeze({
     name:'PapeRuss 2.0 Stabilization',
     version:'2.0.1-stabilization',
-    cacheName:'paperuss-shell-v30',
+    cacheName:'paperuss-shell-v31',
     schemaVersion:4
   });
 
@@ -263,10 +263,16 @@
       '#deleteBtn',
       '#editorMoreBtn',
       '#editorContent',
-      '#editorScroll'
+      '#editorScroll',
+      '.embed-editor-toolbar',
+      '.embed-resize-handle',
+      '.embed-live-player-wrap'
     ].join(',');
 
     clone.querySelectorAll(UI_SELECTOR).forEach(el => el.remove());
+    if (typeof window.dehydrateEmbeds === 'function') {
+      window.dehydrateEmbeds(clone);
+    }
 
     const FORBIDDEN_IDS = ['noteBody', 'editorContent', 'editorScroll', 'formatBar', 'noteTitle', 'editorEmpty', 'findPanel'];
     clone.querySelectorAll('[id], [data-paperuss-content-root], [data-paperuss-ui]').forEach(el => {

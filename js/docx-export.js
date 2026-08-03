@@ -114,6 +114,11 @@
       return `<w:p>${pPr}${runsXml}</w:p>`;
     }
 
+    // Paperuss Embed Card (print/PDF/DOCX static card fallback)
+    if (el.classList && el.classList.contains('paperuss-embed')) {
+      return await convertEmbedToWml(el, ctx);
+    }
+
     // Paragraph or Div
     if (tag === 'P' || tag === 'DIV') {
       const runsXml = await convertChildrenToWml(el, ctx);
@@ -239,6 +244,36 @@
 
     const tblPr = `<w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="0" w:type="auto"/><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:left w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:right w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="EEEEEE"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="EEEEEE"/></w:tblBorders></w:tblPr>`;
     return `<w:tbl>${tblPr}${rowsXml}</w:tbl>`;
+  }
+
+  async function convertEmbedToWml(el, ctx) {
+    try {
+      const provider = el.getAttribute('data-provider') || 'Embed';
+      const badgeEl = el.querySelector('.embed-provider-badge');
+      const providerName = badgeEl ? badgeEl.textContent.trim() : provider;
+      const url = el.getAttribute('data-canonical-url') || '';
+      const strongEl = el.querySelector('.embed-canonical-text strong');
+      const title = strongEl ? strongEl.textContent.trim() : `${providerName} Content`;
+      const descEl = el.querySelector('.embed-fallback-desc');
+      const desc = descEl ? descEl.textContent.trim() : '';
+
+      const pBdr = `<w:pBdr><w:top w:val="single" w:sz="6" w:space="4" w:color="CCCCCC"/><w:left w:val="single" w:sz="6" w:space="4" w:color="CCCCCC"/><w:bottom w:val="single" w:sz="6" w:space="4" w:color="CCCCCC"/><w:right w:val="single" w:sz="6" w:space="4" w:color="CCCCCC"/></w:pBdr>`;
+      const pPr = `<w:pPr><w:pStyle w:val="Normal"/>${pBdr}</w:pPr>`;
+
+      let runXml = `<w:r><w:rPr><w:b/><w:color w:val="333333"/></w:rPr><w:t xml:space="preserve">[${escXml(providerName)}] ${escXml(title)} </w:t></w:r>`;
+      if (desc) {
+        runXml += `<w:r><w:rPr><w:color w:val="666666"/></w:rPr><w:t xml:space="preserve">— ${escXml(desc)} </w:t></w:r>`;
+      }
+      if (url) {
+        const rId = nextRId(ctx.relsCounter);
+        ctx.hyperlinks.push({ id: rId, target: url });
+        runXml += `<w:hyperlink r:id="${rId}"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">(${escXml(url)})</w:t></w:r></w:hyperlink>`;
+      }
+      return `<w:p>${pPr}${runXml}</w:p>`;
+    } catch (e) {
+      const url = el.getAttribute ? el.getAttribute('data-canonical-url') : '';
+      return `<w:p><w:r><w:t>[Embed: ${escXml(url || 'Content')}]</w:t></w:r></w:p>`;
+    }
   }
 
   async function convertImageToWml(img, ctx) {

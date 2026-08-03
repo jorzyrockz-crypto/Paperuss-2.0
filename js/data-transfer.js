@@ -344,7 +344,7 @@ async function checkIncomingSharedData(){
     // 2. POST share payload cached by Service Worker
     if (isShared === '1' && 'caches' in window) {
       window.history.replaceState({}, document.title, window.location.pathname);
-      const cacheName = window.PAPERUSS_BUILD?.cacheName || 'paperuss-shell-v30';
+      const cacheName = window.PAPERUSS_BUILD?.cacheName || 'paperuss-shell-v31';
       const cache = await caches.open(cacheName);
       const match = await cache.match('./__pending_shared_payload__');
       if (match) {

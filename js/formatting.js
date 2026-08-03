@@ -44,6 +44,9 @@ function applyCommand(cmd, val){
     if(a && res.isExternal){ a.target='_blank'; a.rel='noopener noreferrer'; }
     handleBodyInput(); updateToolbarState();
     return;
+  } else if(cmd==='embedTool'){
+    if(typeof window.openEmbedModal === 'function') window.openEmbedModal();
+    return;
   } else if(cmd==='fontSize'){
     applyFontSize(val);
     return;
