@@ -296,7 +296,24 @@ svg{display:block;flex-shrink:0}
 .editor-content.trash-preview .note-editor img,
 .editor-content.trash-preview .note-editor table{pointer-events:none}
 
-.editor-topbar{display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid var(--border)}
+.editor-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--canvas);
+  position: relative;
+  z-index: 10;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+  will-change: transform;
+}
+
+.editor-topbar.topbar-hidden {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
 #noteTitle{
   flex:1;background:transparent;border:none;outline:none;
   font-size:22px;font-weight:700;color:var(--fg);letter-spacing:-.5px;

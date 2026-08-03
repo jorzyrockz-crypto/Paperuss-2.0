@@ -1318,6 +1318,28 @@ function isMarkdownText(text) {
   // init Find in Note
   if(typeof initFindInNote === 'function') initFindInNote();
 
+  // Auto-hide main editor header on scroll down, reveal on scroll up
+  const scrollEl = document.getElementById('editorScroll');
+  const topbar = document.querySelector('.editor-topbar');
+  if (scrollEl && topbar) {
+    let lastScrollTop = 0;
+    scrollEl.addEventListener('scroll', () => {
+      const scrollTop = scrollEl.scrollTop;
+      if (scrollTop < 40) {
+        topbar.classList.remove('topbar-hidden');
+        lastScrollTop = scrollTop;
+        return;
+      }
+      if (Math.abs(scrollTop - lastScrollTop) < 10) return;
+      if (scrollTop > lastScrollTop) {
+        topbar.classList.add('topbar-hidden');
+      } else {
+        topbar.classList.remove('topbar-hidden');
+      }
+      lastScrollTop = scrollTop;
+    }, { passive: true });
+  }
+
   window.addEventListener('resize', ()=>{
     const width=window.innerWidth;
     if(width===lastViewportWidth) return;   // keyboard show/hide → ignore

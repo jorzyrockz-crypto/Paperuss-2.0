@@ -202,6 +202,21 @@
             <i data-lucide="panel-left" id="backBtnIcon" class="w-4 h-4"></i>
           </button>
           <input type="text" id="noteTitle" placeholder="Untitled">
+          
+          <!-- Merged Leaf Breadcrumb & Dynamic Status Button -->
+          <div id="leafTitleBar" class="leaf-title-bar" style="display:none; align-items:center; gap:6px; flex-shrink:0;">
+            <span id="leafTitleNoteName" style="display:none;">Note Title</span>
+            <span id="leafTitleLeafName" style="display:none;">Main</span>
+            <button class="leaf-toggle-btn status-saved" id="leafToggleBtn" onclick="toggleLeavesPalette(event)" title="Leaves Palette (Click to open)">
+              <svg class="leaf-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"></path>
+                <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"></path>
+              </svg>
+              <span class="leaf-badge-title" id="leafToggleTitle">Main</span>
+              <span class="leaf-status-dot" id="leafStatusDot" title="Saved"></span>
+            </button>
+          </div>
+
           <button class="btn btn-icon" id="undoBtn" title="Undo (Ctrl+Z)">
             <i data-lucide="undo" class="w-4 h-4"></i>
           </button>
@@ -238,19 +253,6 @@
               <button class="profile-menu-item compact-note-action danger" id="moreDeleteBtn"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
             </div>
           </div>
-        </div>
-        <div id="leafTitleBar" class="leaf-title-bar" style="display:none; padding:4px 20px; font-size:12px; color:var(--fg-muted); align-items:center; gap:6px; border-bottom:1px solid var(--border);">
-          <span id="leafTitleNoteName">Note Title</span>
-          <i data-lucide="chevron-right" class="w-3 h-3"></i>
-          <span id="leafTitleLeafName" style="font-weight:600; color:var(--fg-secondary);">Main</span>
-          <button class="leaf-toggle-btn status-saved" id="leafToggleBtn" onclick="toggleLeavesPalette(event)" title="Leaves Palette (Click to open)" style="margin-left:auto;">
-            <svg class="leaf-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"></path>
-              <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"></path>
-            </svg>
-            <span class="leaf-badge-title" id="leafToggleTitle">Leaves</span>
-            <span class="leaf-status-dot" id="leafStatusDot" title="Saved"></span>
-          </button>
         </div>
         
         <div class="find-panel hidden" id="findPanel" role="dialog" aria-label="Find and Replace">
