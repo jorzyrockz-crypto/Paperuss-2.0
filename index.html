@@ -17,6 +17,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
 <!-- Firebase (optional cloud sync). App works fully offline if these fail to load or are unconfigured. -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" onerror="window.__fbLoadFailed=true"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" onerror="window.__fbLoadFailed=true"></script>
@@ -112,7 +113,7 @@
         </button>
       </div>
     </div>
-    <input type="file" id="importFile" accept="application/json" hidden>
+    <input type="file" id="importFile" accept="application/json,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
   </header>
 
   <div class="layout">
@@ -1257,6 +1258,7 @@
 <script src="js/formatting.js"></script>
 <script src="js/media.js"></script>
 <script src="js/data-transfer.js"></script>
+<script src="js/docx-import.js"></script>
 <script src="js/responsive-images.js"></script>
 <script src="js/tables.js"></script>
 <script src="js/bootstrap.js"></script>

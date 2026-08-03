@@ -966,7 +966,17 @@ function isMarkdownText(text) {
 
   document.getElementById('exportBtn').onclick=exportNotes;
   document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
-  document.getElementById('importFile').onchange=e=>{ if(e.target.files[0]) importNotes(e.target.files[0]); e.target.value=''; };
+  document.getElementById('importFile').onchange=e=>{
+    const f=e.target.files[0];
+    if(f){
+      if(f.name.toLowerCase().endsWith('.docx') || f.type==='application/vnd.openxmlformats-officedocument.wordprocessingml.document'){
+        if(typeof window.importDocxFile==='function') window.importDocxFile(f);
+      } else {
+        importNotes(f);
+      }
+    }
+    e.target.value='';
+  };
 
   // Profile utilities replace duplicate top-bar controls on every device.
   const profileImportBtn=document.getElementById('profileImportBtn');
