@@ -996,11 +996,11 @@ function isMarkdownText(text) {
   const profileExportDocxAllBtn=document.getElementById('profileExportDocxAllBtn');
   if(profileExportDocxActiveBtn) profileExportDocxActiveBtn.onclick=()=>{
     closeProfilePanel();
-    if(typeof window.exportDocxActiveLeaf==='function') window.exportDocxActiveLeaf();
+    if(typeof window.exportDocx==='function') window.exportDocx('active');
   };
   if(profileExportDocxAllBtn) profileExportDocxAllBtn.onclick=()=>{
     closeProfilePanel();
-    if(typeof window.exportDocxAllLeaves==='function') window.exportDocxAllLeaves();
+    if(typeof window.exportDocx==='function') window.exportDocx('all');
   };
   if(profileThemeBtn) profileThemeBtn.onclick=()=>{
     const cur=document.documentElement.getAttribute('data-theme');

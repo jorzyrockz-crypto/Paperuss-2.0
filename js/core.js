@@ -1002,6 +1002,14 @@ function restoreEditorSelection(editor,savedSelection){
   }catch(_){ /* A changed remote document has no safe equivalent selection. */ }
 }
 
+global.getCurrentOpenNote = function() {
+  if (typeof state === 'undefined' || !state.currentId) return null;
+  const isSpecialPage = ['media', 'calendar', 'tasks', 'settings'].includes(state.filter);
+  if (isSpecialPage) return null;
+  const note = getNote(state.currentId);
+  return (note && !note.deletedAt) ? note : null;
+};
+
 function renderEditor(){
   const empty=document.getElementById('editorEmpty');
   const content=document.getElementById('editorContent');
