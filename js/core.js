@@ -2134,13 +2134,18 @@ window.updateLeafToggleState = updateLeafToggleState;
 function updateLeafTitleBar() {
   const toggleBtn = document.getElementById('leafToggleBtn');
   const toggleTitleEl = document.getElementById('leafToggleTitle');
+  const authLanding = document.getElementById('authLanding');
+  const isAuthShowing = authLanding && !authLanding.classList.contains('hidden');
   const n = getNote(state.currentId);
   const nonNoteView = ['media','calendar','tasks','settings'].includes(state.filter);
 
-  const shouldShow = !!n && !nonNoteView;
+  const shouldShow = !!n && !nonNoteView && !isAuthShowing;
   if (toggleBtn) toggleBtn.style.display = shouldShow ? 'inline-flex' : 'none';
 
-  if (!shouldShow) return;
+  if (!shouldShow) {
+    if (typeof closeLeavesDrawer === 'function') closeLeavesDrawer();
+    return;
+  }
 
   const activeLeaf = window.currentActiveLeaf;
   const leafTitle = activeLeaf && activeLeaf.title ? activeLeaf.title : 'Main';

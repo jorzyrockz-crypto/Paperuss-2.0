@@ -110,10 +110,13 @@ function saveSession(session){
 function showAuthLanding(){
   const el=document.getElementById('authLanding');
   if(el) el.classList.remove('hidden');
+  if(typeof closeLeavesDrawer === 'function') closeLeavesDrawer();
+  if(typeof updateLeafTitleBar === 'function') updateLeafTitleBar();
 }
 function hideAuthLanding(){
   const el=document.getElementById('authLanding');
   if(el) el.classList.add('hidden');
+  if(typeof updateLeafTitleBar === 'function') updateLeafTitleBar();
 }
 
 async function continueAsGuest(){
