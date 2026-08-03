@@ -937,6 +937,10 @@ function renderList(){
     renderLeavesList(c);
     return;
   }
+  if (state.listMode === 'leafline') {
+    if (typeof window.renderLeafline === 'function') window.renderLeafline(c);
+    return;
+  }
   let arr=filteredNotes();
   let titleText=state.tag?('#'+state.tag) : ({all:'All Notes',pinned:'Pinned',archived:'Archived',trash:'Trash',calendar:'Events / Planner',tasks:'Tasks & Todos',settings:'Settings'}[state.filter]);
   document.getElementById('listTitle').textContent = titleText || 'All Notes';
@@ -1217,6 +1221,7 @@ function renderEditor(){
         : '<span class="dot"></span><span>Saved '+timeAgo(n.updatedAt)+'</span>';
       updateToolbarState();
       refreshIcons();
+      if(typeof window.triggerLeaflineUpdate === 'function') window.triggerLeaflineUpdate();
     } catch (e) {
       console.error("renderEditor IIFE Error:", e);
     }
@@ -1940,10 +1945,12 @@ function setListMode(mode) {
   state.listMode = mode;
   const notesBtn = document.getElementById('modeNotesBtn');
   const leavesBtn = document.getElementById('modeLeavesBtn');
+  const leaflineBtn = document.getElementById('modeLeaflineBtn');
   if (notesBtn) notesBtn.classList.toggle('active', mode === 'notes');
   if (leavesBtn) leavesBtn.classList.toggle('active', mode === 'leaves');
+  if (leaflineBtn) leaflineBtn.classList.toggle('active', mode === 'leafline');
   const sortSelect = document.getElementById('sortSelect');
-  if (sortSelect) sortSelect.style.display = mode === 'leaves' ? 'none' : '';
+  if (sortSelect) sortSelect.style.display = (mode === 'leaves' || mode === 'leafline') ? 'none' : '';
   renderList();
 }
 window.setListMode = setListMode;
