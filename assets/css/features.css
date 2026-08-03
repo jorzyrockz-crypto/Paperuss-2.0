@@ -1954,6 +1954,59 @@ blockquote.note-callout.callout-info {
   visibility: visible;
 }
 
+/* Component Classes: .leaves-launcher, .leaves-popover, .leaves-row, .editor-leaf-context */
+.leaves-launcher {
+  position: fixed;
+  bottom: 50px;
+  right: 20px;
+  top: auto;
+  z-index: 1100;
+}
+
+.leaves-popover {
+  position: fixed !important;
+  bottom: 94px !important;
+  right: 20px !important;
+  top: auto !important;
+  left: auto !important;
+  z-index: 1050 !important;
+  width: min(290px, calc(100vw - 32px));
+  max-width: 290px;
+  height: auto !important;
+  max-height: calc(100vh - 150px) !important;
+}
+
+.leaves-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.editor-leaf-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.editor-leaf-context:hover {
+  background-color: var(--hover);
+  color: var(--fg);
+}
+
+.editor-leaf-sep {
+  opacity: 0.5;
+  user-select: none;
+}
+
 .leaves-drawer-header {
   display: flex;
   align-items: center;

@@ -202,6 +202,10 @@
             <i data-lucide="panel-left" id="backBtnIcon" class="w-4 h-4"></i>
           </button>
           <input type="text" id="noteTitle" placeholder="Untitled">
+          <div class="editor-leaf-context" id="editorLeafContext" title="Active Leaf (Click to rename)" style="display:none;">
+            <span class="editor-leaf-sep">&gt;</span>
+            <span class="editor-leaf-name" id="editorLeafName" onclick="if (window.currentActiveLeaf && window.currentActiveLeaf.id) renameLeafAction(window.currentActiveLeaf.id)">Main</span>
+          </div>
 
           <button class="btn btn-icon" id="undoBtn" title="Undo (Ctrl+Z)">
             <i data-lucide="undo" class="w-4 h-4"></i>
@@ -1194,7 +1198,7 @@
 </div>
 
 <!-- Floating Decoupled Leaf Toggle Button (FAB - Fixed position: fixed; top:16px; right:16px; z-index:60) -->
-<button class="leaf-toggle-fab status-saved" id="leafToggleBtn" onclick="toggleLeavesPalette(event)" title="Leaves Palette (Click to open)">
+<button class="leaf-toggle-fab leaves-launcher status-saved" id="leafToggleBtn" onclick="toggleLeavesPalette(event)" title="Leaves Palette (Click to open)" aria-expanded="false" aria-controls="leavesDrawer">
   <svg class="leaf-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"></path>
     <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"></path>
@@ -1204,11 +1208,14 @@
 </button>
 
 <div class="leaves-drawer-overlay hidden" id="leavesDrawerOverlay">
-  <div class="leaves-drawer leaves-palette-widget" id="leavesDrawer">
+  <div class="leaves-drawer leaves-palette-widget leaves-popover leaves-sheet" id="leavesDrawer" role="dialog" aria-label="Leaves Palette">
     <div class="leaves-drawer-header" id="leavesDrawerHeader">
-      <div class="leaves-drag-handle" id="leavesDragHandle" title="Drag to reposition widget">
-        <i data-lucide="sprout" class="w-4 h-4 text-success"></i>
-        <h3 id="leavesDrawerTitle">Leaves (0)</h3>
+      <div class="leaves-drag-handle" id="leavesDragHandle" title="Drag to reposition widget" style="display:flex;flex-direction:column;gap:2px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <i data-lucide="sprout" class="w-4 h-4 text-success"></i>
+          <h3 id="leavesDrawerTitle" style="margin:0;">Leaves (0)</h3>
+        </div>
+        <div id="leavesDrawerNoteTitle" class="leaves-header-subtitle" style="font-size:11px;color:var(--fg-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;"></div>
       </div>
       <div class="leaves-header-actions" style="display:flex;align-items:center;gap:6px">
         <button class="btn btn-icon btn-primary" id="headerNewLeafBtn" onclick="createNewLeafAction()" title="Add New Leaf" style="width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;">

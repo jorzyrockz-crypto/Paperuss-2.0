@@ -1944,22 +1944,33 @@ async function renderLeavesList(c) {
   if (listTitle) listTitle.textContent = 'Leaves';
   if (!n) {
     c.innerHTML = '<div class="list-empty">Select a note to view its Leaves</div>';
+    // Also clear the floating panel content
+    const drawerContent = document.getElementById('leavesDrawerContent');
+    if (drawerContent && drawerContent !== c) {
+      drawerContent.innerHTML = '<div class="list-empty">Select a note to view its Leaves</div>';
+    }
     return;
   }
   const order = window.paperussLeaves ? window.paperussLeaves.getNoteLeafOrder(n) : null;
   const leaves = order && order.length > 0 ? order : [n.defaultLeafId || 'virtual_main_' + n.id];
   const activeLeafId = window.paperussLeaves ? window.paperussLeaves.getNoteActiveLeafId(n) : (n.defaultLeafId || 'virtual_main_' + n.id);
 
+  // Update count header in floating panel
   const modalTitle = document.getElementById('leavesDrawerTitle');
   if (modalTitle) modalTitle.textContent = 'Leaves (' + leaves.length + ')';
 
+  // Update note subtitle in floating panel
+  const noteTitleEl = document.getElementById('leavesDrawerNoteTitle');
+  if (noteTitleEl) noteTitleEl.textContent = n.title || 'Untitled';
+
+  // Build row HTML
   let html = '<div class="leaves-list-rows" style="padding-top: 4px;">';
   for (let idx = 0; idx < leaves.length; idx++) {
     const leafId = leaves[idx];
     const isVirtual = typeof leafId === 'string' && leafId.startsWith('virtual_main');
     let title = isVirtual ? 'Main' : 'Leaf ' + (idx + 1);
     let color = isVirtual ? 'emerald' : 'slate';
-    
+
     if (!isVirtual && window.paperussLeaves) {
       const leafObj = await window.paperussLeaves.leafGet(leafId);
       if (leafObj) {
@@ -1984,7 +1995,19 @@ async function renderLeavesList(c) {
   }
   html += '</div>';
 
+  // Write into the provided container
   c.innerHTML = html;
+
+  // Keep the other surface in sync without infinite recursion
+  const drawerContent = document.getElementById('leavesDrawerContent');
+  if (drawerContent && drawerContent !== c) {
+    drawerContent.innerHTML = html;
+  }
+  const columnContent = document.getElementById('notesContainer');
+  if (columnContent && columnContent !== c && state.listMode === 'leaves') {
+    columnContent.innerHTML = html;
+  }
+
   refreshIcons();
 }
 window.renderLeavesList = renderLeavesList;
@@ -2026,16 +2049,29 @@ async function toggleLeafContextMenu(e, leafId) {
     { name: 'slate', hex: '#64748b', label: 'Slate' }
   ];
 
+  // Determine position for Move Up / Move Down availability
+  const n2 = getNote(state.currentId);
+  const allLeaves = window.paperussLeaves ? window.paperussLeaves.getNoteLeafOrder(n2) : [];
+  const leafIdx = allLeaves.indexOf(leafId);
+  const canMoveUp = leafIdx > 0;
+  const canMoveDown = leafIdx >= 0 && leafIdx < allLeaves.length - 1;
+
   menu.dataset.activeLeafId = leafId;
   menu.innerHTML = `
     <button class="leaf-menu-item" type="button" onclick="createNewLeafAction(); closeLeafContextMenu();">
-      <i data-lucide="plus" class="w-4 h-4"></i> Add Sub-leaf
+      <i data-lucide="plus" class="w-4 h-4"></i> New Leaf
     </button>
     <button class="leaf-menu-item" type="button" onclick="duplicateLeafAction('${leafId}'); closeLeafContextMenu();">
       <i data-lucide="copy" class="w-4 h-4"></i> Duplicate
     </button>
     <button class="leaf-menu-item" type="button" onclick="renameLeafAction('${leafId}'); closeLeafContextMenu();">
       <i data-lucide="edit-2" class="w-4 h-4"></i> Rename
+    </button>
+    <button class="leaf-menu-item" type="button" onclick="reorderLeafAction('${leafId}', -1); closeLeafContextMenu();" ${!canMoveUp ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''}>
+      <i data-lucide="chevron-up" class="w-4 h-4"></i> Move Up
+    </button>
+    <button class="leaf-menu-item" type="button" onclick="reorderLeafAction('${leafId}', 1); closeLeafContextMenu();" ${!canMoveDown ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''}>
+      <i data-lucide="chevron-down" class="w-4 h-4"></i> Move Down
     </button>
     <div style="padding:4px 8px 2px; font-size:11px; font-weight:600; color:var(--fg-muted);">Leaf Accent Color</div>
     <div class="leaf-color-swatches">
@@ -2142,12 +2178,29 @@ function updateLeafTitleBar() {
 
   if (!shouldShow) {
     if (typeof closeLeavesDrawer === 'function') closeLeavesDrawer();
+    // Hide editor leaf breadcrumb
+    const ctx = document.getElementById('editorLeafContext');
+    if (ctx) ctx.style.display = 'none';
     return;
   }
 
   const activeLeaf = window.currentActiveLeaf;
   const leafTitle = activeLeaf && activeLeaf.title ? activeLeaf.title : 'Main';
   if (toggleTitleEl) toggleTitleEl.textContent = leafTitle;
+
+  // Update editor-leaf-context breadcrumb (only show when leaf is not the default "Main" virtual leaf
+  // or whenever a note has actual leaves so the user can rename)
+  const editorCtx = document.getElementById('editorLeafContext');
+  const editorLeafName = document.getElementById('editorLeafName');
+  const hasMultipleLeaves = n && Array.isArray(n.leafOrder) && n.leafOrder.length > 1;
+  const isVirtual = !activeLeaf || activeLeaf.isVirtual;
+  const showCtx = hasMultipleLeaves || (!isVirtual && leafTitle !== 'Main');
+  if (editorCtx) editorCtx.style.display = showCtx ? 'inline-flex' : 'none';
+  if (editorLeafName) editorLeafName.textContent = leafTitle;
+
+  // Update note subtitle in floating panel
+  const noteTitleEl = document.getElementById('leavesDrawerNoteTitle');
+  if (noteTitleEl) noteTitleEl.textContent = n ? (n.title || 'Untitled') : '';
 }
 window.updateLeafTitleBar = updateLeafTitleBar;
 
@@ -2175,7 +2228,10 @@ function openLeavesDrawer() {
   overlay.classList.remove('hidden');
   overlay.classList.add('show');
   const toggleBtn = document.getElementById('leafToggleBtn');
-  if (toggleBtn) toggleBtn.classList.add('panel-open');
+  if (toggleBtn) {
+    toggleBtn.classList.add('panel-open');
+    toggleBtn.setAttribute('aria-expanded', 'true');
+  }
   positionLeavesWidgetBelowToggle();
 }
 window.openLeavesDrawer = openLeavesDrawer;
@@ -2186,7 +2242,12 @@ function closeLeavesDrawer() {
   overlay.classList.add('hidden');
   overlay.classList.remove('show');
   const toggleBtn = document.getElementById('leafToggleBtn');
-  if (toggleBtn) toggleBtn.classList.remove('panel-open');
+  if (toggleBtn) {
+    toggleBtn.classList.remove('panel-open');
+    toggleBtn.setAttribute('aria-expanded', 'false');
+    // Restore focus to the toggle button so keyboard users are not lost
+    toggleBtn.focus();
+  }
   closeLeafContextMenu();
 }
 window.closeLeavesDrawer = closeLeavesDrawer;
@@ -2266,6 +2327,34 @@ document.addEventListener('pointerdown', (e) => {
   const menu = document.getElementById('leafContextMenu');
   if (menu && !menu.classList.contains('hidden') && !menu.contains(e.target) && !e.target.closest('.leaf-more-btn')) {
     closeLeafContextMenu();
+  }
+  // Click outside the floating panel — close it (but not when clicking the toggle button itself)
+  const overlay = document.getElementById('leavesDrawerOverlay');
+  const drawer = document.getElementById('leavesDrawer');
+  const launcher = document.getElementById('leafToggleBtn');
+  if (
+    overlay &&
+    overlay.classList.contains('show') &&
+    drawer &&
+    !drawer.contains(e.target) &&
+    launcher &&
+    !launcher.contains(e.target)
+  ) {
+    closeLeavesDrawer();
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const overlay = document.getElementById('leavesDrawerOverlay');
+    if (overlay && overlay.classList.contains('show')) {
+      closeLeavesDrawer();
+      return;
+    }
+    const menu = document.getElementById('leafContextMenu');
+    if (menu && !menu.classList.contains('hidden')) {
+      closeLeafContextMenu();
+    }
   }
 });
 
