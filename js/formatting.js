@@ -501,27 +501,39 @@ function wrapInlineCode(){
 
 /* Helpers — strip or add task decoration on a single <li>. */
 function _stripTask(li){
-  const cb=li.querySelector(':scope > input[type=checkbox]');
-  if(cb){
-    const nxt=cb.nextSibling;
-    if(nxt && nxt.nodeType===3) nxt.textContent=nxt.textContent.replace(/^\s+/,'');
+  const cbs = li.querySelectorAll(':scope > input[type=checkbox]');
+  cbs.forEach(cb => {
+    const nxt = cb.nextSibling;
+    if(nxt && nxt.nodeType===3) nxt.textContent = nxt.textContent.replace(/^\s+/,'');
     cb.remove();
-  }
+  });
   li.removeAttribute('data-task');
+  li.removeAttribute('checked');
+  if(li.parentElement && li.parentElement.classList.contains('task-list')){
+    if(!li.parentElement.querySelector(':scope > li[data-task], :scope > li > input[type=checkbox]')){
+      li.parentElement.classList.remove('task-list');
+      if(!li.parentElement.className) li.parentElement.removeAttribute('class');
+      li.parentElement.removeAttribute('data-task-list');
+    }
+  }
 }
 function _addTask(li, isChecked = false){
   let cb = li.querySelector(':scope > input[type=checkbox]');
   if(!cb){
     li.setAttribute('data-task','1');
-    cb=document.createElement('input');
-    cb.type='checkbox';
+    cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.setAttribute('aria-label', 'Checklist');
     if(li.firstChild && li.firstChild.nodeType===3)
-      li.firstChild.textContent=li.firstChild.textContent.replace(/^\s+/,'');
+      li.firstChild.textContent = li.firstChild.textContent.replace(/^\s+/,'');
     li.insertBefore(cb, li.firstChild);
-    const nxt=cb.nextSibling;
+    const nxt = cb.nextSibling;
     if(!nxt) li.appendChild(document.createTextNode(' '));
     else if(nxt.nodeType===3 && !nxt.textContent.startsWith(' '))
-      nxt.textContent=' '+nxt.textContent;
+      nxt.textContent = ' ' + nxt.textContent;
+  } else {
+    li.setAttribute('data-task','1');
+    cb.setAttribute('aria-label', 'Checklist');
   }
   if(isChecked){
     cb.checked = true;
@@ -535,22 +547,52 @@ function _addTask(li, isChecked = false){
   }
 }
 
+function isTaskListItem(li, list) {
+  if (!li || !list) return false;
+  return !!li.hasAttribute('data-task') ||
+         !!li.querySelector(':scope > input[type=checkbox]') ||
+         !!li.querySelector('input[type=checkbox]') ||
+         list.classList.contains('task-list') ||
+         list.hasAttribute('data-task-list');
+}
+
 /* Detect the "current list type" the caret is inside.
    Returns {list, li, type} or null if not in a list.
-   type is 'ul' | 'ol' | 'task'. */
+   type is strictly 'ul' | 'ol' | 'task' | null. */
 function getListContext(){
-  const sel=window.getSelection();
-  const ed=bodyEl();
-  if(!sel || !sel.anchorNode || !ed.contains(sel.anchorNode)) return null;
-  let node=sel.anchorNode;
-  if(node.nodeType===3) node=node.parentElement;
-  const li=node.closest && node.closest('li');
+  const sel = window.getSelection();
+  const ed = bodyEl();
+  if(!sel || !sel.anchorNode || !ed) return null;
+  if(ed !== sel.anchorNode && !ed.contains(sel.anchorNode)) return null;
+  let node = sel.anchorNode;
+  if(node.nodeType === 3) node = node.parentElement;
+  const li = node.closest && node.closest('li');
   if(!li) return null;
-  const list=li.parentElement;
-  if(!list || (list.tagName!=='UL' && list.tagName!=='OL')) return null;
-  const isTask=!!li.hasAttribute('data-task') || !!list.querySelector(':scope > li[data-task]');
-  return {list, li, type: isTask ? 'task' : list.tagName.toLowerCase()};
+  const list = li.parentElement;
+  if(!list || (list.tagName !== 'UL' && list.tagName !== 'OL')) return null;
+
+  const currentType = isTaskListItem(li, list) ? 'task' : list.tagName.toLowerCase();
+
+  if(sel.rangeCount > 0 && !sel.isCollapsed){
+    const range = sel.getRangeAt(0);
+    const lis = ed.querySelectorAll('li');
+    for(let i = 0; i < lis.length; i++){
+      const item = lis[i];
+      if(range.intersectsNode(item) && item.parentElement){
+        const pList = item.parentElement;
+        if(pList.tagName !== 'UL' && pList.tagName !== 'OL') return null;
+        const itemType = isTaskListItem(item, pList) ? 'task' : pList.tagName.toLowerCase();
+        if(itemType !== currentType) return null;
+      }
+    }
+  }
+
+  return {list, li, type: currentType};
 }
+
+window.getListContext = getListContext;
+window._listContext = getListContext;
+window.isTaskListItem = isTaskListItem;
 
 /* Collect all block-level elements that intersect the current selection.
    Used to convert multiple selected paragraphs into list items.           */
@@ -596,36 +638,34 @@ function _selectedBlocks(){
  * All paths preserve nested lists, indentation, inline formatting, and content.
  */
 function toggleList(targetType){
-  focusEditor();
-  const sel=window.getSelection();
-  const ed=bodyEl();
+  const sel = window.getSelection();
+  const ed = bodyEl();
   if(!sel || !ed) return;
+  if(sel.anchorNode && !ed.contains(sel.anchorNode) && sel.anchorNode !== ed) return;
+  focusEditor();
 
-  const ctx=getListContext();
-  const wantTag=(targetType==='ol')?'OL':'UL';
+  const ctx = getListContext();
+  const wantTag = (targetType === 'ol') ? 'OL' : 'UL';
 
   /* ---------- CASE 2: already in the same type → toggle OFF ---------- */
-  if(ctx && ctx.type===targetType){
-    const list=ctx.list;
-    // Strip task decorations first if needed.
-    if(targetType==='task'){
-      list.querySelectorAll(':scope > li[data-task]').forEach(_stripTask);
+  if(ctx && ctx.type === targetType){
+    const list = ctx.list;
+    if(targetType === 'task'){
+      list.querySelectorAll(':scope > li').forEach(_stripTask);
     }
-    // Unwrap every <li> back to <p>, preserving nested sub-lists.
-    const frag=document.createDocumentFragment();
-    Array.from(list.children).forEach(li=>{
-      if(li.tagName!=='LI'){ frag.appendChild(li); return; }
-      // Separate nested lists from the li's own content.
-      const nested=[]; const contentFrag=document.createDocumentFragment();
-      Array.from(li.childNodes).forEach(child=>{
-        if(child.nodeType===1 && (child.tagName==='UL'||child.tagName==='OL'))
+    const frag = document.createDocumentFragment();
+    Array.from(list.children).forEach(li => {
+      if(li.tagName !== 'LI'){ frag.appendChild(li); return; }
+      const nested = []; const contentFrag = document.createDocumentFragment();
+      Array.from(li.childNodes).forEach(child => {
+        if(child.nodeType === 1 && (child.tagName === 'UL' || child.tagName === 'OL'))
           nested.push(child);
         else contentFrag.appendChild(child.cloneNode(true));
       });
-      const p=document.createElement('p');
+      const p = document.createElement('p');
       p.appendChild(contentFrag);
       frag.appendChild(p);
-      nested.forEach(sub=>frag.appendChild(sub));
+      nested.forEach(sub => frag.appendChild(sub));
     });
     list.replaceWith(frag);
     handleBodyInput(); updateToolbarState();
@@ -634,31 +674,28 @@ function toggleList(targetType){
 
   /* ---------- CASE 3: in a different list type → convert ---------- */
   if(ctx){
-    const list=ctx.list;
-    // Strip old task decoration if converting away from tasks.
-    if(ctx.type==='task'){
-      list.querySelectorAll(':scope > li[data-task]').forEach(_stripTask);
+    const list = ctx.list;
+    if(ctx.type === 'task'){
+      list.querySelectorAll(':scope > li').forEach(_stripTask);
     }
-    // Swap the list wrapper tag if needed (UL↔OL).
-    if(list.tagName!==wantTag){
-      const newList=document.createElement(wantTag);
+    if(list.tagName !== wantTag){
+      const newList = document.createElement(wantTag);
+      if(targetType === 'task') newList.className = 'task-list';
       while(list.firstChild) newList.appendChild(list.firstChild);
       list.replaceWith(newList);
-      // Add task decoration if converting TO tasks.
-      if(targetType==='task'){
-        newList.querySelectorAll(':scope > li').forEach(_addTask);
+      if(targetType === 'task'){
+        newList.querySelectorAll(':scope > li').forEach(li => _addTask(li, false));
       }
-      // Restore caret.
-      const caretLi=newList.querySelector('li');
+      const caretLi = newList.querySelector('li');
       if(caretLi){
-        const r=document.createRange();
+        const r = document.createRange();
         r.selectNodeContents(caretLi); r.collapse(false);
         sel.removeAllRanges(); sel.addRange(r);
       }
     } else {
-      // Same wrapper tag, just add/remove task decoration.
-      if(targetType==='task'){
-        list.querySelectorAll(':scope > li').forEach(_addTask);
+      if(targetType === 'task'){
+        list.classList.add('task-list');
+        list.querySelectorAll(':scope > li').forEach(li => _addTask(li, false));
       }
     }
     handleBodyInput(); updateToolbarState();
@@ -666,23 +703,21 @@ function toggleList(targetType){
   }
 
   /* ---------- CASE 1: not in a list → wrap selected blocks ---------- */
-  const blocks=_selectedBlocks();
-  if(blocks.length>0){
-    const newList=document.createElement(wantTag);
-    // Insert the new list before the first selected block.
+  const blocks = _selectedBlocks();
+  if(blocks.length > 0){
+    const newList = document.createElement(wantTag);
+    if(targetType === 'task') newList.className = 'task-list';
     blocks[0].parentNode.insertBefore(newList, blocks[0]);
-    blocks.forEach(blk=>{
-      const li=document.createElement('li');
-      // Move all of the block's children into the li (preserves inline formatting).
+    blocks.forEach(blk => {
+      const li = document.createElement('li');
       while(blk.firstChild) li.appendChild(blk.firstChild);
-      if(targetType==='task') _addTask(li);
+      if(targetType === 'task') _addTask(li, false);
       newList.appendChild(li);
       blk.remove();
     });
-    // Place caret in the first item.
-    const firstLi=newList.querySelector('li');
+    const firstLi = newList.querySelector('li');
     if(firstLi){
-      const r=document.createRange();
+      const r = document.createRange();
       r.selectNodeContents(firstLi); r.collapse(false);
       sel.removeAllRanges(); sel.addRange(r);
     }
@@ -690,25 +725,176 @@ function toggleList(targetType){
     return;
   }
 
-  // Absolute fallback: collapsed cursor not inside any block.
-  // Insert a single fresh list item.
-  const li=document.createElement('li');
-  li.textContent='\u200B';
-  if(targetType==='task') _addTask(li);
-  const list=document.createElement(wantTag);
+  const li = document.createElement('li');
+  li.textContent = '\u200B';
+  const list = document.createElement(wantTag);
+  if(targetType === 'task'){
+    list.className = 'task-list';
+    _addTask(li, false);
+  }
   list.appendChild(li);
-  const range=sel.rangeCount?sel.getRangeAt(0):null;
+  const range = sel.rangeCount ? sel.getRangeAt(0) : null;
   if(range){
     range.deleteContents();
     range.insertNode(list);
   } else {
     ed.appendChild(list);
   }
-  const r=document.createRange();
+  const r = document.createRange();
   r.selectNodeContents(li); r.collapse(false);
   sel.removeAllRanges(); sel.addRange(r);
   handleBodyInput(); updateToolbarState();
 }
+
+function createNextTaskListItem(li) {
+  if (window.HistoryManager) window.HistoryManager.capture(true);
+  const newLi = document.createElement('li');
+  newLi.setAttribute('data-task', '1');
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = false;
+  cb.setAttribute('aria-label', 'Checklist');
+  newLi.appendChild(cb);
+
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount) {
+    const range = sel.getRangeAt(0);
+    const endRange = range.cloneRange();
+    endRange.setEndAfter(li.lastChild || li);
+    const fragment = endRange.extractContents();
+    const extraCb = fragment.querySelector('input[type=checkbox]');
+    if (extraCb) extraCb.remove();
+    if (fragment.childNodes.length > 0) {
+      newLi.appendChild(fragment);
+    } else {
+      newLi.appendChild(document.createTextNode(' '));
+    }
+  } else {
+    newLi.appendChild(document.createTextNode(' '));
+  }
+
+  li.parentNode.insertBefore(newLi, li.nextSibling);
+
+  const r = document.createRange();
+  if (newLi.childNodes.length >= 2) {
+    r.setStart(newLi, 1);
+  } else {
+    r.setStart(newLi, 0);
+  }
+  r.collapse(true);
+  if (sel) {
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+  handleBodyInput();
+  updateToolbarState();
+}
+
+function exitEmptyListItem(li, list) {
+  const ed = bodyEl();
+  if (window.HistoryManager) window.HistoryManager.capture(true);
+  const parentLi = list.parentElement ? list.parentElement.closest('li') : null;
+  if (parentLi) {
+    outdentListItem(li);
+    return;
+  }
+  const nextSiblings = [];
+  let next = li.nextElementSibling;
+  while (next) {
+    nextSiblings.push(next);
+    next = next.nextElementSibling;
+  }
+  const p = document.createElement('p');
+  p.innerHTML = '<br>';
+  if (nextSiblings.length > 0) {
+    const secondList = list.cloneNode(false);
+    nextSiblings.forEach(sib => secondList.appendChild(sib));
+    list.parentNode.insertBefore(p, list.nextSibling);
+    list.parentNode.insertBefore(secondList, p.nextSibling);
+  } else {
+    list.parentNode.insertBefore(p, list.nextSibling);
+  }
+  li.remove();
+  if (list.children.length === 0) list.remove();
+  const r = document.createRange();
+  r.setStart(p, 0);
+  r.collapse(true);
+  const sel = window.getSelection();
+  if (sel) {
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+  handleBodyInput();
+  updateToolbarState();
+}
+
+function indentListItem(li) {
+  if (!li) return;
+  const prevLi = li.previousElementSibling;
+  if (!prevLi) return;
+  if (window.HistoryManager) window.HistoryManager.capture(true);
+
+  const parentList = li.parentElement;
+  const isTask = isTaskListItem(li, parentList);
+  let childList = Array.from(prevLi.children).find(c => c.tagName === 'UL' || c.tagName === 'OL');
+
+  if (!childList) {
+    childList = document.createElement(parentList.tagName);
+    if (isTask) {
+      childList.className = 'task-list';
+    } else if (parentList.className) {
+      childList.className = parentList.className;
+    }
+    prevLi.appendChild(childList);
+  }
+
+  childList.appendChild(li);
+
+  const sel = window.getSelection();
+  if (sel) {
+    const r = document.createRange();
+    r.selectNodeContents(li);
+    r.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+  handleBodyInput();
+  updateToolbarState();
+}
+
+function outdentListItem(li) {
+  if (!li) return;
+  const parentList = li.parentElement;
+  if (!parentList) return;
+  if (window.HistoryManager) window.HistoryManager.capture(true);
+
+  const parentLi = parentList.parentElement && parentList.parentElement.closest('li');
+
+  if (parentLi) {
+    parentLi.parentNode.insertBefore(li, parentLi.nextSibling);
+    if (parentList.children.length === 0) parentList.remove();
+  } else {
+    exitEmptyListItem(li, parentList);
+    return;
+  }
+
+  const sel = window.getSelection();
+  if (sel) {
+    const r = document.createRange();
+    r.selectNodeContents(li);
+    r.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+  handleBodyInput();
+  updateToolbarState();
+}
+
+window.toggleList = toggleList;
+window.createNextTaskListItem = createNextTaskListItem;
+window.exitEmptyListItem = exitEmptyListItem;
+window.indentListItem = indentListItem;
+window.outdentListItem = outdentListItem;
 
 // Legacy alias so any remaining callers still work.
 function insertTaskList(){ toggleList('task'); }
@@ -867,6 +1053,11 @@ function getActiveParagraphStyle() {
 
 /* ---- Indentation Logic ---- */
 function applyIndent() {
+  const ctx = getListContext();
+  if (ctx && ctx.li) {
+    indentListItem(ctx.li);
+    return;
+  }
   const blocks = getSelectedBlocks();
   if(!blocks.length) return;
   
@@ -888,6 +1079,11 @@ function applyIndent() {
 }
 
 function applyOutdent() {
+  const ctx = getListContext();
+  if (ctx && ctx.li) {
+    outdentListItem(ctx.li);
+    return;
+  }
   const blocks = getSelectedBlocks();
   if(!blocks.length) return;
   

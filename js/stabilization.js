@@ -126,7 +126,14 @@
     if(tag==='INPUT'){
       if((el.getAttribute('type')||'').toLowerCase()!=='checkbox'){
         el.replaceWith(document.createTextNode(''));
+        return;
       }else{
+        Array.from(el.attributes).forEach(attr => {
+          const name = attr.name.toLowerCase();
+          if(name !== 'type' && name !== 'checked' && name !== 'aria-label'){
+            el.removeAttribute(attr.name);
+          }
+        });
         el.setAttribute('type','checkbox');
       }
     }
@@ -292,6 +299,20 @@
         el.replaceWith(...Array.from(el.childNodes)); return;
       }
       sanitizeElementAttributes(el);
+    });
+    body.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      if(cb.checked || cb.hasAttribute('checked')){
+        cb.setAttribute('checked', '');
+      } else {
+        cb.removeAttribute('checked');
+      }
+      const li = cb.closest('li');
+      if(li && !li.hasAttribute('data-task')){
+        li.setAttribute('data-task', '1');
+        if(li.parentElement && (li.parentElement.tagName === 'UL' || li.parentElement.tagName === 'OL')){
+          li.parentElement.classList.add('task-list');
+        }
+      }
     });
     return body.innerHTML;
   }

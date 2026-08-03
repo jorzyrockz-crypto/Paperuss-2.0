@@ -127,6 +127,22 @@ function bind(){
       }
     }
   });
+  ed.addEventListener('change', e=>{
+    if(e.target && e.target.matches && e.target.matches('input[type=checkbox]')){
+      if(e.target.checked) e.target.setAttribute('checked', '');
+      else e.target.removeAttribute('checked');
+      setTimeout(handleBodyInput, 0);
+    }
+  });
+  ed.addEventListener('keydown', e=>{
+    if(e.key === ' ' && e.target && e.target.matches && e.target.matches('input[type=checkbox]')){
+      setTimeout(()=>{
+        if(e.target.checked) e.target.setAttribute('checked', '');
+        else e.target.removeAttribute('checked');
+        handleBodyInput();
+      }, 0);
+    }
+  });
 
   // Intercept Undo / Redo / Link shortcuts
   ed.addEventListener('keydown', e => {
@@ -146,35 +162,51 @@ function bind(){
     }
   });
 
-  // Enter in a task item creates a new task line or converts empty item back to paragraph
-  ed.addEventListener('keydown', e=>{
-    if(e.key==='Enter' && !e.shiftKey){
-      const sel=window.getSelection();
-      if(sel && sel.anchorNode && ed.contains(sel.anchorNode)){
-        let node=sel.anchorNode;
-        if(node.nodeType===3) node=node.parentElement;
-        const li=node.closest&&node.closest('[data-task]');
-        if(li){
+  // Unified Word-like list keyboard handling for Enter, Tab, and Backspace inside lists
+  ed.addEventListener('keydown', e => {
+    const sel = window.getSelection();
+    if (!sel || !sel.anchorNode || !ed.contains(sel.anchorNode)) return;
+    const ctx = typeof window.getListContext === 'function' ? window.getListContext() : null;
+    if (!ctx || !ctx.li) return;
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      const textContent = Array.from(ctx.li.childNodes)
+        .filter(n => n.nodeType !== 1 || n.tagName !== 'INPUT')
+        .map(n => n.textContent).join('').trim();
+      if (textContent === '') {
+        e.preventDefault();
+        if (typeof window.exitEmptyListItem === 'function') window.exitEmptyListItem(ctx.li, ctx.list);
+      } else if (ctx.type === 'task') {
+        e.preventDefault();
+        if (typeof window.createNextTaskListItem === 'function') window.createNextTaskListItem(ctx.li);
+      }
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        if (typeof window.outdentListItem === 'function') window.outdentListItem(ctx.li);
+      } else {
+        if (typeof window.indentListItem === 'function') window.indentListItem(ctx.li);
+      }
+    } else if (e.key === 'Backspace' && !e.shiftKey && sel.isCollapsed) {
+      let atStart = false;
+      const range = sel.getRangeAt(0);
+      if (range.startOffset === 0) {
+        const firstNonCb = Array.from(ctx.li.childNodes).find(n => n.nodeType !== 1 || n.tagName !== 'INPUT');
+        if (!firstNonCb || sel.anchorNode === ctx.li || sel.anchorNode === firstNonCb) {
+          atStart = true;
+        }
+      }
+      if (atStart) {
+        const textContent = Array.from(ctx.li.childNodes)
+          .filter(n => n.nodeType !== 1 || n.tagName !== 'INPUT')
+          .map(n => n.textContent).join('').trim();
+        const parentLi = ctx.list.parentElement && ctx.list.parentElement.closest('li');
+        if (parentLi) {
           e.preventDefault();
-          const textContent = Array.from(li.childNodes).filter(n=>n.nodeType!==1||n.tagName!=='INPUT').map(n=>n.textContent).join('').trim();
-          if(textContent === '' && typeof toggleList === 'function'){
-            toggleList('task');
-          } else {
-            // Create a new sibling task item after the current one
-            const newLi=document.createElement('li');
-            newLi.setAttribute('data-task','1');
-            const cb=document.createElement('input');
-            cb.type='checkbox';
-            newLi.appendChild(cb);
-            newLi.appendChild(document.createTextNode(' '));
-            li.parentElement.insertBefore(newLi, li.nextSibling);
-            // Place cursor in the new task item
-            const r=document.createRange();
-            r.setStart(newLi, newLi.childNodes.length===2?2:1);
-            r.collapse(true);
-            sel.removeAllRanges(); sel.addRange(r);
-            setTimeout(handleBodyInput, 0);
-          }
+          if (typeof window.outdentListItem === 'function') window.outdentListItem(ctx.li);
+        } else if (textContent === '') {
+          e.preventDefault();
+          if (typeof window.exitEmptyListItem === 'function') window.exitEmptyListItem(ctx.li, ctx.list);
         }
       }
     }
@@ -1476,4 +1508,8 @@ function isMarkdownText(text) {
     });
   }
   if(typeof checkWhatsNewAutoPopup === 'function') setTimeout(checkWhatsNewAutoPopup, 1500);
+  document.querySelectorAll('[data-cmd="task"]').forEach(btn => {
+    btn.setAttribute('title', 'Checklist');
+    btn.setAttribute('aria-label', 'Checklist');
+  });
 })();

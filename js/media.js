@@ -538,18 +538,12 @@ function updateToolbarState(){
     if(cmd === 'task'){
       btn.classList.toggle('active', !!isTask);
     } else if(cmd === 'insertUnorderedList'){
-      btn.classList.toggle('active', !!isUl && !isTask);
+      btn.classList.toggle('active', !!isUl);
     } else if(cmd === 'insertOrderedList'){
-      btn.classList.toggle('active', !!isOl && !isTask);
+      btn.classList.toggle('active', !!isOl);
     } else if(cmds.includes(cmd)){
       try{ btn.classList.toggle('active', document.queryCommandState(cmd)); }
       catch(e){ btn.classList.remove('active'); }
-    } else if(cmd === 'insertUnorderedList') {
-      btn.classList.toggle('active', !!(listCtx && listCtx.type === 'ul'));
-    } else if(cmd === 'insertOrderedList') {
-      btn.classList.toggle('active', !!(listCtx && listCtx.type === 'ol'));
-    } else if(cmd === 'task') {
-      btn.classList.toggle('active', !!(listCtx && listCtx.type === 'task'));
     } else if(!['hilite','textColor','fontSize','formatBlock'].includes(cmd)) {
       btn.classList.remove('active');
     }
