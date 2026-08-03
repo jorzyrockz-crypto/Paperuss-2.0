@@ -2006,24 +2006,25 @@ window.updateLeafToggleState = updateLeafToggleState;
 
 function updateLeafTitleBar() {
   const bar = document.getElementById('leafTitleBar');
-  if (!bar) return;
+  const toggleBtn = document.getElementById('leafToggleBtn');
+  const toggleTitleEl = document.getElementById('leafToggleTitle');
   const n = getNote(state.currentId);
   const nonNoteView = ['media','calendar','tasks','settings'].includes(state.filter);
-  if (!n || nonNoteView) {
-    bar.style.display = 'none';
-    return;
-  }
+
+  const shouldShow = !!n && !nonNoteView;
+  if (bar) bar.style.display = shouldShow ? 'inline-flex' : 'none';
+  if (toggleBtn) toggleBtn.style.display = shouldShow ? 'inline-flex' : 'none';
+
+  if (!shouldShow) return;
+
   const noteNameEl = document.getElementById('leafTitleNoteName');
   const leafNameEl = document.getElementById('leafTitleLeafName');
-  const toggleTitleEl = document.getElementById('leafToggleTitle');
 
   if (noteNameEl) noteNameEl.textContent = n.title || 'Untitled';
   const activeLeaf = window.currentActiveLeaf;
   const leafTitle = activeLeaf && activeLeaf.title ? activeLeaf.title : 'Main';
   if (leafNameEl) leafNameEl.textContent = leafTitle;
   if (toggleTitleEl) toggleTitleEl.textContent = leafTitle;
-
-  bar.style.display = 'flex';
 }
 window.updateLeafTitleBar = updateLeafTitleBar;
 
