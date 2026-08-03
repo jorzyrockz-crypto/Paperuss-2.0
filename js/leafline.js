@@ -122,12 +122,15 @@
     if (heading && heading.el) {
       const scroller = document.getElementById('editorScroll');
       if (scroller) {
-        heading.el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const scrollerRect = scroller.getBoundingClientRect();
+        const elRect = heading.el.getBoundingClientRect();
+        const scrollTop = scroller.scrollTop + (elRect.top - scrollerRect.top) - 20;
+        scroller.scrollTo({ top: scrollTop, behavior: 'smooth' });
       }
     }
   };
   
-  function highlightActiveHeading() {
+  function highlightActiveHeading(fromCaret = false) {
     if (!cachedHeadings.length) return;
     
     const scroller = document.getElementById('editorScroll');
@@ -135,12 +138,31 @@
     
     let activeIndex = 0;
     
-    cachedHeadings.forEach((h, i) => {
-      const rect = h.el.getBoundingClientRect();
-      if (rect.top <= window.innerHeight * 0.4) {
-        activeIndex = i;
+    if (fromCaret) {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        let node = selection.anchorNode;
+        if (node && node.nodeType === 3) node = node.parentNode;
+        
+        if (node && scroller.contains(node)) {
+          const nodeRect = node.getBoundingClientRect();
+          let minDiff = Infinity;
+          cachedHeadings.forEach((h, i) => {
+            const hRect = h.el.getBoundingClientRect();
+            if (hRect.top <= nodeRect.top + 10) {
+              activeIndex = i;
+            }
+          });
+        }
       }
-    });
+    } else {
+      cachedHeadings.forEach((h, i) => {
+        const rect = h.el.getBoundingClientRect();
+        if (rect.top <= window.innerHeight * 0.4) {
+          activeIndex = i;
+        }
+      });
+    }
     
     document.querySelectorAll('.leafline-item').forEach(el => {
       if (parseInt(el.dataset.index, 10) === activeIndex) {
@@ -163,13 +185,22 @@
     editorScroll.addEventListener('scroll', () => {
       if (!scrollTicking) {
         window.requestAnimationFrame(() => {
-          highlightActiveHeading();
+          highlightActiveHeading(false);
           scrollTicking = false;
         });
         scrollTicking = true;
       }
     }, {passive:true});
   }
+  
+  document.addEventListener('selectionchange', () => {
+    if (window.state && (window.state.listMode === 'leafline' || window.state.drawerMode === 'leafline')) {
+      const activeElement = document.activeElement;
+      if (activeElement && activeElement.closest('#noteBody')) {
+        highlightActiveHeading(true);
+      }
+    }
+  });
   
   window.triggerLeaflineUpdate = function() {
     if (leaflineDebounceTimer) clearTimeout(leaflineDebounceTimer);
