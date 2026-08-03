@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'paperuss-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v26`;
+const CACHE_NAME = `${CACHE_PREFIX}v27`;
 const APP_SHELL = [
   './',
   './index.html',
@@ -15,12 +15,14 @@ const APP_SHELL = [
   './js/stabilization.js',
   './js/history.js',
   './js/core.js',
+  './js/leaves.js',
   './js/productivity.js',
   './js/editor-ui.js',
   './js/tasks-settings.js',
   './js/cloud-notifications.js',
   './js/changelog.js',
   './js/actions.js',
+  './js/link-parser.js',
   './js/formatting.js',
   './js/media.js',
   './js/data-transfer.js',
