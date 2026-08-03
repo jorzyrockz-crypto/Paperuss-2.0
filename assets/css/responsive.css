@@ -15,8 +15,8 @@
   .sidebar.expanded{width:230px}
 }
 
-/* Tablet Portrait Drawer (641px to 900px) */
-@media (min-width: 641px) and (max-width: 900px) {
+/* Tablet Portrait Drawer (641px to 1024px portrait) */
+@media (min-width: 641px) and (max-width: 1024px) and (orientation: portrait) {
   .sidebar { position: relative; z-index: 50; }
   .note-list {
     position: fixed;
@@ -41,8 +41,8 @@
   .resizer { display: none !important; }
 }
 
-/* Tablet Landscape & Desktop (min-width: 901px) */
-@media (min-width: 901px) {
+/* Tablet Landscape & Desktop (min-width: 1025px, or 641-1024px landscape) */
+@media (min-width: 1025px), (min-width: 641px) and (max-width: 1024px) and (orientation: landscape) {
   .sidebar { position: relative; z-index: 10; }
   .tablet-list-collapse { display: inline-flex !important; }
   .note-list {
@@ -130,13 +130,20 @@
 
 /* Mobile Floating Action Button (<= 640px) */
 .mobile-fab{
-  display:none;position:fixed;right:20px;bottom:24px;z-index:42;
+  display:none;position:fixed;right:20px;
+  bottom:calc(24px + env(safe-area-inset-bottom, 0px));z-index:42;
   background:var(--accent);color:#fff;border-radius:99px;padding:13px 22px;
   font-size:14px;font-weight:600;box-shadow:0 8px 24px var(--accent-ring);
   align-items:center;gap:8px;transition:transform .15s ease, background .15s ease;
 }
 .mobile-fab:active{transform:scale(0.95)}
 .mobile-fab:hover{background:var(--accent-emphasis)}
+
+@media (max-width: 640px){
+  .leaf-toggle-fab {
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
 
 /* Phone mode (<= 640px) - True phone drawer */
 @media (max-width: 640px){
@@ -368,7 +375,7 @@
   display: none !important;
 }
 /* Portrait / Mobile: Leaves panel as a full-width bottom sheet */
-@media (max-width: 900px) {
+@media (max-width: 640px), (max-width: 1024px) and (orientation: portrait) {
   .leaves-sheet,
   .leaves-drawer {
     position: fixed !important;

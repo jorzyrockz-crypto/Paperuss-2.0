@@ -71,7 +71,18 @@ function toggleSidebarRail(){
   if(typeof window.recalculateToolbarOverflow === 'function') setTimeout(window.recalculateToolbarOverflow, 150);
 }
 
-function toggleNoteListPanel(){
+function toggleNoteListPanel(e){
+  if(e && e.preventDefault) e.preventDefault();
+  
+  // Back button should close Leaves drawer first if open
+  const leavesOverlay = document.getElementById('leavesDrawerOverlay');
+  if (leavesOverlay && leavesOverlay.classList.contains('show')) {
+    if (typeof window.closeLeavesDrawer === 'function') {
+      window.closeLeavesDrawer();
+      return;
+    }
+  }
+
   const listEl = document.getElementById('noteList');
   const iconEl = document.getElementById('backBtnIcon');
   if(!listEl) return;
@@ -88,8 +99,9 @@ function toggleNoteListPanel(){
   }
 
   let isCollapsed = false;
+  const isDrawer = window.getComputedStyle(listEl).position === 'fixed';
 
-  if(w <= 900){
+  if(isDrawer){
     // Tablet portrait drawer mode: toggle 'open'
     const isOpen = listEl.classList.toggle('open');
     isCollapsed = !isOpen;
@@ -150,6 +162,7 @@ function closeSidebarMobile(){
 function showMobileEditor(){
   document.getElementById('editor').classList.add('mobile-show');
   document.getElementById('noteList').classList.add('mobile-hide');
+  document.getElementById('noteList').classList.remove('open'); // Close tablet portrait drawer on selection
 }
 
 function showMobileList(){
