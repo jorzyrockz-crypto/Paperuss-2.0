@@ -413,6 +413,10 @@ const _debouncedRenderListSidebar = debounce(()=>{
 function editField(field, value){
   const n=getNote(state.currentId); if(!n) return;
   if(n.deletedAt) return;
+  if (field === 'content') {
+    const cleanValue = typeof window.cleanInternalEditorUI === 'function' ? window.cleanInternalEditorUI(value) : value;
+    value = typeof sanitizeNoteHTML === 'function' ? sanitizeNoteHTML(cleanValue) : cleanValue;
+  }
   
   if (field === 'content' && window.currentActiveLeaf) {
     const leaf = window.currentActiveLeaf;
@@ -549,9 +553,11 @@ async function duplicateNoteAction() {
   toast('Duplicating note...');
   
   const newNoteId = uid();
+  const cleanNoteContent = typeof window.cleanInternalEditorUI === 'function' ? window.cleanInternalEditorUI(n.content || '') : (n.content || '');
   const newNote = Object.assign({}, n, {
     id: newNoteId,
     title: n.title + ' (Copy)',
+    content: cleanNoteContent,
     createdAt: Date.now(),
     updatedAt: Date.now()
   });
@@ -567,9 +573,11 @@ async function duplicateNoteAction() {
         idMap[lf.id] = newLeafId;
         newLeafOrder.push(newLeafId);
         
+        const cleanLeafContent = typeof window.cleanInternalEditorUI === 'function' ? window.cleanInternalEditorUI(lf.content || '') : (lf.content || '');
         const newLeaf = Object.assign({}, lf, {
           id: newLeafId,
           noteId: newNoteId,
+          content: cleanLeafContent,
           createdAt: Date.now(),
           updatedAt: Date.now()
         });

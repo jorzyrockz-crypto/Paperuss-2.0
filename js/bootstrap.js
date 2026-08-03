@@ -1419,6 +1419,11 @@ function isMarkdownText(text) {
   if(typeof rescheduleAllEventNotifications==='function') rescheduleAllEventNotifications();
   state.currentId = filteredNotes()[0]?.id || null;
   renderAll();
+  if (window.paperussLeaves && typeof window.paperussLeaves.repairContaminatedLeavesOnce === 'function') {
+    window.paperussLeaves.repairContaminatedLeavesOnce().then((repaired) => {
+      if (repaired > 0 && typeof renderEditor === 'function') renderEditor();
+    }).catch(e => console.error('Leaf recovery check error:', e));
+  }
   updateNotifBar();
   updateNotifBadge();
   startReminderWatcher();

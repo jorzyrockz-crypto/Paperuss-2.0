@@ -197,7 +197,7 @@
         <button class="btn btn-primary" onclick="createNote()">+ Create your first note</button>
       </div>
       <div class="editor-content" id="editorContent">
-        <div class="editor-topbar">
+        <div class="editor-topbar" data-paperuss-ui="true">
           <button class="btn btn-icon" id="backBtn" title="Toggle note list panel for wider editor">
             <i data-lucide="panel-left" id="backBtnIcon" class="w-4 h-4"></i>
           </button>
@@ -245,7 +245,7 @@
           </div>
         </div>
         
-        <div class="find-panel hidden" id="findPanel" role="dialog" aria-label="Find and Replace">
+        <div class="find-panel hidden" id="findPanel" role="dialog" aria-label="Find and Replace" data-paperuss-ui="true">
           <div class="find-row">
             <div class="find-input-wrap">
               <i data-lucide="search" class="w-4 h-4 text-fg-muted"></i>
@@ -273,7 +273,7 @@
           </div>
         </div>
 
-        <div class="editor-toolbar" id="formatBar" role="toolbar" aria-label="Text Formatting">
+        <div class="editor-toolbar" id="formatBar" role="toolbar" aria-label="Text Formatting" data-paperuss-ui="true">
           <div class="para-style-picker" id="paraStylePicker" style="position:relative;display:inline-flex">
             <button class="tool-btn" id="paraStyleBtn" title="Paragraph Style" aria-label="Paragraph Style" aria-haspopup="true" aria-expanded="false" style="min-width:90px;font-size:12px;gap:4px;justify-content:space-between">
               <span id="paraStyleLabel" class="truncate" style="max-width:70px">Normal</span>
@@ -464,16 +464,16 @@
             </div>
           </div>
         </div>
-        <button class="toolbar-collapse-toggle" id="toolbarCollapseBtn" title="Expand toolbar" aria-label="Toggle toolbar">
+        <button class="toolbar-collapse-toggle" id="toolbarCollapseBtn" title="Expand toolbar" aria-label="Toggle toolbar" data-paperuss-ui="true">
           <i data-lucide="chevron-down" class="w-4 h-4"></i>
         </button>
         <input type="file" id="mediaImageInput" accept="image/*" hidden>
         <input type="file" id="mediaVideoInput" accept="video/*" hidden>
         <input type="file" id="mediaFileInput" hidden>
         <div class="editor-scroll" id="editorScroll">
-          <div class="note-editor" id="noteBody" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" data-placeholder="Start writing… Select text and use the toolbar to format it."></div>
+          <div class="note-editor" id="noteBody" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" data-placeholder="Start writing… Select text and use the toolbar to format it." data-paperuss-content-root="true"></div>
         </div>
-        <div class="editor-footer">
+        <div class="editor-footer" data-paperuss-ui="true">
           <div class="save-status" id="saveStatus"><span class="dot"></span><span>Saved</span></div>
           
           <button class="tool-btn" id="findReplaceTriggerBtn" title="Find & Replace" style="min-width:32px;padding:0 6px;margin-left:auto">
@@ -1198,7 +1198,7 @@
 </div>
 
 <!-- Floating Decoupled Leaf Toggle Button (FAB - Fixed position: fixed; top:16px; right:16px; z-index:60) -->
-<button class="leaf-toggle-fab leaves-launcher status-saved" id="leafToggleBtn" onclick="toggleLeavesPalette(event)" title="Leaves Palette (Click to open)" aria-expanded="false" aria-controls="leavesDrawer">
+<button class="leaf-toggle-fab leaves-launcher status-saved" id="leafToggleBtn" onclick="toggleLeavesPalette(event)" title="Leaves Palette (Click to open)" aria-expanded="false" aria-controls="leavesDrawer" data-paperuss-ui="true">
   <svg class="leaf-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"></path>
     <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"></path>
@@ -1207,7 +1207,7 @@
   <span class="leaf-status-dot" id="leafStatusDot" title="Saved"></span>
 </button>
 
-<div class="leaves-drawer-overlay hidden" id="leavesDrawerOverlay">
+<div class="leaves-drawer-overlay hidden" id="leavesDrawerOverlay" data-paperuss-ui="true">
   <div class="leaves-drawer leaves-palette-widget leaves-popover leaves-sheet" id="leavesDrawer" role="dialog" aria-label="Leaves Palette">
     <div class="leaves-drawer-header" id="leavesDrawerHeader">
       <div class="leaves-drag-handle" id="leavesDragHandle" title="Drag to reposition widget" style="display:flex;flex-direction:column;gap:2px;">
@@ -1233,7 +1233,7 @@
 </div>
 
 <!-- Glassmorphic 3-Dot Context Menu Popover -->
-<div class="leaf-context-menu hidden" id="leafContextMenu" role="menu"></div>
+<div class="leaf-context-menu hidden" id="leafContextMenu" role="menu" data-paperuss-ui="true"></div>
 
 <script src="js/stabilization.js"></script>
 <script src="js/history.js"></script>

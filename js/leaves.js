@@ -358,6 +358,91 @@ function isNoteMigratedToLeaves(note) {
   return !!(note && Array.isArray(note.leafOrder) && note.leafOrder.length > 0 && note.defaultLeafId);
 }
 
+/**
+ * Repair already-contaminated Leaves safely and one time.
+ * Backs up original raw HTML to localStorage recovery key before cleaning.
+ * @returns {Promise<number>} Number of repaired records
+ */
+async function repairContaminatedLeavesOnce() {
+  let repairedCount = 0;
+  try {
+    const allLeaves = await leafGetAll();
+    let recoveryLog = [];
+    try {
+      const storedLog = localStorage.getItem('octonotes:contaminated_leaf_recovery_v1');
+      if (storedLog) recoveryLog = JSON.parse(storedLog);
+      if (!Array.isArray(recoveryLog)) recoveryLog = [];
+    } catch (e) {
+      recoveryLog = [];
+    }
+
+    const isContaminated = typeof window.isLeafContentContaminated === 'function'
+      ? window.isLeafContentContaminated
+      : (html => html && String(html).indexOf('data-paperuss-ui') !== -1);
+
+    const cleanUI = typeof window.cleanInternalEditorUI === 'function'
+      ? window.cleanInternalEditorUI
+      : (html => html || '');
+
+    for (const leaf of allLeaves) {
+      if (isContaminated(leaf.content)) {
+        const originalRawHTML = leaf.content;
+        recoveryLog.push({
+          noteId: leaf.noteId || '',
+          leafId: leaf.id,
+          timestamp: Date.now(),
+          originalRawHTML: originalRawHTML
+        });
+
+        const cleaned = cleanUI(leaf.content);
+        leaf.content = cleaned;
+        leaf.updatedAt = Date.now();
+        await leafPut(leaf);
+        await leafQueuePut({
+          id: 'mut_fix_' + Date.now() + '_' + Math.random().toString(36).substr(2,6),
+          noteId: leaf.noteId || '',
+          action: 'put',
+          data: Object.assign({}, leaf),
+          timestamp: Date.now()
+        });
+        repairedCount++;
+      }
+    }
+
+    // Also check window.notes in memory / localStorage
+    if (typeof window !== 'undefined' && Array.isArray(window.notes)) {
+      let notesModified = false;
+      for (const n of window.notes) {
+        if (isContaminated(n.content)) {
+          const originalRawHTML = n.content;
+          recoveryLog.push({
+            noteId: n.id,
+            leafId: 'note_default_' + n.id,
+            timestamp: Date.now(),
+            originalRawHTML: originalRawHTML
+          });
+          n.content = cleanUI(n.content);
+          n.updatedAt = Date.now();
+          notesModified = true;
+          repairedCount++;
+        }
+      }
+      if (notesModified && typeof window.persist === 'function') {
+        window.persist();
+      }
+    }
+
+    if (recoveryLog.length > 0) {
+      try {
+        localStorage.setItem('octonotes:contaminated_leaf_recovery_v1', JSON.stringify(recoveryLog));
+      } catch (e) {}
+    }
+  } catch (err) {
+    console.error('repairContaminatedLeavesOnce error:', err);
+  }
+  return repairedCount;
+}
+
 // Expose on global window object for clean modular access across existing scripts and tests
 if (typeof window !== 'undefined') {
   window.paperussLeaves = {
@@ -380,6 +465,7 @@ if (typeof window !== 'undefined') {
     getNoteActiveLeafId,
     setNoteActiveLeafId,
     getVirtualMainLeaf,
-    isNoteMigratedToLeaves
+    isNoteMigratedToLeaves,
+    repairContaminatedLeavesOnce
   };
 }

@@ -962,6 +962,8 @@ function renderList(){
 function captureEditorSelection(editor){
   const selection=window.getSelection();
   if(!selection || !selection.rangeCount || !editor.contains(selection.anchorNode)) return null;
+  const el = selection.anchorNode.nodeType === Node.TEXT_NODE ? selection.anchorNode.parentElement : selection.anchorNode;
+  if(el && el.closest && el.closest('[data-paperuss-ui="true"], .editor-topbar, #formatBar, .editor-footer, #leavesDrawerOverlay, #leafToggleBtn, #leafContextMenu')) return null;
   const pathFor=node=>{
     const path=[];
     while(node && node!==editor){
@@ -1147,7 +1149,12 @@ function renderEditor(){
       // Only replace the DOM when content actually changed. This prevents the
       // 60-second cloud sync from resetting the cursor / scrollposition when no
       // remote data has arrived. Also preserve scroll position across real swaps.
-      const incomingContent = typeof sanitizeNoteHTML==='function'?sanitizeNoteHTML(leafToRender.content||''):(leafToRender.content||'');
+      const rawIncoming = leafToRender.content || '';
+      const cleanIncoming = typeof window.cleanInternalEditorUI === 'function' ? window.cleanInternalEditorUI(rawIncoming) : rawIncoming;
+      const incomingContent = typeof sanitizeNoteHTML==='function'?sanitizeNoteHTML(cleanIncoming):cleanIncoming;
+      if (leafToRender.content !== cleanIncoming) {
+        leafToRender.content = cleanIncoming;
+      }
       if (leafToRender.isVirtual || leafToRender.id === window.paperussLeaves.getNoteDefaultLeafId(n)) {
         if(incomingContent!==n.content) n.content=incomingContent;
       }
@@ -1912,14 +1919,16 @@ window.paperussLeafManager = {
 
 window.flushActiveLeaf = async function() {
   if (window.currentActiveLeaf && !window.currentActiveLeaf.isVirtual && window.paperussLeaves) {
-    const ed = document.getElementById('editorContent');
-    const contentEl = ed ? (ed.querySelector('.editor-body') || ed) : null;
+    const contentEl = document.getElementById('noteBody') || document.querySelector('[data-paperuss-content-root="true"]');
     // Only read from DOM if the editor is currently rendering this specific leaf
     // (prevents stale DOM from overwriting programmatic in-memory edits done via editField)
     const editorIsForThisLeaf = contentEl && window.currentActiveLeaf.id &&
-      document.querySelector('[data-active-leaf-id="' + window.currentActiveLeaf.id + '"]') !== null;
+      contentEl.getAttribute('data-active-leaf-id') === window.currentActiveLeaf.id;
     if (editorIsForThisLeaf) {
-      window.currentActiveLeaf.content = contentEl.innerHTML;
+      const cleanHTML = typeof window.cleanInternalEditorUI === 'function'
+        ? window.cleanInternalEditorUI(contentEl.innerHTML)
+        : contentEl.innerHTML;
+      window.currentActiveLeaf.content = cleanHTML;
       window.currentActiveLeaf.updatedAt = Date.now();
     }
     await window.paperussLeaves.leafPut(window.currentActiveLeaf);

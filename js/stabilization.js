@@ -137,10 +137,148 @@
     }
   }
 
+  function isLeafContentContaminated(input){
+    const html = String(input||'');
+    if (!html) return false;
+    const MARKERS = [
+      'data-paperuss-ui',
+      'editor-topbar',
+      'editor-toolbar',
+      'formatBar',
+      'editor-footer',
+      'findPanel',
+      'saveStatus',
+      'pageLayoutPicker',
+      'footerTagsPicker',
+      'toolbarCollapseBtn',
+      'leafToggleBtn',
+      'leavesDrawerOverlay',
+      'leavesDrawer',
+      'leafContextMenu',
+      'leafTitleBar',
+      'editor-more-wrap',
+      'editor-leaf-context',
+      'para-style-picker',
+      'font-style-picker',
+      'sz-picker',
+      'hl-picker',
+      'tc-picker',
+      'tbl-picker',
+      'template-picker',
+      'zoom-controls',
+      'footer-tags-picker',
+      'noteTitle',
+      'backBtn',
+      'undoBtn',
+      'redoBtn',
+      'distractionFreeBtn',
+      'pinBtn',
+      'archiveBtn',
+      'restoreBtn',
+      'deleteBtn',
+      'editorMoreBtn',
+      'id="noteBody"',
+      'id="editorContent"',
+      'id="editorScroll"',
+      'data-paperuss-content-root'
+    ];
+    for (let i = 0; i < MARKERS.length; i++) {
+      if (html.indexOf(MARKERS[i]) !== -1) return true;
+    }
+    return false;
+  }
+
+  function cleanInternalEditorUI(input) {
+    if (input === null || input === undefined) return '';
+    const html = typeof input === 'string' ? input : (input.innerHTML || '');
+    if (!html || !html.trim()) return '';
+
+    const contaminated = isLeafContentContaminated(html);
+    if (contaminated && typeof console !== 'undefined' && console.warn) {
+      console.warn("[PapeRuss] Internal editor UI detected in Leaf content");
+    }
+
+    const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
+    const body = doc.body;
+
+    const roots = Array.from(body.querySelectorAll('#noteBody, [data-paperuss-content-root="true"], .note-editor'));
+    let targetNode = body;
+    if (roots.length > 0) {
+      for (let i = 0; i < roots.length; i++) {
+        if (roots[i].querySelectorAll('#noteBody, [data-paperuss-content-root="true"], .note-editor').length === 0) {
+          targetNode = roots[i];
+          break;
+        }
+      }
+    }
+
+    const clone = targetNode.cloneNode(true);
+
+    const UI_SELECTOR = [
+      '[data-paperuss-ui="true"]',
+      '.editor-topbar',
+      '.editor-toolbar',
+      '#formatBar',
+      '.editor-footer',
+      '#findPanel',
+      '#saveStatus',
+      '#pageLayoutPicker',
+      '#footerTagsPicker',
+      '#toolbarCollapseBtn',
+      '#leafToggleBtn',
+      '.leaf-toggle-fab',
+      '#leavesDrawerOverlay',
+      '#leavesDrawer',
+      '.leaves-sheet',
+      '#leafContextMenu',
+      '.overflow-picker',
+      '#editorEmpty',
+      '.editor-more-wrap',
+      '.editor-leaf-context',
+      '.para-style-picker',
+      '.font-style-picker',
+      '.sz-picker',
+      '.hl-picker',
+      '.tc-picker',
+      '.tbl-picker',
+      '.template-picker',
+      '.zoom-controls',
+      '.page-layout-picker',
+      '.footer-tags-picker',
+      '#noteTitle',
+      '#backBtn',
+      '#undoBtn',
+      '#redoBtn',
+      '#distractionFreeBtn',
+      '#pinBtn',
+      '#archiveBtn',
+      '#restoreBtn',
+      '#deleteBtn',
+      '#editorMoreBtn',
+      '#editorContent',
+      '#editorScroll'
+    ].join(',');
+
+    clone.querySelectorAll(UI_SELECTOR).forEach(el => el.remove());
+
+    const FORBIDDEN_IDS = ['noteBody', 'editorContent', 'editorScroll', 'formatBar', 'noteTitle', 'editorEmpty', 'findPanel'];
+    clone.querySelectorAll('[id], [data-paperuss-content-root], [data-paperuss-ui]').forEach(el => {
+      if (FORBIDDEN_IDS.includes(el.id)) {
+        el.removeAttribute('id');
+      }
+      el.removeAttribute('data-paperuss-content-root');
+      el.removeAttribute('data-paperuss-ui');
+      el.removeAttribute('data-active-leaf-id');
+    });
+
+    return clone.innerHTML;
+  }
+
   function sanitizeNoteHTML(input){
     const html=String(input||'');
     if(!html) return '';
-    const parsed=new DOMParser().parseFromString(`<body>${html}</body>`,'text/html');
+    const cleanedUI=cleanInternalEditorUI(html);
+    const parsed=new DOMParser().parseFromString(`<body>${cleanedUI}</body>`,'text/html');
     const body=parsed.body;
     const walk=document.createTreeWalker(body,NodeFilter.SHOW_ELEMENT);
     const nodes=[];
@@ -188,15 +326,9 @@
       const source=String(note.coverImage.src||'').slice(0,5_000_000);
       const mediaId=sanitizeId(note.coverImage.mediaId);
       const positionY=Math.max(0,Math.min(100,safeNumber(note.coverImage.positionY,50)));
-      note.coverImage={
-        src:isSafeUrl(source,'src','IMG')?source:'',
-        mediaId:mediaId||'',
-        cropParams:note.coverImage.cropParams&&typeof note.coverImage.cropParams==='object'?note.coverImage.cropParams:null,
-        positionY
-      };
-      if(!note.coverImage.src && !note.coverImage.mediaId) delete note.coverImage;
-    }else if(note.coverImage!=null){
-      delete note.coverImage;
+      note.coverImage=source?{src:source,mediaId,positionY}:null;
+    } else {
+      note.coverImage=null;
     }
     note.createdAt=safeNumber(note.createdAt,Date.now());
     note.updatedAt=safeNumber(note.updatedAt,note.createdAt);
@@ -215,9 +347,9 @@
   function sanitizeNoteCollection(value){
     if(!Array.isArray(value)) return [];
     const seen=new Set();
-    return value.map(sanitizeNoteRecord).filter(note=>{
-      if(!note || seen.has(note.id)) return false;
-      seen.add(note.id); return true;
+    return value.map(sanitizeNoteRecord).filter(n=>{
+      if(!n || seen.has(n.id)) return false;
+      seen.add(n.id); return true;
     });
   }
 
@@ -226,7 +358,9 @@
     if(!task || typeof task!=='object') return null;
     task.id=sanitizeId(task.id);
     if(!task.id) return null;
-    task.text=String(task.text||'').slice(0,2000);
+    task.noteId=sanitizeId(task.noteId);
+    if(!task.noteId) return null;
+    task.text=String(task.text||'').slice(0,1000);
     task.completed=task.completed===true;
     task.priority=VALID_PRIORITY.has(task.priority)?task.priority:'medium';
     task.due=task.due==null?null:safeNumber(task.due,null);
@@ -247,6 +381,8 @@
   }
 
   global.PAPERUSS_BUILD=BUILD;
+  global.cleanInternalEditorUI=cleanInternalEditorUI;
+  global.isLeafContentContaminated=isLeafContentContaminated;
   global.sanitizeNoteHTML=sanitizeNoteHTML;
   global.sanitizeNoteRecord=sanitizeNoteRecord;
   global.sanitizeNoteCollection=sanitizeNoteCollection;
