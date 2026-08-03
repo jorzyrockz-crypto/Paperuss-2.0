@@ -75,11 +75,16 @@ async function loadChangelog(){
     throw error;
   }
 }
-function openChangelogModal(){
+function openChangelogModal(autoMarkVersion){
   const root=document.getElementById('modalRoot');
   if(!root) return;
   root.innerHTML=`<div class="modal-overlay"><section class="modal changelog-modal" role="dialog" aria-modal="true" aria-labelledby="changelogTitle"><div class="changelog-head"><h3 id="changelogTitle">What's new</h3><button class="changelog-close" type="button" aria-label="Close What's new" data-changelog-close><i data-lucide="x"></i></button></div><div class="changelog-body" id="changelogBody"><div class="changelog-state">Loading release notes…</div></div></section></div>`;
-  const close=()=>{ root.innerHTML=''; };
+  const close=()=>{ 
+    root.innerHTML=''; 
+    if(autoMarkVersion){
+      try{ localStorage.setItem('paperuss:changelog-viewed', autoMarkVersion); }catch(e){}
+    }
+  };
   root.querySelector('[data-changelog-close]').onclick=close;
   root.querySelector('.modal-overlay').onclick=event=>{ if(event.target===event.currentTarget) close(); };
   refreshIcons();
@@ -91,27 +96,35 @@ function openChangelogModal(){
     const cached=readCachedChangelog();
     if(cached){ renderChangelog(body,cached,'Showing saved release notes while offline.'); return; }
     body.innerHTML='<div class="changelog-state">Could not load release notes.<br><button class="btn" type="button" data-changelog-retry>Retry</button></div>';
-    body.querySelector('[data-changelog-retry]').onclick=()=>openChangelogModal();
+    body.querySelector('[data-changelog-retry]').onclick=()=>openChangelogModal(autoMarkVersion);
   });
 }
 
 async function checkWhatsNewAutoPopup(){
   try {
-    const data = await loadChangelog();
-    if(data && Array.isArray(data.releases) && data.releases.length > 0) {
-      const latestReleaseName = data.releases[0].name || data.releases[0].tagName;
-      if(!latestReleaseName) return;
-      const lastSeenRelease = localStorage.getItem('paperuss:lastSeenRelease');
-      
-      if(lastSeenRelease && lastSeenRelease !== latestReleaseName) {
-        // Show modal for existing users when version updates
-        openChangelogModal();
+    const root = document.getElementById('modalRoot');
+    // Do not interrupt authentication, onboarding, or recovery screens (which use modalRoot or overlays)
+    if (root && root.innerHTML.trim() !== '') return;
+    if (document.querySelector('.auth-overlay, .onboarding-overlay, .recovery-overlay')) return;
+
+    const currentVersion = window.PAPERUSS_BUILD?.version;
+    if(!currentVersion) return;
+
+    const lastSeenVersion = localStorage.getItem('paperuss:changelog-viewed');
+    if (lastSeenVersion !== currentVersion) {
+      if (!lastSeenVersion) {
+        // Fresh install: mark as viewed silently to avoid bombarding new users
+        localStorage.setItem('paperuss:changelog-viewed', currentVersion);
+        return;
       }
       
-      // Update last seen to the latest release
-      localStorage.setItem('paperuss:lastSeenRelease', latestReleaseName);
+      // Pre-fetch changelog to ensure we have data to show before popping up
+      const data = await loadChangelog().catch(() => readCachedChangelog());
+      if (data && Array.isArray(data.releases) && data.releases.length > 0) {
+        openChangelogModal(currentVersion);
+      }
     }
   } catch(e) {
-    console.warn("Failed to check for What's New", e);
+    console.warn("Failed to check for What's New auto popup", e);
   }
 }
