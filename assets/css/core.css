@@ -305,13 +305,20 @@ svg{display:block;flex-shrink:0}
   background: var(--canvas);
   position: relative;
   z-index: 10;
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
-  will-change: transform;
+  margin-top: 0;
+  opacity: 1;
+  transition: margin-top 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s ease;
+  will-change: margin-top, opacity;
 }
 
+.editor-content.hide-title-row .editor-topbar,
+.editor-topbar.hide-title-row,
 .editor-topbar.topbar-hidden {
-  transform: translateY(-100%);
+  margin-top: -62px;
   opacity: 0;
+  border-bottom-color: transparent;
   pointer-events: none;
 }
 #noteTitle{
@@ -333,9 +340,12 @@ svg{display:block;flex-shrink:0}
 #tagInput{background:transparent;border:none;outline:none;font-size:12.5px;width:100px;color:var(--fg);caret-color:var(--fg);cursor:text}
 #tagInput::placeholder{color:var(--fg-muted)}
 
-/* Modern Flat Toolbar */
+/* Modern Flat Toolbar (Sticky) */
 .toolbar-collapse-toggle{display:none}
 .editor-toolbar{
+  position:sticky;
+  top:0;
+  z-index:40;
   display:flex;align-items:center;gap:6px;padding:8px 20px;
   border-bottom:1px solid var(--border);flex-shrink:0;
   flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;

@@ -1081,6 +1081,9 @@ function renderEditor(){
   const emptyCreate=empty.querySelector('button');
   if(emptyCreate) emptyCreate.style.display='inline-flex';
   empty.style.display='none'; content.classList.add('show');
+  content.classList.remove('hide-title-row');
+  const topbarEl = content.querySelector('.editor-topbar');
+  if(topbarEl) topbarEl.classList.remove('hide-title-row', 'topbar-hidden');
   const trashMode=state.filter==='trash'&&!!n.deletedAt;
   content.classList.toggle('trash-preview',trashMode);
   const titleInput=document.getElementById('noteTitle');

@@ -1318,24 +1318,37 @@ function isMarkdownText(text) {
   // init Find in Note
   if(typeof initFindInNote === 'function') initFindInNote();
 
-  // Auto-hide main editor header on scroll down, reveal on scroll up
+  // Zen Mode / Scroll-to-Hide Title Row, keeping Formatting Toolbar pinned
   const scrollEl = document.getElementById('editorScroll');
+  const editorContent = document.getElementById('editorContent');
   const topbar = document.querySelector('.editor-topbar');
-  if (scrollEl && topbar) {
+
+  if (scrollEl && editorContent) {
     let lastScrollTop = 0;
     scrollEl.addEventListener('scroll', () => {
       const scrollTop = scrollEl.scrollTop;
-      if (scrollTop < 40) {
-        topbar.classList.remove('topbar-hidden');
+
+      // Re-engage: Always show Title Row when at or near the absolute top
+      if (scrollTop <= 20) {
+        editorContent.classList.remove('hide-title-row');
+        if (topbar) topbar.classList.remove('hide-title-row', 'topbar-hidden');
         lastScrollTop = scrollTop;
         return;
       }
-      if (Math.abs(scrollTop - lastScrollTop) < 10) return;
-      if (scrollTop > lastScrollTop) {
-        topbar.classList.add('topbar-hidden');
-      } else {
-        topbar.classList.remove('topbar-hidden');
+
+      // Hysteresis buffer (8px) to prevent scroll jitter
+      if (Math.abs(scrollTop - lastScrollTop) < 8) return;
+
+      // Scroll Down -> apply negative margin collapse to Title Row
+      if (scrollTop > lastScrollTop && scrollTop > 40) {
+        editorContent.classList.add('hide-title-row');
+        if (topbar) topbar.classList.add('hide-title-row', 'topbar-hidden');
+      } else if (scrollTop < lastScrollTop) {
+        // Scroll Up -> restore Title Row
+        editorContent.classList.remove('hide-title-row');
+        if (topbar) topbar.classList.remove('hide-title-row', 'topbar-hidden');
       }
+
       lastScrollTop = scrollTop;
     }, { passive: true });
   }
