@@ -1984,6 +1984,26 @@ async function renderLeavesList(c) {
 }
 window.renderLeavesList = renderLeavesList;
 
+function updateLeafToggleState(status = 'saved') {
+  const btn = document.getElementById('leafToggleBtn');
+  const dot = document.getElementById('leafStatusDot');
+  if (!btn) return;
+
+  btn.classList.remove('status-saved', 'status-unsaved', 'status-syncing');
+
+  if (status === 'unsaved') {
+    btn.classList.add('status-unsaved');
+    if (dot) dot.title = 'Unsaved changes';
+  } else if (status === 'syncing') {
+    btn.classList.add('status-syncing');
+    if (dot) dot.title = 'Syncing...';
+  } else {
+    btn.classList.add('status-saved');
+    if (dot) dot.title = 'Saved';
+  }
+}
+window.updateLeafToggleState = updateLeafToggleState;
+
 function updateLeafTitleBar() {
   const bar = document.getElementById('leafTitleBar');
   if (!bar) return;
@@ -1995,14 +2015,41 @@ function updateLeafTitleBar() {
   }
   const noteNameEl = document.getElementById('leafTitleNoteName');
   const leafNameEl = document.getElementById('leafTitleLeafName');
+  const toggleTitleEl = document.getElementById('leafToggleTitle');
+
   if (noteNameEl) noteNameEl.textContent = n.title || 'Untitled';
-  if (leafNameEl) {
-    const activeLeaf = window.currentActiveLeaf;
-    leafNameEl.textContent = activeLeaf && activeLeaf.title ? activeLeaf.title : 'Main';
-  }
+  const activeLeaf = window.currentActiveLeaf;
+  const leafTitle = activeLeaf && activeLeaf.title ? activeLeaf.title : 'Main';
+  if (leafNameEl) leafNameEl.textContent = leafTitle;
+  if (toggleTitleEl) toggleTitleEl.textContent = leafTitle;
+
   bar.style.display = 'flex';
 }
 window.updateLeafTitleBar = updateLeafTitleBar;
+
+function positionLeavesWidgetBelowToggle() {
+  const widget = document.getElementById('leavesDrawer');
+  const toggleBtn = document.getElementById('leafToggleBtn');
+  if (!widget || !toggleBtn) return;
+
+  if (widget.dataset.dragged === 'true') return;
+
+  const rect = toggleBtn.getBoundingClientRect();
+  const safe = 12;
+  const w = widget.offsetWidth || 320;
+
+  let left = rect.right - w;
+  let top = rect.bottom + 8;
+
+  left = Math.max(safe, Math.min(left, window.innerWidth - w - safe));
+  top = Math.max(safe, Math.min(top, window.innerHeight - (widget.offsetHeight || 300) - safe));
+
+  widget.style.position = 'fixed';
+  widget.style.left = `${Math.round(left)}px`;
+  widget.style.top = `${Math.round(top)}px`;
+  widget.style.right = 'auto';
+  widget.style.bottom = 'auto';
+}
 
 function openLeavesDrawer() {
   const overlay = document.getElementById('leavesDrawerOverlay');
@@ -2013,6 +2060,7 @@ function openLeavesDrawer() {
   }
   overlay.classList.remove('hidden');
   overlay.classList.add('show');
+  positionLeavesWidgetBelowToggle();
 }
 window.openLeavesDrawer = openLeavesDrawer;
 
@@ -2023,6 +2071,93 @@ function closeLeavesDrawer() {
   overlay.classList.remove('show');
 }
 window.closeLeavesDrawer = closeLeavesDrawer;
+
+function toggleLeavesPalette(e) {
+  if (e) e.stopPropagation();
+  const overlay = document.getElementById('leavesDrawerOverlay');
+  if (!overlay) return;
+  if (overlay.classList.contains('show')) {
+    closeLeavesDrawer();
+  } else {
+    openLeavesDrawer();
+  }
+}
+window.toggleLeavesPalette = toggleLeavesPalette;
+
+function initDraggableLeavesWidget() {
+  const widget = document.getElementById('leavesDrawer');
+  const handle = document.getElementById('leavesDragHandle');
+  if (!widget || !handle) return;
+
+  let isDragging = false;
+  let startX = 0, startY = 0;
+  let initialLeft = 0, initialTop = 0;
+
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return;
+    isDragging = true;
+    handle.style.cursor = 'grabbing';
+    startX = e.clientX;
+    startY = e.clientY;
+
+    const rect = widget.getBoundingClientRect();
+    initialLeft = rect.left;
+    initialTop = rect.top;
+
+    widget.dataset.dragged = 'true';
+    widget.style.position = 'fixed';
+    widget.style.left = `${initialLeft}px`;
+    widget.style.top = `${initialTop}px`;
+    widget.style.right = 'auto';
+    widget.style.bottom = 'auto';
+
+    try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+
+  handle.addEventListener('pointermove', (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+
+    let newLeft = initialLeft + dx;
+    let newTop = initialTop + dy;
+
+    const maxLeft = window.innerWidth - widget.offsetWidth - 12;
+    const maxTop = window.innerHeight - widget.offsetHeight - 12;
+
+    newLeft = Math.max(12, Math.min(newLeft, maxLeft));
+    newTop = Math.max(12, Math.min(newTop, maxTop));
+
+    widget.style.left = `${Math.round(newLeft)}px`;
+    widget.style.top = `${Math.round(newTop)}px`;
+  });
+
+  const stopDrag = (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+    handle.style.cursor = 'grab';
+    try { handle.releasePointerCapture(e.pointerId); } catch (_) {}
+  };
+
+  handle.addEventListener('pointerup', stopDrag);
+  handle.addEventListener('pointercancel', stopDrag);
+}
+
+document.addEventListener('pointerdown', (e) => {
+  const overlay = document.getElementById('leavesDrawerOverlay');
+  if (!overlay || !overlay.classList.contains('show')) return;
+  const widget = document.getElementById('leavesDrawer');
+  const toggleBtn = document.getElementById('leafToggleBtn');
+  if (widget && !widget.contains(e.target) && (!toggleBtn || !toggleBtn.contains(e.target))) {
+    closeLeavesDrawer();
+  }
+});
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initDraggableLeavesWidget);
+} else {
+  setTimeout(initDraggableLeavesWidget, 0);
+}
 
 window.paperussState = state;
 window.paperussNotes = notes;

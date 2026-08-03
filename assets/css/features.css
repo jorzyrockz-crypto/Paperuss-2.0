@@ -1768,3 +1768,167 @@ blockquote.note-callout.callout-info {
   margin-left: auto;
 }
 
+/* ============ FLOATING LEAVES PALETTE & DYNAMIC LEAF BUTTON ============ */
+
+/* Phase 1: The Minimized Toggle Button (The Leaf) */
+.leaf-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 20px;
+  background: var(--overlay, rgba(27, 33, 48, 0.75));
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: transform var(--duration-fast) var(--ease-spring),
+              background-color 0.2s ease,
+              border-color 0.2s ease,
+              box-shadow 0.2s ease;
+  will-change: transform;
+}
+
+.leaf-toggle-btn:hover {
+  transform: translateY(-2px) scale(1.04);
+  background: var(--hover, rgba(255, 255, 255, 0.1));
+  border-color: var(--accent);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.leaf-toggle-btn:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.leaf-icon {
+  transition: stroke 0.3s ease, fill 0.3s ease, transform 0.3s var(--ease-spring);
+}
+
+/* Save State Dynamic Indicator */
+.leaf-toggle-btn.status-saved .leaf-icon {
+  stroke: var(--success, #10b981);
+  fill: rgba(16, 185, 129, 0.15);
+}
+
+.leaf-toggle-btn.status-unsaved .leaf-icon {
+  stroke: var(--attention, #f59e0b);
+  fill: rgba(245, 158, 11, 0.15);
+}
+
+.leaf-toggle-btn.status-syncing .leaf-icon {
+  stroke: var(--accent, #3b82f6);
+  fill: rgba(59, 130, 246, 0.15);
+  animation: leafPulse 1.2s infinite ease-in-out;
+}
+
+.leaf-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success, #10b981);
+  transition: background-color 0.25s ease, transform 0.25s var(--ease-spring);
+}
+
+.leaf-toggle-btn.status-unsaved .leaf-status-dot {
+  background: var(--attention, #f59e0b);
+}
+
+.leaf-toggle-btn.status-syncing .leaf-status-dot {
+  background: var(--accent, #3b82f6);
+  animation: leafDotPulse 1s infinite ease-in-out;
+}
+
+@keyframes leafPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.92); }
+}
+
+@keyframes leafDotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(1.4); }
+}
+
+/* Phase 2: Expanded Leaves Palette Widget */
+.leaves-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  pointer-events: none;
+  background: transparent;
+}
+
+.leaves-drawer-overlay.show {
+  pointer-events: auto;
+}
+
+.leaves-palette-widget {
+  position: fixed;
+  z-index: 221;
+  width: min(340px, calc(100vw - 32px));
+  max-height: calc(100vh - 100px);
+  background: var(--overlay, rgba(27, 33, 48, 0.92));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  opacity: 0;
+  transform: scale(0.95) translateY(-8px);
+  pointer-events: none;
+  visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: opacity var(--duration-normal) var(--ease-out-expo),
+              transform var(--duration-normal) var(--ease-out-expo),
+              visibility var(--duration-normal);
+  will-change: opacity, transform, left, top;
+}
+
+.leaves-drawer-overlay.show .leaves-palette-widget {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.leaves-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.leaves-drag-handle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  flex: 1;
+}
+
+.leaves-drag-handle:active {
+  cursor: grabbing;
+}
+
+.leaves-drag-handle h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+  margin: 0;
+}
+
+.leaves-drawer-content {
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+}
+
