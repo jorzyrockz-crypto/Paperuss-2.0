@@ -629,12 +629,22 @@ function removeTag(tag){
 async function switchLeafAction(leafId) {
   const n = getNote(state.currentId);
   if (!n) return;
-  await window.paperussLeafManager.switchLeaf(n.id, leafId);
+  if (typeof window.flushActiveLeaf === 'function') {
+    await window.flushActiveLeaf();
+  }
+  if (window.paperussLeafManager && typeof window.paperussLeafManager.switchLeaf === 'function') {
+    await window.paperussLeafManager.switchLeaf(n.id, leafId);
+  } else if (window.paperussLeaves && typeof window.paperussLeaves.setNoteActiveLeafId === 'function') {
+    window.paperussLeaves.setNoteActiveLeafId(n, leafId);
+  }
+  if (typeof renderEditor === 'function') {
+    await renderEditor();
+  }
   renderList();
   if (window.updateLeafTitleBar) window.updateLeafTitleBar();
-  const overlay = document.getElementById('leavesDrawerOverlay');
-  if (overlay && !overlay.classList.contains('hidden')) {
-    closeLeavesDrawer();
+  const contentEl = document.getElementById('leavesDrawerContent');
+  if (contentEl && typeof renderLeavesList === 'function') {
+    renderLeavesList(contentEl);
   }
 }
 window.switchLeafAction = switchLeafAction;

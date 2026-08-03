@@ -2044,11 +2044,12 @@ blockquote.note-callout.callout-info {
 /* Glassmorphic 3-Dot Context Menu Popover */
 .leaf-context-menu {
   position: fixed !important;
-  z-index: 2000 !important;
+  z-index: 200000 !important;
   min-width: 175px;
   padding: 6px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.94) !important;
+  background: rgba(255, 255, 255, 0.94);
+  color: #0f172a;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(0, 0, 0, 0.08);
@@ -2057,9 +2058,10 @@ blockquote.note-callout.callout-info {
 }
 
 [data-theme="dark"] .leaf-context-menu {
-  background: rgba(24, 28, 38, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  background: rgba(24, 28, 38, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #f1f5f9 !important;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6) !important;
 }
 
 .leaf-context-menu.hidden {
@@ -2085,6 +2087,18 @@ blockquote.note-callout.callout-info {
   border: none;
   cursor: pointer;
   transition: background 0.12s ease;
+}
+
+[data-theme="dark"] .leaf-menu-item {
+  color: #f1f5f9 !important;
+}
+
+.leaf-menu-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .leaf-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
 }
 
 .leaf-menu-item:hover {
