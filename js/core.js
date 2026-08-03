@@ -865,7 +865,7 @@ function renderNoteCard(n){
   const isV2 = (typeof appSettings !== 'undefined' && appSettings && appSettings.previewV2 === true);
   const density = (typeof appSettings !== 'undefined' && appSettings && appSettings.previewDensity === 'compact') ? 'compact' : 'comfortable';
 
-  let displayTitle = n.pinned ? '<i data-lucide="pin" class="w-3 h-3 pinned-icon" style="flex-shrink:0;"></i>' : '';
+  let displayTitle = (!isV2 && n.pinned) ? '<i data-lucide="pin" class="w-3 h-3 pinned-icon" style="flex-shrink:0;"></i>' : '';
   if (n.isVirtualSearchMatch) {
     displayTitle += esc(titleOf(n)) + ' — Leaf: ' + esc(n.searchMatchedLeafTitle);
   } else {
@@ -876,30 +876,28 @@ function renderNoteCard(n){
     const thumbUrl = extractNoteThumbnail(content);
     const checklistStats = getChecklistStats(content);
     const hasReminder = n.reminder || n.due || n.reminderAt;
+    const notebookName = n.notebook || n.folder;
+    const metaTop = (n.pinned || hasReminder) ? `<div class="v2-meta-top">
+      ${n.pinned ? '<i data-lucide="pin" class="w-3.5 h-3.5 note-pin" title="Pinned"></i>' : ''}
+      ${hasReminder ? '<i data-lucide="alarm-clock" class="w-3.5 h-3.5 text-accent" title="Has reminder"></i>' : ''}
+    </div>` : '';
 
-    let mediaRow = '';
-    if(hasImage || hasVideo || hasAudio || hasFile || checklistStats || hasReminder) {
-      mediaRow = `<div class="note-card-badges">`;
-      if(checklistStats) mediaRow += `<span class="badge"><i data-lucide="check-square" class="w-3 h-3"></i> ${checklistStats.checked}/${checklistStats.total}</span>`;
-      if(hasReminder) mediaRow += `<span class="badge" style="color:var(--accent)"><i data-lucide="bell" class="w-3 h-3"></i></span>`;
-      if(hasImage) mediaRow += `<span class="badge"><i data-lucide="image" class="w-3 h-3"></i></span>`;
-      if(hasVideo) mediaRow += `<span class="badge"><i data-lucide="video" class="w-3 h-3"></i></span>`;
-      if(hasAudio) mediaRow += `<span class="badge"><i data-lucide="headphones" class="w-3 h-3"></i></span>`;
-      if(hasFile) mediaRow += `<span class="badge"><i data-lucide="file" class="w-3 h-3"></i></span>`;
-      mediaRow += `</div>`;
-    }
-
-    return `<div class="note-card v2 ${density} ${n.id===state.currentId?'active':''}" data-id="${n.id}" ${n.isVirtualSearchMatch ? `data-leaf-id="${n.searchMatchedLeafId}"` : ''}>
-      ${thumbUrl ? `<div class="note-card-thumb"><img src="${thumbUrl}" alt="thumbnail"></div>` : ''}
-      <div class="note-card-body">
-        <div class="note-title">${displayTitle}</div>
-        <div class="note-preview">${prev?esc(prev):'<span style="opacity:0.5;font-style:italic">Empty note</span>'}</div>
-        <div class="note-meta">
-          ${n.deletedAt?'<span class="archived">In Trash</span>':(n.archived?'<span class="archived">Archived</span>':'')}
-          <span>${n.deletedAt?'Deleted '+timeAgo(n.deletedAt):timeAgo(n.updatedAt)}</span>
-        </div>
-        ${mediaRow}
-        ${n.tags && n.tags.length ? `<div class="note-tags">${n.tags.slice(0,3).map(t=>'<span class="chip">'+esc(t)+'</span>').join('')}</div>` : ''}
+    return `<div class="note-card v2 v2-${density} ${n.id===state.currentId?'active':''}" data-id="${n.id}" ${n.isVirtualSearchMatch ? `data-leaf-id="${n.searchMatchedLeafId}"` : ''}>
+      <div class="v2-header">
+        <div class="v2-title">${displayTitle}</div>
+        ${metaTop}
+      </div>
+      <div class="v2-body">
+        <div class="v2-excerpt">${prev ? esc(prev) : '<span style="color:var(--fg-muted)">Empty note</span>'}</div>
+        ${thumbUrl ? `<img class="v2-thumbnail" src="${esc(thumbUrl)}" alt="" loading="lazy">` : ''}
+      </div>
+      <div class="v2-footer">
+        ${notebookName ? `<span class="v2-badge" title="Notebook"><i data-lucide="book" class="w-3 h-3"></i> ${esc(notebookName)}</span>` : ''}
+        ${checklistStats ? `<span class="v2-badge" title="Checklist progress"><i data-lucide="check-square" class="w-3 h-3"></i> ${checklistStats.checked}/${checklistStats.total}</span>` : ''}
+        ${mediaCount ? `<span class="v2-badge" title="${mediaCount} attachment${mediaCount!==1?'s':''}"><i data-lucide="paperclip" class="w-3 h-3"></i> ${mediaCount}</span>` : ''}
+        ${(n.tags||[]).slice(0,3).map(t=>`<span class="chip">${esc(t)}</span>`).join('')}
+        <span>${n.deletedAt ? 'Deleted '+timeAgo(n.deletedAt) : timeAgo(n.updatedAt)}</span>
+        ${n.deletedAt ? '<span class="archived">In Trash</span>' : (n.archived ? '<span class="archived">Archived</span>' : '')}
       </div>
     </div>`;
   }
