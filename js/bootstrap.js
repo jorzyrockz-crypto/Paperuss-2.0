@@ -992,6 +992,16 @@ function isMarkdownText(text) {
     closeProfilePanel();
     exportNotes();
   };
+  const profileExportDocxActiveBtn=document.getElementById('profileExportDocxActiveBtn');
+  const profileExportDocxAllBtn=document.getElementById('profileExportDocxAllBtn');
+  if(profileExportDocxActiveBtn) profileExportDocxActiveBtn.onclick=()=>{
+    closeProfilePanel();
+    if(typeof window.exportDocxActiveLeaf==='function') window.exportDocxActiveLeaf();
+  };
+  if(profileExportDocxAllBtn) profileExportDocxAllBtn.onclick=()=>{
+    closeProfilePanel();
+    if(typeof window.exportDocxAllLeaves==='function') window.exportDocxAllLeaves();
+  };
   if(profileThemeBtn) profileThemeBtn.onclick=()=>{
     const cur=document.documentElement.getAttribute('data-theme');
     setTheme(cur==='dark'?'light':'dark');

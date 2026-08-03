@@ -769,6 +769,20 @@
             </div>
             <div class="settings-row">
               <div class="settings-label">
+                <span>Export Active Leaf (Word)</span>
+                <small>Export current leaf to a Word (.docx) document</small>
+              </div>
+              <button class="btn" id="setExportDocxActiveBtn"><i data-lucide="file-text" class="w-4 h-4"></i> Export</button>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Export All Leaves (Word)</span>
+                <small>Export all leaves in current note to a Word (.docx) document</small>
+              </div>
+              <button class="btn" id="setExportDocxAllBtn"><i data-lucide="files" class="w-4 h-4"></i> Export</button>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
                 <span>Import backup</span>
                 <small>Restore notes from a JSON export</small>
               </div>
@@ -1183,6 +1197,12 @@
       <button class="profile-menu-item" id="profileExportBtn">
         <i data-lucide="folder-output" class="w-4 h-4"></i> Export notes
       </button>
+      <button class="profile-menu-item" id="profileExportDocxActiveBtn">
+        <i data-lucide="file-text" class="w-4 h-4"></i> Export Leaf (Word)
+      </button>
+      <button class="profile-menu-item" id="profileExportDocxAllBtn">
+        <i data-lucide="files" class="w-4 h-4"></i> Export All Leaves (Word)
+      </button>
       <button class="profile-menu-item" id="profileThemeBtn">
         <i data-lucide="sun-moon" class="w-4 h-4"></i> Toggle theme
       </button>
@@ -1259,6 +1279,8 @@
 <script src="js/media.js"></script>
 <script src="js/data-transfer.js"></script>
 <script src="js/docx-import.js"></script>
+<script src="assets/vendor/jszip.min.js"></script>
+<script src="js/docx-export.js"></script>
 <script src="js/responsive-images.js"></script>
 <script src="js/tables.js"></script>
 <script src="js/bootstrap.js"></script>

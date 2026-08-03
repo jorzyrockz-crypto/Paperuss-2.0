@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'paperuss-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v29`;
+const CACHE_NAME = `${CACHE_PREFIX}v30`;
 const APP_SHELL = [
   './',
   './index.html',
@@ -28,6 +28,8 @@ const APP_SHELL = [
   './js/media.js',
   './js/data-transfer.js',
   './js/docx-import.js',
+  './assets/vendor/jszip.min.js',
+  './js/docx-export.js',
   './js/responsive-images.js',
   './js/bootstrap.js',
   './assets/vendor/mammoth.browser.min.js'
