@@ -1413,8 +1413,10 @@ function isMarkdownText(text) {
 
   if (scrollEl && editorContent) {
     let lastScrollTop = 0;
+    let ignoreUntil = 0;
     scrollEl.addEventListener('scroll', () => {
       const scrollTop = scrollEl.scrollTop;
+      const now = Date.now();
 
       // Re-engage: Always show Title Row when at or near the absolute top
       if (scrollTop <= 20) {
@@ -1424,17 +1426,29 @@ function isMarkdownText(text) {
         return;
       }
 
+      // If we are currently ignoring scroll changes (during transition), just update baseline
+      if (now < ignoreUntil) {
+        lastScrollTop = scrollTop;
+        return;
+      }
+
       // Hysteresis buffer (8px) to prevent scroll jitter
       if (Math.abs(scrollTop - lastScrollTop) < 8) return;
 
       // Scroll Down -> apply negative margin collapse to Title Row
       if (scrollTop > lastScrollTop && scrollTop > 40) {
-        editorContent.classList.add('hide-title-row');
-        if (topbar) topbar.classList.add('hide-title-row', 'topbar-hidden');
+        if (!editorContent.classList.contains('hide-title-row')) {
+          editorContent.classList.add('hide-title-row');
+          if (topbar) topbar.classList.add('hide-title-row', 'topbar-hidden');
+          ignoreUntil = now + 400; // ignore layout-shift induced scroll events during transition
+        }
       } else if (scrollTop < lastScrollTop) {
         // Scroll Up -> restore Title Row
-        editorContent.classList.remove('hide-title-row');
-        if (topbar) topbar.classList.remove('hide-title-row', 'topbar-hidden');
+        if (editorContent.classList.contains('hide-title-row')) {
+          editorContent.classList.remove('hide-title-row');
+          if (topbar) topbar.classList.remove('hide-title-row', 'topbar-hidden');
+          ignoreUntil = now + 400;
+        }
       }
 
       lastScrollTop = scrollTop;

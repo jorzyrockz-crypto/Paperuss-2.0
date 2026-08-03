@@ -601,26 +601,7 @@ function bind(){
     });
   }
 
-  // Paste images, spreadsheet tables, or clean formatted HTML from clipboard
-  edEl.addEventListener('paste', e=>{
-    if(!e.clipboardData) return;
-    const items=e.clipboardData.items||[];
-    for(const it of items){
-      if(it.kind==='file'){
-        const f=it.getAsFile();
-        if(f && f.type.startsWith('image/')){ e.preventDefault(); insertImageFile(f); return; }
-      }
-    }
-    const text = e.clipboardData.getData('text/plain');
-    if(text && /\t/.test(text) && /\n/.test(text)){
-      const tableHtml = tsvToPaperussTable(text);
-      if(tableHtml){
-        e.preventDefault();
-        document.execCommand('insertHTML', false, tableHtml);
-        setTimeout(handleBodyInput, 0);
-        return;
-      }
-    }
+
 function parseMarkdownInline(text) {
   if (!text) return '';
   let str = String(text);
