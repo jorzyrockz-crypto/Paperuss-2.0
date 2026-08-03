@@ -318,7 +318,7 @@
 .leaves-drawer {
   width: 300px;
   max-width: 85vw;
-  height: 100%;
+  height: auto;
   background: var(--canvas);
   border-left: 1px solid var(--border);
   display: flex;
@@ -338,7 +338,7 @@
   margin: 0;
 }
 .leaves-drawer-content {
-  flex: 1;
+  flex: 0 1 auto;
   overflow-y: auto;
   padding: 10px;
 }

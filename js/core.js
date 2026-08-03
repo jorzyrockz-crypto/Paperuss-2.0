@@ -2150,8 +2150,8 @@ function positionLeavesWidgetBelowToggle() {
   if (widget.dataset.dragged === 'true') return;
 
   widget.style.position = 'fixed';
-  widget.style.bottom = '80px';
-  widget.style.right = '24px';
+  widget.style.bottom = '94px';
+  widget.style.right = '20px';
   widget.style.top = 'auto';
   widget.style.left = 'auto';
 }

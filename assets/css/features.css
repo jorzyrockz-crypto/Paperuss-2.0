@@ -1776,16 +1776,16 @@ blockquote.note-callout.callout-info {
 .leaf-toggle-fab,
 .leaf-toggle-btn {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: 50px;
+  right: 20px;
   top: auto;
-  z-index: 60;
+  z-index: 1100;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 7px 14px;
   border-radius: 24px;
-  background: rgba(20, 24, 33, 0.85);
+  background: rgba(20, 24, 33, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: var(--fg, #f1f5f9);
   font-size: 12.5px;
@@ -1804,9 +1804,9 @@ blockquote.note-callout.callout-info {
 [data-theme="light"] .leaf-toggle-fab,
 [data-theme="light"] .leaf-toggle-btn {
   background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   color: var(--fg, #0f172a);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.14);
 }
 
 .leaf-toggle-fab:hover,
@@ -1886,7 +1886,7 @@ blockquote.note-callout.callout-info {
 .leaves-drawer-overlay {
   position: fixed;
   inset: 0;
-  z-index: 54;
+  z-index: 1040;
   pointer-events: none;
   background: transparent !important;
 }
@@ -1898,15 +1898,15 @@ blockquote.note-callout.callout-info {
 /* Requirement 3 & 4: Detached Bottom-Right Floating Palette Widget with Dynamic Height Auto-Expansion */
 .leaves-palette-widget {
   position: fixed;
-  bottom: 80px;
-  right: 24px;
-  top: auto;
-  left: auto;
-  z-index: 55;
+  bottom: 94px !important;
+  right: 20px !important;
+  top: auto !important;
+  left: auto !important;
+  z-index: 1050 !important;
   width: min(290px, calc(100vw - 32px));
   max-width: 290px;
-  height: fit-content;
-  max-height: calc(100vh - 120px);
+  height: auto !important;
+  max-height: calc(100vh - 150px) !important;
   background: rgba(20, 24, 33, 0.88);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -1928,9 +1928,9 @@ blockquote.note-callout.callout-info {
 }
 
 [data-theme="light"] .leaves-palette-widget {
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.94);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.14);
 }
 
 .leaves-drawer-overlay.show .leaves-palette-widget {
@@ -1947,6 +1947,7 @@ blockquote.note-callout.callout-info {
   padding: 8px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.02);
+  flex-shrink: 0;
 }
 
 [data-theme="light"] .leaves-drawer-header {
@@ -1977,7 +1978,8 @@ blockquote.note-callout.callout-info {
 .leaves-drawer-content {
   padding: 10px;
   overflow-y: auto;
-  flex: 1;
+  flex: 0 1 auto !important;
+  max-height: calc(100vh - 210px) !important;
 }
 
 /* Leaf Row Styling & Color Accent Tinting */
@@ -2041,16 +2043,16 @@ blockquote.note-callout.callout-info {
 
 /* Glassmorphic 3-Dot Context Menu Popover */
 .leaf-context-menu {
-  position: fixed;
-  z-index: 70;
+  position: fixed !important;
+  z-index: 2000 !important;
   min-width: 175px;
   padding: 6px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.94) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.2);
   animation: leafMenuIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
