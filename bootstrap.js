@@ -100,8 +100,13 @@ function bind(){
     }
   });
 
-  // Intercept Undo / Redo for Custom History Manager
+  // Intercept Undo / Redo / Link shortcuts
   ed.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      if (typeof applyCommand === 'function') applyCommand('createLink');
+      return;
+    }
     if(window.HistoryManager) {
       if((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();

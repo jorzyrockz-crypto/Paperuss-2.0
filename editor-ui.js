@@ -826,6 +826,118 @@ function openResizeDialog(img){
   };
 }
 
+function openLinkModal(options = {}) {
+  const root = document.getElementById('modalRoot');
+  if (!root) return;
+
+  const initialUrl = options.initialUrl || '';
+  const selectionText = options.initialText || (window.getSelection ? window.getSelection().toString().trim() : '');
+  const callback = options.callback;
+
+  root.innerHTML = `<div class="modal-overlay">
+    <div class="link-modal-card" role="dialog" aria-label="Insert Link">
+      <div class="link-modal-header">
+        <h3>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          Insert Link
+        </h3>
+        <span class="link-modal-badge" id="linkPlatformBadge" style="display:none"></span>
+      </div>
+      
+      <div class="link-modal-field">
+        <label for="linkUrlInput">Web Address or Email</label>
+        <input type="text" id="linkUrlInput" class="link-modal-input" placeholder="e.g. github.com, https://example.com, or user@example.com" value="${esc(initialUrl)}" autocomplete="off" spellcheck="false">
+        <div class="link-modal-error" id="linkUrlError">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span id="linkUrlErrorText"></span>
+        </div>
+      </div>
+
+      <div class="link-modal-field">
+        <label for="linkTextInput">Display Text (optional)</label>
+        <input type="text" id="linkTextInput" class="link-modal-input" placeholder="Text to display" value="${esc(selectionText)}">
+      </div>
+
+      <div class="link-modal-actions">
+        <button type="button" class="btn" id="linkModalCancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="linkModalSubmit">Insert Link</button>
+      </div>
+    </div>
+  </div>`;
+
+  const urlInput = document.getElementById('linkUrlInput');
+  const textInput = document.getElementById('linkTextInput');
+  const errorEl = document.getElementById('linkUrlError');
+  const errorText = document.getElementById('linkUrlErrorText');
+  const badgeEl = document.getElementById('linkPlatformBadge');
+  const submitBtn = document.getElementById('linkModalSubmit');
+  const cancelBtn = document.getElementById('linkModalCancel');
+
+  const close = () => { root.innerHTML = ''; };
+
+  const validate = () => {
+    const val = urlInput.value.trim();
+    if (!val) {
+      urlInput.classList.remove('has-error');
+      errorEl.classList.remove('show');
+      badgeEl.style.display = 'none';
+      return null;
+    }
+    const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(val) : { valid: true, url: val, isExternal: /^https?:/i.test(val) };
+    if (!res.valid) {
+      urlInput.classList.add('has-error');
+      errorText.textContent = res.error || 'Invalid URL.';
+      errorEl.classList.add('show');
+      badgeEl.style.display = 'none';
+    } else {
+      urlInput.classList.remove('has-error');
+      errorEl.classList.remove('show');
+      if (res.platformName) {
+        badgeEl.textContent = res.platformName;
+        badgeEl.style.display = 'inline-flex';
+      } else {
+        badgeEl.style.display = 'none';
+      }
+    }
+    return res;
+  };
+
+  urlInput.addEventListener('input', validate);
+
+  submitBtn.onclick = () => {
+    const val = urlInput.value.trim();
+    if (!val) {
+      urlInput.classList.add('has-error');
+      errorText.textContent = 'Please enter a URL or email address.';
+      errorEl.classList.add('show');
+      urlInput.focus();
+      return;
+    }
+    const res = validate();
+    if (!res || !res.valid) {
+      urlInput.focus();
+      return;
+    }
+    const linkText = textInput.value.trim() || selectionText || res.url;
+    close();
+    if (typeof callback === 'function') {
+      callback(res, linkText);
+    }
+  };
+
+  cancelBtn.onclick = close;
+  root.querySelector('.modal-overlay').onclick = e => { if (e.target === e.currentTarget) close(); };
+
+  urlInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); submitBtn.click(); }
+  });
+  textInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); submitBtn.click(); }
+  });
+
+  setTimeout(() => { urlInput.focus(); urlInput.select(); }, 50);
+}
+
 /* ============================================================
    PAGE LAYOUT / WYSIWYG EDITOR LOGIC
    ============================================================ */

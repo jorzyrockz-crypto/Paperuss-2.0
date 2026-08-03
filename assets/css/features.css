@@ -1684,3 +1684,87 @@ blockquote.note-callout.callout-info {
   background: rgba(99, 102, 241, 0.12);
 }
 
+/* Link Insertion Modal & Inline Error Feedback */
+.link-modal-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--overlay, #1e293b);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 20px 48px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.link-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.link-modal-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.link-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.link-modal-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-secondary);
+}
+.link-modal-input {
+  width: 100%;
+  background: var(--inset, #0f172a);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  color: var(--fg);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.link-modal-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+.link-modal-input.has-error {
+  border-color: var(--danger, #ef4444);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+}
+.link-modal-error {
+  font-size: 12px;
+  color: var(--danger, #ef4444);
+  display: none;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+.link-modal-error.show {
+  display: flex;
+}
+.link-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+.link-modal-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  margin-left: auto;
+}
+

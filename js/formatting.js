@@ -7,14 +7,43 @@ function applyCommand(cmd, val){
   focusEditor();
   if(window.HistoryManager) window.HistoryManager.capture(true);
   if(cmd==='createLink'){
-    const url=prompt('Enter URL:','https://');
-    if(!url) return;
-    document.execCommand('createLink', false, url);
     const sel=window.getSelection();
-    if(sel && sel.anchorNode){
-      const a=(sel.anchorNode.nodeType===3?sel.anchorNode.parentElement:sel.anchorNode).closest?.('a');
-      if(a){ a.target='_blank'; a.rel='noopener noreferrer'; }
+    const selText=sel ? sel.toString().trim() : '';
+    if(typeof openLinkModal === 'function'){
+      openLinkModal({
+        initialText: selText,
+        callback: (res, linkText) => {
+          focusEditor();
+          if(!res || !res.url) return;
+          const ed = bodyEl();
+          const targetAttr = res.isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
+          const curSel = window.getSelection();
+          if(curSel && curSel.rangeCount && !curSel.isCollapsed && ed.contains(curSel.anchorNode)){
+            document.execCommand('createLink', false, res.url);
+            const anchor = (curSel.anchorNode.nodeType === 3 ? curSel.anchorNode.parentElement : curSel.anchorNode).closest?.('a');
+            if(anchor){
+              if(linkText && linkText !== selText) anchor.textContent = linkText;
+              if(res.isExternal){ anchor.target = '_blank'; anchor.rel = 'noopener noreferrer'; }
+              else { anchor.removeAttribute('target'); anchor.removeAttribute('rel'); }
+            }
+          } else {
+            const html = `<a href="${esc(res.url)}"${targetAttr}>${esc(linkText)}</a>`;
+            insertHTMLAtCaret(html);
+          }
+          handleBodyInput(); updateToolbarState();
+        }
+      });
+      return;
     }
+    const raw=prompt('Enter URL:','https://');
+    if(!raw) return;
+    const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(raw) : { valid: true, url: raw, isExternal: true };
+    if(!res.valid){ toast(res.error || 'Invalid URL'); return; }
+    document.execCommand('createLink', false, res.url);
+    const a=(sel && sel.anchorNode ? (sel.anchorNode.nodeType===3?sel.anchorNode.parentElement:sel.anchorNode).closest?.('a') : null);
+    if(a && res.isExternal){ a.target='_blank'; a.rel='noopener noreferrer'; }
+    handleBodyInput(); updateToolbarState();
+    return;
   } else if(cmd==='fontSize'){
     applyFontSize(val);
     return;

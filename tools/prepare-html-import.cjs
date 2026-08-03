@@ -45,6 +45,7 @@ const jsEntries = [
   ["tasks-settings.js", "STANDALONE TASKS + REMINDERS + NOTIFICATIONS"],
   ["cloud-notifications.js", "FIREBASE AUTH + CLOUD SYNC"],
   ["actions.js", "DIVIDERS & TABLES"],
+  ["link-parser.js", "LINK PARSER UTILITY"],
   ["formatting.js", "WYSIWYG FORMATTING"],
   ["media.js", "MEDIA INSERTION"],
   ["data-transfer.js", "IMPORT / EXPORT"],

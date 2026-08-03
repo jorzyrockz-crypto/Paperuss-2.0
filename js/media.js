@@ -266,8 +266,42 @@ function fileIconSVG(type,name){
 
 /* Rich link cards */
 function insertRichLink(){
-  const url=prompt('Paste a URL to embed as a rich card:','https://');
-  if(!url) return;
+  if(typeof openLinkModal === 'function'){
+    openLinkModal({
+      callback: (res, linkText) => {
+        if(!res || !res.valid || !res.isExternal) {
+          if(res && !res.isExternal) toast('Link cards require http:// or https:// URLs');
+          return;
+        }
+        let u;
+        try{ u=new URL(res.url); }catch(e){ toast('Invalid URL'); return; }
+        const host=u.hostname.replace(/^www\./,'');
+        const path=(u.pathname==='/'?'':u.pathname).replace(/\/$/,'');
+        const defaultTitle = res.platformName ? `${res.platformName} Link` : decodeURIComponent(path.split('/').pop()||host) || host;
+        const title = linkText || defaultTitle;
+        const favicon=`https://www.google.com/s2/favicons?domain=${host}&sz=64`;
+        const id='l_'+Date.now().toString(36);
+        insertHTMLAtCaret(
+          `<a class="media-card link-card" contenteditable="false" data-media-id="${id}" data-media-kind="link" href="${esc(res.url)}" target="_blank" rel="noopener noreferrer">
+            <div class="mc-top">
+              <div class="mc-icon"><img src="${esc(favicon)}" alt="" loading="lazy" decoding="async"></div>
+              <div class="mc-body">
+                <div class="mc-title">${esc(title)}</div>
+                <div class="mc-meta">${esc(host)}</div>
+              </div>
+            </div>
+          </a>`
+        );
+        toast('Link card added');
+      }
+    });
+    return;
+  }
+  const raw=prompt('Paste a URL to embed as a rich card:','https://');
+  if(!raw) return;
+  const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(raw) : null;
+  if(res && !res.valid){ toast(res.error || 'Invalid URL'); return; }
+  const url = res ? res.url : raw;
   let u;
   try{ u=new URL(url); }catch(e){ toast('Invalid URL'); return; }
   if(!['http:','https:'].includes(u.protocol)){ toast('Only http:// and https:// links are supported'); return; }
