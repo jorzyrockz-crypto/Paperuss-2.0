@@ -621,38 +621,258 @@ function bind(){
         return;
       }
     }
-    // Plain-text paste containing Markdown task lists (e.g. - [ ] Task 1 \n * [x] Task 2)
-    if(text && /^[ \t]*(?:[-*+]\s*|\d+\.\s*)?\[[ xX]\]/m.test(text)){
-      const lines = text.split(/\r?\n/);
-      let htmlOutput = '';
-      let inTaskGroup = false;
-      const taskLineRegex = /^[ \t]*(?:[-*+]\s*|\d+\.\s*)?\[([ xX])\]\s*(.*)$/;
-      for(let i = 0; i < lines.length; i++){
-        const line = lines[i];
-        const m = line.match(taskLineRegex);
-        if(m){
-          if(!inTaskGroup){
-            htmlOutput += '<ul class="task-list">';
-            inTaskGroup = true;
-          }
-          const isChecked = m[1].toLowerCase() === 'x';
-          const content = m[2] || '';
-          const checkedAttr = isChecked ? ' checked=""' : '';
-          htmlOutput += `<li data-task="1"><input type="checkbox"${checkedAttr}> ${esc(content)}</li>`;
-        } else {
-          if(inTaskGroup){
-            htmlOutput += '</ul>';
-            inTaskGroup = false;
-          }
-          if(line.trim()){
-            htmlOutput += `<p>${esc(line)}</p>`;
-          }
-        }
+function parseMarkdownInline(text) {
+  if (!text) return '';
+  let str = String(text);
+
+  const codeSpans = [];
+  str = str.replace(/`([^`]+)`/g, (_, code) => {
+    const idx = codeSpans.length;
+    codeSpans.push(`<code>${esc(code)}</code>`);
+    return `\uE000C${idx}\uE000`;
+  });
+
+  const imageSpans = [];
+  str = str.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
+    const idx = imageSpans.length;
+    const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(url) : { valid: true, url: url };
+    const src = res.valid ? res.url : url;
+    imageSpans.push(`<img src="${esc(src)}" alt="${esc(alt)}">`);
+    return `\uE000I${idx}\uE000`;
+  });
+
+  const linkSpans = [];
+  str = str.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, title, url) => {
+    const idx = linkSpans.length;
+    const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(url) : { valid: true, url: url, isExternal: true };
+    const targetAttr = (res.isExternal || !res.url.startsWith('#')) ? ' target="_blank" rel="noopener noreferrer"' : '';
+    const href = res.valid ? res.url : url;
+    const renderedTitle = parseMarkdownInline(title);
+    linkSpans.push(`<a href="${esc(href)}"${targetAttr}>${renderedTitle}</a>`);
+    return `\uE000L${idx}\uE000`;
+  });
+
+  str = esc(str);
+
+  str = str.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
+  str = str.replace(/___([^_]+)___/g, '<strong><em>$1</em></strong>');
+  str = str.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  str = str.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  str = str.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+  str = str.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+  str = str.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+  str = str.replace(/==([^=]+)==/g, '<mark>$1</mark>');
+
+  str = str.replace(/\uE000L(\d+)\uE000/g, (_, idx) => linkSpans[+idx] || '');
+  str = str.replace(/\uE000I(\d+)\uE000/g, (_, idx) => imageSpans[+idx] || '');
+  str = str.replace(/\uE000C(\d+)\uE000/g, (_, idx) => codeSpans[+idx] || '');
+
+  return str;
+}
+
+function parseMarkdownToPaperussHTML(markdown) {
+  if (!markdown || !String(markdown).trim()) return '';
+  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
+
+  let html = '';
+  let inList = null;
+  let inCodeBlock = false;
+  let codeBuffer = [];
+  let inTable = false;
+  let tableRows = [];
+
+  const closeList = () => {
+    if (inList) {
+      html += inList === 'ol' ? '</ol>' : '</ul>';
+      inList = null;
+    }
+  };
+
+  const closeTable = () => {
+    if (inTable && tableRows.length > 0) {
+      let tHtml = '<table class="note-table"><thead>';
+      tableRows.forEach((row, rIdx) => {
+        if (rIdx === 1 && row.every(cell => /^:?-+:?$/.test(cell.trim()))) return;
+        const tag = rIdx === 0 ? 'th' : 'td';
+        if (rIdx === 1) tHtml += '</thead><tbody>';
+        tHtml += '<tr>';
+        row.forEach(cell => {
+          tHtml += `<${tag}>${parseMarkdownInline(cell.trim())}</${tag}>`;
+        });
+        tHtml += '</tr>';
+      });
+      if (tableRows.length > 1) tHtml += '</tbody>';
+      tHtml += '</table>';
+      html += tHtml;
+      tableRows = [];
+      inTable = false;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const line = rawLine.trim();
+
+    if (/^```/.test(line)) {
+      if (inCodeBlock) {
+        closeList(); closeTable();
+        html += `<pre><code>${esc(codeBuffer.join('\n'))}</code></pre>`;
+        codeBuffer = [];
+        inCodeBlock = false;
+      } else {
+        closeList(); closeTable();
+        inCodeBlock = true;
+        codeBuffer = [];
       }
-      if(inTaskGroup) htmlOutput += '</ul>';
-      if(htmlOutput){
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeBuffer.push(rawLine);
+      continue;
+    }
+
+    if (/^\|.*\|$/.test(line)) {
+      closeList();
+      const cells = line.slice(1, -1).split('|');
+      tableRows.push(cells);
+      inTable = true;
+      continue;
+    } else if (inTable) {
+      closeTable();
+    }
+
+    if (!line) {
+      closeList(); closeTable();
+      continue;
+    }
+
+    if (/^(?:---|\*\*\*|___)$/.test(line)) {
+      closeList(); closeTable();
+      html += '<hr>';
+      continue;
+    }
+
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      closeList(); closeTable();
+      const level = Math.min(headingMatch[1].length, 6);
+      const tag = `h${level}`;
+      html += `<${tag}>${parseMarkdownInline(headingMatch[2])}</${tag}>`;
+      continue;
+    }
+
+    const calloutMatch = line.match(/^>\s*\[!(TIP|WARNING|SUMMARY|INFO|NOTE|DANGER|CAUTION)\]\s*(.*)$/i) || line.match(/^!(tip|warning|summary|info|note|danger|caution)\s*(.*)$/i);
+    if (calloutMatch) {
+      closeList(); closeTable();
+      const type = calloutMatch[1].toLowerCase();
+      const text = calloutMatch[2];
+      const iconMap = { tip: '💡', warning: '⚠️', summary: '📋', info: 'ℹ️', note: '📌', danger: '🚨', caution: '⚠️' };
+      const title = type.toUpperCase();
+      html += `<div class="callout callout-${type}" contenteditable="true" data-callout="${type}">
+        <div class="callout-title">${iconMap[type] || '📌'} ${title}</div>
+        <div class="callout-body">${parseMarkdownInline(text)}</div>
+      </div>`;
+      continue;
+    }
+
+    const quoteMatch = line.match(/^>\s*(.+)$/);
+    if (quoteMatch) {
+      closeList(); closeTable();
+      html += `<blockquote>${parseMarkdownInline(quoteMatch[1])}</blockquote>`;
+      continue;
+    }
+
+    const taskMatch = line.match(/^(?:[-*+]\s*|\d+[.)]\s*)?\[([ xX])\]\s*(.*)$/);
+    if (taskMatch) {
+      closeTable();
+      if (inList !== 'task') {
+        closeList();
+        html += '<ul class="task-list">';
+        inList = 'task';
+      }
+      const isChecked = taskMatch[1].toLowerCase() === 'x';
+      const checkedAttr = isChecked ? ' checked=""' : '';
+      html += `<li data-task="1"><input type="checkbox"${checkedAttr}> ${parseMarkdownInline(taskMatch[2])}</li>`;
+      continue;
+    }
+
+    const bulletMatch = line.match(/^[-*+]\s+(.+)$/);
+    if (bulletMatch) {
+      closeTable();
+      if (inList !== 'ul') {
+        closeList();
+        html += '<ul>';
+        inList = 'ul';
+      }
+      html += `<li>${parseMarkdownInline(bulletMatch[1])}</li>`;
+      continue;
+    }
+
+    const orderedMatch = line.match(/^\d+[.)]\s+(.+)$/);
+    if (orderedMatch) {
+      closeTable();
+      if (inList !== 'ol') {
+        closeList();
+        html += '<ol>';
+        inList = 'ol';
+      }
+      html += `<li>${parseMarkdownInline(orderedMatch[1])}</li>`;
+      continue;
+    }
+
+    closeList(); closeTable();
+    html += `<p>${parseMarkdownInline(line)}</p>`;
+  }
+
+  if (inCodeBlock) {
+    html += `<pre><code>${esc(codeBuffer.join('\n'))}</code></pre>`;
+  }
+  closeList();
+  closeTable();
+
+  return html;
+}
+
+function isMarkdownText(text) {
+  if (!text || typeof text !== 'string') return false;
+  const str = text.trim();
+  if (!str) return false;
+  return /^[ \t]*#{1,6}\s+/m.test(str) ||
+         /^[ \t]*(?:[-*+]\s*|\d+[.)]\s*)?\[[ xX]\]/m.test(str) ||
+         /^[ \t]*(?:[-*+]\s+|\d+[.)]\s+)/m.test(str) ||
+         /^[ \t]*>\s+/m.test(str) ||
+         /```/.test(str) ||
+         /^[ \t]*(?:---|\*\*\*|___)[ \t]*$/m.test(str) ||
+         /\*\*[^\*\s][^\*]*\*\*|~~[^~\s][^~]*~~|`[^`]+`|\[[^\]]+\]\([^)]+\)|!\[[^\]]*\]\([^)]+\)|==[^=]+==/.test(str) ||
+         /^\|.*\|$/m.test(str);
+}
+
+  // Paste images, spreadsheet tables, or clean formatted HTML from clipboard
+  edEl.addEventListener('paste', e=>{
+    if(!e.clipboardData) return;
+    const items=e.clipboardData.items||[];
+    for(const it of items){
+      if(it.kind==='file'){
+        const f=it.getAsFile();
+        if(f && f.type.startsWith('image/')){ e.preventDefault(); insertImageFile(f); return; }
+      }
+    }
+    const text = e.clipboardData.getData('text/plain');
+    if(text && /\t/.test(text) && /\n/.test(text)){
+      const tableHtml = tsvToPaperussTable(text);
+      if(tableHtml){
         e.preventDefault();
-        document.execCommand('insertHTML', false, htmlOutput);
+        document.execCommand('insertHTML', false, tableHtml);
+        setTimeout(handleBodyInput, 0);
+        return;
+      }
+    }
+    if(text && isMarkdownText(text)){
+      const markdownHTML = parseMarkdownToPaperussHTML(text);
+      if(markdownHTML){
+        e.preventDefault();
+        document.execCommand('insertHTML', false, markdownHTML);
         showPasteAsPlainTextChip(text);
         setTimeout(handleBodyInput, 0);
         return;
