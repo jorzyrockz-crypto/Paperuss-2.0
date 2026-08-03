@@ -11,9 +11,12 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
 
-    // 2. Notes Subcollection
+    // 2. Notes Subcollection & Leaves Subcollection
     match /paperuss_users/{userId}/notes/{noteId} {
       allow read, write: if isOwner(userId);
+      match /leaves/{leafId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     // 3. Tasks Subcollection

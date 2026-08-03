@@ -169,6 +169,10 @@
     <section class="note-list" id="noteList">
       <div class="list-header" style="gap:8px">
         <h2 id="listTitle" style="flex:1">All Notes</h2>
+        <div class="mode-selector-wrap" id="listModeSelector" style="display:flex;background:var(--subtle);border:1px solid var(--border);border-radius:6px;padding:2px;gap:2px;">
+          <button class="mode-btn active" id="modeNotesBtn" data-listmode="notes" onclick="setListMode('notes')" title="Notes" style="padding:2px 8px;border-radius:4px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--fg-secondary);">Notes</button>
+          <button class="mode-btn" id="modeLeavesBtn" data-listmode="leaves" onclick="setListMode('leaves')" title="Leaves" style="padding:2px 8px;border-radius:4px;border:none;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--fg-secondary);">Leaves</button>
+        </div>
         <select id="sortSelect" title="Sort">
           <option value="updated">Updated</option>
           <option value="created">Created</option>
@@ -227,12 +231,22 @@
             <div class="editor-more-panel" id="editorMorePanel">
               <button class="profile-menu-item" id="moreShareBtn"><i data-lucide="share-2" class="w-4 h-4"></i> Share note</button>
               <button class="profile-menu-item" id="morePrintBtn"><i data-lucide="printer" class="w-4 h-4"></i> Print / PDF</button>
+              <button class="profile-menu-item" id="moreDuplicateBtn"><i data-lucide="copy" class="w-4 h-4"></i> Duplicate note</button>
               <div class="hl-divider compact-note-action" style="margin:6px 0"></div>
               <button class="profile-menu-item compact-note-action" id="morePinBtn"><i data-lucide="pin" class="w-4 h-4"></i> Pin / Unpin</button>
               <button class="profile-menu-item compact-note-action" id="moreArchiveBtn"><i data-lucide="archive" class="w-4 h-4"></i> Archive / Restore</button>
               <button class="profile-menu-item compact-note-action danger" id="moreDeleteBtn"><i data-lucide="trash-2" class="w-4 h-4"></i> Delete</button>
             </div>
           </div>
+        </div>
+        <div id="leafTitleBar" class="leaf-title-bar" style="display:none; padding:4px 20px; font-size:12px; color:var(--fg-muted); align-items:center; gap:6px; border-bottom:1px solid var(--border);">
+          <span id="leafTitleNoteName">Note Title</span>
+          <i data-lucide="chevron-right" class="w-3 h-3"></i>
+          <span id="leafTitleLeafName" style="font-weight:600; color:var(--fg-secondary);">Main</span>
+          <button class="btn btn-icon" id="openLeavesDrawerBtn" onclick="openLeavesDrawer()" title="Leaves Drawer" style="margin-left:auto; padding:2px 8px; font-size:11px; display:none; align-items:center; gap:4px;">
+            <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+            <span>Leaves</span>
+          </button>
         </div>
         
         <div class="find-panel hidden" id="findPanel" role="dialog" aria-label="Find and Replace">
@@ -1187,9 +1201,24 @@
   </div>
 </div>
 
+<div class="leaves-drawer-overlay hidden" id="leavesDrawerOverlay" onclick="if(event.target===this) closeLeavesDrawer()">
+  <div class="leaves-drawer" id="leavesDrawer">
+    <div class="leaves-drawer-header">
+      <h3 id="leavesDrawerTitle">Leaves</h3>
+      <button class="btn btn-icon" id="closeLeavesDrawerBtn" onclick="closeLeavesDrawer()" title="Close drawer">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <div class="leaves-drawer-content" id="leavesDrawerContent">
+      <!-- Leaves list rendered here in Drawer mode -->
+    </div>
+  </div>
+</div>
+
 <script src="js/stabilization.js"></script>
 <script src="js/history.js"></script>
 <script src="js/core.js"></script>
+<script src="js/leaves.js"></script>
 <script src="js/productivity.js"></script>
 <script src="js/editor-ui.js"></script>
 <script src="js/tasks-settings.js"></script>

@@ -22,7 +22,31 @@ function selectFilter(filterName){
 function bind(){
   document.getElementById('newNoteBtn').onclick=()=>contextualNew();
 
-  document.getElementById('searchInput').addEventListener('input', e=>{ state.query=e.target.value; renderList(); });
+  let leafSearchTimer = null;
+  document.getElementById('searchInput').addEventListener('input', e => {
+    const q = e.target.value;
+    state.query = q;
+    renderList(); // render main note matches immediately
+    
+    clearTimeout(leafSearchTimer);
+    if (q && window.paperussLeaves) {
+      leafSearchTimer = setTimeout(async () => {
+        if (state.query !== q) return;
+        try {
+          const results = await window.paperussLeaves.leafGetAll();
+          if (state.query === q) {
+            state.leafSearchResults = results;
+            renderList();
+          }
+        } catch(err) {
+          console.error('Leaf search error', err);
+        }
+      }, 300);
+    } else {
+      state.leafSearchResults = null;
+      renderList();
+    }
+  });
 
   document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>selectFilter(b.dataset.filter));
 
@@ -35,7 +59,7 @@ function bind(){
     const card=e.target.closest('.note-card');
     if(card && card.dataset.id){
       if(typeof closeAllContextTools==='function') closeAllContextTools();
-      selectNote(card.dataset.id);
+      selectNote(card.dataset.id, card.dataset.leafId || null);
     }
   };
 
@@ -58,6 +82,10 @@ function bind(){
 
   const ed=bodyEl();
   ed.addEventListener('input', handleBodyInput);
+  ed.addEventListener('input', () => {
+    const ov = document.getElementById('overflowDropdown');
+    if(ov && ov.classList.contains('show')) ov.classList.remove('show');
+  });
   ed.addEventListener('keyup', updateToolbarState);
   ed.addEventListener('mouseup', updateToolbarState);
   ed.addEventListener('focus', updateToolbarState);
@@ -363,6 +391,8 @@ function bind(){
   document.getElementById('morePinBtn').onclick=()=>{ closeEditorMore(); togglePin(); };
   document.getElementById('moreShareBtn').onclick=()=>{ closeEditorMore(); shareCurrentNote(); };
   document.getElementById('morePrintBtn').onclick=()=>{ closeEditorMore(); printCurrentNote(); };
+  const dupBtn = document.getElementById('moreDuplicateBtn');
+  if(dupBtn) dupBtn.onclick=()=>{ closeEditorMore(); duplicateNoteAction(); };
   document.getElementById('moreArchiveBtn').onclick=()=>{
     closeEditorMore();
     const n=getNote(state.currentId);
@@ -1159,7 +1189,10 @@ function isMarkdownText(text) {
 
   // Overflow Menu dropdown
   const ovfBtn = document.getElementById('overflowBtn');
-  if(ovfBtn) ovfBtn.onclick = e => { e.stopPropagation(); toggleDropdown('overflowDropdown'); };
+  if(ovfBtn) {
+    ovfBtn.onmousedown = e => { e.preventDefault(); };
+    ovfBtn.onclick = e => { e.stopPropagation(); toggleDropdown('overflowDropdown'); };
+  }
 
   // Responsive Toolbar Overflow
   function initResponsiveToolbar() {

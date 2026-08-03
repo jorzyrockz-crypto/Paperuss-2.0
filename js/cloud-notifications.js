@@ -1111,6 +1111,17 @@ async function _syncNowInner(opts){
       console.warn('PapeRuss media sync non-blocking warning:', mediaErr);
     }
 
+    try {
+      if (window.paperussLeafManager && typeof window.paperussLeafManager.syncLeavesWithCloud === 'function') {
+        await window.paperussLeafManager.syncLeavesWithCloud(session.uid);
+      }
+      if (window.paperussLeafManager && typeof window.paperussLeafManager.syncNoteLeavesFromCloud === 'function' && typeof state !== 'undefined' && state && state.currentId) {
+        await window.paperussLeafManager.syncNoteLeavesFromCloud(state.currentId, session.uid);
+      }
+    } catch (leafErr) {
+      console.warn('PapeRuss leaves sync non-blocking warning:', leafErr);
+    }
+
     localStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
     if(partialFailure){
       updateSyncStatus('partial','Media sync incomplete — retry scheduled');

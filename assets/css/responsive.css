@@ -258,3 +258,87 @@
   .sz-opt,.fs-opt{padding:10px 14px}
   .profile-menu-item,.block-menu-item,.icm-item{padding:11px 12px}
 }
+
+/* ============ LEAVES (GROUP 3) RESPONSIVE & DRAWER STYLES ============ */
+.mode-selector-wrap .mode-btn.active {
+  background: var(--canvas) !important;
+  color: var(--fg) !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+.leaf-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.leaf-row.active {
+  background: var(--subtle);
+  border-color: var(--border);
+}
+.leaf-row .leaf-actions button {
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+.leaf-row:hover .leaf-actions button {
+  opacity: 1;
+}
+
+/* Distraction-Free & Portrait/Mobile Drawer button */
+@media (max-width: 640px) {
+  #openLeavesDrawerBtn {
+    display: inline-flex !important;
+  }
+}
+.distraction-free #openLeavesDrawerBtn {
+  display: inline-flex !important;
+}
+.distraction-free #noteList {
+  display: none !important;
+}
+
+/* Overlay drawer */
+.leaves-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.leaves-drawer-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.leaves-drawer-overlay.hidden {
+  display: none !important;
+}
+.leaves-drawer {
+  width: 300px;
+  max-width: 85vw;
+  height: 100%;
+  background: var(--canvas);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.25);
+}
+.leaves-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.leaves-drawer-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+.leaves-drawer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}

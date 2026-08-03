@@ -527,13 +527,13 @@ function updateAlignmentButton(){
 }
 
 function updateToolbarState(){
-  const listCtx = typeof _listContext === 'function' ? _listContext() : null;
+  const listCtx = typeof getListContext === 'function' ? getListContext() : (typeof _listContext === 'function' ? _listContext() : null);
   const isTask = listCtx && listCtx.type === 'task';
   const isUl = listCtx && listCtx.type === 'ul';
   const isOl = listCtx && listCtx.type === 'ol';
   const cmds=['bold','italic','underline','strikeThrough'];
 
-  document.querySelectorAll('#formatBar .tool-btn').forEach(btn=>{
+  document.querySelectorAll('#formatBar .tool-btn, .overflow-dropdown .tool-btn').forEach(btn=>{
     const cmd=btn.dataset.cmd;
     if(cmd === 'task'){
       btn.classList.toggle('active', !!isTask);
@@ -544,7 +544,13 @@ function updateToolbarState(){
     } else if(cmds.includes(cmd)){
       try{ btn.classList.toggle('active', document.queryCommandState(cmd)); }
       catch(e){ btn.classList.remove('active'); }
-    } else {
+    } else if(cmd === 'insertUnorderedList') {
+      btn.classList.toggle('active', !!(listCtx && listCtx.type === 'ul'));
+    } else if(cmd === 'insertOrderedList') {
+      btn.classList.toggle('active', !!(listCtx && listCtx.type === 'ol'));
+    } else if(cmd === 'task') {
+      btn.classList.toggle('active', !!(listCtx && listCtx.type === 'task'));
+    } else if(!['hilite','textColor','fontSize','formatBlock'].includes(cmd)) {
       btn.classList.remove('active');
     }
   });

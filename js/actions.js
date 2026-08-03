@@ -336,7 +336,7 @@ function createNote(){
   toast('New note created');
 }
 
-function selectNote(id){
+function selectNote(id, leafId = null){
   state.currentId=id;
   state.currentMediaId=null;
   // If we're in a non-note view (media/calendar/tasks) or the note isn't in the
@@ -348,6 +348,12 @@ function selectNote(id){
   }
   renderAll();
   showMobileEditor();
+
+  if (leafId && window.paperussLeafManager) {
+    setTimeout(() => {
+      window.paperussLeafManager.switchLeaf(id, leafId).catch(console.error);
+    }, 50);
+  }
 }
 
 const persist = debounce(()=>{
@@ -368,11 +374,43 @@ const _debouncedRenderListSidebar = debounce(()=>{
 function editField(field, value){
   const n=getNote(state.currentId); if(!n) return;
   if(n.deletedAt) return;
-  n[field]=value; n.updatedAt=Date.now();
+  
+  if (field === 'content' && window.currentActiveLeaf) {
+    const leaf = window.currentActiveLeaf;
+    leaf.content = value;
+    leaf.updatedAt = Date.now();
+    
+    // If virtual or default leaf, mirror to Note
+    if (leaf.isVirtual || leaf.id === (window.paperussLeaves ? window.paperussLeaves.getNoteDefaultLeafId(n) : '')) {
+      n.content = value;
+      n.updatedAt = Date.now();
+      persist();
+    } else {
+      // Materialized non-default leaf: save only to IndexedDB!
+      n.updatedAt = Date.now(); // Note metadata updated, but NOT content
+      persist();
+      
+      // Async save leaf to IndexedDB
+      if (window.paperussLeaves) {
+        window.paperussLeaves.leafPut(leaf).then(() => {
+          window.paperussLeaves.leafQueuePut({
+            id: 'mut_' + Date.now() + '_' + Math.random().toString(36).substr(2,9),
+            noteId: n.id,
+            action: 'put',
+            data: Object.assign({}, leaf),
+            timestamp: Date.now()
+          });
+        });
+      }
+    }
+  } else {
+    n[field]=value; n.updatedAt=Date.now();
+    persist();
+  }
+
   const st=document.getElementById('saveStatus'); st.className='save-status saving';
   st.innerHTML='<span class="dot"></span><span>Saving…</span>';
-  persist();
-  // Title edits flush immediately (short, cheap update); content edits debounce.
+  
   if(field==='title'){ renderList(); renderSidebar(); }
   else { _debouncedRenderListSidebar(); }
   if(field==='content') renderStats(n);
@@ -435,8 +473,27 @@ function restoreNote(id,options={}){
 function permanentlyDeleteNote(id){
   const n=getNote(id); if(!n) return;
   const idx=notes.indexOf(n);
-  confirmDialog('Delete permanently?','"'+esc(titleOf(n))+'" will be permanently removed. This cannot be undone.','Delete permanently',()=>{
+  confirmDialog('Delete permanently?','"'+esc(titleOf(n))+'" will be permanently removed. This cannot be undone.','Delete permanently', async ()=>{
     notes.splice(idx,1);
+
+    if (window.paperussLeaves && window.paperussLeaves.isNoteMigratedToLeaves(n)) {
+      try {
+        const oldLeaves = await window.paperussLeaves.leafGetByNoteId(n.id);
+        for (const lf of oldLeaves) {
+          await window.paperussLeaves.leafDel(lf.id);
+          await window.paperussLeaves.leafQueuePut({
+            id: 'mut_del_' + Date.now() + '_' + Math.random().toString(36).substr(2,6),
+            noteId: n.id,
+            action: 'delete',
+            data: { id: lf.id },
+            timestamp: Date.now()
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to delete associated leaves', err);
+      }
+    }
+
     if(typeof recordCloudDeletion==='function') recordCloudDeletion('notes',id);
     if(state.currentId===id) state.currentId=filteredNotes()[0]?.id||null;
     save();
@@ -445,6 +502,66 @@ function permanentlyDeleteNote(id){
     toast('Note permanently deleted');
     setTimeout(gcOrphanMedia,500);
   });
+}
+
+async function duplicateNoteAction() {
+  const n = getNote(state.currentId);
+  if (!n) return;
+  toast('Duplicating note...');
+  
+  const newNoteId = uid();
+  const newNote = Object.assign({}, n, {
+    id: newNoteId,
+    title: n.title + ' (Copy)',
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  });
+  
+  if (window.paperussLeaves && window.paperussLeaves.isNoteMigratedToLeaves(n)) {
+    try {
+      const oldLeaves = await window.paperussLeaves.leafGetByNoteId(n.id);
+      const idMap = {};
+      const newLeafOrder = [];
+      
+      for (const lf of oldLeaves) {
+        const newLeafId = 'leaf_' + Date.now() + '_' + Math.random().toString(36).substr(2,6);
+        idMap[lf.id] = newLeafId;
+        newLeafOrder.push(newLeafId);
+        
+        const newLeaf = Object.assign({}, lf, {
+          id: newLeafId,
+          noteId: newNoteId,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        });
+        
+        await window.paperussLeaves.leafPut(newLeaf);
+        await window.paperussLeaves.leafQueuePut({
+          id: 'mut_dup_' + Date.now() + '_' + Math.random().toString(36).substr(2,6),
+          noteId: newNoteId,
+          action: 'put',
+          data: Object.assign({}, newLeaf),
+          timestamp: Date.now()
+        });
+      }
+      
+      newNote.leafOrder = newLeafOrder;
+      newNote.defaultLeafId = idMap[n.defaultLeafId] || n.defaultLeafId || newLeafOrder[0];
+      
+      const oldActiveId = window.paperussLeaves.getNoteActiveLeafId(n);
+      if (oldActiveId && idMap[oldActiveId]) {
+        window.paperussLeaves.setNoteActiveLeafId(newNoteId, idMap[oldActiveId]);
+      }
+    } catch(err) {
+      console.error('duplicateNoteAction leaf copy error', err);
+    }
+  }
+  
+  notes.push(newNote);
+  save();
+  renderAll();
+  selectNote(newNoteId);
+  toast('Note duplicated');
 }
 
 function deleteNote(id){
@@ -477,3 +594,99 @@ function removeTag(tag){
   n.tags=(n.tags||[]).filter(t=>t!==tag); n.updatedAt=Date.now();
   save(); renderTags(n); renderList(); renderSidebar();
 }
+
+/* ============ LEAVES (GROUP 3) ACTIONS ============ */
+async function switchLeafAction(leafId) {
+  const n = getNote(state.currentId);
+  if (!n) return;
+  await window.paperussLeafManager.switchLeaf(n.id, leafId);
+  renderList();
+  if (window.updateLeafTitleBar) window.updateLeafTitleBar();
+  const overlay = document.getElementById('leavesDrawerOverlay');
+  if (overlay && !overlay.classList.contains('hidden')) {
+    closeLeavesDrawer();
+  }
+}
+window.switchLeafAction = switchLeafAction;
+
+async function createNewLeafAction() {
+  const n = getNote(state.currentId);
+  if (!n) return;
+  const newLeafId = await window.paperussLeafManager.addLeaf(n.id, 'New Leaf');
+  if (newLeafId) {
+    await window.paperussLeafManager.switchLeaf(n.id, newLeafId);
+    renderList();
+    if (window.updateLeafTitleBar) window.updateLeafTitleBar();
+    toast('Created new leaf');
+  }
+}
+window.createNewLeafAction = createNewLeafAction;
+
+async function renameLeafAction(leafId) {
+  const n = getNote(state.currentId);
+  if (!n) return;
+  let currentTitle = 'Leaf';
+  if (window.paperussLeaves) {
+    const leafObj = await window.paperussLeaves.leafGet(leafId);
+    if (leafObj && leafObj.title) currentTitle = leafObj.title;
+  }
+  const newTitle = prompt('Rename leaf:', currentTitle);
+  if (newTitle && newTitle.trim() !== '' && newTitle !== currentTitle) {
+    await window.paperussLeafManager.renameLeaf(n.id, leafId, newTitle.trim());
+    renderList();
+    if (window.updateLeafTitleBar) window.updateLeafTitleBar();
+    toast('Renamed leaf');
+  }
+}
+window.renameLeafAction = renameLeafAction;
+
+async function duplicateLeafAction(leafId) {
+  const n = getNote(state.currentId);
+  if (!n) return;
+  const newId = await window.paperussLeafManager.duplicateLeaf(n.id, leafId);
+  if (newId) {
+    await window.paperussLeafManager.switchLeaf(n.id, newId);
+    renderList();
+    if (window.updateLeafTitleBar) window.updateLeafTitleBar();
+    toast('Duplicated leaf');
+  }
+}
+window.duplicateLeafAction = duplicateLeafAction;
+
+async function reorderLeafAction(leafId, direction) {
+  const n = getNote(state.currentId);
+  if (!n) return;
+  const res = await window.paperussLeafManager.reorderLeaf(n.id, leafId, direction);
+  if (res) {
+    renderList();
+    toast('Reordered leaves');
+  }
+}
+window.reorderLeafAction = reorderLeafAction;
+
+async function deleteLeafAction(leafId, skipConfirm = false) {
+  const n = getNote(state.currentId);
+  if (!n) return;
+  const order = window.paperussLeaves ? window.paperussLeaves.getNoteLeafOrder(n) : null;
+  const leaves = order && order.length > 0 ? order : [n.defaultLeafId || 'virtual_main_' + n.id];
+  if (leaves.length <= 1) {
+    toast('Cannot delete the final Leaf.');
+    return false;
+  }
+  const doDelete = async () => {
+    const res = await window.paperussLeafManager.deleteLeaf(n.id, leafId);
+    if (res) {
+      renderList();
+      if (window.updateLeafTitleBar) window.updateLeafTitleBar();
+      toast('Deleted leaf');
+    }
+  };
+  if (skipConfirm || window._skipConfirm) {
+    await doDelete();
+  } else {
+    confirmDialog('Delete Leaf?', 'This Leaf will be permanently deleted.', 'Delete', async () => {
+      await doDelete();
+    });
+  }
+}
+window.deleteLeafAction = deleteLeafAction;

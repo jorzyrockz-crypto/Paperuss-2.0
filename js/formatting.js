@@ -526,7 +526,7 @@ function _addTask(li, isChecked = false){
 /* Detect the "current list type" the caret is inside.
    Returns {list, li, type} or null if not in a list.
    type is 'ul' | 'ol' | 'task'. */
-function _listContext(){
+function getListContext(){
   const sel=window.getSelection();
   const ed=bodyEl();
   if(!sel || !sel.anchorNode || !ed.contains(sel.anchorNode)) return null;
@@ -589,7 +589,7 @@ function toggleList(targetType){
   const ed=bodyEl();
   if(!sel || !ed) return;
 
-  const ctx=_listContext();
+  const ctx=getListContext();
   const wantTag=(targetType==='ol')?'OL':'UL';
 
   /* ---------- CASE 2: already in the same type → toggle OFF ---------- */
