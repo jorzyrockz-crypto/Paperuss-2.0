@@ -58,12 +58,22 @@ function cacheChangelog(data){
   try{ localStorage.setItem(CHANGELOG_CACHE_KEY,JSON.stringify(data)); }catch(_){}
 }
 async function loadChangelog(){
-  const response=await fetch(CHANGELOG_URL,{cache:'no-store'});
-  if(!response.ok) throw new Error(`Changelog request failed (${response.status})`);
-  const data=await response.json();
-  if(!Array.isArray(data?.releases)) throw new Error('Changelog document is invalid');
-  cacheChangelog(data);
-  return data;
+  const cacheBustUrl = `${CHANGELOG_URL}?v=${Date.now()}`;
+  try {
+    const response = await fetch(cacheBustUrl, { cache: 'no-store' });
+    if(!response.ok) throw new Error(`Changelog request failed (${response.status})`);
+    const data = await response.json();
+    if(!Array.isArray(data?.releases)) throw new Error('Changelog document is invalid');
+    cacheChangelog(data);
+    return data;
+  } catch (error) {
+    const cached = readCachedChangelog();
+    if (cached && Array.isArray(cached?.releases)) {
+      console.warn('Network fetch for changelog failed, using offline fallback:', error);
+      return cached;
+    }
+    throw error;
+  }
 }
 function openChangelogModal(){
   const root=document.getElementById('modalRoot');
@@ -74,7 +84,10 @@ function openChangelogModal(){
   root.querySelector('.modal-overlay').onclick=event=>{ if(event.target===event.currentTarget) close(); };
   refreshIcons();
   const body=document.getElementById('changelogBody');
-  loadChangelog().then(data=>renderChangelog(body,data)).catch(()=>{
+  loadChangelog().then(data=>{
+    const isOffline = !navigator.onLine;
+    renderChangelog(body, data, isOffline ? 'Showing saved release notes while offline.' : undefined);
+  }).catch(()=>{
     const cached=readCachedChangelog();
     if(cached){ renderChangelog(body,cached,'Showing saved release notes while offline.'); return; }
     body.innerHTML='<div class="changelog-state">Could not load release notes.<br><button class="btn" type="button" data-changelog-retry>Retry</button></div>';

@@ -1,9 +1,8 @@
 const CACHE_PREFIX = 'paperuss-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v25`;
+const CACHE_NAME = `${CACHE_PREFIX}v26`;
 const APP_SHELL = [
   './',
   './index.html',
-  './changelog.json',
   './manifest.webmanifest',
   './assets/css/core.css',
   './assets/css/features.css',
@@ -133,10 +132,20 @@ self.addEventListener('fetch',event=>{
 
   if(url.origin===self.location.origin && url.pathname.endsWith('/changelog.json')){
     event.respondWith((async()=>{
-      const response=await networkFirst(request);
-      if(response && response.type!=='error') return response;
-      return new Response(JSON.stringify({generatedAt:null,releases:[]}),{
-        headers:{'Content-Type':'application/json'},status:503
+      try {
+        const response = await fetch(request);
+        if (response && response.ok) {
+          const cache = await caches.open(CACHE_NAME);
+          cache.put('./changelog.json', response.clone());
+          return response;
+        }
+      } catch (error) {
+        console.warn('PapeRuss SW network fetch for changelog.json failed, falling back to cache:', error);
+      }
+      const cached = (await caches.match('./changelog.json')) || (await caches.match(request));
+      if (cached) return cached;
+      return new Response(JSON.stringify({ generatedAt: null, releases: [] }), {
+        headers: { 'Content-Type': 'application/json' }, status: 503
       });
     })());
     return;
