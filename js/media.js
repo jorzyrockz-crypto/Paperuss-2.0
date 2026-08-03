@@ -280,6 +280,14 @@ function insertRichLink(){
         const defaultTitle = res.platformName ? `${res.platformName} Link` : decodeURIComponent(path.split('/').pop()||host) || host;
         const title = linkText || defaultTitle;
         const favicon=`https://www.google.com/s2/favicons?domain=${host}&sz=64`;
+        if(res.isTemporaryImage){
+          // Insert as normal clickable link
+          const id='l_'+Date.now().toString(36);
+          insertHTMLAtCaret(`<a href="${esc(res.url)}" data-media-id="${id}" target="_blank" rel="noopener noreferrer">${esc(title)}</a>`);
+          toast('Link inserted');
+          return;
+        }
+
         const id='l_'+Date.now().toString(36);
         insertHTMLAtCaret(
           `<a class="media-card link-card" contenteditable="false" data-media-id="${id}" data-media-kind="link" href="${esc(res.url)}" target="_blank" rel="noopener noreferrer">
@@ -310,6 +318,13 @@ function insertRichLink(){
   const title=prompt('Title (optional):', decodeURIComponent(path.split('/').pop()||host)) || host;
   const desc=prompt('Description (optional):','') || '';
   const favicon=`https://www.google.com/s2/favicons?domain=${host}&sz=64`;
+  if(res && res.isTemporaryImage) {
+    const id='l_'+Date.now().toString(36);
+    insertHTMLAtCaret(`<a href="${esc(url)}" data-media-id="${id}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>`);
+    toast('Link inserted');
+    return;
+  }
+
   const id='l_'+Date.now().toString(36);
   insertHTMLAtCaret(
     `<a class="media-card link-card" contenteditable="false" data-media-id="${id}" data-media-kind="link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">
@@ -597,6 +612,7 @@ function setupBrokenImageElement(img){
   if(!img || img.dataset.brokenHandled) return;
   img.dataset.brokenHandled = 'true';
 
+  const src = img.getAttribute('src') || '';
   const alt = img.getAttribute('alt') || img.getAttribute('title') || 'Image attachment';
   const wrapper = document.createElement('div');
   wrapper.className = 'broken-media-card';
@@ -606,10 +622,14 @@ function setupBrokenImageElement(img){
       <i data-lucide="image-off" class="w-5 h-5"></i>
       <div class="bmc-info">
         <span class="bmc-title">${esc(alt)}</span>
-        <span class="bmc-sub">Remote image link expired or unavailable</span>
+        <span class="bmc-sub">Image unavailable</span>
+        ${src ? `<a href="${esc(src)}" target="_blank" rel="noopener noreferrer" class="bmc-link">${esc(src)}</a>` : ''}
       </div>
     </div>
-    <button type="button" class="bmc-replace-btn"><i data-lucide="upload" class="w-4 h-4"></i> Re-upload Image</button>
+    <div class="bmc-actions">
+      <button type="button" class="bmc-replace-btn"><i data-lucide="upload" class="w-4 h-4"></i> Re-upload</button>
+      <button type="button" class="bmc-remove-btn"><i data-lucide="trash-2" class="w-4 h-4"></i> Remove</button>
+    </div>
   `;
 
   const replaceBtn = wrapper.querySelector('.bmc-replace-btn');
@@ -642,6 +662,17 @@ function setupBrokenImageElement(img){
         }
       };
       input.click();
+    };
+  }
+
+  const removeBtn = wrapper.querySelector('.bmc-remove-btn');
+  if(removeBtn){
+    removeBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      wrapper.remove();
+      toast('Image removed');
+      save();
     };
   }
 

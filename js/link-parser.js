@@ -153,6 +153,26 @@
 
     const isExternal = protocol === 'http:' || protocol === 'https:';
     const platformInfo = detectPlatform(parsedUrl.hostname);
+    
+    let isDirectImage = false;
+    let isTemporaryImage = false;
+    
+    if (isExternal) {
+      const pathname = parsedUrl.pathname || '';
+      if (/\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i.test(pathname)) {
+        isDirectImage = true;
+      }
+      
+      const host = parsedUrl.hostname.toLowerCase();
+      // Detect temporary/social media image URLs
+      const isFbcdn = host.includes('fbcdn.net') || host.includes('fbcdn.com') || host.includes('messenger.com');
+      const hasSignature = parsedUrl.searchParams.has('oh') && parsedUrl.searchParams.has('oe') || parsedUrl.searchParams.has('Signature') || parsedUrl.searchParams.has('Expires');
+      
+      if (isFbcdn || hasSignature) {
+        isTemporaryImage = true;
+        isDirectImage = true; // Still an image, just temporary
+      }
+    }
 
     return {
       valid: true,
@@ -161,7 +181,9 @@
       hostname: parsedUrl.hostname || '',
       isExternal: isExternal,
       platform: platformInfo.key,
-      platformName: platformInfo.name
+      platformName: platformInfo.name,
+      isDirectImage: isDirectImage,
+      isTemporaryImage: isTemporaryImage
     };
   }
 
