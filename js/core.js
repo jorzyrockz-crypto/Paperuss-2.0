@@ -1949,9 +1949,9 @@ async function renderLeavesList(c) {
   const leaves = order && order.length > 0 ? order : [n.defaultLeafId || 'virtual_main_' + n.id];
   const activeLeafId = window.paperussLeaves ? window.paperussLeaves.getNoteActiveLeafId(n) : (n.defaultLeafId || 'virtual_main_' + n.id);
 
-  let html = '<div style="padding: 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); margin-bottom: 6px;">';
+  let html = '<div style="padding: 6px 10px 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-muted); margin-bottom: 6px;">';
   html += '<span style="font-size:12px; font-weight:600; color:var(--fg-muted);">Leaves (' + leaves.length + ')</span>';
-  html += '<button class="btn btn-primary" id="newLeafBtn" onclick="createNewLeafAction()" style="padding: 4px 10px; font-size:12px;">+ New Leaf</button>';
+  html += '<button class="btn btn-primary" id="newLeafBtn" onclick="createNewLeafAction()" style="padding: 3px 10px; font-size:11.5px; border-radius:14px;">+ New Leaf</button>';
   html += '</div>';
 
   html += '<div class="leaves-list-rows">';
@@ -1959,24 +1959,27 @@ async function renderLeavesList(c) {
     const leafId = leaves[idx];
     const isVirtual = typeof leafId === 'string' && leafId.startsWith('virtual_main');
     let title = isVirtual ? 'Main' : 'Leaf ' + (idx + 1);
+    let color = isVirtual ? 'emerald' : 'slate';
+    
     if (!isVirtual && window.paperussLeaves) {
       const leafObj = await window.paperussLeaves.leafGet(leafId);
-      if (leafObj && leafObj.title) title = leafObj.title;
+      if (leafObj) {
+        if (leafObj.title) title = leafObj.title;
+        if (leafObj.color) color = leafObj.color;
+      }
     }
     const isActive = leafId === activeLeafId;
-    const canDelete = leaves.length > 1;
+    const colorClass = 'color-' + color;
 
-    html += `<div class="note-card leaf-row ${isActive ? 'active' : ''}" data-leaf-id="${leafId}" onclick="switchLeafAction('${leafId}')" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">`;
+    html += `<div class="note-card leaf-row ${isActive ? 'active' : ''} ${colorClass}" data-leaf-id="${leafId}" onclick="switchLeafAction('${leafId}')">`;
     html += `<div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">`;
-    html += `<i data-lucide="file-text" class="w-4 h-4 text-fg-muted"></i>`;
-    html += `<span class="leaf-row-title" style="font-size:13.5px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(title)}</span>`;
+    html += `<i data-lucide="file-text" class="w-4 h-4 leaf-row-icon"></i>`;
+    html += `<span class="leaf-row-title" style="font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(title)}</span>`;
     html += `</div>`;
-    html += `<div class="leaf-actions" style="display:flex; align-items:center; gap:2px;" onclick="event.stopPropagation();">`;
-    html += `<button class="btn btn-icon leaf-reorder-up" onclick="reorderLeafAction('${leafId}', -1)" title="Move up" style="padding:4px;"><i data-lucide="chevron-up" class="w-3.5 h-3.5"></i></button>`;
-    html += `<button class="btn btn-icon leaf-reorder-down" onclick="reorderLeafAction('${leafId}', 1)" title="Move down" style="padding:4px;"><i data-lucide="chevron-down" class="w-3.5 h-3.5"></i></button>`;
-    html += `<button class="btn btn-icon leaf-rename-btn" onclick="renameLeafAction('${leafId}')" title="Rename" style="padding:4px;"><i data-lucide="edit-2" class="w-3.5 h-3.5"></i></button>`;
-    html += `<button class="btn btn-icon leaf-duplicate-btn" onclick="duplicateLeafAction('${leafId}')" title="Duplicate" style="padding:4px;"><i data-lucide="copy" class="w-3.5 h-3.5"></i></button>`;
-    html += `<button class="btn btn-icon leaf-delete-btn" onclick="deleteLeafAction('${leafId}', false)" title="Delete" style="padding:4px; color:${canDelete?'var(--danger)':'var(--fg-muted)'};" ${!canDelete ? 'disabled' : ''}><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>`;
+    html += `<div class="leaf-actions" onclick="event.stopPropagation();">`;
+    html += `<button class="btn btn-icon leaf-more-btn" onclick="toggleLeafContextMenu(event, '${leafId}')" title="Leaf Options">`;
+    html += `<i data-lucide="more-vertical" class="w-4 h-4"></i>`;
+    html += `</button>`;
     html += `</div>`;
     html += `</div>`;
   }
@@ -1986,6 +1989,121 @@ async function renderLeavesList(c) {
   refreshIcons();
 }
 window.renderLeavesList = renderLeavesList;
+
+async function toggleLeafContextMenu(e, leafId) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('leafContextMenu');
+  if (!menu) return;
+
+  if (menu.dataset.activeLeafId === leafId && !menu.classList.contains('hidden')) {
+    menu.classList.add('hidden');
+    return;
+  }
+
+  const btn = e.currentTarget;
+  const rect = btn.getBoundingClientRect();
+  const n = getNote(state.currentId);
+  const leaves = window.paperussLeaves ? window.paperussLeaves.getNoteLeafOrder(n) : [];
+  const canDelete = leaves.length > 1;
+
+  let currentColor = 'slate';
+  if (typeof leafId === 'string' && leafId.startsWith('virtual_main')) {
+    currentColor = 'emerald';
+  } else if (window.paperussLeaves) {
+    const leafObj = await window.paperussLeaves.leafGet(leafId);
+    if (leafObj && leafObj.color) currentColor = leafObj.color;
+  }
+
+  const colors = [
+    { name: 'emerald', hex: '#10b981', label: 'Green' },
+    { name: 'amber', hex: '#f59e0b', label: 'Amber' },
+    { name: 'blue', hex: '#3b82f6', label: 'Blue' },
+    { name: 'purple', hex: '#a855f7', label: 'Purple' },
+    { name: 'rose', hex: '#f43f5e', label: 'Rose' },
+    { name: 'slate', hex: '#64748b', label: 'Slate' }
+  ];
+
+  menu.dataset.activeLeafId = leafId;
+  menu.innerHTML = `
+    <button class="leaf-menu-item" onclick="createNewLeafAction(); closeLeafContextMenu();">
+      <i data-lucide="plus" class="w-4 h-4"></i> Add Sub-leaf
+    </button>
+    <button class="leaf-menu-item" onclick="duplicateLeafAction('${leafId}'); closeLeafContextMenu();">
+      <i data-lucide="copy" class="w-4 h-4"></i> Duplicate
+    </button>
+    <button class="leaf-menu-item" onclick="renameLeafAction('${leafId}'); closeLeafContextMenu();">
+      <i data-lucide="edit-2" class="w-4 h-4"></i> Rename
+    </button>
+    <div style="padding:4px 8px 2px; font-size:11px; font-weight:600; color:var(--fg-muted);">Leaf Accent Color</div>
+    <div class="leaf-color-swatches">
+      ${colors.map(c => `<div class="leaf-color-swatch ${c.name === currentColor ? 'active' : ''}" style="background:${c.hex};" onclick="setLeafColorAction('${leafId}', '${c.name}'); closeLeafContextMenu();" title="${c.label}"></div>`).join('')}
+    </div>
+    <button class="leaf-menu-item" onclick="copyLeafLinkAction('${leafId}'); closeLeafContextMenu();">
+      <i data-lucide="link" class="w-4 h-4"></i> Copy Link
+    </button>
+    <button class="leaf-menu-item danger" onclick="deleteLeafAction('${leafId}', false); closeLeafContextMenu();" ${!canDelete ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''}>
+      <i data-lucide="trash-2" class="w-4 h-4"></i> Delete Leaf
+    </button>
+  `;
+
+  menu.style.position = 'fixed';
+  let left = rect.right - 180;
+  let top = rect.bottom + 4;
+  if (left < 10) left = 10;
+  if (top + 220 > window.innerHeight) top = Math.max(10, rect.top - 220);
+
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.top = `${Math.round(top)}px`;
+  menu.classList.remove('hidden');
+  refreshIcons();
+}
+window.toggleLeafContextMenu = toggleLeafContextMenu;
+
+function closeLeafContextMenu() {
+  const menu = document.getElementById('leafContextMenu');
+  if (menu) menu.classList.add('hidden');
+}
+window.closeLeafContextMenu = closeLeafContextMenu;
+
+async function setLeafColorAction(leafId, colorName) {
+  if (!leafId || !window.paperussLeaves) return;
+  let leafObj = await window.paperussLeaves.leafGet(leafId);
+  if (!leafObj) {
+    const n = getNote(state.currentId);
+    leafObj = {
+      id: leafId,
+      noteId: n ? n.id : '',
+      title: leafId.startsWith('virtual_main') ? 'Main' : 'Leaf',
+      content: '',
+      color: colorName,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+  } else {
+    leafObj.color = colorName;
+    leafObj.updatedAt = Date.now();
+  }
+  await window.paperussLeaves.leafPut(leafObj);
+  const contentEl = document.getElementById('leavesDrawerContent');
+  if (contentEl) renderLeavesList(contentEl);
+  if (typeof toast === 'function') toast(`Leaf accent set to ${colorName}`);
+}
+window.setLeafColorAction = setLeafColorAction;
+
+function copyLeafLinkAction(leafId) {
+  const n = getNote(state.currentId);
+  const link = `${window.location.origin}${window.location.pathname}?noteId=${n ? n.id : ''}&leafId=${leafId}`;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(link).then(() => {
+      if (typeof toast === 'function') toast('Leaf deep link copied to clipboard');
+    }).catch(() => {
+      if (typeof toast === 'function') toast('Copied link: ' + link);
+    });
+  } else if (typeof toast === 'function') {
+    toast('Copied link: ' + link);
+  }
+}
+window.copyLeafLinkAction = copyLeafLinkAction;
 
 function updateLeafToggleState(status = 'saved') {
   const btn = document.getElementById('leafToggleBtn');
@@ -2031,21 +2149,11 @@ function positionLeavesWidgetBelowToggle() {
 
   if (widget.dataset.dragged === 'true') return;
 
-  const rect = toggleBtn.getBoundingClientRect();
-  const safe = 12;
-  const w = widget.offsetWidth || 320;
-
-  let left = rect.right - w;
-  let top = rect.bottom + 8;
-
-  left = Math.max(safe, Math.min(left, window.innerWidth - w - safe));
-  top = Math.max(safe, Math.min(top, window.innerHeight - (widget.offsetHeight || 300) - safe));
-
   widget.style.position = 'fixed';
-  widget.style.left = `${Math.round(left)}px`;
-  widget.style.top = `${Math.round(top)}px`;
-  widget.style.right = 'auto';
-  widget.style.bottom = 'auto';
+  widget.style.bottom = '80px';
+  widget.style.right = '24px';
+  widget.style.top = 'auto';
+  widget.style.left = 'auto';
 }
 
 function openLeavesDrawer() {
@@ -2066,6 +2174,7 @@ function closeLeavesDrawer() {
   if (!overlay) return;
   overlay.classList.add('hidden');
   overlay.classList.remove('show');
+  closeLeafContextMenu();
 }
 window.closeLeavesDrawer = closeLeavesDrawer;
 
@@ -2141,12 +2250,9 @@ function initDraggableLeavesWidget() {
 }
 
 document.addEventListener('pointerdown', (e) => {
-  const overlay = document.getElementById('leavesDrawerOverlay');
-  if (!overlay || !overlay.classList.contains('show')) return;
-  const widget = document.getElementById('leavesDrawer');
-  const toggleBtn = document.getElementById('leafToggleBtn');
-  if (widget && !widget.contains(e.target) && (!toggleBtn || !toggleBtn.contains(e.target))) {
-    closeLeavesDrawer();
+  const menu = document.getElementById('leafContextMenu');
+  if (menu && !menu.classList.contains('hidden') && !menu.contains(e.target) && !e.target.closest('.leaf-more-btn')) {
+    closeLeafContextMenu();
   }
 });
 

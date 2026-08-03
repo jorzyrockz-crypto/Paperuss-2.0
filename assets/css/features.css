@@ -1770,25 +1770,28 @@ blockquote.note-callout.callout-info {
 
 /* ============ FLOATING LEAVES PALETTE & DYNAMIC LEAF BUTTON ============ */
 
-/* Requirement 1: Decoupled Floating Action Button (FAB) */
+/* ============ FLOATING LEAVES PALETTE & DYNAMIC LEAF BUTTON ============ */
+
+/* Requirement 1: Bottom-Right Decoupled Floating Action Button (FAB) */
 .leaf-toggle-fab,
 .leaf-toggle-btn {
   position: fixed;
-  top: 16px;
-  right: 16px;
+  bottom: 24px;
+  right: 24px;
+  top: auto;
   z-index: 60;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 20px;
-  background: rgba(30, 30, 30, 0.65);
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 24px;
+  background: rgba(20, 24, 33, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: var(--fg, #f1f5f9);
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   transition: transform var(--duration-fast, 120ms) var(--ease-spring, cubic-bezier(0.175, 0.885, 0.32, 1.275)),
@@ -1800,24 +1803,25 @@ blockquote.note-callout.callout-info {
 
 [data-theme="light"] .leaf-toggle-fab,
 [data-theme="light"] .leaf-toggle-btn {
-  background: rgba(255, 255, 255, 0.75);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   color: var(--fg, #0f172a);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
 }
 
 .leaf-toggle-fab:hover,
 .leaf-toggle-btn:hover {
   transform: translateY(-2px) scale(1.04);
-  background: rgba(45, 52, 68, 0.8);
+  background: rgba(45, 52, 68, 0.9);
   border-color: var(--accent, #3b82f6);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
 }
 
 [data-theme="light"] .leaf-toggle-fab:hover,
 [data-theme="light"] .leaf-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 1);
   border-color: var(--accent, #2563eb);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.16);
 }
 
 .leaf-toggle-fab:active,
@@ -1878,7 +1882,7 @@ blockquote.note-callout.callout-info {
   50% { opacity: 0.3; transform: scale(1.4); }
 }
 
-/* Requirement 2: Overlay container without dimming backdrop */
+/* Requirement 2: Transparent overlay container (No dimming backdrop) */
 .leaves-drawer-overlay {
   position: fixed;
   inset: 0;
@@ -1891,23 +1895,27 @@ blockquote.note-callout.callout-info {
   pointer-events: none;
 }
 
-/* Requirement 3 & 4: Compact Glassmorphism Widget with Anchored Expansion */
+/* Requirement 3 & 4: Detached Bottom-Right Floating Palette Widget with Dynamic Height Auto-Expansion */
 .leaves-palette-widget {
   position: fixed;
-  top: 56px;
-  right: 16px;
+  bottom: 80px;
+  right: 24px;
+  top: auto;
+  left: auto;
   z-index: 55;
-  width: min(280px, calc(100vw - 32px));
-  max-width: 280px;
-  max-height: calc(100vh - 80px);
-  background: rgba(30, 30, 30, 0.65);
+  width: min(290px, calc(100vw - 32px));
+  max-width: 290px;
+  height: fit-content;
+  max-height: calc(100vh - 120px);
+  background: rgba(20, 24, 33, 0.88);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 14px;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
   opacity: 0;
-  transform: translateY(-10px);
+  transform-origin: bottom right;
+  transform: scale(0.9) translateY(12px);
   pointer-events: none;
   visibility: hidden;
   display: flex;
@@ -1920,14 +1928,14 @@ blockquote.note-callout.callout-info {
 }
 
 [data-theme="light"] .leaves-palette-widget {
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12);
 }
 
 .leaves-drawer-overlay.show .leaves-palette-widget {
   opacity: 1;
-  transform: translateY(0);
+  transform: scale(1) translateY(0);
   pointer-events: auto;
   visibility: visible;
 }
@@ -1970,5 +1978,153 @@ blockquote.note-callout.callout-info {
   padding: 10px;
   overflow-y: auto;
   flex: 1;
+}
+
+/* Leaf Row Styling & Color Accent Tinting */
+.leaf-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  border-left: 3px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+  cursor: pointer;
+}
+
+.leaf-row:hover {
+  background: var(--hover, rgba(255, 255, 255, 0.06));
+}
+
+.leaf-row.active {
+  border-left-color: var(--accent, #3b82f6);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* Color Accent Tint Variants */
+.leaf-row.color-emerald { background: rgba(16, 185, 129, 0.08); border-left-color: #10b981; }
+.leaf-row.color-amber { background: rgba(245, 158, 11, 0.08); border-left-color: #f59e0b; }
+.leaf-row.color-blue { background: rgba(59, 130, 246, 0.08); border-left-color: #3b82f6; }
+.leaf-row.color-purple { background: rgba(168, 85, 247, 0.08); border-left-color: #a855f7; }
+.leaf-row.color-rose { background: rgba(244, 63, 94, 0.08); border-left-color: #f43f5e; }
+.leaf-row.color-slate { background: rgba(100, 116, 139, 0.08); border-left-color: #64748b; }
+
+.leaf-row.color-emerald .leaf-row-icon { color: #10b981; }
+.leaf-row.color-amber .leaf-row-icon { color: #f59e0b; }
+.leaf-row.color-blue .leaf-row-icon { color: #3b82f6; }
+.leaf-row.color-purple .leaf-row-icon { color: #a855f7; }
+.leaf-row.color-rose .leaf-row-icon { color: #f43f5e; }
+.leaf-row.color-slate .leaf-row-icon { color: #64748b; }
+
+/* 3-Dot Kebab Button Reveal on Hover */
+.leaf-more-btn {
+  opacity: 0;
+  padding: 4px;
+  border-radius: 6px;
+  color: var(--fg-muted);
+  transition: opacity 0.15s ease, background 0.12s ease, color 0.12s ease;
+}
+
+.leaf-row:hover .leaf-more-btn,
+.leaf-row.active .leaf-more-btn,
+.touch-device .leaf-more-btn {
+  opacity: 1;
+}
+
+.leaf-more-btn:hover {
+  background: var(--hover, rgba(255, 255, 255, 0.12));
+  color: var(--fg);
+}
+
+/* Glassmorphic 3-Dot Context Menu Popover */
+.leaf-context-menu {
+  position: fixed;
+  z-index: 70;
+  min-width: 175px;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  animation: leafMenuIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="dark"] .leaf-context-menu {
+  background: rgba(24, 28, 38, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+}
+
+.leaf-context-menu.hidden {
+  display: none;
+}
+
+@keyframes leafMenuIn {
+  from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.leaf-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.leaf-menu-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .leaf-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.leaf-menu-item.danger {
+  color: var(--danger, #ef4444);
+}
+
+.leaf-menu-item.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.leaf-color-swatches {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px;
+  margin: 4px 0;
+  border-top: 1px solid var(--border-muted, rgba(255, 255, 255, 0.08));
+  border-bottom: 1px solid var(--border-muted, rgba(255, 255, 255, 0.08));
+}
+
+.leaf-color-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+
+.leaf-color-swatch:hover {
+  transform: scale(1.25);
+}
+
+.leaf-color-swatch.active {
+  border-color: var(--fg);
 }
 
