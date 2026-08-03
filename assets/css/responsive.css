@@ -367,24 +367,26 @@
 .leaves-drawer-overlay.hidden {
   display: none !important;
 }
-/* Authoritative Portrait/Mobile Leaves Sheet presentation */
-.leaves-sheet,
-.leaves-drawer {
-  position: fixed !important;
-  left: 16px !important;
-  right: 16px !important;
-  bottom: 74px !important;
-  top: auto !important;
-  width: auto !important;
-  max-width: none !important;
-  max-height: calc(100vh - 120px) !important;
-  border-radius: 16px !important;
-  background: var(--canvas);
-  border: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
-  pointer-events: auto !important;
+/* Portrait / Mobile: Leaves panel as a full-width bottom sheet */
+@media (max-width: 900px) {
+  .leaves-sheet,
+  .leaves-drawer {
+    position: fixed !important;
+    left: 16px !important;
+    right: 16px !important;
+    bottom: 74px !important;
+    top: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: calc(100vh - 120px) !important;
+    border-radius: 16px !important;
+    background: var(--canvas);
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+    pointer-events: auto !important;
+  }
 }
 .leaves-drawer-header {
   display: flex;
