@@ -527,6 +527,7 @@
         return null;
       }
       if (typeof global.toast === 'function') global.toast('Generating Word document (.docx)...');
+      if (typeof global.flushActiveLeaf === 'function') await global.flushActiveLeaf();
 
       const blob = await generateDocxBlob({ note, mode: 'active' });
       const filename = `${(note.title || 'Note').replace(/[^\w\s-]/g, '').trim() || 'Note'}.docx`;
@@ -551,6 +552,7 @@
         return null;
       }
       if (typeof global.toast === 'function') global.toast('Generating Word document (.docx) for all leaves...');
+      if (typeof global.flushActiveLeaf === 'function') await global.flushActiveLeaf();
 
       const blob = await generateDocxBlob({ note, mode: 'all' });
       const filename = `${(note.title || 'Note').replace(/[^\w\s-]/g, '').trim() || 'Note'}-all-leaves.docx`;
