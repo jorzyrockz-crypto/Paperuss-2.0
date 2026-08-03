@@ -193,6 +193,30 @@ function bind(){
         node.textContent = node.textContent.slice(type.length + 1);
         if(typeof insertCallout === 'function') insertCallout(type);
         setTimeout(handleBodyInput, 0);
+      } else if((text === '- [ ]' || text === '* [ ]' || text === '+ [ ]' || text === '[ ]') && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(text.length);
+        if(typeof toggleList === 'function') toggleList('task');
+        setTimeout(handleBodyInput, 0);
+      } else if((text === '- [x]' || text === '- [X]' || text === '* [x]' || text === '* [X]' || text === '+ [x]' || text === '+ [X]' || text === '[x]' || text === '[X]') && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(text.length);
+        if(typeof toggleList === 'function') toggleList('task');
+        setTimeout(() => {
+          const li = window.getSelection()?.anchorNode?.parentElement?.closest?.('li[data-task]');
+          if(li && typeof _addTask === 'function') _addTask(li, true);
+          handleBodyInput();
+        }, 0);
+      } else if((text === '-' || text === '*' || text === '+') && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(text.length);
+        if(typeof toggleList === 'function') toggleList('ul');
+        setTimeout(handleBodyInput, 0);
+      } else if(text === '1.' && (block.tagName === 'P' || block.tagName === 'DIV')){
+        e.preventDefault();
+        node.textContent = node.textContent.slice(2);
+        if(typeof toggleList === 'function') toggleList('ol');
+        setTimeout(handleBodyInput, 0);
       } else {
         // Inline markdown auto-formatting for **bold**, ~~strike~~, and *italic*
         const boldMatch = text.match(/\*\*([^\*\s][^\*]*[^\*\s]|[^\*\s])\*\*$/);
@@ -457,11 +481,74 @@ function bind(){
     // 2. Remove dangerous or non-semantic tags
     doc.querySelectorAll('script, style, meta, link, iframe, object, embed, o\\:p').forEach(el => el.remove());
 
-    // 3. Normalize AI List Items (<ul><li><p>Text</p></li></ul> -> <ul><li>Text</li></ul>)
+    // 3. Normalize AI List Items & Markdown Task Markers (e.g. <li>[ ] Task</li> or <li>- [x] Task</li>)
     doc.querySelectorAll('li').forEach(li => {
       const ps = Array.from(li.querySelectorAll('p'));
       if(ps.length > 0){
         li.innerHTML = ps.map(p => p.innerHTML).join('<br>');
+      }
+      // Check for existing checkbox input
+      const cbInput = li.querySelector(':scope > input[type="checkbox"]');
+      if(cbInput){
+        li.setAttribute('data-task', '1');
+        if(li.parentElement) li.parentElement.classList.add('task-list');
+        if(cbInput.checked) cbInput.setAttribute('checked', '');
+        return;
+      }
+      // Intercept text node patterns: - [ ], * [x], [ ], [X]
+      const textMatch = li.textContent.match(/^\s*(?:[-*+]\s*|\d+\.\s*)?\[([ xX])\]\s*/);
+      if(textMatch){
+        const isChecked = textMatch[1].toLowerCase() === 'x';
+        // Strip the [ ] or [x] prefix marker
+        const taskRegex = /^\s*(?:[-*+]\s*|\d+\.\s*)?\[([ xX])\]\s*/;
+        const walker = doc.createTreeWalker(li, NodeFilter.SHOW_TEXT);
+        const firstText = walker.nextNode();
+        if(firstText){
+          firstText.textContent = firstText.textContent.replace(taskRegex, '');
+        }
+        li.setAttribute('data-task', '1');
+        if(li.parentElement) li.parentElement.classList.add('task-list');
+        const cb = doc.createElement('input');
+        cb.type = 'checkbox';
+        if(isChecked){
+          cb.checked = true;
+          cb.setAttribute('checked', '');
+        }
+        li.insertBefore(cb, li.firstChild);
+        if(!cb.nextSibling) li.appendChild(doc.createTextNode(' '));
+        else if(cb.nextSibling.nodeType === 3 && !cb.nextSibling.textContent.startsWith(' ')){
+          cb.nextSibling.textContent = ' ' + cb.nextSibling.textContent;
+        }
+      }
+    });
+
+    // 3b. Intercept paragraph/div blocks starting with Markdown tasks: e.g. <p>- [ ] Task 1</p>
+    const blockTaskRegex = /^\s*(?:[-*+]\s*|\d+\.\s*)?\[([ xX])\]\s*/;
+    doc.querySelectorAll('p, div').forEach(blk => {
+      if(blk.querySelector('ul, ol, table')) return;
+      const text = blk.textContent;
+      const match = text.match(blockTaskRegex);
+      if(match){
+        const isChecked = match[1].toLowerCase() === 'x';
+        const cleanHTML = blk.innerHTML.replace(blockTaskRegex, '');
+        const li = doc.createElement('li');
+        li.setAttribute('data-task', '1');
+        const cb = doc.createElement('input');
+        cb.type = 'checkbox';
+        if(isChecked){
+          cb.checked = true;
+          cb.setAttribute('checked', '');
+        }
+        li.appendChild(cb);
+        li.appendChild(doc.createTextNode(' '));
+        const temp = doc.createElement('span');
+        temp.innerHTML = cleanHTML;
+        while(temp.firstChild) li.appendChild(temp.firstChild);
+
+        const ul = doc.createElement('ul');
+        ul.className = 'task-list';
+        ul.appendChild(li);
+        blk.replaceWith(ul);
       }
     });
 
@@ -534,6 +621,44 @@ function bind(){
         return;
       }
     }
+    // Plain-text paste containing Markdown task lists (e.g. - [ ] Task 1 \n * [x] Task 2)
+    if(text && /^[ \t]*(?:[-*+]\s*|\d+\.\s*)?\[[ xX]\]/m.test(text)){
+      const lines = text.split(/\r?\n/);
+      let htmlOutput = '';
+      let inTaskGroup = false;
+      const taskLineRegex = /^[ \t]*(?:[-*+]\s*|\d+\.\s*)?\[([ xX])\]\s*(.*)$/;
+      for(let i = 0; i < lines.length; i++){
+        const line = lines[i];
+        const m = line.match(taskLineRegex);
+        if(m){
+          if(!inTaskGroup){
+            htmlOutput += '<ul class="task-list">';
+            inTaskGroup = true;
+          }
+          const isChecked = m[1].toLowerCase() === 'x';
+          const content = m[2] || '';
+          const checkedAttr = isChecked ? ' checked=""' : '';
+          htmlOutput += `<li data-task="1"><input type="checkbox"${checkedAttr}> ${esc(content)}</li>`;
+        } else {
+          if(inTaskGroup){
+            htmlOutput += '</ul>';
+            inTaskGroup = false;
+          }
+          if(line.trim()){
+            htmlOutput += `<p>${esc(line)}</p>`;
+          }
+        }
+      }
+      if(inTaskGroup) htmlOutput += '</ul>';
+      if(htmlOutput){
+        e.preventDefault();
+        document.execCommand('insertHTML', false, htmlOutput);
+        showPasteAsPlainTextChip(text);
+        setTimeout(handleBodyInput, 0);
+        return;
+      }
+    }
+
     const html = e.clipboardData.getData('text/html');
     if(html){
       e.preventDefault();

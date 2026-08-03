@@ -497,19 +497,30 @@ function _stripTask(li){
   }
   li.removeAttribute('data-task');
 }
-function _addTask(li){
-  if(li.querySelector(':scope > input[type=checkbox]')) return; // idempotent
-  li.setAttribute('data-task','1');
-  const cb=document.createElement('input');
-  cb.type='checkbox';
-  if(li.firstChild && li.firstChild.nodeType===3)
-    li.firstChild.textContent=li.firstChild.textContent.replace(/^\s+/,'');
-  li.insertBefore(cb, li.firstChild);
-  // Ensure exactly one space after the checkbox
-  const nxt=cb.nextSibling;
-  if(!nxt) li.appendChild(document.createTextNode(' '));
-  else if(nxt.nodeType===3 && !nxt.textContent.startsWith(' '))
-    nxt.textContent=' '+nxt.textContent;
+function _addTask(li, isChecked = false){
+  let cb = li.querySelector(':scope > input[type=checkbox]');
+  if(!cb){
+    li.setAttribute('data-task','1');
+    cb=document.createElement('input');
+    cb.type='checkbox';
+    if(li.firstChild && li.firstChild.nodeType===3)
+      li.firstChild.textContent=li.firstChild.textContent.replace(/^\s+/,'');
+    li.insertBefore(cb, li.firstChild);
+    const nxt=cb.nextSibling;
+    if(!nxt) li.appendChild(document.createTextNode(' '));
+    else if(nxt.nodeType===3 && !nxt.textContent.startsWith(' '))
+      nxt.textContent=' '+nxt.textContent;
+  }
+  if(isChecked){
+    cb.checked = true;
+    cb.setAttribute('checked', '');
+  } else {
+    cb.checked = false;
+    cb.removeAttribute('checked');
+  }
+  if(li.parentElement && (li.parentElement.tagName === 'UL' || li.parentElement.tagName === 'OL')){
+    li.parentElement.classList.add('task-list');
+  }
 }
 
 /* Detect the "current list type" the caret is inside.
