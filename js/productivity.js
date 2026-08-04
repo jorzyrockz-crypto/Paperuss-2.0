@@ -816,11 +816,23 @@ window.buildProductivityStaticSnapshot = function(type, source) {
     </div>`;
   }
   
+  const normalizeProductivityDate = (val) => {
+    if (!val) return new Date(NaN);
+    if (typeof val === 'object') {
+      if (typeof val.toDate === 'function') return val.toDate();
+      if (typeof val.toMillis === 'function') return new Date(val.toMillis());
+      if (val.seconds !== undefined) return new Date(val.seconds * 1000);
+    }
+    return new Date(val);
+  };
+
   if (type === 'calendar') {
     const title = source.title || 'Untitled Event';
-    const startFmt = new Date(source.calendarStart).toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    const d = normalizeProductivityDate(source.calendarStart);
+    const startFmt = isNaN(d) ? 'Date unavailable' : d.toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
     return `📅 Event: ${escStr(title)} (${escStr(startFmt)})`;
-  } else if (type === 'todo-list') {
+  }
+ else if (type === 'todo-list') {
     const title = source[0].groupTitle || 'Todo List';
     return `✅ Todo List: ${escStr(title)} (${source.length} tasks)`;
   }
@@ -883,7 +895,8 @@ window.hydrateProductivityReferences = function(rootElement) {
 
     if (type === 'calendar') {
       const title = source.title || 'Untitled Event';
-      const startFmt = new Date(source.calendarStart).toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+      const d = normalizeProductivityDate(source.calendarStart);
+      const startFmt = isNaN(d) ? 'Date unavailable' : d.toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
       hydrateContainer.innerHTML = `
         <div class="ref-cal-header">📅 ${escStr(title)}</div>
         <div class="ref-cal-meta">${escStr(startFmt)}</div>
