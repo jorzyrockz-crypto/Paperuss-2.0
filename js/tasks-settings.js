@@ -23,7 +23,7 @@ async function openTaskCreatorModal(){
   let loadedTasks = [];
   let isLoading = true;
   let errorState = null;
-  let listEventBound = false;
+
   let isCreatingTasks = false;
 
   async function performLoad() {
@@ -113,17 +113,16 @@ async function openTaskCreatorModal(){
       }
       
       const listEl = document.getElementById('tmTaskList');
-      if(listEl && !listEventBound) {
-        listEventBound = true;
-        listEl.addEventListener('click', (e) => {
+      if(listEl) {
+        listEl.onclick = (e) => {
           const row = e.target.closest('[data-item-id]');
           if(!row) return;
-          const id = row.getAttribute('data-item-id');
+          const id = String(row.getAttribute('data-item-id'));
           if(selectedTaskIds.has(id)) selectedTaskIds.delete(id);
           else selectedTaskIds.add(id);
           
           listEl.querySelectorAll('[data-item-id]').forEach(r => {
-            const isSel = selectedTaskIds.has(r.getAttribute('data-item-id'));
+            const isSel = selectedTaskIds.has(String(r.getAttribute('data-item-id')));
             r.classList.toggle('selected', isSel);
             r.setAttribute('aria-selected', isSel);
             const cb = r.querySelector('input[type="checkbox"]');
@@ -131,9 +130,9 @@ async function openTaskCreatorModal(){
           });
           const btn = document.getElementById('tmInsertSelected');
           if(btn) btn.disabled = selectedTaskIds.size === 0;
-        });
+        };
         
-        listEl.addEventListener('keydown', (e) => {
+        listEl.onkeydown = (e) => {
           if(e.key === 'Enter' || e.key === ' ') {
             const row = e.target.closest('[data-item-id]');
             if(row) {
@@ -141,7 +140,7 @@ async function openTaskCreatorModal(){
               row.click();
             }
           }
-        });
+        };
       }
 
       const btnInsertSel = document.getElementById('tmInsertSelected');
@@ -170,7 +169,7 @@ async function openTaskCreatorModal(){
           if(isCreatingTasks) return;
           
           const raw=document.getElementById('tmTasks').value;
-          const lines=raw.split('\\n').map(s=>s.trim()).filter(Boolean);
+          const lines=raw.split(/\\r?\\n/).map(s=>s.trim()).filter(Boolean);
           if(!lines.length){ toast('Enter at least one task'); return; }
           
           isCreatingTasks = true;

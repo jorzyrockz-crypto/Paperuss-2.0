@@ -263,7 +263,6 @@ async function openCalendarEventCreator(year, month, day, options = { intent: 'c
   let loadedEvents = [];
   let isLoading = true;
   let errorState = null;
-  let listEventBound = false;
 
   async function performLoad() {
     isLoading = true;
@@ -380,11 +379,9 @@ async function openCalendarEventCreator(year, month, day, options = { intent: 'c
           if(listEl) listEl.innerHTML = renderEventListRows(e.target.value);
         };
       }
-      
       const listEl = document.getElementById('evList');
-      if(listEl && !listEventBound) {
-        listEventBound = true;
-        listEl.addEventListener('click', (e) => {
+      if(listEl) {
+        listEl.onclick = (e) => {
           const row = e.target.closest('[data-item-id]');
           if(!row) return;
           selectedEventNoteId = String(row.getAttribute('data-item-id'));
@@ -396,9 +393,9 @@ async function openCalendarEventCreator(year, month, day, options = { intent: 'c
           });
           const btn = document.getElementById('evInsertSelected');
           if(btn) btn.disabled = !selectedEventNoteId;
-        });
+        };
         
-        listEl.addEventListener('keydown', (e) => {
+        listEl.onkeydown = (e) => {
           if(e.key === 'Enter' || e.key === ' ') {
             const row = e.target.closest('[data-item-id]');
             if(row) {
@@ -406,7 +403,7 @@ async function openCalendarEventCreator(year, month, day, options = { intent: 'c
               row.click();
             }
           }
-        });
+        };
       }
 
       const btnInsertSel = document.getElementById('evInsertSelected');

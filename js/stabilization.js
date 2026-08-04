@@ -393,8 +393,9 @@
     if(!task || typeof task!=='object') return null;
     task.id=sanitizeId(task.id);
     if(!task.id) return null;
-    task.noteId=sanitizeId(task.noteId);
-    if(!task.noteId) return null;
+    const rawNoteId = task.noteId == null ? '' : String(task.noteId).trim();
+    task.noteId = rawNoteId ? sanitizeId(rawNoteId) : '';
+    if(rawNoteId && !task.noteId) return null;
     task.text=String(task.text||'').slice(0,1000);
     task.completed=task.completed===true;
     task.priority=VALID_PRIORITY.has(task.priority)?task.priority:'medium';
