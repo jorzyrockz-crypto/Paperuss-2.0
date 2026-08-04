@@ -251,7 +251,7 @@ function renderCalendarScheduleView(){
 
 async function openCalendarEventCreator(year, month, day, options){
   options = options || {};
-  options.intent = options.intent || 'calendar';
+  const intent = options.intent || 'calendar';
   const now = new Date();
   if(!year) year = now.getFullYear();
   if(month === undefined) month = now.getMonth();
@@ -356,7 +356,7 @@ async function openCalendarEventCreator(year, month, day, options){
         </div>
         <div class="modal-actions">
           <button class="btn" id="evCancel">Cancel</button>
-          <button class="btn btn-primary" id="evCreate">${options.intent === 'insert' ? 'Create & Insert Event' : 'Create Event'}</button>
+          <button class="btn btn-primary" id="evCreate">${intent === 'insert' ? 'Create & Insert Event' : 'Create Event'}</button>
         </div>
       `}
     </div></div>`;
@@ -486,7 +486,7 @@ async function openCalendarEventCreator(year, month, day, options){
         }
         renderCalendarView(); renderAll();
         
-        if(options.intent === 'insert') {
+        if(intent === 'insert') {
           const eventHtml = `<div class="callout callout-info" style="margin:12px 0"><span class="callout-badge">📅 Event</span> <strong>${esc(title)}</strong> &nbsp;·&nbsp; <span style="font-size:12px;opacity:0.8">${startFmt}</span></div><p><br></p>`;
           const ed = document.getElementById('noteBody');
           if(ed) {

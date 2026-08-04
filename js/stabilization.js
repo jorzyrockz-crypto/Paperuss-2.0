@@ -8,7 +8,7 @@
   const BUILD=Object.freeze({
     name:'PapeRuss 2.0 Stabilization',
     version:'2.0.1-stabilization',
-    cacheName:'paperuss-shell-v32',
+    cacheName:'paperuss-shell-v33',
     schemaVersion:4
   });
 

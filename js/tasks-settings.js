@@ -18,7 +18,7 @@ function saveTasks(){
 
 async function openTaskCreatorModal(options){
   options = options || {};
-  options.intent = options.intent || 'manage';
+  const intent = options.intent || 'manage';
   const root=document.getElementById('modalRoot');
   let activeTab = 'select'; // 'select' or 'create'
   let selectedTaskIds = new Set();
@@ -87,7 +87,7 @@ async function openTaskCreatorModal(options){
         </div>
         <div class="modal-actions">
           <button class="btn" id="tmCancel">Cancel</button>
-          <button class="btn btn-primary" id="tmCreate">${options.intent === 'insert' ? 'Create & Insert' : 'Create List'}</button>
+          <button class="btn btn-primary" id="tmCreate">${intent === 'insert' ? 'Create & Insert' : 'Create List'}</button>
         </div>
       `}
     </div></div>`;
@@ -221,7 +221,7 @@ async function openTaskCreatorModal(options){
           }
           
           addNotification({type:'task',title:`${lines.length} tasks created`,body:lines.slice(0,3).join(', ')+(lines.length>3?'…':''),icon:'check-square',activity:true});
-          if (options.intent === 'insert') {
+          if (intent === 'insert') {
             const selectedItems = loadedTasks.filter(t => validIds.includes(String(t.id)));
             const checklistHtml = selectedItems.map(t => `<li data-task="1"><input type="checkbox" ${t.completed?'checked':''}> ${esc(t.text)}</li>`).join('');
             
