@@ -969,8 +969,8 @@ function isMarkdownText(text) {
   document.getElementById('importFile').onchange=e=>{
     const f=e.target.files[0];
     if(f){
-      if(f.name.toLowerCase().endsWith('.docx') || f.type==='application/vnd.openxmlformats-officedocument.wordprocessingml.document'){
-        if(typeof window.importDocxFile==='function') window.importDocxFile(f);
+      if(typeof importSelectedFile==='function') {
+        importSelectedFile(f);
       } else {
         importNotes(f);
       }
@@ -996,11 +996,11 @@ function isMarkdownText(text) {
   const profileExportDocxAllBtn=document.getElementById('profileExportDocxAllBtn');
   if(profileExportDocxActiveBtn) profileExportDocxActiveBtn.onclick=()=>{
     closeProfilePanel();
-    if(typeof window.exportDocxActiveLeaf==='function') window.exportDocxActiveLeaf();
+    if(typeof window.exportDocx==='function') window.exportDocx('active');
   };
   if(profileExportDocxAllBtn) profileExportDocxAllBtn.onclick=()=>{
     closeProfilePanel();
-    if(typeof window.exportDocxAllLeaves==='function') window.exportDocxAllLeaves();
+    if(typeof window.exportDocx==='function') window.exportDocx('all');
   };
   if(profileThemeBtn) profileThemeBtn.onclick=()=>{
     const cur=document.documentElement.getAttribute('data-theme');
