@@ -19,26 +19,24 @@
 
   // Regex definitions
   // 1. Time only (e.g. "3 PM", "3:30 PM", "15:00", "at 9 AM")
-  const timeRe = /\b(?:(?:at\s+)?([0-1]?[0-9]|2[0-3])(?::([0-5][0-9]))?\s*([AaPp][Mm])|(?:at\s+)?([0-1]?[0-9]|2[0-3]):([0-5][0-9]))\b/i;
+  const timeRe = /\b(?:(?:at\s+)?([0-1]?[0-9]|2[0-3])(?::([0-5][0-9]))?\s*([AaPp][Mm])|(?:at\s+)?([0-1]?[0-9]|2[0-3]):([0-5][0-9]))\b/ig;
   
   // 2. Absolute Dates (e.g. "August 15, 2026", "Aug 15", "15 August 2026", "08/15/2026", "2026-08-15")
   const monthNamesStr = [...MONTHS, ...SHORT_MONTHS].join('|');
-  const absDate1 = new RegExp(`\\b(?:(${monthNamesStr})\\s+([1-9]|[12][0-9]|3[01])(?:st|nd|rd|th)?(?:,?\\s+((?:19|20)\\d\\d))?)\\b`, 'i'); // Month DD, YYYY
-  const absDate2 = new RegExp(`\\b(?:([1-9]|[12][0-9]|3[01])(?:st|nd|rd|th)?\\s+(${monthNamesStr})(?:,?\\s+((?:19|20)\\d\\d))?)\\b`, 'i'); // DD Month YYYY
-  const absDate3 = new RegExp(`\\b(?:(0?[1-9]|1[0-2])/(0?[1-9]|[12][0-9]|3[01])/(?:((?:19|20)\\d\\d)|\\d\\d))\\b`, 'i'); // MM/DD/YYYY
-  const absDate4 = new RegExp(`\\b(?:((?:19|20)\\d\\d)-(0?[1-9]|1[0-2])-(0?[1-9]|[12][0-9]|3[01]))\\b`, 'i'); // YYYY-MM-DD
+  const absDate1 = new RegExp(`\\b(?:(${monthNamesStr})\\s+([1-9]|[12][0-9]|3[01])(?:st|nd|rd|th)?(?:,?\\s+((?:19|20)\\d\\d))?)\\b`, 'ig'); // Month DD, YYYY
+  const absDate2 = new RegExp(`\\b(?:([1-9]|[12][0-9]|3[01])(?:st|nd|rd|th)?\\s+(${monthNamesStr})(?:,?\\s+((?:19|20)\\d\\d))?)\\b`, 'ig'); // DD Month YYYY
+  const absDate3 = new RegExp(`\\b(?:(0?[1-9]|1[0-2])/(0?[1-9]|[12][0-9]|3[01])/(?:((?:19|20)\\d\\d)|\\d\\d))\\b`, 'ig'); // MM/DD/YYYY
+  const absDate4 = new RegExp(`\\b(?:((?:19|20)\\d\\d)-(0?[1-9]|1[0-2])-(0?[1-9]|[12][0-9]|3[01]))\\b`, 'ig'); // YYYY-MM-DD
   
   // 3. Relative Dates
   const weekdaysStr = WEEKDAYS.join('|');
-  const relDate1 = /\b(?:today|tomorrow)\b/i;
-  const relDate2 = new RegExp(`\\b(?:next\\s+)(${weekdaysStr})\\b`, 'i');
-  const relDate3 = new RegExp(`\\b(${weekdaysStr})\\b`, 'i');
+  const relDate1 = /\b(?:today|tomorrow)\b/ig;
+  const relDate2 = new RegExp(`\\b(?:next\\s+)(${weekdaysStr})\\b`, 'ig');
+  const relDate3 = new RegExp(`\\b(${weekdaysStr})\\b`, 'ig');
 
   // Combined patterns (Date + Time) are handled by parsing dates and times separately and looking for proximity.
   
-  function matchTime(str, offset) {
-    const m = timeRe.exec(str);
-    if (!m) return null;
+  function matchTime(m, offset) {
     let hour = -1, min = 0;
     
     if (m[4] !== undefined && m[5] !== undefined) {
@@ -60,107 +58,91 @@
     };
   }
 
-  function parseDateOnly(str, offset, contextDate) {
+  function parseDateObj(m, regexType, contextDate, offset) {
     const d = new Date(contextDate.getTime());
-    let match = null;
-    let text = '';
-    let start = -1;
-    let end = -1;
-    let m;
+    let y, mo, da;
     
-    // Check absolutes
-    if ((m = absDate4.exec(str))) {
-      let y = parseInt(m[1]), mo = parseInt(m[2])-1, da = parseInt(m[3]);
+    if (regexType === 'abs4') {
+      y = parseInt(m[1]); mo = parseInt(m[2])-1; da = parseInt(m[3]);
       if (da > getDaysInMonth(y, mo)) return null;
       d.setFullYear(y, mo, da);
-      match = m;
-    } else if ((m = absDate3.exec(str))) {
-      let y = m[3] ? parseInt(m[3]) : d.getFullYear();
-      let mo = parseInt(m[1])-1, da = parseInt(m[2]);
+    } else if (regexType === 'abs3') {
+      y = m[3] ? parseInt(m[3]) : d.getFullYear();
+      mo = parseInt(m[1])-1; da = parseInt(m[2]);
       if (da > getDaysInMonth(y, mo)) return null;
       d.setFullYear(y, mo, da);
       if (!m[3] && d.getTime() < contextDate.getTime() - 86400000) d.setFullYear(y+1);
-      match = m;
-    } else if ((m = absDate1.exec(str)) || (m = absDate2.exec(str))) {
-      // absDate1: Month DD, YYYY
-      // absDate2: DD Month YYYY
+    } else if (regexType === 'abs1' || regexType === 'abs2') {
       let moStr = m[1].toLowerCase();
       let daStr = m[2];
-      if (absDate2.test(m[0])) { moStr = m[2].toLowerCase(); daStr = m[1]; }
+      if (regexType === 'abs2') { moStr = m[2].toLowerCase(); daStr = m[1]; }
       
-      let mo = MONTHS.indexOf(moStr);
+      mo = MONTHS.indexOf(moStr);
       if (mo === -1) mo = SHORT_MONTHS.indexOf(moStr);
-      let da = parseInt(daStr);
-      let y = m[3] ? parseInt(m[3]) : d.getFullYear();
+      da = parseInt(daStr);
+      y = m[3] ? parseInt(m[3]) : d.getFullYear();
       
       if (da > getDaysInMonth(y, mo)) return null;
       d.setFullYear(y, mo, da);
       if (!m[3] && d.getTime() < contextDate.getTime() - 86400000) d.setFullYear(y+1);
-      match = m;
-    } else if ((m = relDate1.exec(str))) {
+    } else if (regexType === 'rel1') {
       let w = m[0].toLowerCase();
       if (w === 'tomorrow') d.setDate(d.getDate() + 1);
-      match = m;
-    } else if ((m = relDate2.exec(str))) {
+    } else if (regexType === 'rel2' || regexType === 'rel3') {
       let target = WEEKDAYS.indexOf(m[1].toLowerCase());
       let current = d.getDay();
       let diff = target - current;
       if (diff <= 0) diff += 7;
-      diff += 7; // "next" means the one after the upcoming one, usually. Or 1-7 days? Let's use 1-7 days ahead if we assume 'next' just means upcoming.
-      // Requirements: "next weekday: 1–7 days ahead"
-      let nextDiff = target - current;
-      if (nextDiff <= 0) nextDiff += 7;
-      d.setDate(d.getDate() + nextDiff);
-      match = m;
-    } else if ((m = relDate3.exec(str))) {
-      let target = WEEKDAYS.indexOf(m[1].toLowerCase());
-      let current = d.getDay();
-      let diff = target - current;
-      if (diff <= 0) diff += 7;
+      if (regexType === 'rel2') diff += 7; // next week
       d.setDate(d.getDate() + diff);
-      match = m;
     }
     
-    if (match) {
-      return {
-        text: match[0],
-        start: match.index + offset,
-        end: match.index + match[0].length + offset,
-        date: d,
-        hasExplicitDate: true,
-        requiresDate: false
-      };
-    }
-    return null;
+    return {
+      text: m[0],
+      start: m.index + offset,
+      end: m.index + m[0].length + offset,
+      date: d,
+      hasExplicitDate: true,
+      requiresDate: false,
+      isRelative: regexType.startsWith('rel')
+    };
   }
 
   window.parseSmartDatePhrase = function(text, contextDate) {
     contextDate = contextDate || new Date();
-    let results = [];
-    
-    // We scan the text repeatedly for non-overlapping dates and times.
-    let remaining = text;
-    let offset = 0;
-    
     let dates = [];
-    while (true) {
-      let d = parseDateOnly(remaining, offset, contextDate);
-      if (!d) break;
-      dates.push(d);
-      remaining = text.substring(d.end);
-      offset = d.end;
+    let times = [];
+    
+    // Find all times
+    timeRe.lastIndex = 0;
+    let m;
+    while ((m = timeRe.exec(text))) {
+      let t = matchTime(m, 0);
+      if (t) times.push(t);
     }
     
-    remaining = text;
-    offset = 0;
-    let times = [];
-    while (true) {
-      let t = matchTime(remaining, offset);
-      if (!t) break;
-      times.push(t);
-      remaining = text.substring(t.end);
-      offset = t.end;
+    // Find all dates
+    const dateRegexes = [
+      { re: absDate4, type: 'abs4' },
+      { re: absDate3, type: 'abs3' },
+      { re: absDate1, type: 'abs1' },
+      { re: absDate2, type: 'abs2' },
+      { re: relDate1, type: 'rel1' },
+      { re: relDate2, type: 'rel2' },
+      { re: relDate3, type: 'rel3' }
+    ];
+    
+    for (let rule of dateRegexes) {
+      rule.re.lastIndex = 0;
+      while ((m = rule.re.exec(text))) {
+        let d = parseDateObj(m, rule.type, contextDate, 0);
+        if (d) dates.push(d);
+      }
     }
+    
+    // Sort dates and times by start index so we combine them left-to-right properly
+    dates.sort((a, b) => a.start - b.start);
+    times.sort((a, b) => a.start - b.start);
     
     // Combine proximate dates and times
     let consumedTimes = new Set();
@@ -307,7 +289,7 @@
     }
   }
 
-  window.scanSmartDatesInBlock = function(block) {
+  window.scanSmartDatesInBlock = function(block, contextDate) {
     if (!block || !block.textContent) return;
     
     // Do not scan inside existing suggestions, productivity blocks, embeds, pre/code
@@ -324,7 +306,7 @@
     block.normalize();
     
     const text = block.textContent;
-    const matches = window.parseSmartDatePhrase(text);
+    const matches = window.parseSmartDatePhrase(text, contextDate);
     if (!matches.length) return;
     
     const caret = getCaretOffsets(block);
@@ -411,6 +393,7 @@
   let scheduledBlock = null;
 
   let scheduledRoot = null;
+  let scheduledContextDate = null;
 
   function safeScan() {
     if (isComposing) return;
@@ -419,19 +402,17 @@
     if (!document.contains(scheduledBlock)) return;
     if (!scheduledRoot.contains(scheduledBlock)) return;
     
-    // Check if the block still belongs to the active editor root.
-    // In PapeRuss, bodyEl() usually returns the active editor. We assume scheduledRoot is that active editor.
-    // If the active editor is #noteBody, we can check if scheduledRoot is #noteBody.
     const activeEditor = document.getElementById('noteBody');
     if (activeEditor && scheduledRoot !== activeEditor) return;
     
-    window.scanSmartDatesInBlock(scheduledBlock);
+    window.scanSmartDatesInBlock(scheduledBlock, scheduledContextDate || new Date());
   }
 
-  window.scheduleSmartDateScan = function(root, editedBlock) {
+  window.scheduleSmartDateScan = function(root, editedBlock, contextDate) {
     if (!editedBlock || !root) return;
     scheduledBlock = editedBlock;
     scheduledRoot = root;
+    scheduledContextDate = contextDate || new Date();
     if (isComposing) return;
     
     clearTimeout(scanTimer);
@@ -447,14 +428,12 @@
     }
   });
 
-  window.hydrateSmartDateSuggestions = function(root) {
+  window.hydrateSmartDateSuggestions = function(root, contextDate) {
     if (!root) return;
+    const cd = contextDate || new Date();
     
-    // Defer the execution to ensure DOM is stable and embed/productivity hydration has finished
     const executeHydration = () => {
-      // 4. STALE-ROOT SAFETY
       if (!root.isConnected) return;
-      
       const activeEditor = document.getElementById('noteBody');
       if (activeEditor && root !== activeEditor) return;
       
@@ -462,8 +441,7 @@
       blocks.forEach(block => {
         if (!block.isConnected) return;
         if (!root.contains(block)) return;
-        
-        window.scanSmartDatesInBlock(block);
+        window.scanSmartDatesInBlock(block, cd);
       });
     };
 
