@@ -292,58 +292,117 @@
   // Suppression Set
   window.suppressedSmartDates = window.suppressedSmartDates || new Set();
 
-  window.getSmartDateLinksForActiveLeaf = async function() {
-    const activeNoteId = window.HistoryManager ? window.HistoryManager.activeNoteId : null;
-    if (!activeNoteId || !window.getNote) return [];
-    const n = window.getNote(activeNoteId);
-    if (!n) return [];
-    if (window.paperussLeaves) {
-      const leafId = window.paperussLeaves.getNoteActiveLeafId(n);
-      const leaf = await window.paperussLeaves.leafGet(leafId);
-      return (leaf && leaf.smartDateLinks) ? leaf.smartDateLinks : [];
+  // Build marker — verify in browser: window.PAPERUSS_SMART_DATES_BUILD
+  window.PAPERUSS_SMART_DATES_BUILD = 'checkpoint-c-canonical-hotfix';
+
+  // =========================================================================
+  // CANONICAL NOTES HELPERS
+  // =========================================================================
+
+  function getCanonicalNotesArray() {
+    const list =
+      typeof window.getCanonicalNotes === 'function'
+        ? window.getCanonicalNotes()
+        : window.paperussNotes;
+    return Array.isArray(list) ? list : null;
+  }
+
+  function getCanonicalNote(eventId) {
+    if (typeof window.getNote === 'function') {
+      const n = window.getNote(eventId);
+      if (n) return n;
     }
-    return n.smartDateLinks || [];
+    const arr = getCanonicalNotesArray();
+    return arr ? (arr.find(x => String(x.id) === String(eventId)) || null) : null;
+  }
+
+  // =========================================================================
+  // HYBRID LEAF CONTEXT
+  // =========================================================================
+
+  async function resolveActiveLeafContext() {
+    const activeNoteId = window.HistoryManager ? window.HistoryManager.activeNoteId : null;
+    if (!activeNoteId) return null;
+
+    const n = typeof window.getNote === 'function' ? window.getNote(activeNoteId) : null;
+    if (!n) return null;
+
+    const leavesApi = window.paperussLeaves;
+    const isMigrated = leavesApi &&
+      typeof leavesApi.isNoteMigratedToLeaves === 'function' &&
+      leavesApi.isNoteMigratedToLeaves(n);
+
+    if (isMigrated) {
+      const leafId = leavesApi.getNoteActiveLeafId(n);
+      const leaf = await leavesApi.leafGet(leafId);
+      if (!leaf) throw new Error('Smart Dates: physical Leaf not found for note ' + activeNoteId);
+      return { note: n, leaf, isMigrated: true };
+    }
+    // Unmigrated virtual Main Leaf — store directly on the note
+    return { note: n, leaf: null, isMigrated: false };
+  }
+
+  window.getSmartDateLinksForActiveLeaf = async function() {
+    try {
+      const ctx = await resolveActiveLeafContext();
+      if (!ctx) return [];
+      return ctx.isMigrated
+        ? (ctx.leaf.smartDateLinks || [])
+        : (ctx.note.smartDateLinks || []);
+    } catch (e) {
+      console.error('getSmartDateLinksForActiveLeaf:', e);
+      return [];
+    }
   };
 
+  // NOTE: saveSmartDateLink must NOT call save() — caller is responsible.
   window.saveSmartDateLink = async function(linkObj) {
-    const activeNoteId = window.HistoryManager ? window.HistoryManager.activeNoteId : null;
-    if (!activeNoteId || !window.getNote) return;
-    const n = window.getNote(activeNoteId);
-    if (!n) return;
-    if (window.paperussLeaves) {
-      const leafId = window.paperussLeaves.getNoteActiveLeafId(n);
-      const leaf = await window.paperussLeaves.leafGet(leafId);
-      if (leaf) {
-        leaf.smartDateLinks = leaf.smartDateLinks || [];
-        leaf.smartDateLinks.push(linkObj);
-        await window.paperussLeaves.leafPut(leaf);
-      }
+    const ctx = await resolveActiveLeafContext();
+    if (!ctx) return;
+    if (ctx.isMigrated) {
+      ctx.leaf.smartDateLinks = ctx.leaf.smartDateLinks || [];
+      ctx.leaf.smartDateLinks.push(linkObj);
+      await window.paperussLeaves.leafPut(ctx.leaf);
     } else {
-      n.smartDateLinks = n.smartDateLinks || [];
-      n.smartDateLinks.push(linkObj);
-      if (typeof window.save === 'function') window.save();
+      // Attach to note; canonical save() will persist it
+      ctx.note.smartDateLinks = ctx.note.smartDateLinks || [];
+      ctx.note.smartDateLinks.push(linkObj);
     }
   };
 
   window.removeSmartDateLink = async function(eventId) {
-    const activeNoteId = window.HistoryManager ? window.HistoryManager.activeNoteId : null;
-    if (!activeNoteId || !window.getNote) return;
-    const n = window.getNote(activeNoteId);
-    if (!n) return;
-    if (window.paperussLeaves) {
-      const leafId = window.paperussLeaves.getNoteActiveLeafId(n);
-      const leaf = await window.paperussLeaves.leafGet(leafId);
-      if (leaf && leaf.smartDateLinks) {
-        leaf.smartDateLinks = leaf.smartDateLinks.filter(l => l.eventId !== eventId);
-        await window.paperussLeaves.leafPut(leaf);
+    try {
+      const ctx = await resolveActiveLeafContext();
+      if (!ctx) return;
+      if (ctx.isMigrated) {
+        if (ctx.leaf.smartDateLinks) {
+          ctx.leaf.smartDateLinks = ctx.leaf.smartDateLinks.filter(l => l.eventId !== eventId);
+          await window.paperussLeaves.leafPut(ctx.leaf);
+        }
+      } else {
+        if (ctx.note.smartDateLinks) {
+          ctx.note.smartDateLinks = ctx.note.smartDateLinks.filter(l => l.eventId !== eventId);
+          if (typeof window.save === 'function') window.save();
+        }
       }
-    } else {
-      if (n.smartDateLinks) {
-        n.smartDateLinks = n.smartDateLinks.filter(l => l.eventId !== eventId);
-        if (typeof window.save === 'function') window.save();
-      }
+    } catch (e) {
+      console.error('removeSmartDateLink:', e);
     }
   };
+
+  // =========================================================================
+  // CLEAN BLOCK HTML HELPER
+  // =========================================================================
+
+  function getCleanBlockHTML(block) {
+    const clone = block.cloneNode(true);
+    clone.querySelectorAll('.smart-date-suggestion').forEach(span => {
+      while (span.firstChild) span.parentNode.insertBefore(span.firstChild, span);
+      span.remove();
+    });
+    clone.normalize();
+    return clone.innerHTML;
+  }
 
   function escHtml(str) {
     if (!str) return '';
@@ -352,12 +411,15 @@
     });
   }
 
+  // =========================================================================
+  // SCAN SMART DATES IN BLOCK
+  // =========================================================================
+
   window.scanSmartDatesInBlock = function(block, contextDate, links) {
     if (!block || !block.textContent) return;
-    
-    // Dehydrate any existing schedule lines in this block so we rescan clean
-    const oldSchedules = block.querySelectorAll('.smart-date-linked-schedule');
-    oldSchedules.forEach(el => {
+
+    // Dehydrate any existing schedule lines before rescanning
+    block.querySelectorAll('.smart-date-linked-schedule').forEach(el => {
       if (el.dataset.sdHiddenLi === 'true') {
         el.remove();
       } else {
@@ -367,45 +429,54 @@
           const restored = document.createElement(tag);
           restored.innerHTML = html;
           el.replaceWith(restored);
-          block = restored; // update reference
+          block = restored;
         }
       }
     });
-    
-    const hiddenLis = document.querySelectorAll('.smart-date-hidden-li');
-    hiddenLis.forEach(li => {
+    document.querySelectorAll('.smart-date-hidden-li').forEach(li => {
       li.classList.remove('smart-date-hidden-li');
       li.style.display = '';
     });
 
     if (block.closest('.smart-date-suggestion, .smart-date-linked-schedule, .productivity-ref, [data-embed], pre, code, [contenteditable="false"]')) return;
-    
-    const oldSpans = block.querySelectorAll('.smart-date-suggestion');
-    oldSpans.forEach(span => {
+
+    block.querySelectorAll('.smart-date-suggestion').forEach(span => {
       while (span.firstChild) span.parentNode.insertBefore(span.firstChild, span);
       span.remove();
     });
-    
+
     block.normalize();
     const text = block.textContent;
-    const matches = window.parseSmartDatePhrase(text, contextDate);
-    
+
+    // Link matching: rawText + offsets + context for exact-occurrence disambiguation
     let matchedLink = null;
     if (links && links.length > 0) {
-      for (let l of links) {
-        if (l.originalBlockText === text) {
-          matchedLink = l;
-          break;
+      for (const l of links) {
+        if (l.originalBlockText !== text) continue;
+        if (l.rawText && l.startOffset !== undefined && l.endOffset !== undefined) {
+          const expectedRaw = text.substring(l.startOffset, l.endOffset);
+          if (expectedRaw === l.rawText) { matchedLink = l; break; }
+          // Fallback: context match
+          if (l.contextBefore !== undefined && l.contextAfter !== undefined) {
+            const ctxBefore = text.substring(0, l.startOffset);
+            const ctxAfter = text.substring(l.endOffset);
+            if (ctxBefore.endsWith(l.contextBefore) && ctxAfter.startsWith(l.contextAfter)) {
+              matchedLink = l; break;
+            }
+          }
+        } else {
+          // Legacy link without offsets
+          matchedLink = l; break;
         }
       }
     }
 
     if (matchedLink) {
       const eventId = matchedLink.eventId;
-      const evObj = (window.notes || []).find(x => x.id === eventId);
-      
-      const isUnavailable = !evObj || evObj.deleted || evObj.archived || !evObj.tags.includes('calendar');
-      
+      const evObj = getCanonicalNote(eventId);
+      const isUnavailable = !evObj || evObj.deleted || evObj.deletedAt ||
+        !(Array.isArray(evObj.tags) && evObj.tags.includes('calendar'));
+
       const newEl = document.createElement('div');
       newEl.className = 'smart-date-linked-schedule';
       newEl.setAttribute('data-smart-date-state', isUnavailable ? 'unavailable' : 'linked');
@@ -414,24 +485,24 @@
       newEl.dataset.sdOriginalHtml = matchedLink.originalBlockHTML || block.innerHTML;
       newEl.dataset.sdOriginalTag = matchedLink.originalBlockTag || block.tagName;
       newEl.dataset.eventId = eventId;
-      
+
       if (isUnavailable) {
         newEl.innerHTML = `<span class="smart-date-linked-main smart-date-unavailable">
-            <span aria-hidden="true">⚠️</span>
+            <span aria-hidden="true">📅</span>
             <span class="smart-date-linked-title">Event unavailable</span>
             <span class="smart-date-linked-separator">·</span>
             <span class="smart-date-linked-date">${escHtml(matchedLink.originalBlockText)}</span>
           </span>
           <span class="smart-date-linked-actions">
-            <button class="smart-date-action-btn" onclick="window.handleSmartDateAction(event, 'remove', '${eventId}')">Remove Link</button>
+            <button class="smart-date-action-btn" onclick="window.handleSmartDateAction(event,'remove','${eventId}')">Remove Link</button>
           </span>`;
       } else {
         const start = new Date(evObj.calendarStart);
         const end = new Date(evObj.calendarEnd);
         const dateStr = start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-        const timeStrStart = start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }).replace(' AM','').replace(' PM','');
+        const timeStrStart = start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
         const timeStrEnd = end.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-        
+
         newEl.innerHTML = `<span class="smart-date-linked-main">
             <span aria-hidden="true">📅</span>
             <span class="smart-date-linked-title">${escHtml(evObj.title)}</span>
@@ -441,13 +512,13 @@
             <span class="smart-date-linked-time">${escHtml(timeStrStart)}–${escHtml(timeStrEnd)}</span>
           </span>
           <span class="smart-date-linked-actions">
-            <button class="smart-date-action-btn" onclick="window.handleSmartDateAction(event, 'open', '${eventId}')">Open</button>
-            <button class="smart-date-action-btn" onclick="window.handleSmartDateAction(event, 'edit', '${eventId}')">Edit</button>
-            <button class="smart-date-action-btn danger" onclick="window.handleSmartDateAction(event, 'unlink', '${eventId}')">Unlink</button>
-            <button class="smart-date-action-btn danger" onclick="window.handleSmartDateAction(event, 'delete', '${eventId}')">Delete Event</button>
+            <button class="smart-date-action-btn" onclick="window.handleSmartDateAction(event,'open','${eventId}')">Open</button>
+            <button class="smart-date-action-btn" onclick="window.handleSmartDateAction(event,'edit','${eventId}')">Edit</button>
+            <button class="smart-date-action-btn danger" onclick="window.handleSmartDateAction(event,'unlink','${eventId}')">Unlink</button>
+            <button class="smart-date-action-btn danger" onclick="window.handleSmartDateAction(event,'delete','${eventId}')">Delete Event</button>
           </span>`;
       }
-      
+
       if (block.tagName === 'LI') {
         const list = block.closest('ul, ol');
         if (list && list.parentNode) {
@@ -462,82 +533,82 @@
       return;
     }
 
+    const matches = window.parseSmartDatePhrase(text, contextDate);
     if (!matches.length) return;
+
     const caret = getCaretOffsets(block);
     let textNodes = [];
     let currentIndex = 0;
-    
+
     function buildTextNodes(node) {
       if (node.nodeType === 3) {
         textNodes.push({ node, start: currentIndex, end: currentIndex + node.length });
         currentIndex += node.length;
       } else {
-        if (['A', 'CODE', 'PRE'].includes(node.nodeName) || 
+        if (['A', 'CODE', 'PRE'].includes(node.nodeName) ||
             (node.hasAttribute && node.hasAttribute('data-embed')) ||
             (node.classList && node.classList.contains('productivity-ref')) ||
             (node.getAttribute && node.getAttribute('contenteditable') === 'false')) {
-           currentIndex += node.textContent.length;
-           return;
+          currentIndex += node.textContent.length;
+          return;
         }
         Array.from(node.childNodes).forEach(buildTextNodes);
       }
     }
     buildTextNodes(block);
-    
+
     matches.reverse().forEach(m => {
       if (caret) {
-        let overlap = Math.max(0, Math.min(caret.end, m.endIndex) - Math.max(caret.start, m.startIndex));
-        if (overlap > 0 || caret.start === m.endIndex || caret.end === m.endIndex) {
-          return;
-        }
+        const overlap = Math.max(0, Math.min(caret.end, m.endIndex) - Math.max(caret.start, m.startIndex));
+        if (overlap > 0 || caret.start === m.endIndex || caret.end === m.endIndex) return;
       }
-      
+
       const activeNoteId = window.HistoryManager && window.HistoryManager.activeNoteId ? window.HistoryManager.activeNoteId : 'unknown-note';
       const activeEditor = document.getElementById('noteBody');
       const activeLeafId = activeEditor && activeEditor.dataset && activeEditor.dataset.leafId ? activeEditor.dataset.leafId : 'unknown-leaf';
       const suppressionKey = `${activeNoteId}::${activeLeafId}::${m.rawText}::${text}`;
-      
+
       if (window.suppressedSmartDates.has(suppressionKey)) return;
-      
-      let containingNodeObj = textNodes.find(n => m.startIndex >= n.start && m.endIndex <= n.end);
+
+      const containingNodeObj = textNodes.find(n => m.startIndex >= n.start && m.endIndex <= n.end);
       if (!containingNodeObj) return;
-      
-      let node = containingNodeObj.node;
-      let localStart = m.startIndex - containingNodeObj.start;
-      let localEnd = m.endIndex - containingNodeObj.start;
-      
-      let beforeText = node.textContent.slice(0, localStart);
-      let matchText = node.textContent.slice(localStart, localEnd);
-      let afterText = node.textContent.slice(localEnd);
-      
-      let parent = node.parentNode;
-      
-      let span = document.createElement('span');
+
+      const node = containingNodeObj.node;
+      const localStart = m.startIndex - containingNodeObj.start;
+      const localEnd = m.endIndex - containingNodeObj.start;
+
+      const beforeText = node.textContent.slice(0, localStart);
+      const matchText = node.textContent.slice(localStart, localEnd);
+      const afterText = node.textContent.slice(localEnd);
+      const parent = node.parentNode;
+
+      const span = document.createElement('span');
       span.className = 'smart-date-suggestion';
       span.setAttribute('data-paperuss-smart-date', 'true');
       span.setAttribute('contenteditable', 'false');
       span.setAttribute('tabindex', '0');
       span.setAttribute('role', 'button');
       span.setAttribute('aria-label', `Detected date: ${matchText}`);
-      
       span.dataset.sdStart = m.startDate.getTime();
       span.dataset.sdHasDate = m.hasExplicitDate;
       span.dataset.sdHasTime = m.hasExplicitTime;
       span.dataset.sdSuppressionKey = suppressionKey;
-      
       span.textContent = matchText;
-      
+
       if (beforeText) parent.insertBefore(document.createTextNode(beforeText), node);
       parent.insertBefore(span, node);
       if (afterText) parent.insertBefore(document.createTextNode(afterText), node);
-      
       node.remove();
     });
-    
+
     if (caret) {
-      try { setCaretOffsets(block, caret.start, caret.end); } catch (e) {}
+      try { setCaretOffsets(block, caret.start, caret.end); } catch (_) {}
     }
   };
+
+  // =========================================================================
+  // LIFECYCLE
+  // =========================================================================
 
   let scanTimer = null;
   let isComposing = false;
@@ -548,13 +619,10 @@
   async function safeScan() {
     if (isComposing) return;
     if (!scheduledBlock || !scheduledRoot) return;
-    if (!document.contains(scheduledRoot)) return;
-    if (!document.contains(scheduledBlock)) return;
+    if (!document.contains(scheduledRoot) || !document.contains(scheduledBlock)) return;
     if (!scheduledRoot.contains(scheduledBlock)) return;
-    
     const activeEditor = document.getElementById('noteBody');
     if (activeEditor && scheduledRoot !== activeEditor) return;
-    
     const links = await window.getSmartDateLinksForActiveLeaf();
     window.scanSmartDatesInBlock(scheduledBlock, scheduledContextDate || new Date(), links);
   }
@@ -570,43 +638,34 @@
   };
 
   document.addEventListener('compositionstart', () => { isComposing = true; });
-  document.addEventListener('compositionend', () => { 
-    isComposing = false; 
-    if (scheduledBlock && scheduledRoot) {
-      clearTimeout(scanTimer);
-      scanTimer = setTimeout(safeScan, 500);
-    }
+  document.addEventListener('compositionend', () => {
+    isComposing = false;
+    if (scheduledBlock && scheduledRoot) { clearTimeout(scanTimer); scanTimer = setTimeout(safeScan, 500); }
   });
 
   window.hydrateSmartDateSuggestions = function(root, contextDate) {
     if (!root) return;
     const cd = contextDate || new Date();
-    const executeHydration = async () => {
+    const run = async () => {
       if (!root.isConnected) return;
       const activeEditor = document.getElementById('noteBody');
       if (activeEditor && root !== activeEditor) return;
-      
       const links = await window.getSmartDateLinksForActiveLeaf();
-      const blocks = root.querySelectorAll('p, div, li, h1, h2, h3, h4, h5, h6, blockquote');
-      blocks.forEach(block => {
-        if (!block.isConnected) return;
-        if (!root.contains(block)) return;
+      root.querySelectorAll('p, div, li, h1, h2, h3, h4, h5, h6, blockquote').forEach(block => {
+        if (!block.isConnected || !root.contains(block)) return;
         window.scanSmartDatesInBlock(block, cd, links);
       });
     };
-    if (window.requestIdleCallback) window.requestIdleCallback(executeHydration);
-    else setTimeout(executeHydration, 500);
+    if (window.requestIdleCallback) window.requestIdleCallback(run);
+    else setTimeout(run, 500);
   };
 
   window.dehydrateSmartDateSuggestions = function(root) {
     if (!root) return;
-    
-    const schedules = root.querySelectorAll('.smart-date-linked-schedule');
-    schedules.forEach(el => {
+    root.querySelectorAll('.smart-date-linked-schedule').forEach(el => {
       if (el.dataset.sdHiddenLi === 'true') {
         el.remove();
-        const hiddenLis = root.querySelectorAll('.smart-date-hidden-li');
-        hiddenLis.forEach(li => {
+        root.querySelectorAll('.smart-date-hidden-li').forEach(li => {
           li.classList.remove('smart-date-hidden-li');
           li.style.display = '';
         });
@@ -620,9 +679,7 @@
         }
       }
     });
-
-    const spans = root.querySelectorAll('.smart-date-suggestion');
-    spans.forEach(span => {
+    root.querySelectorAll('.smart-date-suggestion').forEach(span => {
       const parent = span.parentNode;
       if (!parent) return;
       while (span.firstChild) parent.insertBefore(span.firstChild, span);
@@ -641,9 +698,14 @@
     parent.normalize();
   }
 
+  // =========================================================================
+  // MODAL — CREATE CALENDAR EVENT
+  // =========================================================================
+
   function openSmartDateModal(span) {
-    const root = document.getElementById('modalRoot');
-    if (!root) return;
+    const modalRootEl = document.getElementById('modalRoot');
+    if (!modalRootEl) return;
+    if (modalRootEl.querySelector('.modal-overlay')) return; // guard double-open
 
     const startDate = new Date(parseInt(span.dataset.sdStart, 10));
     const hasDate = span.dataset.sdHasDate === 'true';
@@ -652,10 +714,16 @@
     const rawText = span.textContent;
 
     const block = span.closest('p, div, li, h1, h2, h3, h4, h5, h6, blockquote') || span.parentNode;
-    const originalBlockHTML = block.innerHTML;
     const originalBlockTag = block.tagName;
     const originalBlockText = block.textContent;
-    
+
+    // Compute exact offsets of the matched phrase within the block text
+    const spanStartOffset = originalBlockText.indexOf(rawText);
+    const spanEndOffset = spanStartOffset >= 0 ? spanStartOffset + rawText.length : -1;
+    const CTX = 30;
+    const contextBefore = spanStartOffset >= 0 ? originalBlockText.substring(Math.max(0, spanStartOffset - CTX), spanStartOffset) : '';
+    const contextAfter = spanEndOffset >= 0 ? originalBlockText.substring(spanEndOffset, Math.min(originalBlockText.length, spanEndOffset + CTX)) : '';
+
     let extractedTitle = originalBlockText.replace(rawText, '').trim();
     extractedTitle = extractedTitle.replace(/^[^\w\d]+|[^\w\d]+$/g, '').trim();
     if (!extractedTitle) extractedTitle = 'Event';
@@ -668,17 +736,17 @@
     if (hasDate && hasTime) {
       interpretedMsg = `${dateStr} at ${timeStr}`;
     } else if (hasDate) {
-      interpretedMsg = `${dateStr}`;
-      warningMsg = `<p style="color:var(--warning);font-size:13px;margin:8px 0"><i class="w-4 h-4 feather-alert-triangle" style="vertical-align:middle"></i> Time is missing.</p>`;
+      interpretedMsg = dateStr;
+      warningMsg = `<p style="color:var(--warning);font-size:13px;margin:8px 0"><i class="feather-alert-triangle" style="vertical-align:middle"></i> Time is missing.</p>`;
     } else if (hasTime) {
-      interpretedMsg = `${timeStr}`;
-      warningMsg = `<p style="color:var(--warning);font-size:13px;margin:8px 0"><i class="w-4 h-4 feather-alert-triangle" style="vertical-align:middle"></i> Date is missing.</p>`;
+      interpretedMsg = timeStr;
+      warningMsg = `<p style="color:var(--warning);font-size:13px;margin:8px 0"><i class="feather-alert-triangle" style="vertical-align:middle"></i> Date is missing.</p>`;
     }
 
-    const close = () => { root.innerHTML = ''; };
+    const close = () => { modalRootEl.innerHTML = ''; };
 
     const renderConfirmation = () => {
-      root.innerHTML = `<div class="modal-overlay">
+      modalRootEl.innerHTML = `<div class="modal-overlay">
         <div class="modal" style="max-width:360px">
           <h3 style="margin-top:0">Create Calendar Event?</h3>
           <div style="background:var(--subtle);border-radius:8px;padding:12px;margin:16px 0">
@@ -693,16 +761,13 @@
           </div>
         </div>
       </div>`;
-
-      root.querySelector('.modal-overlay').onclick = e => { if(e.target===e.currentTarget) close(); };
+      modalRootEl.querySelector('.modal-overlay').onclick = e => { if (e.target === e.currentTarget) close(); };
       document.getElementById('sdCancelBtn').onclick = close;
-      
       document.getElementById('sdNotEventBtn').onclick = () => {
         window.suppressedSmartDates.add(suppressionKey);
         unwrapSpan(span);
         close();
       };
-
       document.getElementById('sdConfirmBtn').onclick = () => {
         if (!hasDate && !hasTime) return;
         renderForm();
@@ -712,12 +777,11 @@
     const renderForm = () => {
       const startDVal = `${startDate.getFullYear()}-${String(startDate.getMonth()+1).padStart(2,'0')}-${String(startDate.getDate()).padStart(2,'0')}`;
       const startTVal = `${String(startDate.getHours()).padStart(2,'0')}:${String(startDate.getMinutes()).padStart(2,'0')}`;
-      
-      const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // +1 hour
+      const endDate = new Date(startDate.getTime() + 3600000);
       const endDVal = `${endDate.getFullYear()}-${String(endDate.getMonth()+1).padStart(2,'0')}-${String(endDate.getDate()).padStart(2,'0')}`;
       const endTVal = `${String(endDate.getHours()).padStart(2,'0')}:${String(endDate.getMinutes()).padStart(2,'0')}`;
 
-      root.innerHTML = `<div class="modal-overlay">
+      modalRootEl.innerHTML = `<div class="modal-overlay">
         <div class="modal" style="max-width:400px;max-height:90vh;overflow-y:auto">
           <h3 style="margin-top:0">Create Event</h3>
           <div class="form-group" style="margin-bottom:12px">
@@ -773,11 +837,15 @@
         </div>
       </div>`;
 
-      root.querySelector('.modal-overlay').onclick = e => { if(e.target===e.currentTarget) close(); };
+      modalRootEl.querySelector('.modal-overlay').onclick = e => { if (e.target === e.currentTarget) close(); };
       document.getElementById('sdFormCancel').onclick = close;
-      
+
+      let isCreatingEvent = false;
       const submitBtn = document.getElementById('sdFormSubmit');
+
       submitBtn.onclick = () => {
+        if (isCreatingEvent) return;
+
         const tVal = document.getElementById('sdFormTitle').value.trim() || 'Untitled Event';
         const sD = document.getElementById('sdFormStartDate').value;
         const sT = document.getElementById('sdFormStartTime').value;
@@ -788,150 +856,167 @@
         const notifyVal = document.getElementById('sdFormNotify').checked;
         const repeatVal = document.getElementById('sdFormRepeat').value;
 
-        if (!sD || !sT) {
-          if (typeof toast === 'function') toast('Please provide both start date and time.');
-          return;
-        }
+        if (!sD || !sT) { if (typeof toast === 'function') toast('Please provide both start date and time.'); return; }
 
         const startTs = new Date(`${sD}T${sT}:00`).getTime();
         const endTs = new Date(`${eD}T${eT}:00`).getTime();
 
-        if (!Number.isFinite(startTs) || !Number.isFinite(endTs)) {
-          if (typeof toast === 'function') toast('Invalid date or time.');
-          return;
-        }
-        if (endTs < startTs) {
-          if (typeof toast === 'function') toast('Event end must be after its start.');
-          return;
-        }
+        if (!Number.isFinite(startTs) || !Number.isFinite(endTs)) { if (typeof toast === 'function') toast('Invalid date or time.'); return; }
+        if (endTs < startTs) { if (typeof toast === 'function') toast('Event end must be after its start.'); return; }
 
+        const canonicalNotes = getCanonicalNotesArray();
+        if (!canonicalNotes) { if (typeof toast === 'function') toast('Cannot access notes storage.'); return; }
+
+        isCreatingEvent = true;
         submitBtn.disabled = true;
 
         let tags = ['calendar'];
         if (typeVal === 'meeting') tags.push('meeting');
         if (typeVal === 'deadline') tags.push('deadline');
         if (repeatVal !== 'none') { tags.push('recurring'); tags.push('repeat-' + repeatVal); }
-        
-        const startFmt = new Date(startTs).toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-        const endFmt = new Date(endTs).toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+
+        const startFmt = new Date(startTs).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const endFmt = new Date(endTs).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         const safeDesc = escHtml(descVal);
-        
+
         let htmlStr = `<p><strong>📅 ${escHtml(startFmt)}</strong></p><p>→ ${escHtml(endFmt)}</p>`;
         if (repeatVal !== 'none') htmlStr += `<p>🔁 Repeats: ${escHtml(repeatVal)}</p>`;
         if (safeDesc) htmlStr += `<p>${safeDesc}</p>`;
-        
         const content_html = (typeof window.sanitizeNoteHTML === 'function') ? window.sanitizeNoteHTML(htmlStr) : htmlStr;
-        
+
         const newId = typeof window.uid === 'function' ? window.uid() : Date.now().toString();
-        
         const n = {
-          id: newId,
-          title: tVal,
-          content: content_html,
-          tags: tags,
-          pinned: false,
-          archived: false,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          fontStyle: 'sans',
-          calendarStart: startTs,
-          calendarEnd: endTs,
+          id: newId, title: tVal, content: content_html, tags,
+          pinned: false, archived: false,
+          createdAt: Date.now(), updatedAt: Date.now(), fontStyle: 'sans',
+          calendarStart: startTs, calendarEnd: endTs,
           calendarRepeat: repeatVal === 'none' ? null : repeatVal,
-          calendarNotify: notifyVal,
-          calendarLastNotifiedAt: null,
+          calendarNotify: notifyVal, calendarLastNotifiedAt: null,
           calendarDescription: descVal
         };
 
-        if (window.notes && Array.isArray(window.notes)) {
-          window.notes.unshift(n);
-        }
-        
+        // Capture clean HTML (no suggestion spans) before inserting into canonical store
+        const originalBlockHTML = getCleanBlockHTML(block);
+
+        const linkId = typeof window.uid === 'function' ? window.uid() : (Date.now() + 1).toString();
+        const linkObj = {
+          id: linkId,
+          eventId: newId,
+          rawText,
+          originalBlockText,
+          originalBlockHTML,
+          originalBlockTag,
+          startOffset: spanStartOffset,
+          endOffset: spanEndOffset,
+          contextBefore,
+          contextAfter,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+
+        // Step 1: insert into canonical notes array
+        canonicalNotes.unshift(n);
+
         Promise.resolve().then(async () => {
-          const linkObj = {
-            id: typeof window.uid === 'function' ? window.uid() : Date.now().toString(),
-            eventId: newId,
-            rawText: rawText,
-            originalBlockText: originalBlockText,
-            originalBlockHTML: originalBlockHTML,
-            originalBlockTag: originalBlockTag,
-            createdAt: Date.now(),
-            updatedAt: Date.now()
-          };
-          
+          // Step 2: persist link metadata (does NOT call save() internally)
           await window.saveSmartDateLink(linkObj);
 
-          unwrapSpan(span);
-          
-          const links = await window.getSmartDateLinksForActiveLeaf();
-          window.scanSmartDatesInBlock(block, new Date(), links);
+          // Step 3: canonical save — exactly once
+          if (typeof window.save !== 'function') throw new Error('Canonical save() is unavailable');
+          window.save();
 
-        }).then(() => {
+        }).then(async () => {
+          // Step 4: side effects
           if (notifyVal && typeof window.scheduleEventNotification === 'function') window.scheduleEventNotification(n);
           if (typeof window.addNotification === 'function') {
             window.addNotification({ type: 'calendar', title: 'Event Created: ' + tVal, body: startFmt, icon: 'calendar', activity: true });
           }
           if (typeof window.renderCalendarView === 'function') window.renderCalendarView();
           if (typeof window.renderAll === 'function') window.renderAll();
+
+          // Step 5: rehydrate the schedule line
+          unwrapSpan(span);
+          const links = await window.getSmartDateLinksForActiveLeaf();
+          window.scanSmartDatesInBlock(block, new Date(), links);
+
           if (typeof toast === 'function') toast('Event created successfully.');
           close();
-        }).catch(err => {
-          console.error('Failed to save smart date event', err);
-          if (window.notes) {
-            const idx = window.notes.findIndex(xn => xn.id === newId);
-            if (idx > -1) window.notes.splice(idx, 1);
+
+        }).catch(async err => {
+          console.error('Smart Dates: failed to save event:', err);
+
+          // Rollback: remove exact event from canonical notes by newId
+          const arr = getCanonicalNotesArray();
+          if (arr) {
+            const idx = arr.findIndex(xn => String(xn.id) === String(newId));
+            if (idx > -1) arr.splice(idx, 1);
           }
+
+          // Rollback: remove link by eventId if it was persisted
+          try { await window.removeSmartDateLink(newId); } catch (_) {}
+
+          isCreatingEvent = false;
           submitBtn.disabled = false;
-          if (typeof toast === 'function') toast('Failed to save event.');
+          if (typeof toast === 'function') toast('Failed to save event. Please try again.');
         });
       };
     };
+
     renderConfirmation();
   }
+
+  // =========================================================================
+  // SCHEDULE LINE ACTIONS
+  // =========================================================================
 
   window.handleSmartDateAction = async function(e, action, eventId) {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (action === 'open' || action === 'edit') {
       if (action === 'edit') window._sdPendingRefresh = true;
       if (typeof window.openCalendarEventEditor === 'function') window.openCalendarEventEditor(eventId);
+
     } else if (action === 'unlink' || action === 'remove') {
       await window.removeSmartDateLink(eventId);
       const schedule = e.target.closest('.smart-date-linked-schedule');
       if (schedule) {
-         if (schedule.dataset.sdHiddenLi === 'true') {
-           schedule.remove();
-           const hiddenLis = document.querySelectorAll('.smart-date-hidden-li');
-           hiddenLis.forEach(li => {
-             li.classList.remove('smart-date-hidden-li');
-             li.style.display = '';
-             window.scanSmartDatesInBlock(li, new Date(), []);
-           });
-         } else {
-           const html = schedule.dataset.sdOriginalHtml;
-           const tag = schedule.dataset.sdOriginalTag || 'P';
-           const restored = document.createElement(tag);
-           restored.innerHTML = html;
-           schedule.replaceWith(restored);
-           window.scanSmartDatesInBlock(restored, new Date(), []);
-         }
+        if (schedule.dataset.sdHiddenLi === 'true') {
+          schedule.remove();
+          document.querySelectorAll('.smart-date-hidden-li').forEach(li => {
+            li.classList.remove('smart-date-hidden-li');
+            li.style.display = '';
+            window.scanSmartDatesInBlock(li, new Date(), []);
+          });
+        } else {
+          const html = schedule.dataset.sdOriginalHtml;
+          const tag = schedule.dataset.sdOriginalTag || 'P';
+          const restored = document.createElement(tag);
+          restored.innerHTML = html;
+          schedule.replaceWith(restored);
+          window.scanSmartDatesInBlock(restored, new Date(), []);
+        }
       }
       if (typeof toast === 'function') toast('Link removed.');
+
     } else if (action === 'delete') {
       if (typeof window.deleteCalendarSource === 'function') {
         window.deleteCalendarSource(eventId);
-        if (typeof toast === 'function') toast('Event deleted.');
         const schedule = e.target.closest('.smart-date-linked-schedule');
         if (schedule) {
           const parent = schedule.parentNode;
           window.dehydrateSmartDateSuggestions(parent);
           const links = await window.getSmartDateLinksForActiveLeaf();
-          const blocks = parent.querySelectorAll('p, div, li, h1, h2, h3, h4, h5, h6, blockquote');
-          blocks.forEach(b => window.scanSmartDatesInBlock(b, new Date(), links));
+          parent.querySelectorAll('p, div, li, h1, h2, h3, h4, h5, h6, blockquote')
+            .forEach(b => window.scanSmartDatesInBlock(b, new Date(), links));
         }
       }
     }
   };
+
+  // =========================================================================
+  // MODAL CLOSE OBSERVER (Gate 6: re-hydrate after event edit)
+  // =========================================================================
 
   function attachModalCloseObserver() {
     const modalRoot = document.getElementById('modalRoot');
@@ -940,45 +1025,39 @@
       if (modalRoot.children.length === 0 && window._sdPendingRefresh) {
         window._sdPendingRefresh = false;
         const noteBody = document.getElementById('noteBody');
-        if (noteBody && typeof window.hydrateSmartDateSuggestions === 'function') {
-          window.hydrateSmartDateSuggestions(noteBody, new Date());
-        }
+        if (noteBody) window.hydrateSmartDateSuggestions(noteBody, new Date());
       }
     });
     obs.observe(modalRoot, { childList: true });
   }
 
+  // =========================================================================
+  // DELEGATED EVENT LISTENERS
+  // =========================================================================
+
   let listenerAttached = false;
   function attachDelegatedListeners() {
     if (listenerAttached) return;
     listenerAttached = true;
-    
-    const clickHandler = (e) => {
+
+    document.body.addEventListener('click', (e) => {
       const span = e.target.closest('.smart-date-suggestion');
-      if (span) {
-        e.preventDefault();
-        e.stopPropagation();
-        openSmartDateModal(span);
-        return;
-      }
+      if (span) { e.preventDefault(); e.stopPropagation(); openSmartDateModal(span); return; }
       const schedule = e.target.closest('.smart-date-linked-schedule');
       if (schedule && !e.target.closest('.smart-date-action-btn')) {
         document.querySelectorAll('.smart-date-linked-schedule').forEach(el => el.classList.remove('active-tap'));
         schedule.classList.add('active-tap');
       }
-    };
-    
-    const keyHandler = (e) => {
+    }, true);
+
+    document.body.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         const span = e.target.closest('.smart-date-suggestion');
         if (!span) return;
         e.preventDefault();
         openSmartDateModal(span);
       }
-    };
-    
-    document.body.addEventListener('click', clickHandler, true);
-    document.body.addEventListener('keydown', keyHandler, true);
+    }, true);
   }
 
   if (document.readyState === 'loading') {
@@ -990,4 +1069,5 @@
     attachDelegatedListeners();
     attachModalCloseObserver();
   }
+
 })();
