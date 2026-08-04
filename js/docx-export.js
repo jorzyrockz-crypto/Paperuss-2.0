@@ -118,6 +118,21 @@
     if (el.classList && el.classList.contains('paperuss-embed')) {
       return await convertEmbedToWml(el, ctx);
     }
+    
+    // Productivity Linked Compartments
+    if (el.classList && el.classList.contains('productivity-ref')) {
+      const children = Array.from(el.children || el.childNodes || []);
+      const staticEl = children.find(c => c.classList && c.classList.contains('productivity-ref-static'));
+      if (staticEl) {
+        // We simulate a block with border and subtle background in Word
+        let outXml = await convertChildrenToWml(staticEl, ctx);
+        // WordprocessingML does not support styling a div directly without block wrappers, 
+        // but convertChildrenToWml already wraps children in <w:p> if they are divs/ps.
+        // We can just return the children directly.
+        return outXml;
+      }
+      return '';
+    }
 
     // Paragraph or Div
     if (tag === 'P' || tag === 'DIV') {
