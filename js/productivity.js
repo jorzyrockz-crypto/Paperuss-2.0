@@ -263,6 +263,7 @@ async function openCalendarEventCreator(year, month, day, options = { intent: 'c
   let loadedEvents = [];
   let isLoading = true;
   let errorState = null;
+  let isCreatingEvent = false;
 
   async function performLoad() {
     isLoading = true;
@@ -353,7 +354,7 @@ async function openCalendarEventCreator(year, month, day, options = { intent: 'c
         </div>
         <div class="modal-actions">
           <button class="btn" id="evCancel">Cancel</button>
-          <button class="btn btn-primary" id="evCreate">Create Event</button>
+          <button class="btn btn-primary" id="evCreate">${options.intent === 'insert' ? 'Create & Insert Event' : 'Create Event'}</button>
         </div>
       `}
     </div></div>`;
@@ -429,6 +430,9 @@ async function openCalendarEventCreator(year, month, day, options = { intent: 'c
       }
     } else {
       document.getElementById('evCreate').onclick=async ()=>{
+        if(isCreatingEvent) return;
+        const btn=document.getElementById('evCreate');
+        
         const titleEl=document.getElementById('evTitle');
         const startDateEl=document.getElementById('evStartDate');
         const startTimeEl=document.getElementById('evStartTime');
@@ -450,6 +454,10 @@ async function openCalendarEventCreator(year, month, day, options = { intent: 'c
         const notify=notifyEl.checked;
         if(!Number.isFinite(startTs)||!Number.isFinite(endTs)){ toast('Enter valid event dates and times'); return; }
         if(endTs<startTs){ toast('Event end must be after its start'); return; }
+        
+        isCreatingEvent = true;
+        btn.disabled = true;
+        
         let tags=['calendar'];
         if(type==='meeting') tags.push('meeting');
         if(type==='deadline') tags.push('deadline');
@@ -458,11 +466,11 @@ async function openCalendarEventCreator(year, month, day, options = { intent: 'c
         const startFmt=new Date(startTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
         const endFmt=new Date(endTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
         const safeDescription=esc(descEl.value.trim());
-        const content=sanitizeNoteHTML(`<p><strong>📅 ${esc(startFmt)}</strong></p><p>→ ${esc(endFmt)}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${esc(repeatVal)}</p>`:''}${safeDescription?`<p>${safeDescription}</p>`:''}`);
+        const content_html=sanitizeNoteHTML(`<p><strong>📅 ${esc(startFmt)}</strong></p><p>→ ${esc(endFmt)}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${esc(repeatVal)}</p>`:''}${safeDescription?`<p>${safeDescription}</p>`:''}`);
 
         const newId=uid();
         const n={
-          id:newId, title, content, tags, pinned:false, archived:false,
+          id:newId, title, content: content_html, tags, pinned:false, archived:false,
           createdAt:Date.now(), updatedAt:Date.now(), fontStyle:'sans',
           calendarStart:startTs, calendarEnd:endTs,
           calendarRepeat:repeatVal==='none'?null:repeatVal,
@@ -477,18 +485,17 @@ async function openCalendarEventCreator(year, month, day, options = { intent: 'c
         renderCalendarView(); renderAll();
         
         if(options.intent === 'insert') {
-          await performLoad();
-          const found = loadedEvents.find(e => e.note.id === newId);
-          if(found) {
-            selectedEventNoteId = newId;
-            activeTab = 'select';
-            renderModalContent();
-          } else {
-            toast('Save or load error: newly created event not found.');
+          const eventHtml = `<div class="callout callout-info" style="margin:12px 0"><span class="callout-badge">📅 Event</span> <strong>${esc(title)}</strong> &nbsp;·&nbsp; <span style="font-size:12px;opacity:0.8">${startFmt}</span></div><p><br></p>`;
+          const ed = document.getElementById('noteBody');
+          if(ed) {
+            ed.focus();
+            document.execCommand('insertHTML', false, eventHtml);
+            if(typeof handleBodyInput === 'function') handleBodyInput();
           }
-        } else {
-          close();
+          toast(`Inserted event "${title}" into note`);
         }
+        
+        close();
       };
     }
   }
