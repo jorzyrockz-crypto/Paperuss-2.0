@@ -249,7 +249,11 @@ function renderCalendarScheduleView(){
   grid.innerHTML=html||'<div class="list-empty">No upcoming events in the next 90 days.</div>';refreshIcons();
 }
 
-function openCalendarEventCreator(year, month, day){
+async function openCalendarEventCreator(year, month, day){
+  if (typeof load === 'function') {
+    const p = load();
+    if(p instanceof Promise) await p;
+  }
   const now = new Date();
   if(!year) year = now.getFullYear();
   if(month === undefined) month = now.getMonth();
@@ -260,9 +264,10 @@ function openCalendarEventCreator(year, month, day){
 
   let activeTab = 'select';
   let selectedEventNoteId = null;
-  const existingEvents = typeof getCalendarEvents === 'function' ? getCalendarEvents() : [];
+  const getExistingEvents = () => notes.filter(n => !n.deletedAt && (n.tags||[]).includes('calendar')).map(n => ({ note: n, start: n.calendarStart || n.createdAt })).sort((a,b) => b.start - a.start);
 
   function renderModalContent() {
+    const existingEvents = getExistingEvents();
     const hasEvents = existingEvents.length > 0;
     if(!hasEvents && activeTab === 'select') activeTab = 'create';
 
@@ -358,7 +363,7 @@ function openCalendarEventCreator(year, month, day){
       if(btnInsertSel) {
         btnInsertSel.onclick = () => {
           if(!selectedEventNoteId) { toast('Select an event first'); return; }
-          const evObj = existingEvents.find(e => e.note.id === selectedEventNoteId);
+          const evObj = getExistingEvents().find(e => e.note.id === selectedEventNoteId);
           if(!evObj) return;
 
           const title = titleOf(evObj.note);
@@ -423,12 +428,15 @@ function openCalendarEventCreator(year, month, day){
         }
         renderCalendarView(); renderAll();
         toast('Event created');
-        close();
+        activeTab = 'select';
+        selectedEventNoteId = n.id;
+        renderModalContent();
       };
     }
   }
 
   function renderEventListRows(query) {
+    const existingEvents = getExistingEvents();
     const q = query.toLowerCase().trim();
     const filtered = existingEvents.filter(e => !q || titleOf(e.note).toLowerCase().includes(q));
     if(!filtered.length) return `<div style="padding:16px;text-align:center;color:var(--fg-muted);font-size:13px">No calendar events found.</div>`;
@@ -437,10 +445,10 @@ function openCalendarEventCreator(year, month, day){
       const isSel = selectedEventNoteId === ev.note.id;
       const title = titleOf(ev.note);
       const startFmt = new Date(ev.start).toLocaleString(undefined, {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-      return `<div class="modal-item-row ${isSel?'selected':''}" data-event-id="${ev.note.id}" tabindex="0" style="cursor:pointer; pointer-events:auto; outline:none;">
-        <i data-lucide="calendar" class="w-4 h-4" style="color:var(--accent); pointer-events:none;"></i>
-        <div style="flex:1;font-size:13px;font-weight:600;color:var(--fg); pointer-events:none;">${esc(title)}</div>
-        <span style="font-size:11px;color:var(--fg-muted);background:var(--hover);padding:2px 6px;border-radius:4px; pointer-events:none;">${startFmt}</span>
+      return `<div class="modal-item-row ${isSel?'selected':''}" data-event-id="${ev.note.id}" tabindex="0" style="cursor:pointer; outline:none;">
+        <i data-lucide="calendar" class="w-4 h-4" style="color:var(--accent);"></i>
+        <div style="flex:1;font-size:13px;font-weight:600;color:var(--fg);">${esc(title)}</div>
+        <span style="font-size:11px;color:var(--fg-muted);background:var(--hover);padding:2px 6px;border-radius:4px;">${startFmt}</span>
       </div>`;
     }).join('');
   }

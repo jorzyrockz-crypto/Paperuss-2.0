@@ -16,7 +16,11 @@ function saveTasks(){
   if(typeof queueCloudSync==='function') queueCloudSync();
 }
 
-function openTaskCreatorModal(){
+async function openTaskCreatorModal(){
+  if (typeof loadTasks === 'function') {
+    const p = loadTasks();
+    if(p instanceof Promise) await p;
+  }
   const root=document.getElementById('modalRoot');
   let activeTab = 'select'; // 'select' or 'create'
   let selectedTaskIds = new Set();
@@ -128,13 +132,15 @@ function openTaskCreatorModal(){
           const insertNote=document.getElementById('tmInsertNote').checked;
           const groupId='g_'+Date.now().toString(36);
           lines.forEach(txt=>{
+            const newId = 't_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
             standaloneTasks.unshift({
-              id:'t_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+              id:newId,
               text:txt, completed:false,
               priority:prio, due, notified:false,
               groupId,
               createdAt:Date.now(), updatedAt:Date.now()
             });
+            selectedTaskIds.add(newId);
           });
           saveTasks();
           if(insertNote){
@@ -148,7 +154,9 @@ function openTaskCreatorModal(){
           }
           renderTasksView(); updateTasksCount(); renderAll();
           addNotification({type:'task',title:`${lines.length} tasks created`,body:lines.slice(0,3).join(', ')+(lines.length>3?'…':''),icon:'check-square',activity:true});
-          close();
+          toast(`${lines.length} tasks created`);
+          activeTab = 'select';
+          renderModalContent();
         };
       }
       setTimeout(()=>document.getElementById('tmTasks')?.focus(), 50);
@@ -163,11 +171,11 @@ function openTaskCreatorModal(){
     return filtered.map(t => {
       const isSel = selectedTaskIds.has(t.id);
       const prioColor = t.priority==='high'?'🔴':t.priority==='medium'?'🟡':'🟢';
-      return `<div class="modal-item-row ${isSel?'selected':''}" data-task-id="${t.id}" tabindex="0" style="cursor:pointer; pointer-events:auto; outline:none;">
+      return `<div class="modal-item-row ${isSel?'selected':''}" data-task-id="${t.id}" tabindex="0" style="cursor:pointer; outline:none;">
         <input type="checkbox" ${isSel?'checked':''} style="pointer-events:none">
-        <span style="font-size:12px; pointer-events:none;">${prioColor}</span>
-        <div style="flex:1;font-size:13px;color:var(--fg);${t.completed?'text-decoration:line-through;opacity:0.6':''}; pointer-events:none;">${esc(t.text)}</div>
-        ${t.due?`<span style="font-size:11px;color:var(--fg-muted); pointer-events:none;">${new Date(t.due).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>`:''}
+        <span style="font-size:12px;">${prioColor}</span>
+        <div style="flex:1;font-size:13px;color:var(--fg);${t.completed?'text-decoration:line-through;opacity:0.6':''}">${esc(t.text)}</div>
+        ${t.due?`<span style="font-size:11px;color:var(--fg-muted);">${new Date(t.due).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>`:''}
       </div>`;
     }).join('');
   }
