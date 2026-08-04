@@ -169,7 +169,7 @@ async function openTaskCreatorModal(){
           if(isCreatingTasks) return;
           
           const raw=document.getElementById('tmTasks').value;
-          const lines=raw.split(/\\r?\\n/).map(s=>s.trim()).filter(Boolean);
+          const lines=raw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
           if(!lines.length){ toast('Enter at least one task'); return; }
           
           isCreatingTasks = true;
