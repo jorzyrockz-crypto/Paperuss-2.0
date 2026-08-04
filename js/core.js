@@ -458,7 +458,7 @@ async function runStorageSense() {
   try {
     if ('caches' in window) {
       const keys = await caches.keys();
-      const currentCache = window.PAPERUSS_BUILD?.cacheName || 'paperuss-shell-v34';
+      const currentCache = window.PAPERUSS_BUILD?.cacheName || 'paperuss-shell-v35';
       for (const key of keys) {
         if (key !== currentCache && key.startsWith('paperuss-shell')) {
           await caches.delete(key);
