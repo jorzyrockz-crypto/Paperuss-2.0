@@ -300,11 +300,16 @@
   // =========================================================================
 
   function getCanonicalNotesArray() {
-    const list =
-      typeof window.getCanonicalNotes === 'function'
-        ? window.getCanonicalNotes()
-        : window.paperussNotes;
-    return Array.isArray(list) ? list : null;
+    // Try the canonical getter first (core.js live reference)
+    if (typeof window.getCanonicalNotes === 'function') {
+      const list = window.getCanonicalNotes();
+      if (Array.isArray(list)) return list;
+    }
+    // Try the snapshot assigned at core.js load time
+    if (Array.isArray(window.paperussNotes)) return window.paperussNotes;
+    // Final fallback: core.js exposes notes directly in some configurations
+    if (Array.isArray(window.notes)) return window.notes;
+    return null;
   }
 
   function getCanonicalNote(eventId) {
