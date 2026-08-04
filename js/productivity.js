@@ -249,7 +249,9 @@ function renderCalendarScheduleView(){
   grid.innerHTML=html||'<div class="list-empty">No upcoming events in the next 90 days.</div>';refreshIcons();
 }
 
-async function openCalendarEventCreator(year, month, day, options = { intent: 'calendar' }){
+async function openCalendarEventCreator(year, month, day, options){
+  options = options || {};
+  options.intent = options.intent || 'calendar';
   const now = new Date();
   if(!year) year = now.getFullYear();
   if(month === undefined) month = now.getMonth();

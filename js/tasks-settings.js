@@ -16,7 +16,9 @@ function saveTasks(){
   if(typeof queueCloudSync==='function') queueCloudSync();
 }
 
-async function openTaskCreatorModal(options = { intent: 'manage' }){
+async function openTaskCreatorModal(options){
+  options = options || {};
+  options.intent = options.intent || 'manage';
   const root=document.getElementById('modalRoot');
   let activeTab = 'select'; // 'select' or 'create'
   let selectedTaskIds = new Set();
