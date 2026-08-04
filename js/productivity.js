@@ -459,15 +459,16 @@ async function openCalendarEventCreator(year, month, day, options){
         const startFmt=new Date(startTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
         const endFmt=new Date(endTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
         const safeDescription=esc(descEl.value.trim());
-        const content_html=sanitizeNoteHTML(`<p><strong>📅 ${esc(startFmt)}</strong></p><p>→ ${esc(endFmt)}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${esc(repeatVal)}</p>`:''}${safeDescription?`<p>${safeDescription}</p>`:''}`);
+        const content_html=(typeof sanitizeNoteHTML==='function')?sanitizeNoteHTML(`<p><strong>📅 ${esc(startFmt)}</strong></p><p>→ ${esc(endFmt)}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${esc(repeatVal)}</p>`:''}${safeDescription?`<p>${safeDescription}</p>`:''}`):`<p><strong>📅 ${esc(startFmt)}</strong></p><p>→ ${esc(endFmt)}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${esc(repeatVal)}</p>`:''}${safeDescription?`<p>${safeDescription}</p>`:''}`;
 
-        const newId=uid();
+        const newId=typeof uid==='function'?uid():Date.now().toString();
         const n={
           id:newId, title, content: content_html, tags, pinned:false, archived:false,
           createdAt:Date.now(), updatedAt:Date.now(), fontStyle:'sans',
           calendarStart:startTs, calendarEnd:endTs,
           calendarRepeat:repeatVal==='none'?null:repeatVal,
-          calendarNotify:notify, calendarLastNotifiedAt:null
+          calendarNotify:notify, calendarLastNotifiedAt:null,
+          calendarDescription:descEl.value.trim()
         };
         notes.unshift(n);
         save();
@@ -965,7 +966,8 @@ window.insertProductivityReference = function(type, sourceId) {
 window.refreshProductivityReferences = function(type, sourceId) {
   const normType = String(type);
   const normId = String(sourceId);
-  const refs = document.querySelectorAll(`.productivity-ref[data-paperuss-productivity="${normType}"][data-source-id="${normId}"]`);
+  const allRefs = document.querySelectorAll('.productivity-ref');
+  const refs = Array.from(allRefs).filter(r => r.getAttribute('data-paperuss-productivity') === normType && String(r.getAttribute('data-source-id')) === normId);
   if (refs.length === 0) return;
   
   const source = window.resolveProductivitySource(normType, normId);
@@ -988,8 +990,12 @@ window.refreshProductivityReferences = function(type, sourceId) {
     window.hydrateProductivityReferences(ref);
   });
   
-  if (changed && typeof onEditorInput === 'function') {
-    onEditorInput();
+  if (changed) {
+    if (typeof handleBodyInput === 'function') {
+      handleBodyInput();
+    } else if (typeof onEditorInput === 'function') {
+      onEditorInput();
+    }
   }
 };
 
@@ -1006,12 +1012,36 @@ window.openCalendarEventEditor = function(eventId) {
   }
   
   const esc = (s) => (s||'').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  const rawDesc = evNote.content ? evNote.content.replace(/<[^>]*>?/gm, '') : '';
+  let rawDesc = '';
+  if (evNote.calendarDescription !== undefined) {
+    rawDesc = evNote.calendarDescription;
+  } else if (evNote.content) {
+    rawDesc = evNote.content.replace(/<[^>]*>?/gm, '');
+    const toStrip = ['📅', '→', '🔁 Repeats:'];
+    let lines = rawDesc.split('\n');
+    lines = lines.filter(l => !toStrip.some(p => l.includes(p))).map(l => l.trim()).filter(l => l);
+    rawDesc = lines.join('\n');
+  }
   
   let startTs = evNote.calendarStart;
   let endTs = evNote.calendarEnd;
-  const dStart = window.normalizeProductivityDate ? window.normalizeProductivityDate(startTs) : new Date(startTs);
-  const dEnd = window.normalizeProductivityDate ? window.normalizeProductivityDate(endTs) : new Date(endTs);
+  const normalizeProductivityDate = window.normalizeProductivityDate || ((val) => {
+    if (!val) return new Date(NaN);
+    if (typeof val === 'object') {
+      if (typeof val.toDate === 'function') return val.toDate();
+      if (typeof val.toMillis === 'function') return new Date(val.toMillis());
+      if (val.seconds !== undefined) return new Date(val.seconds * 1000);
+    }
+    return new Date(val);
+  });
+  
+  const dStart = normalizeProductivityDate(startTs);
+  const dEnd = normalizeProductivityDate(endTs);
+  
+  if (isNaN(dStart) || isNaN(dEnd)) {
+    if(typeof toast === 'function') toast('Calendar event date unavailable.');
+    return;
+  }
   
   const yS = dStart.getFullYear();
   const mS = String(dStart.getMonth()+1).padStart(2, '0');
@@ -1130,6 +1160,7 @@ window.openCalendarEventEditor = function(eventId) {
     freshEv.calendarEnd = newEndTs;
     freshEv.calendarRepeat = repeatVal === 'none' ? null : repeatVal;
     freshEv.calendarNotify = notify;
+    freshEv.calendarDescription = desc;
     freshEv.updatedAt = Date.now();
     
     if (typeof save === 'function') save();
@@ -1164,6 +1195,18 @@ window.openTodoListEditor = function(groupId) {
   const renderDraft = () => {
     let rowsHtml = '';
     draftTasks.forEach((t, idx) => {
+      let dueVal = '';
+      if (t.due) {
+        const dd = new Date(t.due);
+        if (!isNaN(dd)) {
+          const dy = dd.getFullYear();
+          const dm = String(dd.getMonth()+1).padStart(2,'0');
+          const ddt = String(dd.getDate()).padStart(2,'0');
+          const dh = String(dd.getHours()).padStart(2,'0');
+          const dmin = String(dd.getMinutes()).padStart(2,'0');
+          dueVal = `${dy}-${dm}-${ddt}T${dh}:${dmin}`;
+        }
+      }
       rowsHtml += `
         <div style="display:flex;gap:8px;align-items:center;padding:6px;background:var(--subtle);border-radius:6px;margin-bottom:6px">
           <input type="checkbox" data-idx="${idx}" class="draft-task-done" ${t.completed?'checked':''}>
@@ -1171,9 +1214,10 @@ window.openTodoListEditor = function(groupId) {
           <select data-idx="${idx}" class="draft-task-pri" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;font-size:12px;padding:2px">
             <option value="none" ${t.priority==='none'||!t.priority?'selected':''}>-</option>
             <option value="low" ${t.priority==='low'?'selected':''}>Low</option>
+            <option value="medium" ${t.priority==='medium'?'selected':''}>Medium</option>
             <option value="high" ${t.priority==='high'?'selected':''}>High</option>
           </select>
-          <input type="date" data-idx="${idx}" class="draft-task-due" value="${t.dueDate?new Date(t.dueDate).toISOString().substring(0,10):''}" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;font-size:12px;padding:2px">
+          <input type="datetime-local" data-idx="${idx}" class="draft-task-due" value="${dueVal}" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;font-size:12px;padding:2px">
           <button type="button" data-idx="${idx}" class="draft-task-del btn" style="padding:4px;color:var(--danger)"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
         </div>
       `;
@@ -1210,7 +1254,7 @@ window.openTodoListEditor = function(groupId) {
     root.querySelectorAll('.draft-task-text').forEach(el => el.oninput = (e) => { draftTasks[e.target.dataset.idx].text = e.target.value; });
     root.querySelectorAll('.draft-task-done').forEach(el => el.onchange = (e) => { draftTasks[e.target.dataset.idx].completed = e.target.checked; });
     root.querySelectorAll('.draft-task-pri').forEach(el => el.onchange = (e) => { draftTasks[e.target.dataset.idx].priority = e.target.value; });
-    root.querySelectorAll('.draft-task-due').forEach(el => el.onchange = (e) => { draftTasks[e.target.dataset.idx].dueDate = e.target.value ? new Date(e.target.value).getTime() : null; });
+    root.querySelectorAll('.draft-task-due').forEach(el => el.onchange = (e) => { draftTasks[e.target.dataset.idx].due = e.target.value ? new Date(e.target.value).getTime() : null; });
     root.querySelectorAll('.draft-task-del').forEach(el => el.onclick = (e) => {
       draftTasks.splice(e.currentTarget.dataset.idx, 1);
       renderDraft();
@@ -1243,13 +1287,16 @@ window.openTodoListEditor = function(groupId) {
         dt.groupId = groupId;
         const t = freshTasks.find(x => String(x.id) === String(dt.id));
         if (t) {
-          t.text = dt.text;
-          t.completed = dt.completed;
-          t.priority = dt.priority;
-          t.dueDate = dt.dueDate;
-          t.groupTitle = dt.groupTitle;
+          let changed = false;
+          if (t.text !== dt.text) { t.text = dt.text; changed = true; }
+          if (t.completed !== dt.completed) { t.completed = dt.completed; changed = true; }
+          if (t.priority !== dt.priority) { t.priority = dt.priority; changed = true; }
+          if (t.due !== dt.due) { t.due = dt.due; changed = true; }
+          if (t.groupTitle !== dt.groupTitle) { t.groupTitle = dt.groupTitle; changed = true; }
+          if (changed) t.updatedAt = Date.now();
         } else {
           dt.createdAt = Date.now();
+          dt.updatedAt = Date.now();
           freshTasks.push(dt);
         }
       });
