@@ -657,7 +657,7 @@
     const originalBlockText = block.textContent;
     
     let extractedTitle = originalBlockText.replace(rawText, '').trim();
-    extractedTitle = extractedTitle.replace(/^[^wd]+|[^wd]+$/g, '').trim();
+    extractedTitle = extractedTitle.replace(/^[^\w\d]+|[^\w\d]+$/g, '').trim();
     if (!extractedTitle) extractedTitle = 'Event';
 
     const dateStr = startDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
