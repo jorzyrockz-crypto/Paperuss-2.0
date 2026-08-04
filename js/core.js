@@ -1188,6 +1188,7 @@ function renderEditor(){
       hydrateMediaInEditor();
       if(typeof window.hydrateEmbeds==='function') window.hydrateEmbeds(ed);
       if(typeof window.hydrateProductivityReferences==='function') window.hydrateProductivityReferences(ed);
+    if(typeof window.hydrateSmartDateSuggestions==='function') window.hydrateSmartDateSuggestions(ed);
       if(window.HistoryManager && window.HistoryManager.activeNoteId !== n.id) {
         window.HistoryManager.reset(n.id);
       }

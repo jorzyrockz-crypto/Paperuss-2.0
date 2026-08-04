@@ -495,11 +495,27 @@ function sanitizeForStorage(html){
   temp.querySelectorAll('.table-selection-mode,.table-moving').forEach(el=>{
     el.classList.remove('table-selection-mode','table-moving');
   });
+  if (typeof window.dehydrateSmartDateSuggestions === 'function') {
+    window.dehydrateSmartDateSuggestions(temp);
+  }
   return typeof sanitizeNoteHTML==='function'?sanitizeNoteHTML(temp.innerHTML):temp.innerHTML;
 }
 function handleBodyInput(){
   if(state.suppressInput) return;
   const ed=bodyEl();
+  
+  if (typeof window.scheduleSmartDateScan === 'function') {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      let node = sel.anchorNode;
+      if (node && ed.contains(node)) {
+        if (node.nodeType === 3) node = node.parentNode;
+        const block = node.closest('p, div, li, h1, h2, h3, h4, h5, h6, blockquote') || ed;
+        window.scheduleSmartDateScan(ed, block);
+      }
+    }
+  }
+
   let html=ed.innerHTML;
   if(isEditorEmpty(html) || html==='<br>' || html==='<div><br></div>') html='';
   html=sanitizeForStorage(html);

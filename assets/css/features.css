@@ -2758,3 +2758,19 @@ blockquote.note-callout.callout-info {
     font-size: 14px;
   }
 }
+
+/* ============================================================
+   SMART DATES
+   ============================================================ */
+.smart-date-suggestion {
+  border-bottom: 1px dashed var(--accent, #3b82f6);
+  cursor: pointer;
+  transition: background 0.2s;
+  border-radius: 2px;
+}
+.smart-date-suggestion:hover,
+.smart-date-suggestion:focus {
+  background: var(--subtle, rgba(59, 130, 246, 0.1));
+  outline: 2px solid var(--accent, #3b82f6);
+  outline-offset: 2px;
+}

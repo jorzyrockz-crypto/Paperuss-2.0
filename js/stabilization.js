@@ -280,6 +280,9 @@
     if (typeof window.dehydrateProductivityReferences === 'function') {
       window.dehydrateProductivityReferences(clone);
     }
+    if (typeof window.dehydrateSmartDateSuggestions === 'function') {
+      window.dehydrateSmartDateSuggestions(clone);
+    }
 
     const FORBIDDEN_IDS = ['noteBody', 'editorContent', 'editorScroll', 'formatBar', 'noteTitle', 'editorEmpty', 'findPanel'];
     clone.querySelectorAll('[id], [data-paperuss-content-root], [data-paperuss-ui]').forEach(el => {
