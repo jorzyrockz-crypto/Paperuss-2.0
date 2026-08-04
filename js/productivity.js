@@ -287,7 +287,7 @@ function openCalendarEventCreator(year, month, day){
         </div>
         <div class="modal-actions">
           <button class="btn" id="evCancel">Cancel</button>
-          <button class="btn btn-primary" id="evInsertSelected">Insert Selected Event</button>
+          <button class="btn btn-primary" id="evInsertSelected" ${selectedEventNoteId ? '' : 'disabled'}>Insert Selected Event</button>
         </div>
       ` : `
         <p style="font-size:12.5px;color:var(--fg-secondary);margin-bottom:12px">${dateLabel}</p>
@@ -437,10 +437,10 @@ function openCalendarEventCreator(year, month, day){
       const isSel = selectedEventNoteId === ev.note.id;
       const title = titleOf(ev.note);
       const startFmt = new Date(ev.start).toLocaleString(undefined, {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-      return `<div class="modal-item-row ${isSel?'selected':''}" data-event-id="${ev.note.id}">
-        <i data-lucide="calendar" class="w-4 h-4" style="color:var(--accent)"></i>
-        <div style="flex:1;font-size:13px;font-weight:600;color:var(--fg)">${esc(title)}</div>
-        <span style="font-size:11px;color:var(--fg-muted);background:var(--hover);padding:2px 6px;border-radius:4px">${startFmt}</span>
+      return `<div class="modal-item-row ${isSel?'selected':''}" data-event-id="${ev.note.id}" tabindex="0" style="cursor:pointer; pointer-events:auto; outline:none;">
+        <i data-lucide="calendar" class="w-4 h-4" style="color:var(--accent); pointer-events:none;"></i>
+        <div style="flex:1;font-size:13px;font-weight:600;color:var(--fg); pointer-events:none;">${esc(title)}</div>
+        <span style="font-size:11px;color:var(--fg-muted);background:var(--hover);padding:2px 6px;border-radius:4px; pointer-events:none;">${startFmt}</span>
       </div>`;
     }).join('');
   }
@@ -449,11 +449,21 @@ function openCalendarEventCreator(year, month, day){
     const listEl = document.getElementById('evList');
     if(!listEl) return;
     listEl.querySelectorAll('.modal-item-row[data-event-id]').forEach(row => {
-      row.onclick = () => {
+      row.onkeydown = (e) => {
+        if(e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          row.click();
+        }
+      };
+      row.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         selectedEventNoteId = row.dataset.eventId;
         const searchVal = document.getElementById('evSearchInput')?.value || '';
         listEl.innerHTML = renderEventListRows(searchVal);
         wireEventRowEvents();
+        const btn = document.getElementById('evInsertSelected');
+        if(btn) btn.disabled = !selectedEventNoteId;
       };
     });
   }
