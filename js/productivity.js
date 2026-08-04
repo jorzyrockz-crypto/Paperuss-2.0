@@ -895,31 +895,105 @@ window.hydrateProductivityReferences = function(rootElement) {
     hydrateContainer.setAttribute('data-paperuss-ui', 'true');
     hydrateContainer.className = 'productivity-ref-hydrated';
     
-    if (!source || (Array.isArray(source) && source.length === 0)) {
-      hydrateContainer.innerHTML = window.buildProductivityStaticSnapshot(type, source);
-      ref.appendChild(hydrateContainer);
-      return;
-    }
+
     
     const actionArea = document.createElement('div');
     actionArea.setAttribute('data-paperuss-ui', 'true');
     actionArea.className = 'productivity-ref-actions';
-    actionArea.innerHTML = `<button type="button" class="productivity-ref-open">Open</button>`;
     
-    const btn = actionArea.querySelector('.productivity-ref-open');
-    const handleOpen = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (type === 'calendar') {
-        if (typeof window.openCalendarEventEditor === 'function') window.openCalendarEventEditor(sourceId);
-      } else if (type === 'todo-list') {
-        if (typeof window.openTodoListEditor === 'function') window.openTodoListEditor(sourceId);
-      }
-    };
-    btn.onclick = handleOpen;
-    hydrateContainer.onclick = handleOpen;
-    hydrateContainer.style.cursor = 'pointer';
+    let isMissing = !source || (Array.isArray(source) && source.length === 0);
     
+    if (isMissing) {
+      actionArea.innerHTML = `<button type="button" class="productivity-ref-remove btn btn-sm">Remove from Leaf</button>`;
+      const btnRem = actionArea.querySelector('.productivity-ref-remove');
+      btnRem.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof window.removeProductivityReference === 'function') window.removeProductivityReference(ref);
+      };
+    } else {
+      actionArea.innerHTML = `
+        <button type="button" class="productivity-ref-open btn btn-sm">Open</button>
+        <button type="button" class="productivity-ref-more btn btn-sm">•••</button>
+      `;
+      const btnOpen = actionArea.querySelector('.productivity-ref-open');
+      const handleOpen = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (type === 'calendar') {
+          if (typeof window.openCalendarEventEditor === 'function') window.openCalendarEventEditor(sourceId);
+        } else if (type === 'todo-list') {
+          if (typeof window.openTodoListEditor === 'function') window.openTodoListEditor(sourceId);
+        }
+      };
+      btnOpen.onclick = handleOpen;
+      hydrateContainer.onclick = handleOpen;
+      hydrateContainer.style.cursor = 'pointer';
+      
+      const btnMore = actionArea.querySelector('.productivity-ref-more');
+      btnMore.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        let existingMenu = actionArea.querySelector('.productivity-ref-menu');
+        if (existingMenu) {
+          existingMenu.remove();
+          return;
+        }
+        
+        const menu = document.createElement('div');
+        menu.className = 'productivity-ref-menu';
+        menu.setAttribute('data-paperuss-ui', 'true');
+        menu.style.position = 'absolute';
+        menu.style.right = '0';
+        menu.style.top = '100%';
+        menu.style.background = 'var(--bg)';
+        menu.style.border = '1px solid var(--border)';
+        menu.style.borderRadius = '6px';
+        menu.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
+        menu.style.zIndex = '1000';
+        menu.style.display = 'flex';
+        menu.style.flexDirection = 'column';
+        menu.style.padding = '4px';
+        menu.style.minWidth = '160px';
+        
+        const typeLabel = type === 'calendar' ? 'Event' : 'Todo List';
+        
+        menu.innerHTML = `
+          <button type="button" class="btn btn-menu btn-edit" style="text-align:left;padding:6px;border:none;background:transparent;width:100%">Edit ${typeLabel}</button>
+          <button type="button" class="btn btn-menu btn-rem" style="text-align:left;padding:6px;border:none;background:transparent;width:100%">Remove from Leaf</button>
+          <button type="button" class="btn btn-menu btn-del" style="text-align:left;padding:6px;border:none;background:transparent;width:100%;color:var(--danger)">Delete Source ${typeLabel}</button>
+        `;
+        
+        menu.querySelector('.btn-edit').onclick = handleOpen;
+        menu.querySelector('.btn-rem').onclick = (e2) => {
+          e2.preventDefault();
+          e2.stopPropagation();
+          if (typeof window.removeProductivityReference === 'function') window.removeProductivityReference(ref);
+        };
+        menu.querySelector('.btn-del').onclick = (e2) => {
+          e2.preventDefault();
+          e2.stopPropagation();
+          menu.remove();
+          if (type === 'calendar') {
+            if (typeof window.deleteCalendarSource === 'function') window.deleteCalendarSource(sourceId);
+          } else if (type === 'todo-list') {
+            if (typeof window.deleteTodoListSource === 'function') window.deleteTodoListSource(sourceId);
+          }
+        };
+        
+        actionArea.appendChild(menu);
+        
+        const clickAway = (ce) => {
+          if (!menu.contains(ce.target) && ce.target !== btnMore) {
+            menu.remove();
+            document.removeEventListener('click', clickAway);
+          }
+        };
+        document.addEventListener('click', clickAway);
+      };
+    }
+    
+    hydrateContainer.style.position = 'relative';
     hydrateContainer.appendChild(actionArea);
 
     const escStr = (s) => (s||'').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -1153,6 +1227,9 @@ window.openCalendarEventEditor = function(eventId) {
     const endFmt = new Date(newEndTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
     const content_html = (typeof sanitizeNoteHTML === 'function') ? sanitizeNoteHTML(`<p><strong>📅 ${esc(startFmt)}</strong></p><p>→ ${esc(endFmt)}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${esc(repeatVal)}</p>`:''}${desc?`<p>${esc(desc)}</p>`:''}`) : `<p><strong>📅 ${esc(startFmt)}</strong></p><p>→ ${esc(endFmt)}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${esc(repeatVal)}</p>`:''}${desc?`<p>${esc(desc)}</p>`:''}`;
 
+    document.getElementById('evEditSave').disabled = true;
+    const backupEv = { ...freshEv };
+    
     freshEv.title = title;
     freshEv.content = content_html;
     freshEv.tags = tags;
@@ -1163,9 +1240,7 @@ window.openCalendarEventEditor = function(eventId) {
     freshEv.calendarDescription = desc;
     freshEv.updatedAt = Date.now();
     
-    document.getElementById('evEditSave').disabled = true;
-    
-    Promise.resolve(typeof save === 'function' ? save() : null).then(() => {
+    Promise.resolve().then(() => typeof save === 'function' ? save() : null).then(() => {
       if (typeof renderCalendarView === 'function') renderCalendarView();
       if (typeof renderAll === 'function') renderAll();
       
@@ -1176,6 +1251,7 @@ window.openCalendarEventEditor = function(eventId) {
     }).catch(e => {
       if(typeof toast === 'function') toast('Failed to save event');
       isSaving = false;
+      Object.assign(freshEv, backupEv);
       const btn = document.getElementById('evEditSave');
       if (btn) btn.disabled = false;
     });
@@ -1282,6 +1358,7 @@ window.openTodoListEditor = function(groupId) {
       const freshTasks = typeof window.getCanonicalStandaloneTasks === 'function' ? window.getCanonicalStandaloneTasks() : (typeof standaloneTasks !== 'undefined' ? standaloneTasks : []);
       const newTitle = draftTitle.trim() || 'Todo List';
       
+      const backupTasks = freshTasks.map(t => ({...t}));
       const existingIds = new Set(groupTasks.map(t => String(t.id)));
       const newIds = new Set(draftTasks.map(t => String(t.id)));
       
@@ -1313,7 +1390,7 @@ window.openTodoListEditor = function(groupId) {
       
       document.getElementById('todoEditSave').disabled = true;
       
-      Promise.resolve(typeof saveTasks === 'function' ? saveTasks() : null).then(() => {
+      Promise.resolve().then(() => typeof saveTasks === 'function' ? saveTasks() : null).then(() => {
         if (typeof renderTasksView === 'function') renderTasksView();
         if (typeof updateTasksCount === 'function') updateTasksCount();
         
@@ -1323,6 +1400,13 @@ window.openTodoListEditor = function(groupId) {
         close();
       }).catch(e => {
         if(typeof toast === 'function') toast('Failed to save todo list');
+        
+        // Restore from backup
+        if (typeof standaloneTasks !== 'undefined') {
+           standaloneTasks.length = 0;
+           backupTasks.forEach(t => standaloneTasks.push(t));
+        }
+        
         isSaving = false;
         const btn = document.getElementById('todoEditSave');
         if (btn) btn.disabled = false;
@@ -1332,4 +1416,69 @@ window.openTodoListEditor = function(groupId) {
 
   const close = () => { root.innerHTML = ''; };
   renderDraft();
+};
+
+window.removeProductivityReference = function(ref) {
+  if (ref && ref.parentNode) {
+    ref.remove();
+    if (typeof handleBodyInput === 'function') handleBodyInput();
+    if (typeof toast === 'function') toast('Reference removed from note');
+  }
+};
+
+window.deleteCalendarSource = function(eventId) {
+  if (!confirm('Are you sure you want to delete this event source?')) return;
+  const canonicalNotes = typeof window.getCanonicalNotes === 'function' ? window.getCanonicalNotes() : (typeof notes !== 'undefined' ? notes : []);
+  const ev = canonicalNotes.find(n => String(n.id) === String(eventId));
+  if (!ev) {
+    if (typeof toast === 'function') toast('Event already deleted or missing');
+    return;
+  }
+  const backup = { ...ev };
+  ev.deleted = true;
+  ev.deletedAt = Date.now();
+  
+  Promise.resolve().then(() => typeof save === 'function' ? save() : null).then(() => {
+    if (typeof renderCalendarView === 'function') renderCalendarView();
+    if (typeof renderAll === 'function') renderAll();
+    window.refreshProductivityReferences('calendar', eventId);
+    if (typeof toast === 'function') toast('Calendar event source deleted');
+  }).catch(e => {
+    Object.assign(ev, backup);
+    if (typeof toast === 'function') toast('Failed to delete event source');
+  });
+};
+
+window.deleteTodoListSource = function(groupId) {
+  if (!confirm('Are you sure you want to delete this todo list source?')) return;
+  const canonicalTasks = typeof window.getCanonicalStandaloneTasks === 'function' ? window.getCanonicalStandaloneTasks() : (typeof standaloneTasks !== 'undefined' ? standaloneTasks : []);
+  
+  const backupTasks = canonicalTasks.map(t => ({...t}));
+  let changed = false;
+  
+  canonicalTasks.forEach(t => {
+    if (String(t.groupId) === String(groupId) && !t.deleted && !t.deletedAt) {
+      t.deleted = true;
+      t.deletedAt = Date.now();
+      changed = true;
+    }
+  });
+  
+  if (!changed) {
+    if (typeof toast === 'function') toast('Todo list already deleted or missing');
+    return;
+  }
+  
+  Promise.resolve().then(() => typeof saveTasks === 'function' ? saveTasks() : null).then(() => {
+    if (typeof renderTasksView === 'function') renderTasksView();
+    if (typeof updateTasksCount === 'function') updateTasksCount();
+    window.refreshProductivityReferences('todo-list', groupId);
+    if (typeof toast === 'function') toast('Todo list source deleted');
+  }).catch(e => {
+    if (typeof standaloneTasks !== 'undefined') {
+      standaloneTasks.length = 0;
+      backupTasks.forEach(t => standaloneTasks.push(t));
+    }
+    if (typeof toast === 'function') toast('Failed to delete todo list source');
+  });
 };
