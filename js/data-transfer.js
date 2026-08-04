@@ -40,6 +40,40 @@ async function exportNotes(){
   toast('Exported '+notes.length+' notes'+(Object.keys(media).length?` + ${Object.keys(media).length} media`:'')+(leafNoteCount?` + leaves for ${leafNoteCount} notes`:''));
 }
 
+async function importSelectedFile(file) {
+  if (!file) return;
+  const name = (file.name || '').toLowerCase();
+  const type = file.type || '';
+  
+  if (name.endsWith('.json') || type === 'application/json') {
+    return importNotes(file);
+  }
+  
+  if (name.endsWith('.docx') || type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    if (typeof window.importDocxFile === 'function') {
+      return window.importDocxFile(file);
+    }
+  }
+  
+  try {
+    const headerBuffer = await file.slice(0, 4).arrayBuffer();
+    const headerBytes = new Uint8Array(headerBuffer);
+    if (headerBytes[0] === 0x50 && headerBytes[1] === 0x4B && headerBytes[2] === 0x03 && headerBytes[3] === 0x04) {
+      if (typeof window.importDocxFile === 'function') {
+        return window.importDocxFile(file);
+      }
+    }
+  } catch (e) {
+    // Ignore read errors
+  }
+  
+  if (typeof window.toast === 'function') {
+    window.toast('Unsupported file type');
+  } else if (typeof global !== 'undefined' && typeof global.toast === 'function') {
+    global.toast('Unsupported file type');
+  }
+}
+
 function importNotes(file){
   const r=new FileReader();
   r.onload=async ()=>{

@@ -454,6 +454,7 @@
         ? global.getNoteLeafOrder(note)
         : (note.leafOrder || ['virtual_main_' + note.id]);
 
+      let validLeafCount = 0;
       for (let i = 0; i < leafOrder.length; i++) {
         const leafId = leafOrder[i];
         let leaf = null;
@@ -464,13 +465,15 @@
           leaf = { id: leafId, title: 'Main', content: note.content };
         }
         if (!leaf) continue;
+        
+        validLeafCount++;
 
         // Each Leaf begins on a new page (except if first leaf right after title)
-        if (i > 0) {
+        if (validLeafCount > 1) {
           bodyXml += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
         }
 
-        const leafTitle = leaf.title || `Leaf ${i + 1}`;
+        const leafTitle = leaf.title || `Leaf ${validLeafCount}`;
         bodyXml += `<w:p><w:pPr><w:pStyle w:val="Heading1"/><w:outlineLvl w:val="0"/></w:pPr><w:r><w:t xml:space="preserve">${escXml(leafTitle)}</w:t></w:r></w:p>`;
 
         const cleanHtml = sanitizeForExportHTML(leaf.content || '');
@@ -484,6 +487,11 @@
         const contentWml = await convertChildrenToWml(ast, ctx);
         bodyXml += contentWml;
       }
+      
+      if (validLeafCount === 0) {
+        if (typeof global.toast === 'function') global.toast('This Note has no Leaves available to export.');
+        return null;
+      }
     } else {
       // Active-Leaf export
       let activeLeaf = null;
@@ -494,7 +502,16 @@
         }
       }
       if (!activeLeaf) {
-        activeLeaf = { id: 'main', title: note.title || 'Main', content: note.content };
+        // Only fallback to note.content if the Note itself lacks modern Leaf structures (legacy Note).
+        // If it's a modern note but just has no active leaf, we don't artificially render 'main'.
+        if (!note.leafOrder || note.leafOrder.length === 0 || note.leafOrder.includes('virtual_main_' + note.id)) {
+          activeLeaf = { id: 'main', title: note.title || 'Main', content: note.content };
+        }
+      }
+      
+      if (!activeLeaf) {
+        if (typeof global.toast === 'function') global.toast('No active Leaf found.');
+        return null;
       }
 
       const topTitle = note.title || activeLeaf.title || 'Untitled Note';
@@ -552,50 +569,42 @@
   }
 
   /**
-   * Main export handler for Active Leaf DOCX.
+   * Main export handler for Word document generation.
+   * @param {string} mode - "active" or "all"
    */
-  async function exportDocxActiveLeaf(targetNote) {
-    try {
-      const note = targetNote || (typeof global.getActiveNote === 'function' ? global.getActiveNote() : null);
-      if (!note) {
-        if (typeof global.toast === 'function') global.toast('No active note to export');
-        return null;
-      }
-      if (typeof global.toast === 'function') global.toast('Generating Word document (.docx)...');
-      if (typeof global.flushActiveLeaf === 'function') await global.flushActiveLeaf();
-
-      const blob = await generateDocxBlob({ note, mode: 'active' });
-      const filename = `${(note.title || 'Note').replace(/[^\w\s-]/g, '').trim() || 'Note'}.docx`;
-      triggerBlobDownload(blob, filename);
-      if (typeof global.toast === 'function') global.toast('Exported Active Leaf to Word');
-      return blob;
-    } catch (err) {
-      console.error('exportDocxActiveLeaf error:', err);
-      if (typeof global.toast === 'function') global.toast('Word export failed: ' + err.message);
-      return null;
+  async function exportDocx(mode) {
+    if (mode instanceof Event) {
+      console.warn('exportDocx received an Event instead of a mode string. Defaulting to active.');
+      mode = 'active';
     }
-  }
-
-  /**
-   * Main export handler for All Leaves DOCX.
-   */
-  async function exportDocxAllLeaves(targetNote) {
     try {
-      const note = targetNote || (typeof global.getActiveNote === 'function' ? global.getActiveNote() : null);
+      const note = typeof global.getCurrentOpenNote === 'function' ? global.getCurrentOpenNote() : null;
       if (!note) {
-        if (typeof global.toast === 'function') global.toast('No active note to export');
+        if (typeof global.toast === 'function') global.toast('Open a Note before exporting to Word.');
         return null;
       }
-      if (typeof global.toast === 'function') global.toast('Generating Word document (.docx) for all leaves...');
-      if (typeof global.flushActiveLeaf === 'function') await global.flushActiveLeaf();
 
-      const blob = await generateDocxBlob({ note, mode: 'all' });
-      const filename = `${(note.title || 'Note').replace(/[^\w\s-]/g, '').trim() || 'Note'}-all-leaves.docx`;
+      if (typeof global.flushActiveLeaf === 'function') {
+        await global.flushActiveLeaf();
+      }
+
+      if (typeof global.toast === 'function') {
+        global.toast(mode === 'all' ? 'Generating Word document (.docx) for all leaves...' : 'Generating Word document (.docx)...');
+      }
+
+      const blob = await generateDocxBlob({ note, mode });
+      if (!blob) return null; // Can happen if validation inside generateDocxBlob fails (e.g. no valid leaves)
+
+      const suffix = mode === 'all' ? '-all-leaves' : '';
+      const filename = `${(note.title || 'Note').replace(/[^\w\s-]/g, '').trim() || 'Note'}${suffix}.docx`;
       triggerBlobDownload(blob, filename);
-      if (typeof global.toast === 'function') global.toast('Exported All Leaves to Word');
+
+      if (typeof global.toast === 'function') {
+        global.toast(mode === 'all' ? 'Exported All Leaves to Word' : 'Exported Active Leaf to Word');
+      }
       return blob;
     } catch (err) {
-      console.error('exportDocxAllLeaves error:', err);
+      console.error('exportDocx error:', err);
       if (typeof global.toast === 'function') global.toast('Word export failed: ' + err.message);
       return null;
     }
@@ -603,7 +612,6 @@
 
   // Export on global window
   global.generateDocxBlob = generateDocxBlob;
-  global.exportDocxActiveLeaf = exportDocxActiveLeaf;
-  global.exportDocxAllLeaves = exportDocxAllLeaves;
+  global.exportDocx = exportDocx;
 
 })(typeof window !== 'undefined' ? window : global);

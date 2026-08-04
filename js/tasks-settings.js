@@ -564,9 +564,9 @@ function bindSettings(){
   const expBtn=document.getElementById('setExportBtn');
   if(expBtn) expBtn.onclick=exportNotes;
   const expDocxActiveBtn=document.getElementById('setExportDocxActiveBtn');
-  if(expDocxActiveBtn) expDocxActiveBtn.onclick=()=>typeof window.exportDocxActiveLeaf==='function' && window.exportDocxActiveLeaf();
+  if(expDocxActiveBtn) expDocxActiveBtn.onclick=()=>typeof window.exportDocx==='function' && window.exportDocx('active');
   const expDocxAllBtn=document.getElementById('setExportDocxAllBtn');
-  if(expDocxAllBtn) expDocxAllBtn.onclick=()=>typeof window.exportDocxAllLeaves==='function' && window.exportDocxAllLeaves();
+  if(expDocxAllBtn) expDocxAllBtn.onclick=()=>typeof window.exportDocx==='function' && window.exportDocx('all');
   const impBtn=document.getElementById('setImportBtn');
   if(impBtn) impBtn.onclick=()=>document.getElementById('importFile').click();
 
