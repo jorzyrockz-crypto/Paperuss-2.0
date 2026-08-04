@@ -519,6 +519,47 @@ async function hydrateMediaInEditor(){
 }
 
 let notes = [];
+// ============================================================
+// CANONICAL NOTES STORAGE BRIDGE
+// Used by Smart Dates, Calendar, and Select Existing picker.
+// ============================================================
+
+window.PAPERUSS_CORE_BUILD = 'checkpoint-c-storage-bridge';
+
+window.getCanonicalNotes = function getCanonicalNotes() {
+    return notes;
+};
+
+try {
+    Object.defineProperty(window, 'paperussNotes', {
+        configurable: true,
+        enumerable: false,
+
+        get: function () {
+            return notes;
+        },
+
+        set: function (value) {
+            if (Array.isArray(value)) {
+                notes = value;
+            } else {
+                console.warn(
+                    '[PapeRuss] Ignored invalid paperussNotes assignment:',
+                    value
+                );
+            }
+        }
+    });
+} catch (error) {
+    console.warn(
+        '[PapeRuss] Could not define paperussNotes accessor:',
+        error
+    );
+
+    // Compatibility fallback.
+    window.paperussNotes = notes;
+}
+
 // Queued remote note update to apply on next editor blur (set by scheduleActiveNoteRefresh)
 let _pendingRemoteNote = null;
 let state = {
