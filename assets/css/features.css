@@ -2640,3 +2640,121 @@ blockquote.note-callout.callout-info {
   margin-top: 4px;
 }
 
+
+
+/* ============================================================
+   PRODUCTIVITY COMPARTMENT COMPACT CARDS
+   ============================================================ */
+
+.productivity-ref-card {
+  margin: 12px 0;
+  padding: 10px 14px;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.2s, background 0.2s;
+  user-select: none;
+}
+.productivity-ref-card:hover {
+  border-color: var(--border-hover, #ccc);
+  background: var(--subtle-hover, #f0f0f0);
+}
+
+.pref-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pref-row-header {
+  justify-content: space-between;
+}
+
+.pref-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pref-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.pref-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--fg-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.pref-btn:hover {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--fg);
+}
+.pref-btn-more {
+  padding: 4px 6px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.pref-row-meta {
+  font-size: 12px;
+  color: var(--fg-secondary);
+}
+
+.pref-row-desc, .pref-row-tasks {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pref-row-missing {
+  justify-content: space-between;
+}
+.pref-unavailable {
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.pref-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--fg);
+}
+.pref-menu-item:hover {
+  background: var(--subtle);
+}
+
+/* Touch targets for mobile */
+@media (max-width: 640px) {
+  .pref-btn {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  .pref-menu-item {
+    padding: 12px;
+    font-size: 14px;
+  }
+}

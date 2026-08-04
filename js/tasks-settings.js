@@ -147,20 +147,47 @@ async function openTaskCreatorModal(options){
 
       const btnInsertSel = document.getElementById('tmInsertSelected');
       if(btnInsertSel) {
-        btnInsertSel.onclick = () => {
-          if(selectedTaskIds.size === 0) { toast('Select at least one task'); return; }
+        btnInsertSel.onclick = async () => {
+          if(selectedTaskIds.size === 0) { if(typeof toast==='function') toast('Select at least one task'); return; }
           const selectedItems = loadedTasks.filter(t => selectedTaskIds.has(t.id));
-          if(selectedItems.length === 0) { toast('Selected tasks no longer exist in canonical store'); return; }
+          if(selectedItems.length === 0) { if(typeof toast==='function') toast('Selected tasks no longer exist in canonical store'); return; }
           
-          const checklistHtml = selectedItems.map(t => `<li data-task="1"><input type="checkbox" ${t.completed?'checked':''}> ${esc(t.text)}</li>`).join('');
+          // Group selected tasks by groupId
+          const groupMap = new Map();
+          const legacyTasks = [];
           
-          const ed = document.getElementById('noteBody');
-          if(ed) {
-            ed.focus();
-            document.execCommand('insertHTML', false, `<ul>${checklistHtml}</ul><p><br></p>`);
-            if(typeof handleBodyInput === 'function') handleBodyInput();
+          selectedItems.forEach(t => {
+            if (t.groupId) {
+              if (!groupMap.has(t.groupId)) groupMap.set(t.groupId, []);
+              groupMap.get(t.groupId).push(t);
+            } else {
+              legacyTasks.push(t);
+            }
+          });
+          
+          let savedLegacy = false;
+          if (legacyTasks.length > 0) {
+            // Assign a shared groupId to legacy tasks and persist once
+            const sharedGroupId = 'g_' + Date.now().toString(36);
+            legacyTasks.forEach(t => {
+              t.groupId = sharedGroupId;
+              t.groupTitle = 'Todo List';
+            });
+            groupMap.set(sharedGroupId, legacyTasks);
+            savedLegacy = true;
           }
-          toast(`Inserted ${selectedItems.length} task(s) into note`);
+          
+          if (savedLegacy) {
+            try { await Promise.resolve(typeof saveTasks === 'function' ? saveTasks() : null); } catch(_) {}
+          }
+          
+          let insertCount = 0;
+          groupMap.forEach((tasks, gid) => {
+            window.insertProductivityReference('todo-list', gid);
+            insertCount++;
+          });
+          
+          if(typeof toast==='function') toast('Inserted ' + insertCount + ' todo group' + (insertCount !== 1 ? 's' : '') + ' into note');
           close();
         };
       }

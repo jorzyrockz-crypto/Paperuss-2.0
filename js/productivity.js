@@ -66,8 +66,13 @@ function renderCalendarPlannerList(){
   let html='';
   occ.forEach(({note,start})=>{
     html+=`<div class="note-card ${note.id===state.currentId?'active':''}" data-id="${note.id}">
-      <div class="note-title"><i data-lucide="calendar" class="w-4 h-4 text-accent"></i>${esc(titleOf(note))}</div>
-      <div class="note-preview">${esc(stripHtml(note.content||'').slice(0,120))}</div>
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div class="note-title" style="margin:0;"><i data-lucide="calendar" class="w-4 h-4 text-accent"></i>${esc(titleOf(note))}</div>
+        <button type="button" class="btn btn-sm" onclick="event.stopPropagation(); window.deleteCalendarSource('${note.id}');" style="background:transparent; border:none; padding:4px; margin:-4px -4px 0 0; color:var(--danger);" aria-label="Delete Event" title="Delete Event">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="note-preview" style="margin-top:4px;">${esc(stripHtml(note.content||'').slice(0,120))}</div>
       <div class="note-meta"><span>${new Date(start).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})}</span>${(note.tags||[]).slice(1,3).map(t=>`<span class="chip">${esc(t)}</span>`).join('')}</div>
     </div>`;
   });
@@ -875,14 +880,21 @@ window.hydrateProductivityReferences = function(rootElement) {
   const refs = [];
   if (rootElement.matches && rootElement.matches('.productivity-ref')) refs.push(rootElement);
   rootElement.querySelectorAll('.productivity-ref').forEach(r => refs.push(r));
-  
+
+  // Close any already-open menus from a previous cycle before re-hydrating
+  document.querySelectorAll('.productivity-ref-menu').forEach(m => {
+    if (typeof m._cleanup === 'function') m._cleanup();
+    m.remove();
+  });
+
   refs.forEach(ref => {
-    window.dehydrateProductivityReference(ref); // Make hydration idempotent
+    window.dehydrateProductivityReference(ref);
     ref.setAttribute('data-hydrated', 'true');
     const type = ref.getAttribute('data-paperuss-productivity');
     const sourceId = ref.getAttribute('data-source-id');
     const source = window.resolveProductivitySource(type, sourceId);
-    
+
+    // Keep static fallback updated but hidden
     let staticCard = ref.querySelector('.productivity-ref-static');
     if (!staticCard) {
       staticCard = document.createElement('div');
@@ -890,126 +902,169 @@ window.hydrateProductivityReferences = function(rootElement) {
       ref.appendChild(staticCard);
     }
     staticCard.innerHTML = window.buildProductivityStaticSnapshot(type, source);
-    staticCard.style.display = 'none';
+    staticCard.hidden = true;
 
-    const hydrateContainer = document.createElement('div');
-    hydrateContainer.setAttribute('data-paperuss-ui', 'true');
-    hydrateContainer.className = 'productivity-ref-hydrated';
-    
+    const isMissing = !source || (Array.isArray(source) && source.length === 0);
 
-    
-    const actionArea = document.createElement('div');
-    actionArea.setAttribute('data-paperuss-ui', 'true');
-    actionArea.className = 'productivity-ref-actions';
-    
-    let isMissing = !source || (Array.isArray(source) && source.length === 0);
-    
+    const card = document.createElement('div');
+    card.setAttribute('data-paperuss-ui', 'true');
+    card.className = 'productivity-ref-hydrated productivity-ref-card';
+    card.style.position = 'relative';
+
     if (isMissing) {
-      actionArea.innerHTML = `<button type="button" class="productivity-ref-remove btn btn-sm">Remove from Leaf</button>`;
-      const btnRem = actionArea.querySelector('.productivity-ref-remove');
-      btnRem.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (typeof window.removeProductivityReference === 'function') window.removeProductivityReference(ref);
-      };
+      const rowEl = document.createElement('div');
+      rowEl.className = 'pref-row pref-row-missing';
+      const unavailSpan = document.createElement('span');
+      unavailSpan.className = 'pref-unavailable';
+      unavailSpan.textContent = (type === 'calendar' ? '\u26a0\ufe0f Calendar event' : '\u26a0\ufe0f Todo list') + ' unavailable';
+      const btnRem = document.createElement('button');
+      btnRem.type = 'button';
+      btnRem.className = 'pref-btn pref-btn-remove';
+      btnRem.textContent = 'Remove';
+      btnRem.onclick = (e) => { e.preventDefault(); e.stopPropagation(); if (typeof window.removeProductivityReference === 'function') window.removeProductivityReference(ref); };
+      rowEl.appendChild(unavailSpan);
+      rowEl.appendChild(btnRem);
+      card.appendChild(rowEl);
     } else {
-      actionArea.innerHTML = `
-        <button type="button" class="productivity-ref-open btn btn-sm">Open</button>
-        <button type="button" class="productivity-ref-more btn btn-sm">•••</button>
-      `;
-      const btnOpen = actionArea.querySelector('.productivity-ref-open');
-      const handleOpen = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+      const headerRow = document.createElement('div');
+      headerRow.className = 'pref-row pref-row-header';
+
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'pref-title';
+      if (type === 'calendar') {
+        titleSpan.textContent = '\uD83D\uDCC5 ' + (source.title || 'Untitled Event');
+      } else {
+        titleSpan.textContent = '\u2705 ' + ((source[0] && source[0].groupTitle) ? source[0].groupTitle : 'Todo List');
+      }
+
+      const actionsEl = document.createElement('div');
+      actionsEl.className = 'pref-actions';
+
+      const btnOpen = document.createElement('button');
+      btnOpen.type = 'button';
+      btnOpen.className = 'pref-btn pref-btn-open';
+      btnOpen.textContent = 'Open';
+
+      const btnMore = document.createElement('button');
+      btnMore.type = 'button';
+      btnMore.className = 'pref-btn pref-btn-more';
+      btnMore.setAttribute('aria-label', 'More options');
+      btnMore.textContent = '\u2022\u2022\u2022';
+
+      actionsEl.appendChild(btnOpen);
+      actionsEl.appendChild(btnMore);
+      headerRow.appendChild(titleSpan);
+      headerRow.appendChild(actionsEl);
+      card.appendChild(headerRow);
+
+      // Metadata row
+      const metaRow = document.createElement('div');
+      metaRow.className = 'pref-row pref-row-meta';
+      if (type === 'calendar') {
+        const normDate = window.normalizeProductivityDate || ((v) => new Date(typeof v === 'object' && v && v.seconds ? v.seconds * 1000 : v));
+        const dS = normDate(source.calendarStart);
+        const dE = normDate(source.calendarEnd);
+        const fmtDate = (d) => isNaN(d) ? '' : d.toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+        const fmtTime = (d) => isNaN(d) ? '' : d.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'});
+        let meta = fmtDate(dS);
+        if (!isNaN(dE)) meta += ' \u2013 ' + fmtTime(dE);
+        if (source.calendarRepeat && source.calendarRepeat !== 'none') meta += ' \uD83D\uDD01';
+        if (source.calendarNotify) meta += ' \uD83D\uDD14';
+        metaRow.textContent = meta;
+        card.appendChild(metaRow);
+        if (source.calendarDescription) {
+          const descRow = document.createElement('div');
+          descRow.className = 'pref-row pref-row-desc';
+          descRow.textContent = source.calendarDescription.slice(0, 80) + (source.calendarDescription.length > 80 ? '\u2026' : '');
+          card.appendChild(descRow);
+        }
+      } else {
+        const total = source.length;
+        const completed = source.filter(t => t.completed).length;
+        const dues = source.filter(t => t.due && !t.completed).map(t => t.due).sort();
+        let meta = completed + ' of ' + total + ' completed';
+        if (dues.length) {
+          const nearest = new Date(dues[0]);
+          if (!isNaN(nearest)) meta += ' \u00b7 due ' + nearest.toLocaleDateString(undefined, {month:'short', day:'numeric'});
+        }
+        metaRow.textContent = meta;
+        card.appendChild(metaRow);
+        const previewRow = document.createElement('div');
+        previewRow.className = 'pref-row pref-row-tasks';
+        const previewItems = source.slice(0, 2).map(t => (t.completed ? '\u2611' : '\u2610') + ' ' + (t.text || '').slice(0, 30)).join('  \u00b7  ');
+        const moreStr = total > 2 ? '  +' + (total - 2) + ' more' : '';
+        previewRow.textContent = previewItems + moreStr;
+        card.appendChild(previewRow);
+      }
+
+      const doOpen = (e) => {
+        e.preventDefault(); e.stopPropagation();
         if (type === 'calendar') {
           if (typeof window.openCalendarEventEditor === 'function') window.openCalendarEventEditor(sourceId);
-        } else if (type === 'todo-list') {
+        } else {
           if (typeof window.openTodoListEditor === 'function') window.openTodoListEditor(sourceId);
         }
       };
-      btnOpen.onclick = handleOpen;
-      hydrateContainer.onclick = handleOpen;
-      hydrateContainer.style.cursor = 'pointer';
-      
-      const btnMore = actionArea.querySelector('.productivity-ref-more');
+      btnOpen.onclick = doOpen;
+      card.onclick = doOpen;
+      card.style.cursor = 'pointer';
+
       btnMore.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        let existingMenu = actionArea.querySelector('.productivity-ref-menu');
-        if (existingMenu) {
-          existingMenu.remove();
-          return;
-        }
-        
+        e.preventDefault(); e.stopPropagation();
+        // Close any existing menus globally
+        document.querySelectorAll('.productivity-ref-menu').forEach(m => {
+          if (typeof m._cleanup === 'function') m._cleanup();
+          m.remove();
+        });
+
         const menu = document.createElement('div');
         menu.className = 'productivity-ref-menu';
         menu.setAttribute('data-paperuss-ui', 'true');
-        menu.style.position = 'absolute';
-        menu.style.right = '0';
-        menu.style.top = '100%';
-        menu.style.background = 'var(--bg)';
-        menu.style.border = '1px solid var(--border)';
-        menu.style.borderRadius = '6px';
-        menu.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
-        menu.style.zIndex = '1000';
-        menu.style.display = 'flex';
-        menu.style.flexDirection = 'column';
-        menu.style.padding = '4px';
-        menu.style.minWidth = '160px';
-        
         const typeLabel = type === 'calendar' ? 'Event' : 'Todo List';
-        
-        menu.innerHTML = `
-          <button type="button" class="btn btn-menu btn-edit" style="text-align:left;padding:6px;border:none;background:transparent;width:100%">Edit ${typeLabel}</button>
-          <button type="button" class="btn btn-menu btn-rem" style="text-align:left;padding:6px;border:none;background:transparent;width:100%">Remove from Leaf</button>
-          <button type="button" class="btn btn-menu btn-del" style="text-align:left;padding:6px;border:none;background:transparent;width:100%;color:var(--danger)">Delete Source ${typeLabel}</button>
-        `;
-        
-        menu.querySelector('.btn-edit').onclick = handleOpen;
-        menu.querySelector('.btn-rem').onclick = (e2) => {
-          e2.preventDefault();
-          e2.stopPropagation();
-          if (typeof window.removeProductivityReference === 'function') window.removeProductivityReference(ref);
+        const mkBtn = (cls, txt, danger) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'pref-menu-item ' + cls;
+          b.textContent = txt;
+          if (danger) b.style.color = 'var(--danger)';
+          return b;
         };
-        menu.querySelector('.btn-del').onclick = (e2) => {
-          e2.preventDefault();
-          e2.stopPropagation();
+        const editBtn = mkBtn('pref-mitem-edit', 'Edit ' + typeLabel, false);
+        const remBtn  = mkBtn('pref-mitem-rem',  'Remove from Leaf', false);
+        const delBtn  = mkBtn('pref-mitem-del',  'Delete Source ' + typeLabel, true);
+        editBtn.onclick = doOpen;
+        remBtn.onclick = (e2) => { e2.preventDefault(); e2.stopPropagation(); if (typeof window.removeProductivityReference === 'function') window.removeProductivityReference(ref); };
+        delBtn.onclick  = (e2) => {
+          e2.preventDefault(); e2.stopPropagation();
+          if (typeof menu._cleanup === 'function') menu._cleanup();
           menu.remove();
-          if (type === 'calendar') {
-            if (typeof window.deleteCalendarSource === 'function') window.deleteCalendarSource(sourceId);
-          } else if (type === 'todo-list') {
-            if (typeof window.deleteTodoListSource === 'function') window.deleteTodoListSource(sourceId);
-          }
+          if (type === 'calendar') { if (typeof window.deleteCalendarSource === 'function') window.deleteCalendarSource(sourceId); }
+          else { if (typeof window.deleteTodoListSource === 'function') window.deleteTodoListSource(sourceId); }
         };
-        
-        actionArea.appendChild(menu);
-        
-        const clickAway = (ce) => {
-          if (!menu.contains(ce.target) && ce.target !== btnMore) {
-            menu.remove();
-            document.removeEventListener('click', clickAway);
-          }
-        };
-        document.addEventListener('click', clickAway);
-        
-        // Ensure manual removal also cleans up listener
-        const originalRemove = menu.remove;
-        menu.remove = function() {
+        menu.appendChild(editBtn);
+        menu.appendChild(remBtn);
+        menu.appendChild(delBtn);
+
+        const cleanup = () => {
           document.removeEventListener('click', clickAway);
-          originalRemove.apply(this, arguments);
+          document.removeEventListener('keydown', escHandler);
         };
+        menu._cleanup = cleanup;
+        const clickAway = (ce) => { if (!menu.contains(ce.target) && ce.target !== btnMore) { cleanup(); menu.remove(); } };
+        const escHandler = (ke) => { if (ke.key === 'Escape') { cleanup(); menu.remove(); } };
+        document.addEventListener('click', clickAway);
+        document.addEventListener('keydown', escHandler);
+
+        // Use fixed positioning to avoid clip from overflow:hidden
+        const rect = btnMore.getBoundingClientRect();
+        menu.style.cssText = 'position:fixed;z-index:9999;min-width:170px;background:var(--bg);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);display:flex;flex-direction:column;padding:4px;';
+        menu.style.top = (rect.bottom + 4) + 'px';
+        menu.style.right = Math.max(4, window.innerWidth - rect.right) + 'px';
+        document.body.appendChild(menu);
       };
     }
-    
-    hydrateContainer.style.position = 'relative';
-    hydrateContainer.appendChild(actionArea);
 
-    const escStr = (s) => (s||'').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-    const contentDiv = document.createElement('div');
-    contentDiv.innerHTML = window.buildProductivityStaticSnapshot(type, source);
-    hydrateContainer.insertBefore(contentDiv, actionArea);
-    ref.appendChild(hydrateContainer);
+    ref.appendChild(card);
   });
 };
 
@@ -1033,15 +1088,56 @@ window.insertProductivityReference = function(type, sourceId) {
   }
   
   const staticHtml = window.buildProductivityStaticSnapshot(type, source);
-  const html = `<div class="productivity-ref productivity-ref-${type}" data-paperuss-productivity="${type}" data-source-id="${safeId}" data-ref-version="1" contenteditable="false"><div class="productivity-ref-static">${staticHtml}</div></div><p><br></p>`;
-  
+  const typeClass = type === 'todo-list' ? 'productivity-ref-todo' : 'productivity-ref-calendar';
+
   const ed = document.getElementById('noteBody');
-  if(ed) {
-    ed.focus();
-    document.execCommand('insertHTML', false, html);
-    if(typeof handleBodyInput === 'function') handleBodyInput();
-    window.hydrateProductivityReferences(ed);
+  if (!ed) return;
+  ed.focus();
+
+  // Build block element
+  const tmp = document.createElement('div');
+  tmp.innerHTML = '<div class="productivity-ref ' + typeClass + '" data-paperuss-productivity="' + type + '" data-source-id="' + safeId + '" data-ref-version="1" contenteditable="false"><div class="productivity-ref-static">' + staticHtml + '</div></div>';
+  const block = tmp.firstElementChild;
+
+  // Walk up from caret; exit any list or existing productivity-ref before inserting
+  const sel = typeof window.getSelection === 'function' ? window.getSelection() : null;
+  let insertAfter = null;
+  if (sel && sel.rangeCount > 0) {
+    let node = sel.getRangeAt(0).startContainer;
+    while (node && node !== ed) {
+      const tag = (node.tagName || '').toUpperCase();
+      if (tag === 'LI' || tag === 'UL' || tag === 'OL' || (node.classList && node.classList.contains('productivity-ref'))) {
+        let parent = node.parentNode;
+        while (parent && parent !== ed) { node = parent; parent = parent.parentNode; }
+        if (node.parentNode === ed) insertAfter = node;
+        break;
+      }
+      node = node.parentNode;
+    }
   }
+
+  const trailer = document.createElement('p');
+  trailer.innerHTML = '<br>';
+
+  if (insertAfter && insertAfter.parentNode === ed) {
+    ed.insertBefore(trailer, insertAfter.nextSibling);
+    ed.insertBefore(block, trailer);
+  } else {
+    ed.appendChild(block);
+    ed.appendChild(trailer);
+  }
+
+  // Move caret into trailing paragraph
+  try {
+    const range = document.createRange();
+    range.setStart(trailer, 0);
+    range.collapse(true);
+    const s = typeof window.getSelection === 'function' ? window.getSelection() : null;
+    if (s) { s.removeAllRanges(); s.addRange(range); }
+  } catch (_) {}
+
+  if (typeof handleBodyInput === 'function') handleBodyInput();
+  window.hydrateProductivityReferences(ed);
 };
 
 

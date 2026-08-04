@@ -458,7 +458,7 @@ async function runStorageSense() {
   try {
     if ('caches' in window) {
       const keys = await caches.keys();
-      const currentCache = window.PAPERUSS_BUILD?.cacheName || 'paperuss-shell-v34';
+      const currentCache = window.PAPERUSS_BUILD?.cacheName || 'paperuss-shell-v35';
       for (const key of keys) {
         if (key !== currentCache && key.startsWith('paperuss-shell')) {
           await caches.delete(key);
@@ -703,7 +703,7 @@ function renderSidebar(){
   document.getElementById('countPinned').textContent = liveNotes.filter(n=>n.pinned&&!n.archived).length;
   document.getElementById('countArchived').textContent = liveNotes.filter(n=>n.archived).length;
   const trashEl=document.getElementById('countTrash');
-  if(trashEl) trashEl.textContent=notes.filter(n=>n.deletedAt).length;
+  if(trashEl) trashEl.textContent=notes.filter(n=>n.deletedAt && !(n.tags||[]).includes('calendar')).length;
   const calendarCount = liveNotes.filter(n=>(n.tags||[]).includes('calendar')||(n.tags||[]).some(t=>t==='meeting'||t==='deadline')).length;
   const calEl=document.getElementById('countCalendar');
   if(calEl) calEl.textContent = calendarCount;
@@ -798,6 +798,7 @@ function filteredNotes(){
   notes.forEach(n=>{
     if(state.filter==='trash'){
       if(!n.deletedAt) return;
+      if((n.tags||[]).includes('calendar')) return;
     }else if(n.deletedAt) return;
     if(state.filter==='all' && n.archived) return;
     if(state.filter==='pinned' && (!n.pinned || n.archived)) return;
