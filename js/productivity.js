@@ -990,6 +990,13 @@ window.hydrateProductivityReferences = function(rootElement) {
           }
         };
         document.addEventListener('click', clickAway);
+        
+        // Ensure manual removal also cleans up listener
+        const originalRemove = menu.remove;
+        menu.remove = function() {
+          document.removeEventListener('click', clickAway);
+          originalRemove.apply(this, arguments);
+        };
       };
     }
     
@@ -1401,11 +1408,8 @@ window.openTodoListEditor = function(groupId) {
       }).catch(e => {
         if(typeof toast === 'function') toast('Failed to save todo list');
         
-        // Restore from backup
-        if (typeof standaloneTasks !== 'undefined') {
-           standaloneTasks.length = 0;
-           backupTasks.forEach(t => standaloneTasks.push(t));
-        }
+        // Restore from backup in place
+        freshTasks.splice(0, freshTasks.length, ...backupTasks.map(task => ({ ...task })));
         
         isSaving = false;
         const btn = document.getElementById('todoEditSave');
@@ -1445,6 +1449,8 @@ window.deleteCalendarSource = function(eventId) {
     if (typeof toast === 'function') toast('Calendar event source deleted');
   }).catch(e => {
     Object.assign(ev, backup);
+    if (!('deleted' in backup)) delete ev.deleted;
+    if (!('deletedAt' in backup)) delete ev.deletedAt;
     if (typeof toast === 'function') toast('Failed to delete event source');
   });
 };
@@ -1475,10 +1481,7 @@ window.deleteTodoListSource = function(groupId) {
     window.refreshProductivityReferences('todo-list', groupId);
     if (typeof toast === 'function') toast('Todo list source deleted');
   }).catch(e => {
-    if (typeof standaloneTasks !== 'undefined') {
-      standaloneTasks.length = 0;
-      backupTasks.forEach(t => standaloneTasks.push(t));
-    }
+    canonicalTasks.splice(0, canonicalTasks.length, ...backupTasks.map(task => ({ ...task })));
     if (typeof toast === 'function') toast('Failed to delete todo list source');
   });
 };
