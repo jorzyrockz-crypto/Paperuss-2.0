@@ -19,7 +19,7 @@
 
   // Regex definitions
   // 1. Time only (e.g. "3 PM", "3:30 PM", "15:00", "at 9 AM")
-  const timeRe = /\b(?:at\s+([0-1]?[0-9]|2[0-3])(?::([0-5][0-9]))?\s*([AaPp][Mm])?|([0-1]?[0-9]|2[0-3])(?::([0-5][0-9]))?\s*([AaPp][Mm])|([0-1]?[0-9]|2[0-3]):([0-5][0-9]))\b/i;
+  const timeRe = /\b(?:(?:at\s+)?([0-1]?[0-9]|2[0-3])(?::([0-5][0-9]))?\s*([AaPp][Mm])|(?:at\s+)?([0-1]?[0-9]|2[0-3]):([0-5][0-9]))\b/i;
   
   // 2. Absolute Dates (e.g. "August 15, 2026", "Aug 15", "15 August 2026", "08/15/2026", "2026-08-15")
   const monthNamesStr = [...MONTHS, ...SHORT_MONTHS].join('|');
@@ -41,21 +41,13 @@
     if (!m) return null;
     let hour = -1, min = 0;
     
-    if (m[7] !== undefined && m[8] !== undefined) {
-      hour = parseInt(m[7], 10); min = parseInt(m[8], 10);
-    } else if (m[4] !== undefined) {
-      hour = parseInt(m[4], 10); if(m[5]) min = parseInt(m[5], 10);
-      let ampm = m[6] ? m[6].toLowerCase() : null;
-      if (ampm === 'pm' && hour < 12) hour += 12;
-      if (ampm === 'am' && hour === 12) hour = 0;
+    if (m[4] !== undefined && m[5] !== undefined) {
+      hour = parseInt(m[4], 10); min = parseInt(m[5], 10);
     } else if (m[1] !== undefined) {
       hour = parseInt(m[1], 10); if(m[2]) min = parseInt(m[2], 10);
       let ampm = m[3] ? m[3].toLowerCase() : null;
       if (ampm === 'pm' && hour < 12) hour += 12;
       if (ampm === 'am' && hour === 12) hour = 0;
-      if (!ampm && hour < 12 && hour >= 1 && m[0].toLowerCase().includes('at')) {
-        if (hour < 7) hour += 12;
-      }
     }
     
     return {
@@ -346,9 +338,11 @@
         textNodes.push({ node, start: currentIndex, end: currentIndex + node.length });
         currentIndex += node.length;
       } else {
-        // Skip links, code, etc.
-        if (['A', 'CODE', 'PRE'].includes(node.nodeName)) {
-           // We just treat it as text for indexing, but we'll reject overlapping matches
+        // Skip links, code, embeds, non-editable areas
+        if (['A', 'CODE', 'PRE'].includes(node.nodeName) || 
+            (node.hasAttribute && node.hasAttribute('data-embed')) ||
+            (node.classList && node.classList.contains('productivity-ref')) ||
+            (node.getAttribute && node.getAttribute('contenteditable') === 'false')) {
            currentIndex += node.textContent.length;
            return;
         }
@@ -362,8 +356,11 @@
     // Actually, modifying text nodes is simpler backwards
     matches.reverse().forEach(m => {
       // Caret protection
-      if (caret && ((caret.start > m.startIndex && caret.start <= m.endIndex) || (caret.end > m.startIndex && caret.end <= m.endIndex))) {
-        return; // Caret is touching or inside, skip
+      if (caret) {
+        let overlap = Math.max(0, Math.min(caret.end, m.endIndex) - Math.max(caret.start, m.startIndex));
+        if (overlap > 0 || caret.start === m.endIndex || caret.end === m.endIndex) {
+          return;
+        }
       }
       
       // Find the text node that fully contains this match
@@ -413,29 +410,40 @@
   let isComposing = false;
   let scheduledBlock = null;
 
+  let scheduledRoot = null;
+
+  function safeScan() {
+    if (isComposing) return;
+    if (!scheduledBlock || !scheduledRoot) return;
+    if (!document.contains(scheduledRoot)) return;
+    if (!document.contains(scheduledBlock)) return;
+    if (!scheduledRoot.contains(scheduledBlock)) return;
+    
+    // Check if the block still belongs to the active editor root.
+    // In PapeRuss, bodyEl() usually returns the active editor. We assume scheduledRoot is that active editor.
+    // If the active editor is #noteBody, we can check if scheduledRoot is #noteBody.
+    const activeEditor = document.getElementById('noteBody');
+    if (activeEditor && scheduledRoot !== activeEditor) return;
+    
+    window.scanSmartDatesInBlock(scheduledBlock);
+  }
+
   window.scheduleSmartDateScan = function(root, editedBlock) {
-    if (!editedBlock) return;
+    if (!editedBlock || !root) return;
     scheduledBlock = editedBlock;
+    scheduledRoot = root;
     if (isComposing) return;
     
     clearTimeout(scanTimer);
-    scanTimer = setTimeout(() => {
-      if (scheduledBlock && document.contains(scheduledBlock)) {
-        window.scanSmartDatesInBlock(scheduledBlock);
-      }
-    }, 500);
+    scanTimer = setTimeout(safeScan, 500);
   };
 
   document.addEventListener('compositionstart', () => { isComposing = true; });
   document.addEventListener('compositionend', () => { 
     isComposing = false; 
-    if (scheduledBlock) {
+    if (scheduledBlock && scheduledRoot) {
       clearTimeout(scanTimer);
-      scanTimer = setTimeout(() => {
-        if (scheduledBlock && document.contains(scheduledBlock)) {
-          window.scanSmartDatesInBlock(scheduledBlock);
-        }
-      }, 500);
+      scanTimer = setTimeout(safeScan, 500);
     }
   });
 
