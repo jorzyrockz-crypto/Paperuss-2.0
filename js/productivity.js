@@ -1163,14 +1163,22 @@ window.openCalendarEventEditor = function(eventId) {
     freshEv.calendarDescription = desc;
     freshEv.updatedAt = Date.now();
     
-    if (typeof save === 'function') save();
-    if (typeof renderCalendarView === 'function') renderCalendarView();
-    if (typeof renderAll === 'function') renderAll();
+    document.getElementById('evEditSave').disabled = true;
     
-    window.refreshProductivityReferences('calendar', eventId);
-    if(typeof toast === 'function') toast('Event updated successfully');
-    
-    close();
+    Promise.resolve(typeof save === 'function' ? save() : null).then(() => {
+      if (typeof renderCalendarView === 'function') renderCalendarView();
+      if (typeof renderAll === 'function') renderAll();
+      
+      window.refreshProductivityReferences('calendar', eventId);
+      if(typeof toast === 'function') toast('Event updated successfully');
+      
+      close();
+    }).catch(e => {
+      if(typeof toast === 'function') toast('Failed to save event');
+      isSaving = false;
+      const btn = document.getElementById('evEditSave');
+      if (btn) btn.disabled = false;
+    });
   };
 };
 
@@ -1187,7 +1195,7 @@ window.openTodoListEditor = function(groupId) {
   }
   
   const esc = (s) => (s||'').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  const listTitle = groupTasks[0].groupTitle || 'Todo List';
+  let draftTitle = groupTasks[0].groupTitle || 'Todo List';
   
   let draftTasks = groupTasks.map(t => ({ ...t }));
   let isSaving = false;
@@ -1228,7 +1236,7 @@ window.openTodoListEditor = function(groupId) {
         <h3 style="margin:0">✏️ Edit Todo List</h3>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
-        <input id="todoEditTitle" placeholder="List title" value="${esc(listTitle)}" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;outline:none;color:var(--fg);font-weight:bold">
+        <input id="todoEditTitle" placeholder="List title" value="${esc(draftTitle)}" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;outline:none;color:var(--fg);font-weight:bold">
         <div style="max-height:400px;overflow-y:auto;padding-right:4px">
           ${rowsHtml}
         </div>
@@ -1245,6 +1253,8 @@ window.openTodoListEditor = function(groupId) {
     document.getElementById('todoEditCancel').onclick = close;
     const overlay = root.querySelector('.modal-overlay');
     if (overlay) overlay.onclick = (e) => { if (e.target === overlay) close(); };
+    
+    document.getElementById('todoEditTitle').oninput = (e) => { draftTitle = e.target.value; };
     
     document.getElementById('todoEditAddRow').onclick = () => {
       draftTasks.push({ id: (typeof uid === 'function' ? uid() : Date.now().toString()), text: '', completed: false, priority: 'none', groupId: groupId });
@@ -1270,7 +1280,7 @@ window.openTodoListEditor = function(groupId) {
       isSaving = true;
       
       const freshTasks = typeof window.getCanonicalStandaloneTasks === 'function' ? window.getCanonicalStandaloneTasks() : (typeof standaloneTasks !== 'undefined' ? standaloneTasks : []);
-      const newTitle = document.getElementById('todoEditTitle').value.trim() || 'Todo List';
+      const newTitle = draftTitle.trim() || 'Todo List';
       
       const existingIds = new Set(groupTasks.map(t => String(t.id)));
       const newIds = new Set(draftTasks.map(t => String(t.id)));
@@ -1301,14 +1311,22 @@ window.openTodoListEditor = function(groupId) {
         }
       });
       
-      if (typeof saveTasks === 'function') saveTasks();
-      if (typeof renderTasksView === 'function') renderTasksView();
-      if (typeof updateTasksCount === 'function') updateTasksCount();
+      document.getElementById('todoEditSave').disabled = true;
       
-      window.refreshProductivityReferences('todo-list', groupId);
-      if(typeof toast === 'function') toast('Todo list updated successfully');
-      
-      close();
+      Promise.resolve(typeof saveTasks === 'function' ? saveTasks() : null).then(() => {
+        if (typeof renderTasksView === 'function') renderTasksView();
+        if (typeof updateTasksCount === 'function') updateTasksCount();
+        
+        window.refreshProductivityReferences('todo-list', groupId);
+        if(typeof toast === 'function') toast('Todo list updated successfully');
+        
+        close();
+      }).catch(e => {
+        if(typeof toast === 'function') toast('Failed to save todo list');
+        isSaving = false;
+        const btn = document.getElementById('todoEditSave');
+        if (btn) btn.disabled = false;
+      });
     };
   };
 
