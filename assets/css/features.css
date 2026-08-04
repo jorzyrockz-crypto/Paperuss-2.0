@@ -2543,3 +2543,100 @@ blockquote.note-callout.callout-info {
 }
 
 
+
+/* Productivity Linked Compartments */
+.productivity-ref {
+  display: block;
+  margin: 1rem 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+  user-select: none;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 600px) {
+  .productivity-ref {
+    margin: 1rem -16px;
+    width: calc(100% + 32px);
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+}
+
+.productivity-ref-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.productivity-ref-actions .btn {
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.productivity-ref-menu {
+  max-height: 80vh;
+  overflow-y: auto;
+  max-width: 90vw;
+}
+
+.modal {
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.zen-mode .productivity-ref {
+  opacity: 0.8;
+  transition: opacity 0.3s ease;
+}
+
+.zen-mode .productivity-ref:hover {
+  opacity: 1;
+}
+.productivity-ref-static {
+  padding: 1rem;
+  color: var(--fg-muted);
+  font-style: italic;
+}
+.productivity-ref-hydrated {
+  padding: 1rem;
+  background: var(--subtle);
+}
+.ref-cal-header, .ref-todo-header {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--fg);
+  margin-bottom: 4px;
+}
+.ref-cal-meta, .ref-todo-meta {
+  font-size: 12px;
+  color: var(--fg-secondary);
+  margin-bottom: 8px;
+}
+.ref-todo-preview {
+  font-size: 13px;
+  color: var(--fg);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ref-missing-title {
+  color: var(--danger);
+  font-weight: 600;
+  font-size: 14px;
+}
+.ref-missing-desc {
+  color: var(--fg-muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
+

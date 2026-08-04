@@ -458,7 +458,7 @@ async function runStorageSense() {
   try {
     if ('caches' in window) {
       const keys = await caches.keys();
-      const currentCache = window.PAPERUSS_BUILD?.cacheName || 'paperuss-shell-v33';
+      const currentCache = window.PAPERUSS_BUILD?.cacheName || 'paperuss-shell-v34';
       for (const key of keys) {
         if (key !== currentCache && key.startsWith('paperuss-shell')) {
           await caches.delete(key);
@@ -1186,6 +1186,7 @@ function renderEditor(){
       state.suppressInput=false;
       hydrateMediaInEditor();
       if(typeof window.hydrateEmbeds==='function') window.hydrateEmbeds(ed);
+      if(typeof window.hydrateProductivityReferences==='function') window.hydrateProductivityReferences(ed);
       if(window.HistoryManager && window.HistoryManager.activeNoteId !== n.id) {
         window.HistoryManager.reset(n.id);
       }
@@ -2392,3 +2393,5 @@ if (document.readyState === 'loading') {
 
 window.paperussState = state;
 window.paperussNotes = notes;
+
+window.getCanonicalNotes = function() { return notes; };

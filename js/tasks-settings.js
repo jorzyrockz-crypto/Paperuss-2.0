@@ -221,17 +221,9 @@ async function openTaskCreatorModal(options){
           }
           
           addNotification({type:'task',title:`${lines.length} tasks created`,body:lines.slice(0,3).join(', ')+(lines.length>3?'…':''),icon:'check-square',activity:true});
-          if (intent === 'insert') {
-            const selectedItems = loadedTasks.filter(t => validIds.includes(String(t.id)));
-            const checklistHtml = selectedItems.map(t => `<li data-task="1"><input type="checkbox" ${t.completed?'checked':''}> ${esc(t.text)}</li>`).join('');
-            
-            const ed = document.getElementById('noteBody');
-            if(ed) {
-              ed.focus();
-              document.execCommand('insertHTML', false, `<ul>${checklistHtml}</ul><p><br></p>`);
-              if(typeof handleBodyInput === 'function') handleBodyInput();
-            }
-            toast(`Inserted ${selectedItems.length} task(s) into note`);
+                    if (intent === 'insert') {
+            window.insertProductivityReference('todo-list', groupId);
+            toast(`Inserted ${lines.length} task(s) into note`);
           }
           isCreatingTasks = false;
           close();
@@ -811,3 +803,5 @@ function buildAccentSwatches(){
     toast('Accent color updated');
   };
 }
+
+window.getCanonicalStandaloneTasks = function() { return standaloneTasks; };

@@ -416,17 +416,8 @@ async function openCalendarEventCreator(year, month, day, options){
           const evObj = loadedEvents.find(e => e.note.id === selectedEventNoteId);
           if(!evObj) { toast('Selected event no longer exists in canonical store'); return; }
 
-          const title = titleOf(evObj.note);
-          const startFmt = new Date(evObj.start).toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-          const eventHtml = `<div class="callout callout-info" style="margin:12px 0"><span class="callout-badge">📅 Event</span> <strong>${esc(title)}</strong> &nbsp;·&nbsp; <span style="font-size:12px;opacity:0.8">${startFmt}</span></div><p><br></p>`;
-          
-          const ed = document.getElementById('noteBody');
-          if(ed) {
-            ed.focus();
-            document.execCommand('insertHTML', false, eventHtml);
-            if(typeof handleBodyInput === 'function') handleBodyInput();
-          }
-          toast(`Inserted event "${title}" into note`);
+          window.insertProductivityReference('calendar', selectedEventNoteId);
+          toast(`Inserted event "${titleOf(evObj.note)}" into note`);
           close();
         };
       }
@@ -468,15 +459,16 @@ async function openCalendarEventCreator(year, month, day, options){
         const startFmt=new Date(startTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
         const endFmt=new Date(endTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
         const safeDescription=esc(descEl.value.trim());
-        const content_html=sanitizeNoteHTML(`<p><strong>📅 ${esc(startFmt)}</strong></p><p>→ ${esc(endFmt)}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${esc(repeatVal)}</p>`:''}${safeDescription?`<p>${safeDescription}</p>`:''}`);
+        const content_html=(typeof sanitizeNoteHTML==='function')?sanitizeNoteHTML(`<p><strong>📅 ${esc(startFmt)}</strong></p><p>→ ${esc(endFmt)}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${esc(repeatVal)}</p>`:''}${safeDescription?`<p>${safeDescription}</p>`:''}`):`<p><strong>📅 ${esc(startFmt)}</strong></p><p>→ ${esc(endFmt)}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${esc(repeatVal)}</p>`:''}${safeDescription?`<p>${safeDescription}</p>`:''}`;
 
-        const newId=uid();
+        const newId=typeof uid==='function'?uid():Date.now().toString();
         const n={
           id:newId, title, content: content_html, tags, pinned:false, archived:false,
           createdAt:Date.now(), updatedAt:Date.now(), fontStyle:'sans',
           calendarStart:startTs, calendarEnd:endTs,
           calendarRepeat:repeatVal==='none'?null:repeatVal,
-          calendarNotify:notify, calendarLastNotifiedAt:null
+          calendarNotify:notify, calendarLastNotifiedAt:null,
+          calendarDescription:descEl.value.trim()
         };
         notes.unshift(n);
         save();
@@ -487,13 +479,7 @@ async function openCalendarEventCreator(year, month, day, options){
         renderCalendarView(); renderAll();
         
         if(intent === 'insert') {
-          const eventHtml = `<div class="callout callout-info" style="margin:12px 0"><span class="callout-badge">📅 Event</span> <strong>${esc(title)}</strong> &nbsp;·&nbsp; <span style="font-size:12px;opacity:0.8">${startFmt}</span></div><p><br></p>`;
-          const ed = document.getElementById('noteBody');
-          if(ed) {
-            ed.focus();
-            document.execCommand('insertHTML', false, eventHtml);
-            if(typeof handleBodyInput === 'function') handleBodyInput();
-          }
+          window.insertProductivityReference('calendar', newId);
           toast(`Inserted event "${title}" into note`);
         }
         
@@ -810,3 +796,692 @@ function toggleTaskHubItem(noteId, idx, checked){
     toast(checked?'Task completed':'Task marked pending');
   }
 }
+
+window.resolveProductivitySource = function(type, sourceId) {
+  if (type === 'calendar') {
+    const canonicalNotes = typeof window.getCanonicalNotes === 'function' ? window.getCanonicalNotes() : (typeof notes !== 'undefined' ? notes : []);
+    return canonicalNotes.find(n => String(n.id) === String(sourceId));
+  } else if (type === 'todo-list') {
+    const canonicalTasks = typeof window.getCanonicalStandaloneTasks === 'function' ? window.getCanonicalStandaloneTasks() : (typeof standaloneTasks !== 'undefined' ? standaloneTasks : []);
+    return canonicalTasks.filter(t => String(t.groupId) === String(sourceId) && !t.deleted && !t.deletedAt);
+  }
+  return null;
+};
+
+window.buildProductivityStaticSnapshot = function(type, source) {
+  const escStr = (s) => (s||'').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  if (!source || (Array.isArray(source) && source.length === 0)) {
+    return `<div class="productivity-ref-missing">
+      <div class="ref-missing-title">⚠️ ${type==='calendar'?'Calendar event':'Todo list'} unavailable</div>
+      <div class="ref-missing-desc">The original item may have been deleted.</div>
+    </div>`;
+  }
+  
+  const normalizeProductivityDate = (val) => {
+    if (!val) return new Date(NaN);
+    if (typeof val === 'object') {
+      if (typeof val.toDate === 'function') return val.toDate();
+      if (typeof val.toMillis === 'function') return new Date(val.toMillis());
+      if (val.seconds !== undefined) return new Date(val.seconds * 1000);
+    }
+    return new Date(val);
+  };
+
+  if (type === 'calendar') {
+    const title = source.title || 'Untitled Event';
+    const dStart = normalizeProductivityDate(source.calendarStart);
+    const startFmt = isNaN(dStart) ? 'Date unavailable' : dStart.toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    const dEnd = normalizeProductivityDate(source.calendarEnd);
+    const endFmt = isNaN(dEnd) ? '' : dEnd.toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    const repeatStr = source.calendarRepeat && source.calendarRepeat !== 'none' ? ` 🔁 ${escStr(source.calendarRepeat)}` : '';
+    const notifyStr = source.calendarNotify ? ` 🔔` : '';
+    const rawDesc = source.content ? source.content.replace(/<[^>]*>?/gm, '') : '';
+    const descStr = rawDesc ? `<br><small style="color:var(--fg-muted)">${escStr(rawDesc.substring(0,60))}${rawDesc.length>60?'...':''}</small>` : '';
+    return `<div>📅 Event: <strong>${escStr(title)}</strong></div><div>${escStr(startFmt)} → ${escStr(endFmt)}${repeatStr}${notifyStr}</div>${descStr}`;
+  } else if (type === 'todo-list') {
+    const title = source[0].groupTitle || 'Todo List';
+    const total = source.length;
+    const completed = source.filter(t => t.completed).length;
+    const itemsHtml = source.slice(0, 3).map(t => `<div>${t.completed?'☑':'☐'} ${escStr(t.text)}</div>`).join('');
+    const moreHtml = total > 3 ? `<div style="color:var(--fg-muted)">+ ${total-3} more</div>` : '';
+    return `<div>✅ Todo List: <strong>${escStr(title)}</strong> (${completed}/${total} completed)</div>${itemsHtml}${moreHtml}`;
+  }
+  return '';
+};
+
+window.dehydrateProductivityReference = function(ref) {
+  if (!ref) return;
+  ref.removeAttribute('data-hydrated');
+  const transientUI = ref.querySelectorAll('[data-paperuss-ui="true"]');
+  transientUI.forEach(el => el.remove());
+  const staticCard = ref.querySelector('.productivity-ref-static');
+  if (staticCard) {
+    staticCard.style.display = '';
+  }
+};
+
+window.dehydrateProductivityReferences = function(rootElement) {
+  if (!rootElement) return;
+  if (rootElement.matches && rootElement.matches('.productivity-ref')) {
+    window.dehydrateProductivityReference(rootElement);
+  }
+  const refs = rootElement.querySelectorAll('.productivity-ref');
+  refs.forEach(ref => window.dehydrateProductivityReference(ref));
+};
+
+window.hydrateProductivityReferences = function(rootElement) {
+  if (!rootElement) return;
+  const refs = [];
+  if (rootElement.matches && rootElement.matches('.productivity-ref')) refs.push(rootElement);
+  rootElement.querySelectorAll('.productivity-ref').forEach(r => refs.push(r));
+  
+  refs.forEach(ref => {
+    window.dehydrateProductivityReference(ref); // Make hydration idempotent
+    ref.setAttribute('data-hydrated', 'true');
+    const type = ref.getAttribute('data-paperuss-productivity');
+    const sourceId = ref.getAttribute('data-source-id');
+    const source = window.resolveProductivitySource(type, sourceId);
+    
+    let staticCard = ref.querySelector('.productivity-ref-static');
+    if (!staticCard) {
+      staticCard = document.createElement('div');
+      staticCard.className = 'productivity-ref-static';
+      ref.appendChild(staticCard);
+    }
+    staticCard.innerHTML = window.buildProductivityStaticSnapshot(type, source);
+    staticCard.style.display = 'none';
+
+    const hydrateContainer = document.createElement('div');
+    hydrateContainer.setAttribute('data-paperuss-ui', 'true');
+    hydrateContainer.className = 'productivity-ref-hydrated';
+    
+
+    
+    const actionArea = document.createElement('div');
+    actionArea.setAttribute('data-paperuss-ui', 'true');
+    actionArea.className = 'productivity-ref-actions';
+    
+    let isMissing = !source || (Array.isArray(source) && source.length === 0);
+    
+    if (isMissing) {
+      actionArea.innerHTML = `<button type="button" class="productivity-ref-remove btn btn-sm">Remove from Leaf</button>`;
+      const btnRem = actionArea.querySelector('.productivity-ref-remove');
+      btnRem.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof window.removeProductivityReference === 'function') window.removeProductivityReference(ref);
+      };
+    } else {
+      actionArea.innerHTML = `
+        <button type="button" class="productivity-ref-open btn btn-sm">Open</button>
+        <button type="button" class="productivity-ref-more btn btn-sm">•••</button>
+      `;
+      const btnOpen = actionArea.querySelector('.productivity-ref-open');
+      const handleOpen = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (type === 'calendar') {
+          if (typeof window.openCalendarEventEditor === 'function') window.openCalendarEventEditor(sourceId);
+        } else if (type === 'todo-list') {
+          if (typeof window.openTodoListEditor === 'function') window.openTodoListEditor(sourceId);
+        }
+      };
+      btnOpen.onclick = handleOpen;
+      hydrateContainer.onclick = handleOpen;
+      hydrateContainer.style.cursor = 'pointer';
+      
+      const btnMore = actionArea.querySelector('.productivity-ref-more');
+      btnMore.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        let existingMenu = actionArea.querySelector('.productivity-ref-menu');
+        if (existingMenu) {
+          existingMenu.remove();
+          return;
+        }
+        
+        const menu = document.createElement('div');
+        menu.className = 'productivity-ref-menu';
+        menu.setAttribute('data-paperuss-ui', 'true');
+        menu.style.position = 'absolute';
+        menu.style.right = '0';
+        menu.style.top = '100%';
+        menu.style.background = 'var(--bg)';
+        menu.style.border = '1px solid var(--border)';
+        menu.style.borderRadius = '6px';
+        menu.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
+        menu.style.zIndex = '1000';
+        menu.style.display = 'flex';
+        menu.style.flexDirection = 'column';
+        menu.style.padding = '4px';
+        menu.style.minWidth = '160px';
+        
+        const typeLabel = type === 'calendar' ? 'Event' : 'Todo List';
+        
+        menu.innerHTML = `
+          <button type="button" class="btn btn-menu btn-edit" style="text-align:left;padding:6px;border:none;background:transparent;width:100%">Edit ${typeLabel}</button>
+          <button type="button" class="btn btn-menu btn-rem" style="text-align:left;padding:6px;border:none;background:transparent;width:100%">Remove from Leaf</button>
+          <button type="button" class="btn btn-menu btn-del" style="text-align:left;padding:6px;border:none;background:transparent;width:100%;color:var(--danger)">Delete Source ${typeLabel}</button>
+        `;
+        
+        menu.querySelector('.btn-edit').onclick = handleOpen;
+        menu.querySelector('.btn-rem').onclick = (e2) => {
+          e2.preventDefault();
+          e2.stopPropagation();
+          if (typeof window.removeProductivityReference === 'function') window.removeProductivityReference(ref);
+        };
+        menu.querySelector('.btn-del').onclick = (e2) => {
+          e2.preventDefault();
+          e2.stopPropagation();
+          menu.remove();
+          if (type === 'calendar') {
+            if (typeof window.deleteCalendarSource === 'function') window.deleteCalendarSource(sourceId);
+          } else if (type === 'todo-list') {
+            if (typeof window.deleteTodoListSource === 'function') window.deleteTodoListSource(sourceId);
+          }
+        };
+        
+        actionArea.appendChild(menu);
+        
+        const clickAway = (ce) => {
+          if (!menu.contains(ce.target) && ce.target !== btnMore) {
+            menu.remove();
+            document.removeEventListener('click', clickAway);
+          }
+        };
+        document.addEventListener('click', clickAway);
+        
+        // Ensure manual removal also cleans up listener
+        const originalRemove = menu.remove;
+        menu.remove = function() {
+          document.removeEventListener('click', clickAway);
+          originalRemove.apply(this, arguments);
+        };
+      };
+    }
+    
+    hydrateContainer.style.position = 'relative';
+    hydrateContainer.appendChild(actionArea);
+
+    const escStr = (s) => (s||'').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    const contentDiv = document.createElement('div');
+    contentDiv.innerHTML = window.buildProductivityStaticSnapshot(type, source);
+    hydrateContainer.insertBefore(contentDiv, actionArea);
+    ref.appendChild(hydrateContainer);
+  });
+};
+
+window.insertProductivityReference = function(type, sourceId) {
+  if (type !== 'calendar' && type !== 'todo-list') {
+    if(typeof toast === 'function') toast('Invalid reference type');
+    return;
+  }
+  
+  const normSourceId = String(sourceId);
+  const safeId = typeof sanitizeId === 'function' ? sanitizeId(normSourceId) : normSourceId.replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!safeId) {
+    if(typeof toast === 'function') toast('Invalid source ID');
+    return;
+  }
+
+  const source = window.resolveProductivitySource(type, safeId);
+  if (!source || (Array.isArray(source) && source.length === 0)) {
+    if(typeof toast === 'function') toast('Source not found in canonical store');
+    return;
+  }
+  
+  const staticHtml = window.buildProductivityStaticSnapshot(type, source);
+  const html = `<div class="productivity-ref productivity-ref-${type}" data-paperuss-productivity="${type}" data-source-id="${safeId}" data-ref-version="1" contenteditable="false"><div class="productivity-ref-static">${staticHtml}</div></div><p><br></p>`;
+  
+  const ed = document.getElementById('noteBody');
+  if(ed) {
+    ed.focus();
+    document.execCommand('insertHTML', false, html);
+    if(typeof handleBodyInput === 'function') handleBodyInput();
+    window.hydrateProductivityReferences(ed);
+  }
+};
+
+
+window.refreshProductivityReferences = function(type, sourceId) {
+  const normType = String(type);
+  const normId = String(sourceId);
+  const allRefs = document.querySelectorAll('.productivity-ref');
+  const refs = Array.from(allRefs).filter(r => r.getAttribute('data-paperuss-productivity') === normType && String(r.getAttribute('data-source-id')) === normId);
+  if (refs.length === 0) return;
+  
+  const source = window.resolveProductivitySource(normType, normId);
+  const staticHtml = window.buildProductivityStaticSnapshot(normType, source);
+  
+  let changed = false;
+  
+  refs.forEach(ref => {
+    window.dehydrateProductivityReference(ref);
+    let staticCard = ref.querySelector('.productivity-ref-static');
+    if (!staticCard) {
+      staticCard = document.createElement('div');
+      staticCard.className = 'productivity-ref-static';
+      ref.appendChild(staticCard);
+    }
+    if (staticCard.innerHTML !== staticHtml) {
+      staticCard.innerHTML = staticHtml;
+      changed = true;
+    }
+    window.hydrateProductivityReferences(ref);
+  });
+  
+  if (changed) {
+    if (typeof handleBodyInput === 'function') {
+      handleBodyInput();
+    } else if (typeof onEditorInput === 'function') {
+      onEditorInput();
+    }
+  }
+};
+
+window.openCalendarEventEditor = function(eventId) {
+  const root = document.getElementById('modalRoot');
+  if (!root) return;
+  
+  const canonicalNotes = typeof window.getCanonicalNotes === 'function' ? window.getCanonicalNotes() : (typeof notes !== 'undefined' ? notes : []);
+  const evNote = canonicalNotes.find(n => String(n.id) === String(eventId));
+  
+  if (!evNote || evNote.deletedAt || !(evNote.tags||[]).includes('calendar')) {
+    if(typeof toast === 'function') toast('Calendar event unavailable.');
+    return;
+  }
+  
+  const esc = (s) => (s||'').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  let rawDesc = '';
+  if (evNote.calendarDescription !== undefined) {
+    rawDesc = evNote.calendarDescription;
+  } else if (evNote.content) {
+    rawDesc = evNote.content.replace(/<[^>]*>?/gm, '');
+    const toStrip = ['📅', '→', '🔁 Repeats:'];
+    let lines = rawDesc.split('\n');
+    lines = lines.filter(l => !toStrip.some(p => l.includes(p))).map(l => l.trim()).filter(l => l);
+    rawDesc = lines.join('\n');
+  }
+  
+  let startTs = evNote.calendarStart;
+  let endTs = evNote.calendarEnd;
+  const normalizeProductivityDate = window.normalizeProductivityDate || ((val) => {
+    if (!val) return new Date(NaN);
+    if (typeof val === 'object') {
+      if (typeof val.toDate === 'function') return val.toDate();
+      if (typeof val.toMillis === 'function') return new Date(val.toMillis());
+      if (val.seconds !== undefined) return new Date(val.seconds * 1000);
+    }
+    return new Date(val);
+  });
+  
+  const dStart = normalizeProductivityDate(startTs);
+  const dEnd = normalizeProductivityDate(endTs);
+  
+  if (isNaN(dStart) || isNaN(dEnd)) {
+    if(typeof toast === 'function') toast('Calendar event date unavailable.');
+    return;
+  }
+  
+  const yS = dStart.getFullYear();
+  const mS = String(dStart.getMonth()+1).padStart(2, '0');
+  const dS = String(dStart.getDate()).padStart(2, '0');
+  const hs = String(dStart.getHours()).padStart(2, '0');
+  const ms = String(dStart.getMinutes()).padStart(2, '0');
+  
+  const yE = dEnd.getFullYear();
+  const mE = String(dEnd.getMonth()+1).padStart(2, '0');
+  const dE = String(dEnd.getDate()).padStart(2, '0');
+  const he = String(dEnd.getHours()).padStart(2, '0');
+  const me = String(dEnd.getMinutes()).padStart(2, '0');
+  
+  let eventType = 'event';
+  if ((evNote.tags||[]).includes('meeting')) eventType = 'meeting';
+  if ((evNote.tags||[]).includes('deadline')) eventType = 'deadline';
+  if ((evNote.tags||[]).includes('planner')) eventType = 'planner';
+
+  let isSaving = false;
+
+  root.innerHTML=`<div class="modal-overlay"><div class="modal" style="max-width:500px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <h3 style="margin:0">✏️ Edit Calendar Event</h3>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+      <input id="evEditTitle" placeholder="Event title" value="${esc(evNote.title)}" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;outline:none;color:var(--fg)">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="evEditStartDate" type="date" value="${yS}-${mS}-${dS}" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:120px" title="Start date">
+        <input id="evEditStartTime" type="time" value="${hs}:${ms}" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:100px" title="Start time">
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="evEditEndDate" type="date" value="${yE}-${mE}-${dE}" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:120px" title="End date">
+        <input id="evEditEndTime" type="time" value="${he}:${me}" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:100px" title="End time">
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select id="evEditType" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:110px">
+          <option value="event" ${eventType==='event'?'selected':''}>🗓️ General Event</option>
+          <option value="meeting" ${eventType==='meeting'?'selected':''}>👥 Meeting</option>
+          <option value="deadline" ${eventType==='deadline'?'selected':''}>⏰ Deadline</option>
+          <option value="planner" ${eventType==='planner'?'selected':''}>📝 Planner Note</option>
+        </select>
+        <select id="evEditRepeat" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:120px">
+          <option value="none" ${!evNote.calendarRepeat||evNote.calendarRepeat==='none'?'selected':''}>🔁 Does not repeat</option>
+          <option value="daily" ${evNote.calendarRepeat==='daily'?'selected':''}>🔄 Every day</option>
+          <option value="weekly" ${evNote.calendarRepeat==='weekly'?'selected':''}>📅 Every week</option>
+          <option value="monthly" ${evNote.calendarRepeat==='monthly'?'selected':''}>📆 Every month</option>
+          <option value="yearly" ${evNote.calendarRepeat==='yearly'?'selected':''}>🗓️ Every year</option>
+        </select>
+      </div>
+      <textarea id="evEditDesc" placeholder="Optional description…" rows="2" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;outline:none;color:var(--fg);resize:vertical">${esc(rawDesc)}</textarea>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg-secondary);cursor:pointer">
+        <input type="checkbox" id="evEditNotify" ${evNote.calendarNotify?'checked':''}> Notify me when this event starts
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="evEditCancel">Cancel</button>
+      <button class="btn btn-primary" id="evEditSave">Save Changes</button>
+    </div>
+  </div></div>`;
+  
+  const close = () => { root.innerHTML = ''; };
+  document.getElementById('evEditCancel').onclick = close;
+  const overlay = root.querySelector('.modal-overlay');
+  if (overlay) overlay.onclick = (e) => { if (e.target === overlay) close(); };
+  
+  document.getElementById('evEditSave').onclick = () => {
+    if (isSaving) return;
+    
+    const freshNotes = typeof window.getCanonicalNotes === 'function' ? window.getCanonicalNotes() : (typeof notes !== 'undefined' ? notes : []);
+    const freshEv = freshNotes.find(n => String(n.id) === String(eventId));
+    if (!freshEv) {
+      if(typeof toast === 'function') toast('Event no longer exists.');
+      close();
+      return;
+    }
+    
+    const title = document.getElementById('evEditTitle').value.trim() || 'Untitled Event';
+    const sD = document.getElementById('evEditStartDate').value;
+    const sT = document.getElementById('evEditStartTime').value || '09:00';
+    const eD = document.getElementById('evEditEndDate').value || sD;
+    const eT = document.getElementById('evEditEndTime').value || '10:00';
+    
+    const newStartTs = new Date(sD + 'T' + sT + ':00').getTime();
+    const newEndTs = new Date(eD + 'T' + eT + ':00').getTime();
+    
+    if(!Number.isFinite(newStartTs) || !Number.isFinite(newEndTs)) {
+      if(typeof toast === 'function') toast('Enter valid event dates and times');
+      return;
+    }
+    if (newEndTs < newStartTs) {
+      if(typeof toast === 'function') toast('Event end must be after its start');
+      return;
+    }
+    
+    isSaving = true;
+    const type = document.getElementById('evEditType').value;
+    const repeatVal = document.getElementById('evEditRepeat').value;
+    const notify = document.getElementById('evEditNotify').checked;
+    const desc = document.getElementById('evEditDesc').value.trim();
+    
+    let tags = (freshEv.tags || []).filter(t => t !== 'meeting' && t !== 'deadline' && t !== 'planner' && t !== 'recurring' && !t.startsWith('repeat-'));
+    if (!tags.includes('calendar')) tags.push('calendar');
+    if (type === 'meeting') tags.push('meeting');
+    if (type === 'deadline') tags.push('deadline');
+    if (type === 'planner') tags.push('planner');
+    if (repeatVal !== 'none') { tags.push('recurring'); tags.push('repeat-'+repeatVal); }
+    
+    const startFmt = new Date(newStartTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    const endFmt = new Date(newEndTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    const content_html = (typeof sanitizeNoteHTML === 'function') ? sanitizeNoteHTML(`<p><strong>📅 ${esc(startFmt)}</strong></p><p>→ ${esc(endFmt)}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${esc(repeatVal)}</p>`:''}${desc?`<p>${esc(desc)}</p>`:''}`) : `<p><strong>📅 ${esc(startFmt)}</strong></p><p>→ ${esc(endFmt)}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${esc(repeatVal)}</p>`:''}${desc?`<p>${esc(desc)}</p>`:''}`;
+
+    document.getElementById('evEditSave').disabled = true;
+    const backupEv = { ...freshEv };
+    
+    freshEv.title = title;
+    freshEv.content = content_html;
+    freshEv.tags = tags;
+    freshEv.calendarStart = newStartTs;
+    freshEv.calendarEnd = newEndTs;
+    freshEv.calendarRepeat = repeatVal === 'none' ? null : repeatVal;
+    freshEv.calendarNotify = notify;
+    freshEv.calendarDescription = desc;
+    freshEv.updatedAt = Date.now();
+    
+    Promise.resolve().then(() => typeof save === 'function' ? save() : null).then(() => {
+      if (typeof renderCalendarView === 'function') renderCalendarView();
+      if (typeof renderAll === 'function') renderAll();
+      
+      window.refreshProductivityReferences('calendar', eventId);
+      if(typeof toast === 'function') toast('Event updated successfully');
+      
+      close();
+    }).catch(e => {
+      if(typeof toast === 'function') toast('Failed to save event');
+      isSaving = false;
+      Object.assign(freshEv, backupEv);
+      const btn = document.getElementById('evEditSave');
+      if (btn) btn.disabled = false;
+    });
+  };
+};
+
+window.openTodoListEditor = function(groupId) {
+  const root = document.getElementById('modalRoot');
+  if (!root) return;
+  
+  const canonicalTasks = typeof window.getCanonicalStandaloneTasks === 'function' ? window.getCanonicalStandaloneTasks() : (typeof standaloneTasks !== 'undefined' ? standaloneTasks : []);
+  const groupTasks = canonicalTasks.filter(t => String(t.groupId) === String(groupId) && !t.deleted && !t.deletedAt);
+  
+  if (groupTasks.length === 0) {
+    if(typeof toast === 'function') toast('Todo list unavailable.');
+    return;
+  }
+  
+  const esc = (s) => (s||'').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  let draftTitle = groupTasks[0].groupTitle || 'Todo List';
+  
+  let draftTasks = groupTasks.map(t => ({ ...t }));
+  let isSaving = false;
+
+  const renderDraft = () => {
+    let rowsHtml = '';
+    draftTasks.forEach((t, idx) => {
+      let dueVal = '';
+      if (t.due) {
+        const dd = new Date(t.due);
+        if (!isNaN(dd)) {
+          const dy = dd.getFullYear();
+          const dm = String(dd.getMonth()+1).padStart(2,'0');
+          const ddt = String(dd.getDate()).padStart(2,'0');
+          const dh = String(dd.getHours()).padStart(2,'0');
+          const dmin = String(dd.getMinutes()).padStart(2,'0');
+          dueVal = `${dy}-${dm}-${ddt}T${dh}:${dmin}`;
+        }
+      }
+      rowsHtml += `
+        <div style="display:flex;gap:8px;align-items:center;padding:6px;background:var(--subtle);border-radius:6px;margin-bottom:6px">
+          <input type="checkbox" data-idx="${idx}" class="draft-task-done" ${t.completed?'checked':''}>
+          <input type="text" data-idx="${idx}" class="draft-task-text" value="${esc(t.text)}" style="flex:1;background:transparent;border:none;outline:none;font-size:14px;color:var(--fg)">
+          <select data-idx="${idx}" class="draft-task-pri" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;font-size:12px;padding:2px">
+            <option value="none" ${t.priority==='none'||!t.priority?'selected':''}>-</option>
+            <option value="low" ${t.priority==='low'?'selected':''}>Low</option>
+            <option value="medium" ${t.priority==='medium'?'selected':''}>Medium</option>
+            <option value="high" ${t.priority==='high'?'selected':''}>High</option>
+          </select>
+          <input type="datetime-local" data-idx="${idx}" class="draft-task-due" value="${dueVal}" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;font-size:12px;padding:2px">
+          <button type="button" data-idx="${idx}" class="draft-task-del btn" style="padding:4px;color:var(--danger)"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+        </div>
+      `;
+    });
+    
+    root.innerHTML=`<div class="modal-overlay"><div class="modal" style="max-width:500px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <h3 style="margin:0">✏️ Edit Todo List</h3>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+        <input id="todoEditTitle" placeholder="List title" value="${esc(draftTitle)}" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;outline:none;color:var(--fg);font-weight:bold">
+        <div style="max-height:400px;overflow-y:auto;padding-right:4px">
+          ${rowsHtml}
+        </div>
+        <button type="button" class="btn" id="todoEditAddRow"><i data-lucide="plus" class="w-4 h-4"></i> Add Task</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="todoEditCancel">Cancel</button>
+        <button class="btn btn-primary" id="todoEditSave">Save Changes</button>
+      </div>
+    </div></div>`;
+    
+    if (typeof refreshIcons === 'function') refreshIcons();
+    
+    document.getElementById('todoEditCancel').onclick = close;
+    const overlay = root.querySelector('.modal-overlay');
+    if (overlay) overlay.onclick = (e) => { if (e.target === overlay) close(); };
+    
+    document.getElementById('todoEditTitle').oninput = (e) => { draftTitle = e.target.value; };
+    
+    document.getElementById('todoEditAddRow').onclick = () => {
+      draftTasks.push({ id: (typeof uid === 'function' ? uid() : Date.now().toString()), text: '', completed: false, priority: 'none', groupId: groupId });
+      renderDraft();
+    };
+    
+    root.querySelectorAll('.draft-task-text').forEach(el => el.oninput = (e) => { draftTasks[e.target.dataset.idx].text = e.target.value; });
+    root.querySelectorAll('.draft-task-done').forEach(el => el.onchange = (e) => { draftTasks[e.target.dataset.idx].completed = e.target.checked; });
+    root.querySelectorAll('.draft-task-pri').forEach(el => el.onchange = (e) => { draftTasks[e.target.dataset.idx].priority = e.target.value; });
+    root.querySelectorAll('.draft-task-due').forEach(el => el.onchange = (e) => { draftTasks[e.target.dataset.idx].due = e.target.value ? new Date(e.target.value).getTime() : null; });
+    root.querySelectorAll('.draft-task-del').forEach(el => el.onclick = (e) => {
+      draftTasks.splice(e.currentTarget.dataset.idx, 1);
+      renderDraft();
+    });
+    
+    document.getElementById('todoEditSave').onclick = () => {
+      if (isSaving) return;
+      draftTasks = draftTasks.filter(t => t.text.trim());
+      if (draftTasks.length === 0) {
+        if(typeof toast === 'function') toast('List must have at least one valid task.');
+        return;
+      }
+      isSaving = true;
+      
+      const freshTasks = typeof window.getCanonicalStandaloneTasks === 'function' ? window.getCanonicalStandaloneTasks() : (typeof standaloneTasks !== 'undefined' ? standaloneTasks : []);
+      const newTitle = draftTitle.trim() || 'Todo List';
+      
+      const backupTasks = freshTasks.map(t => ({...t}));
+      const existingIds = new Set(groupTasks.map(t => String(t.id)));
+      const newIds = new Set(draftTasks.map(t => String(t.id)));
+      
+      existingIds.forEach(id => {
+        if (!newIds.has(id)) {
+          const t = freshTasks.find(x => String(x.id) === id);
+          if (t) { t.deleted = true; t.deletedAt = Date.now(); }
+        }
+      });
+      
+      draftTasks.forEach(dt => {
+        dt.groupTitle = newTitle;
+        dt.groupId = groupId;
+        const t = freshTasks.find(x => String(x.id) === String(dt.id));
+        if (t) {
+          let changed = false;
+          if (t.text !== dt.text) { t.text = dt.text; changed = true; }
+          if (t.completed !== dt.completed) { t.completed = dt.completed; changed = true; }
+          if (t.priority !== dt.priority) { t.priority = dt.priority; changed = true; }
+          if (t.due !== dt.due) { t.due = dt.due; changed = true; }
+          if (t.groupTitle !== dt.groupTitle) { t.groupTitle = dt.groupTitle; changed = true; }
+          if (changed) t.updatedAt = Date.now();
+        } else {
+          dt.createdAt = Date.now();
+          dt.updatedAt = Date.now();
+          freshTasks.push(dt);
+        }
+      });
+      
+      document.getElementById('todoEditSave').disabled = true;
+      
+      Promise.resolve().then(() => typeof saveTasks === 'function' ? saveTasks() : null).then(() => {
+        if (typeof renderTasksView === 'function') renderTasksView();
+        if (typeof updateTasksCount === 'function') updateTasksCount();
+        
+        window.refreshProductivityReferences('todo-list', groupId);
+        if(typeof toast === 'function') toast('Todo list updated successfully');
+        
+        close();
+      }).catch(e => {
+        if(typeof toast === 'function') toast('Failed to save todo list');
+        
+        // Restore from backup in place
+        freshTasks.splice(0, freshTasks.length, ...backupTasks.map(task => ({ ...task })));
+        
+        isSaving = false;
+        const btn = document.getElementById('todoEditSave');
+        if (btn) btn.disabled = false;
+      });
+    };
+  };
+
+  const close = () => { root.innerHTML = ''; };
+  renderDraft();
+};
+
+window.removeProductivityReference = function(ref) {
+  if (ref && ref.parentNode) {
+    ref.remove();
+    if (typeof handleBodyInput === 'function') handleBodyInput();
+    if (typeof toast === 'function') toast('Reference removed from note');
+  }
+};
+
+window.deleteCalendarSource = function(eventId) {
+  if (!confirm('Are you sure you want to delete this event source?')) return;
+  const canonicalNotes = typeof window.getCanonicalNotes === 'function' ? window.getCanonicalNotes() : (typeof notes !== 'undefined' ? notes : []);
+  const ev = canonicalNotes.find(n => String(n.id) === String(eventId));
+  if (!ev) {
+    if (typeof toast === 'function') toast('Event already deleted or missing');
+    return;
+  }
+  const backup = { ...ev };
+  ev.deleted = true;
+  ev.deletedAt = Date.now();
+  
+  Promise.resolve().then(() => typeof save === 'function' ? save() : null).then(() => {
+    if (typeof renderCalendarView === 'function') renderCalendarView();
+    if (typeof renderAll === 'function') renderAll();
+    window.refreshProductivityReferences('calendar', eventId);
+    if (typeof toast === 'function') toast('Calendar event source deleted');
+  }).catch(e => {
+    Object.assign(ev, backup);
+    if (!('deleted' in backup)) delete ev.deleted;
+    if (!('deletedAt' in backup)) delete ev.deletedAt;
+    if (typeof toast === 'function') toast('Failed to delete event source');
+  });
+};
+
+window.deleteTodoListSource = function(groupId) {
+  if (!confirm('Are you sure you want to delete this todo list source?')) return;
+  const canonicalTasks = typeof window.getCanonicalStandaloneTasks === 'function' ? window.getCanonicalStandaloneTasks() : (typeof standaloneTasks !== 'undefined' ? standaloneTasks : []);
+  
+  const backupTasks = canonicalTasks.map(t => ({...t}));
+  let changed = false;
+  
+  canonicalTasks.forEach(t => {
+    if (String(t.groupId) === String(groupId) && !t.deleted && !t.deletedAt) {
+      t.deleted = true;
+      t.deletedAt = Date.now();
+      changed = true;
+    }
+  });
+  
+  if (!changed) {
+    if (typeof toast === 'function') toast('Todo list already deleted or missing');
+    return;
+  }
+  
+  Promise.resolve().then(() => typeof saveTasks === 'function' ? saveTasks() : null).then(() => {
+    if (typeof renderTasksView === 'function') renderTasksView();
+    if (typeof updateTasksCount === 'function') updateTasksCount();
+    window.refreshProductivityReferences('todo-list', groupId);
+    if (typeof toast === 'function') toast('Todo list source deleted');
+  }).catch(e => {
+    canonicalTasks.splice(0, canonicalTasks.length, ...backupTasks.map(task => ({ ...task })));
+    if (typeof toast === 'function') toast('Failed to delete todo list source');
+  });
+};

@@ -326,6 +326,10 @@ function printCurrentNote(){
 
   // Remove any inline block-drag indicators or empty paragraphs
   temp.querySelectorAll('.block-drop-indicator, .block-gutter').forEach(el=>el.remove());
+  
+  if (typeof window.dehydrateProductivityReferences === 'function') {
+    window.dehydrateProductivityReferences(temp);
+  }
 
   const cleanHtml=temp.innerHTML;
   const tags=(note.tags||[]).map(t=>`<span class="ps-tag">${esc(t)}</span>`).join('');
