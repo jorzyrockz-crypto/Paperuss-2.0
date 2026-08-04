@@ -800,7 +800,8 @@ function toggleTaskHubItem(noteId, idx, checked){
 window.resolveProductivitySource = function(type, sourceId) {
   if (type === 'calendar') {
     const canonicalNotes = typeof window.getCanonicalNotes === 'function' ? window.getCanonicalNotes() : (typeof notes !== 'undefined' ? notes : []);
-    return canonicalNotes.find(n => String(n.id) === String(sourceId));
+    const ev = canonicalNotes.find(n => String(n.id) === String(sourceId));
+    return (ev && !ev.deleted && !ev.deletedAt) ? ev : null;
   } else if (type === 'todo-list') {
     const canonicalTasks = typeof window.getCanonicalStandaloneTasks === 'function' ? window.getCanonicalStandaloneTasks() : (typeof standaloneTasks !== 'undefined' ? standaloneTasks : []);
     return canonicalTasks.filter(t => String(t.groupId) === String(sourceId) && !t.deleted && !t.deletedAt);
