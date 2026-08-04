@@ -249,11 +249,7 @@ function renderCalendarScheduleView(){
   grid.innerHTML=html||'<div class="list-empty">No upcoming events in the next 90 days.</div>';refreshIcons();
 }
 
-async function openCalendarEventCreator(year, month, day){
-  if (typeof load === 'function') {
-    const p = load();
-    if(p instanceof Promise) await p;
-  }
+async function openCalendarEventCreator(year, month, day, options = { intent: 'calendar' }){
   const now = new Date();
   if(!year) year = now.getFullYear();
   if(month === undefined) month = now.getMonth();
@@ -264,12 +260,40 @@ async function openCalendarEventCreator(year, month, day){
 
   let activeTab = 'select';
   let selectedEventNoteId = null;
-  const getExistingEvents = () => notes.filter(n => !n.deletedAt && (n.tags||[]).includes('calendar')).map(n => ({ note: n, start: n.calendarStart || n.createdAt })).sort((a,b) => b.start - a.start);
+  let loadedEvents = [];
+  let isLoading = true;
+  let errorState = null;
+
+  async function performLoad() {
+    isLoading = true;
+    errorState = null;
+    renderModalContent();
+    try {
+      if(typeof load === 'function') await Promise.resolve(load());
+      
+      loadedEvents = [];
+      notes.forEach(n => {
+        if(n.deletedAt) return;
+        if(!(n.tags||[]).includes('calendar')) return;
+        
+        let eventStart=n.calendarStart||n.createdAt;
+        let eventEnd=n.calendarEnd||n.updatedAt;
+        if(eventStart>eventEnd){ const tmp=eventStart; eventStart=eventEnd; eventEnd=tmp; }
+        
+        if(eventStart) loadedEvents.push({note: n, start: eventStart});
+      });
+      loadedEvents.sort((a,b)=>b.start - a.start);
+      
+    } catch(e) {
+      errorState = e.message || 'Failed to load calendar events';
+    }
+    isLoading = false;
+    renderModalContent();
+  }
 
   function renderModalContent() {
-    const existingEvents = getExistingEvents();
-    const hasEvents = existingEvents.length > 0;
-    if(!hasEvents && activeTab === 'select') activeTab = 'create';
+    const hasEvents = loadedEvents.length > 0;
+    if(!isLoading && !hasEvents && activeTab === 'select') activeTab = 'create';
 
     root.innerHTML=`<div class="modal-overlay"><div class="modal" style="max-width:500px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -277,22 +301,22 @@ async function openCalendarEventCreator(year, month, day){
       </div>
 
       <div class="modal-tabs">
-        <button type="button" class="modal-tab-btn ${activeTab==='select'?'active':''}" id="tabSelectEv">
-          <i data-lucide="calendar" class="w-4 h-4"></i> Select Existing (${existingEvents.length})
+        <button type="button" class="modal-tab-btn ${activeTab==='select'?'active':''}" id="tabSelectEv" ${isLoading?'disabled':''}>
+          <i data-lucide="calendar" class="w-4 h-4"></i> Select Existing (${isLoading ? '…' : loadedEvents.length})
         </button>
-        <button type="button" class="modal-tab-btn ${activeTab==='create'?'active':''}" id="tabCreateEv">
+        <button type="button" class="modal-tab-btn ${activeTab==='create'?'active':''}" id="tabCreateEv" ${isLoading?'disabled':''}>
           <i data-lucide="plus-circle" class="w-4 h-4"></i> Create New
         </button>
       </div>
 
       ${activeTab === 'select' ? `
-        <input id="evSearchInput" class="modal-search-input" placeholder="Search calendar events…" value="">
-        <div class="modal-item-list" id="evList">
+        <input id="evSearchInput" class="modal-search-input" placeholder="Search calendar events…" value="" ${isLoading?'disabled':''}>
+        <div class="modal-item-list" id="evList" role="listbox">
           ${renderEventListRows('')}
         </div>
         <div class="modal-actions">
           <button class="btn" id="evCancel">Cancel</button>
-          <button class="btn btn-primary" id="evInsertSelected" ${selectedEventNoteId ? '' : 'disabled'}>Insert Selected Event</button>
+          <button class="btn btn-primary" id="evInsertSelected" ${!selectedEventNoteId||isLoading?'disabled':''}>Insert Selected Event</button>
         </div>
       ` : `
         <p style="font-size:12.5px;color:var(--fg-secondary);margin-bottom:12px">${dateLabel}</p>
@@ -342,7 +366,6 @@ async function openCalendarEventCreator(year, month, day){
     const overlay = root.querySelector('.modal-overlay');
     if(overlay) overlay.onclick=e=>{ if(e.target===e.currentTarget) close(); };
 
-    // Tab buttons
     const btnTabSel = document.getElementById('tabSelectEv');
     const btnTabCre = document.getElementById('tabCreateEv');
     if(btnTabSel) btnTabSel.onclick = () => { activeTab = 'select'; renderModalContent(); };
@@ -354,17 +377,41 @@ async function openCalendarEventCreator(year, month, day){
         searchInput.oninput = (e) => {
           const listEl = document.getElementById('evList');
           if(listEl) listEl.innerHTML = renderEventListRows(e.target.value);
-          wireEventRowEvents();
         };
       }
-      wireEventRowEvents();
+      const listEl = document.getElementById('evList');
+      if(listEl) {
+        listEl.onclick = (e) => {
+          const row = e.target.closest('[data-item-id]');
+          if(!row) return;
+          selectedEventNoteId = String(row.getAttribute('data-item-id'));
+          
+          listEl.querySelectorAll('[data-item-id]').forEach(r => {
+            const isSel = String(r.getAttribute('data-item-id')) === selectedEventNoteId;
+            r.classList.toggle('selected', isSel);
+            r.setAttribute('aria-selected', isSel);
+          });
+          const btn = document.getElementById('evInsertSelected');
+          if(btn) btn.disabled = !selectedEventNoteId;
+        };
+        
+        listEl.onkeydown = (e) => {
+          if(e.key === 'Enter' || e.key === ' ') {
+            const row = e.target.closest('[data-item-id]');
+            if(row) {
+              e.preventDefault();
+              row.click();
+            }
+          }
+        };
+      }
 
       const btnInsertSel = document.getElementById('evInsertSelected');
       if(btnInsertSel) {
         btnInsertSel.onclick = () => {
           if(!selectedEventNoteId) { toast('Select an event first'); return; }
-          const evObj = getExistingEvents().find(e => e.note.id === selectedEventNoteId);
-          if(!evObj) return;
+          const evObj = loadedEvents.find(e => e.note.id === selectedEventNoteId);
+          if(!evObj) { toast('Selected event no longer exists in canonical store'); return; }
 
           const title = titleOf(evObj.note);
           const startFmt = new Date(evObj.start).toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
@@ -381,7 +428,7 @@ async function openCalendarEventCreator(year, month, day){
         };
       }
     } else {
-      document.getElementById('evCreate').onclick=()=>{
+      document.getElementById('evCreate').onclick=async ()=>{
         const titleEl=document.getElementById('evTitle');
         const startDateEl=document.getElementById('evStartDate');
         const startTimeEl=document.getElementById('evStartTime');
@@ -413,8 +460,9 @@ async function openCalendarEventCreator(year, month, day){
         const safeDescription=esc(descEl.value.trim());
         const content=sanitizeNoteHTML(`<p><strong>📅 ${esc(startFmt)}</strong></p><p>→ ${esc(endFmt)}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${esc(repeatVal)}</p>`:''}${safeDescription?`<p>${safeDescription}</p>`:''}`);
 
+        const newId=uid();
         const n={
-          id:uid(), title, content, tags, pinned:false, archived:false,
+          id:newId, title, content, tags, pinned:false, archived:false,
           createdAt:Date.now(), updatedAt:Date.now(), fontStyle:'sans',
           calendarStart:startTs, calendarEnd:endTs,
           calendarRepeat:repeatVal==='none'?null:repeatVal,
@@ -427,56 +475,45 @@ async function openCalendarEventCreator(year, month, day){
           addNotification({type:'calendar',title:'Event Created: '+title,body:startFmt,icon:'calendar',activity:true});
         }
         renderCalendarView(); renderAll();
-        toast('Event created');
-        activeTab = 'select';
-        selectedEventNoteId = n.id;
-        renderModalContent();
+        
+        if(options.intent === 'insert') {
+          await performLoad();
+          const found = loadedEvents.find(e => e.note.id === newId);
+          if(found) {
+            selectedEventNoteId = newId;
+            activeTab = 'select';
+            renderModalContent();
+          } else {
+            toast('Save or load error: newly created event not found.');
+          }
+        } else {
+          close();
+        }
       };
     }
   }
 
   function renderEventListRows(query) {
-    const existingEvents = getExistingEvents();
+    if(isLoading) return `<div style="padding:16px;text-align:center;color:var(--fg-muted);font-size:13px"><i class="w-4 h-4 spinner" style="border:2px solid;border-right-color:transparent;border-radius:50%;width:14px;height:14px;animation:spin 1s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px"></i>Loading...</div>`;
+    if(errorState) return `<div style="padding:16px;text-align:center;color:var(--danger);font-size:13px">${esc(errorState)}</div>`;
+    
     const q = query.toLowerCase().trim();
-    const filtered = existingEvents.filter(e => !q || titleOf(e.note).toLowerCase().includes(q));
-    if(!filtered.length) return `<div style="padding:16px;text-align:center;color:var(--fg-muted);font-size:13px">No calendar events found.</div>`;
+    const filtered = loadedEvents.filter(e => !q || titleOf(e.note).toLowerCase().includes(q));
+    if(!filtered.length) return `<div class="list-empty" style="padding:16px;text-align:center;color:var(--fg-muted);font-size:13px">No calendar events found.</div>`;
 
     return filtered.map(ev => {
       const isSel = selectedEventNoteId === ev.note.id;
       const title = titleOf(ev.note);
       const startFmt = new Date(ev.start).toLocaleString(undefined, {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-      return `<div class="modal-item-row ${isSel?'selected':''}" data-event-id="${ev.note.id}" tabindex="0" style="cursor:pointer; outline:none;">
-        <i data-lucide="calendar" class="w-4 h-4" style="color:var(--accent);"></i>
-        <div style="flex:1;font-size:13px;font-weight:600;color:var(--fg);">${esc(title)}</div>
-        <span style="font-size:11px;color:var(--fg-muted);background:var(--hover);padding:2px 6px;border-radius:4px;">${startFmt}</span>
+      return `<div class="modal-item-row ${isSel?'selected':''}" data-item-id="${ev.note.id}" tabindex="0" role="option" aria-selected="${isSel}">
+        <i data-lucide="calendar" class="w-4 h-4" style="color:var(--accent)"></i>
+        <div style="flex:1;font-size:13px;font-weight:600;color:var(--fg)">${esc(title)}</div>
+        <span style="font-size:11px;color:var(--fg-muted);background:var(--hover);padding:2px 6px;border-radius:4px">${startFmt}</span>
       </div>`;
     }).join('');
   }
 
-  function wireEventRowEvents() {
-    const listEl = document.getElementById('evList');
-    if(!listEl) return;
-    listEl.querySelectorAll('.modal-item-row[data-event-id]').forEach(row => {
-      row.onkeydown = (e) => {
-        if(e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          row.click();
-        }
-      };
-      row.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        selectedEventNoteId = row.dataset.eventId;
-        const searchVal = document.getElementById('evSearchInput')?.value || '';
-        listEl.innerHTML = renderEventListRows(searchVal);
-        wireEventRowEvents();
-        const btn = document.getElementById('evInsertSelected');
-        if(btn) btn.disabled = !selectedEventNoteId;
-      };
-    });
-  }
-
-  renderModalContent();
+  performLoad();
 }
 
 const eventNotifTimers=new Map();

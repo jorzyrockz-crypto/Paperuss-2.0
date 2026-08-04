@@ -8,7 +8,7 @@
   const BUILD=Object.freeze({
     name:'PapeRuss 2.0 Stabilization',
     version:'2.0.1-stabilization',
-    cacheName:'paperuss-shell-v31',
+    cacheName:'paperuss-shell-v32',
     schemaVersion:4
   });
 
@@ -393,8 +393,9 @@
     if(!task || typeof task!=='object') return null;
     task.id=sanitizeId(task.id);
     if(!task.id) return null;
-    task.noteId=sanitizeId(task.noteId);
-    if(!task.noteId) return null;
+    const rawNoteId = task.noteId == null ? '' : String(task.noteId).trim();
+    task.noteId = rawNoteId ? sanitizeId(rawNoteId) : '';
+    if(rawNoteId && !task.noteId) return null;
     task.text=String(task.text||'').slice(0,1000);
     task.completed=task.completed===true;
     task.priority=VALID_PRIORITY.has(task.priority)?task.priority:'medium';

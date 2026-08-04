@@ -17,17 +17,33 @@ function saveTasks(){
 }
 
 async function openTaskCreatorModal(){
-  if (typeof loadTasks === 'function') {
-    const p = loadTasks();
-    if(p instanceof Promise) await p;
-  }
   const root=document.getElementById('modalRoot');
   let activeTab = 'select'; // 'select' or 'create'
   let selectedTaskIds = new Set();
+  let loadedTasks = [];
+  let isLoading = true;
+  let errorState = null;
+
+  let isCreatingTasks = false;
+
+  async function performLoad() {
+    isLoading = true;
+    errorState = null;
+    renderModalContent();
+    try {
+      if(typeof loadTasks === 'function') await Promise.resolve(loadTasks());
+      
+      loadedTasks = standaloneTasks.filter(t => !t.deletedAt && !t.deleted);
+    } catch(e) {
+      errorState = e.message || 'Failed to load tasks';
+    }
+    isLoading = false;
+    renderModalContent();
+  }
 
   function renderModalContent() {
-    const hasStandalone = standaloneTasks && standaloneTasks.length > 0;
-    if(!hasStandalone && activeTab === 'select') activeTab = 'create';
+    const hasStandalone = loadedTasks.length > 0;
+    if(!isLoading && !hasStandalone && activeTab === 'select') activeTab = 'create';
 
     root.innerHTML=`<div class="modal-overlay"><div class="modal" style="max-width:500px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -35,22 +51,22 @@ async function openTaskCreatorModal(){
       </div>
 
       <div class="modal-tabs">
-        <button type="button" class="modal-tab-btn ${activeTab==='select'?'active':''}" id="tabSelectTask">
-          <i data-lucide="check-square" class="w-4 h-4"></i> Select Existing (${standaloneTasks.length})
+        <button type="button" class="modal-tab-btn ${activeTab==='select'?'active':''}" id="tabSelectTask" ${isLoading?'disabled':''}>
+          <i data-lucide="check-square" class="w-4 h-4"></i> Select Existing (${isLoading ? '…' : loadedTasks.length})
         </button>
-        <button type="button" class="modal-tab-btn ${activeTab==='create'?'active':''}" id="tabCreateTask">
+        <button type="button" class="modal-tab-btn ${activeTab==='create'?'active':''}" id="tabCreateTask" ${isLoading?'disabled':''}>
           <i data-lucide="plus-circle" class="w-4 h-4"></i> Create New
         </button>
       </div>
 
       ${activeTab === 'select' ? `
-        <input id="tmSearchInput" class="modal-search-input" placeholder="Search tasks from Task Page…" value="">
-        <div class="modal-item-list" id="tmTaskList">
+        <input id="tmSearchInput" class="modal-search-input" placeholder="Search tasks from Task Page…" value="" ${isLoading?'disabled':''}>
+        <div class="modal-item-list" id="tmTaskList" role="listbox" aria-multiselectable="true">
           ${renderTaskListRows('')}
         </div>
         <div class="modal-actions">
           <button class="btn" id="tmCancel">Cancel</button>
-          <button class="btn btn-primary" id="tmInsertSelected" ${selectedTaskIds.size > 0 ? '' : 'disabled'}>Insert Selected Task(s)</button>
+          <button class="btn btn-primary" id="tmInsertSelected" ${selectedTaskIds.size===0||isLoading?'disabled':''}>Insert Selected Task(s)</button>
         </div>
       ` : `
         <p style="color:var(--fg-secondary);font-size:12.5px;margin-bottom:12px">
@@ -66,13 +82,10 @@ async function openTaskCreatorModal(){
             </select>
             <input id="tmDue" type="datetime-local" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:160px" title="Shared reminder for all tasks">
           </div>
-          <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg-secondary);cursor:pointer">
-            <input type="checkbox" id="tmInsertNote" checked> Also insert as a checklist block in active note
-          </label>
         </div>
         <div class="modal-actions">
           <button class="btn" id="tmCancel">Cancel</button>
-          <button class="btn btn-primary" id="tmCreate">Create & Insert Tasks</button>
+          <button class="btn btn-primary" id="tmCreate">Create Tasks</button>
         </div>
       `}
     </div></div>`;
@@ -85,7 +98,6 @@ async function openTaskCreatorModal(){
     const overlay = root.querySelector('.modal-overlay');
     if(overlay) overlay.onclick=e=>{ if(e.target===e.currentTarget) close(); };
 
-    // Tab buttons
     const btnTabSel = document.getElementById('tabSelectTask');
     const btnTabCre = document.getElementById('tabCreateTask');
     if(btnTabSel) btnTabSel.onclick = () => { activeTab = 'select'; renderModalContent(); };
@@ -97,16 +109,47 @@ async function openTaskCreatorModal(){
         searchInput.oninput = (e) => {
           const listEl = document.getElementById('tmTaskList');
           if(listEl) listEl.innerHTML = renderTaskListRows(e.target.value);
-          wireTaskRowEvents();
         };
       }
-      wireTaskRowEvents();
+      
+      const listEl = document.getElementById('tmTaskList');
+      if(listEl) {
+        listEl.onclick = (e) => {
+          const row = e.target.closest('[data-item-id]');
+          if(!row) return;
+          const id = String(row.getAttribute('data-item-id'));
+          if(selectedTaskIds.has(id)) selectedTaskIds.delete(id);
+          else selectedTaskIds.add(id);
+          
+          listEl.querySelectorAll('[data-item-id]').forEach(r => {
+            const isSel = selectedTaskIds.has(String(r.getAttribute('data-item-id')));
+            r.classList.toggle('selected', isSel);
+            r.setAttribute('aria-selected', isSel);
+            const cb = r.querySelector('input[type="checkbox"]');
+            if(cb) cb.checked = isSel;
+          });
+          const btn = document.getElementById('tmInsertSelected');
+          if(btn) btn.disabled = selectedTaskIds.size === 0;
+        };
+        
+        listEl.onkeydown = (e) => {
+          if(e.key === 'Enter' || e.key === ' ') {
+            const row = e.target.closest('[data-item-id]');
+            if(row) {
+              e.preventDefault();
+              row.click();
+            }
+          }
+        };
+      }
 
       const btnInsertSel = document.getElementById('tmInsertSelected');
       if(btnInsertSel) {
         btnInsertSel.onclick = () => {
           if(selectedTaskIds.size === 0) { toast('Select at least one task'); return; }
-          const selectedItems = standaloneTasks.filter(t => selectedTaskIds.has(t.id));
+          const selectedItems = loadedTasks.filter(t => selectedTaskIds.has(t.id));
+          if(selectedItems.length === 0) { toast('Selected tasks no longer exist in canonical store'); return; }
+          
           const checklistHtml = selectedItems.map(t => `<li data-task="1"><input type="checkbox" ${t.completed?'checked':''}> ${esc(t.text)}</li>`).join('');
           
           const ed = document.getElementById('noteBody');
@@ -120,42 +163,66 @@ async function openTaskCreatorModal(){
         };
       }
     } else {
-      const btnCreate = document.getElementById('tmCreate');
+            const btnCreate = document.getElementById('tmCreate');
       if(btnCreate) {
-        btnCreate.onclick = () => {
+        btnCreate.onclick = async () => {
+          if(isCreatingTasks) return;
+          
           const raw=document.getElementById('tmTasks').value;
-          const lines=raw.split('\n').map(s=>s.trim()).filter(Boolean);
+          const lines=raw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
           if(!lines.length){ toast('Enter at least one task'); return; }
+          
+          isCreatingTasks = true;
+          btnCreate.disabled = true;
+          
           const prio=document.getElementById('tmPriority').value;
           const dueVal=document.getElementById('tmDue').value;
           const due=dueVal?new Date(dueVal).getTime():null;
-          const insertNote=document.getElementById('tmInsertNote').checked;
           const groupId='g_'+Date.now().toString(36);
+          
+          const newIds = [];
+          const createdTasks = [];
           lines.forEach(txt=>{
-            const newId = 't_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-            standaloneTasks.unshift({
-              id:newId,
+            const nid = 't_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+            newIds.push(nid);
+            createdTasks.push({
+              id:nid,
               text:txt, completed:false,
               priority:prio, due, notified:false,
               groupId,
               createdAt:Date.now(), updatedAt:Date.now()
             });
-            selectedTaskIds.add(newId);
           });
-          saveTasks();
-          if(insertNote){
-            const checklistHtml=lines.map(t=>`<li data-task="1"><input type="checkbox"> ${esc(t)}</li>`).join('');
-            const ed = document.getElementById('noteBody');
-            if(ed) {
-              ed.focus();
-              document.execCommand('insertHTML', false, `<ul>${checklistHtml}</ul><p><br></p>`);
-              if(typeof handleBodyInput === 'function') handleBodyInput();
-            }
+          
+          standaloneTasks.unshift(...createdTasks);
+          
+          try {
+            await Promise.resolve(saveTasks());
+          } catch(e) {
+            standaloneTasks.splice(0, createdTasks.length); // rollback
+            isCreatingTasks = false;
+            btnCreate.disabled = false;
+            toast('Task could not be saved.');
+            return;
           }
+          
           renderTasksView(); updateTasksCount(); renderAll();
+          
+          loadedTasks = standaloneTasks.filter(t => !t.deletedAt && !t.deleted);
+          
+          const validIds = newIds.filter(id => loadedTasks.some(t => String(t.id) === String(id)));
+          if(validIds.length !== newIds.length) {
+            isCreatingTasks = false;
+            btnCreate.disabled = false;
+            toast('Save or load error: newly created tasks not found.');
+            return;
+          }
+          
           addNotification({type:'task',title:`${lines.length} tasks created`,body:lines.slice(0,3).join(', ')+(lines.length>3?'…':''),icon:'check-square',activity:true});
-          toast(`${lines.length} tasks created`);
+          selectedTaskIds.clear();
+          validIds.forEach(id => selectedTaskIds.add(String(id)));
           activeTab = 'select';
+          isCreatingTasks = false;
           renderModalContent();
         };
       }
@@ -164,48 +231,26 @@ async function openTaskCreatorModal(){
   }
 
   function renderTaskListRows(query) {
+    if(isLoading) return `<div style="padding:16px;text-align:center;color:var(--fg-muted);font-size:13px"><i class="w-4 h-4 spinner" style="border:2px solid;border-right-color:transparent;border-radius:50%;width:14px;height:14px;animation:spin 1s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px"></i>Loading...</div>`;
+    if(errorState) return `<div style="padding:16px;text-align:center;color:var(--danger);font-size:13px">${esc(errorState)}</div>`;
+
     const q = query.toLowerCase().trim();
-    const filtered = standaloneTasks.filter(t => !q || t.text.toLowerCase().includes(q));
-    if(!filtered.length) return `<div style="padding:16px;text-align:center;color:var(--fg-muted);font-size:13px">No tasks found.</div>`;
+    const filtered = loadedTasks.filter(t => !q || t.text.toLowerCase().includes(q));
+    if(!filtered.length) return `<div class="list-empty" style="padding:16px;text-align:center;color:var(--fg-muted);font-size:13px">No tasks found.</div>`;
 
     return filtered.map(t => {
       const isSel = selectedTaskIds.has(t.id);
       const prioColor = t.priority==='high'?'🔴':t.priority==='medium'?'🟡':'🟢';
-      return `<div class="modal-item-row ${isSel?'selected':''}" data-task-id="${t.id}" tabindex="0" style="cursor:pointer; outline:none;">
-        <input type="checkbox" ${isSel?'checked':''} style="pointer-events:none">
-        <span style="font-size:12px;">${prioColor}</span>
+      return `<div class="modal-item-row ${isSel?'selected':''}" data-item-id="${t.id}" tabindex="0" role="option" aria-selected="${isSel}">
+        <input type="checkbox" ${isSel?'checked':''} tabindex="-1">
+        <span style="font-size:12px">${prioColor}</span>
         <div style="flex:1;font-size:13px;color:var(--fg);${t.completed?'text-decoration:line-through;opacity:0.6':''}">${esc(t.text)}</div>
-        ${t.due?`<span style="font-size:11px;color:var(--fg-muted);">${new Date(t.due).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>`:''}
+        ${t.due?`<span style="font-size:11px;color:var(--fg-muted)">${new Date(t.due).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>`:''}
       </div>`;
     }).join('');
   }
 
-  function wireTaskRowEvents() {
-    const listEl = document.getElementById('tmTaskList');
-    if(!listEl) return;
-    listEl.querySelectorAll('.modal-item-row[data-task-id]').forEach(row => {
-      row.onkeydown = (e) => {
-        if(e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          row.click();
-        }
-      };
-      row.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const id = row.dataset.taskId;
-        if(selectedTaskIds.has(id)) selectedTaskIds.delete(id);
-        else selectedTaskIds.add(id);
-        const searchVal = document.getElementById('tmSearchInput')?.value || '';
-        listEl.innerHTML = renderTaskListRows(searchVal);
-        wireTaskRowEvents();
-        const btn = document.getElementById('tmInsertSelected');
-        if(btn) btn.disabled = selectedTaskIds.size === 0;
-      };
-    });
-  }
-
-  renderModalContent();
+  performLoad();
 }
 
 let taskAudioCtx=null;
