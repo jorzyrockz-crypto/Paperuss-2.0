@@ -46,7 +46,7 @@ function openTaskCreatorModal(){
         </div>
         <div class="modal-actions">
           <button class="btn" id="tmCancel">Cancel</button>
-          <button class="btn btn-primary" id="tmInsertSelected">Insert Selected Task(s)</button>
+          <button class="btn btn-primary" id="tmInsertSelected" ${selectedTaskIds.size > 0 ? '' : 'disabled'}>Insert Selected Task(s)</button>
         </div>
       ` : `
         <p style="color:var(--fg-secondary);font-size:12.5px;margin-bottom:12px">
@@ -163,11 +163,11 @@ function openTaskCreatorModal(){
     return filtered.map(t => {
       const isSel = selectedTaskIds.has(t.id);
       const prioColor = t.priority==='high'?'🔴':t.priority==='medium'?'🟡':'🟢';
-      return `<div class="modal-item-row ${isSel?'selected':''}" data-task-id="${t.id}">
+      return `<div class="modal-item-row ${isSel?'selected':''}" data-task-id="${t.id}" tabindex="0" style="cursor:pointer; pointer-events:auto; outline:none;">
         <input type="checkbox" ${isSel?'checked':''} style="pointer-events:none">
-        <span style="font-size:12px">${prioColor}</span>
-        <div style="flex:1;font-size:13px;color:var(--fg);${t.completed?'text-decoration:line-through;opacity:0.6':''}">${esc(t.text)}</div>
-        ${t.due?`<span style="font-size:11px;color:var(--fg-muted)">${new Date(t.due).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>`:''}
+        <span style="font-size:12px; pointer-events:none;">${prioColor}</span>
+        <div style="flex:1;font-size:13px;color:var(--fg);${t.completed?'text-decoration:line-through;opacity:0.6':''}; pointer-events:none;">${esc(t.text)}</div>
+        ${t.due?`<span style="font-size:11px;color:var(--fg-muted); pointer-events:none;">${new Date(t.due).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>`:''}
       </div>`;
     }).join('');
   }
@@ -176,13 +176,23 @@ function openTaskCreatorModal(){
     const listEl = document.getElementById('tmTaskList');
     if(!listEl) return;
     listEl.querySelectorAll('.modal-item-row[data-task-id]').forEach(row => {
-      row.onclick = () => {
+      row.onkeydown = (e) => {
+        if(e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          row.click();
+        }
+      };
+      row.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         const id = row.dataset.taskId;
         if(selectedTaskIds.has(id)) selectedTaskIds.delete(id);
         else selectedTaskIds.add(id);
         const searchVal = document.getElementById('tmSearchInput')?.value || '';
         listEl.innerHTML = renderTaskListRows(searchVal);
         wireTaskRowEvents();
+        const btn = document.getElementById('tmInsertSelected');
+        if(btn) btn.disabled = selectedTaskIds.size === 0;
       };
     });
   }
