@@ -289,20 +289,20 @@
     }
   }
 
+  // Suppression Set
+  window.suppressedSmartDates = window.suppressedSmartDates || new Set();
+
   window.scanSmartDatesInBlock = function(block, contextDate) {
     if (!block || !block.textContent) return;
     
-    // Do not scan inside existing suggestions, productivity blocks, embeds, pre/code
     if (block.closest('.smart-date-suggestion, .productivity-ref, [data-embed], pre, code, [contenteditable="false"]')) return;
     
-    // Clear old suggestions in this block by unwrapping
     const oldSpans = block.querySelectorAll('.smart-date-suggestion');
     oldSpans.forEach(span => {
       while (span.firstChild) span.parentNode.insertBefore(span.firstChild, span);
       span.remove();
     });
     
-    // Normalize text nodes after unwrapping
     block.normalize();
     
     const text = block.textContent;
@@ -311,7 +311,6 @@
     
     const caret = getCaretOffsets(block);
     
-    // Text nodes array mapping
     let textNodes = [];
     let currentIndex = 0;
     
@@ -320,7 +319,6 @@
         textNodes.push({ node, start: currentIndex, end: currentIndex + node.length });
         currentIndex += node.length;
       } else {
-        // Skip links, code, embeds, non-editable areas
         if (['A', 'CODE', 'PRE'].includes(node.nodeName) || 
             (node.hasAttribute && node.hasAttribute('data-embed')) ||
             (node.classList && node.classList.contains('productivity-ref')) ||
@@ -333,11 +331,7 @@
     }
     buildTextNodes(block);
     
-    // Only apply valid matches
-    let offsetAdjustment = 0; // if we mutate DOM, indices might drift, but we do it backwards or just recreate block
-    // Actually, modifying text nodes is simpler backwards
     matches.reverse().forEach(m => {
-      // Caret protection
       if (caret) {
         let overlap = Math.max(0, Math.min(caret.end, m.endIndex) - Math.max(caret.start, m.startIndex));
         if (overlap > 0 || caret.start === m.endIndex || caret.end === m.endIndex) {
@@ -345,9 +339,15 @@
         }
       }
       
-      // Find the text node that fully contains this match
+      const activeNoteId = window.HistoryManager && window.HistoryManager.activeNoteId ? window.HistoryManager.activeNoteId : 'unknown-note';
+      const activeEditor = document.getElementById('noteBody');
+      const activeLeafId = activeEditor && activeEditor.dataset && activeEditor.dataset.leafId ? activeEditor.dataset.leafId : 'unknown-leaf';
+      const suppressionKey = `${activeNoteId}::${activeLeafId}::${m.rawText}::${text}`;
+      
+      if (window.suppressedSmartDates.has(suppressionKey)) return;
+      
       let containingNodeObj = textNodes.find(n => m.startIndex >= n.start && m.endIndex <= n.end);
-      if (!containingNodeObj) return; // Crosses boundaries, skip
+      if (!containingNodeObj) return;
       
       let node = containingNodeObj.node;
       let localStart = m.startIndex - containingNodeObj.start;
@@ -366,6 +366,12 @@
       span.setAttribute('tabindex', '0');
       span.setAttribute('role', 'button');
       span.setAttribute('aria-label', `Detected date: ${matchText}`);
+      
+      span.dataset.sdStart = m.startDate.getTime();
+      span.dataset.sdHasDate = m.hasExplicitDate;
+      span.dataset.sdHasTime = m.hasExplicitTime;
+      span.dataset.sdSuppressionKey = suppressionKey;
+      
       span.textContent = matchText;
       
       if (beforeText) parent.insertBefore(document.createTextNode(beforeText), node);
@@ -468,6 +474,251 @@
 
   window.clearSmartDateSuggestions = window.dehydrateSmartDateSuggestions;
 
+  function unwrapSpan(span) {
+    const parent = span.parentNode;
+    if (!parent) return;
+    while (span.firstChild) {
+      parent.insertBefore(span.firstChild, span);
+    }
+    span.remove();
+    parent.normalize();
+  }
+
+  function escHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, function(m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+    });
+  }
+
+  function openSmartDateModal(span) {
+    const root = document.getElementById('modalRoot');
+    if (!root) return;
+
+    const startDate = new Date(parseInt(span.dataset.sdStart, 10));
+    const hasDate = span.dataset.sdHasDate === 'true';
+    const hasTime = span.dataset.sdHasTime === 'true';
+    const suppressionKey = span.dataset.sdSuppressionKey;
+    const rawText = span.textContent;
+
+    const block = span.closest('p, div, li, h1, h2, h3, h4, h5, h6, blockquote') || span.parentNode;
+    let extractedTitle = block.textContent.replace(rawText, '').trim();
+    // Trim leading/trailing punctuation and whitespace
+    extractedTitle = extractedTitle.replace(/^[^\w\d]+|[^\w\d]+$/g, '').trim();
+    if (!extractedTitle) extractedTitle = 'Event';
+
+    const dateStr = startDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    const timeStr = startDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+    let interpretedMsg = '';
+    let warningMsg = '';
+    if (hasDate && hasTime) {
+      interpretedMsg = `${dateStr} at ${timeStr}`;
+    } else if (hasDate) {
+      interpretedMsg = `${dateStr}`;
+      warningMsg = `<p style="color:var(--warning);font-size:13px;margin:8px 0"><i class="w-4 h-4 feather-alert-triangle" style="vertical-align:middle"></i> Time is missing.</p>`;
+    } else if (hasTime) {
+      interpretedMsg = `${timeStr}`;
+      warningMsg = `<p style="color:var(--warning);font-size:13px;margin:8px 0"><i class="w-4 h-4 feather-alert-triangle" style="vertical-align:middle"></i> Date is missing.</p>`;
+    }
+
+    const close = () => { root.innerHTML = ''; };
+
+    const renderConfirmation = () => {
+      root.innerHTML = `<div class="modal-overlay">
+        <div class="modal" style="max-width:360px">
+          <h3 style="margin-top:0">Create Calendar Event?</h3>
+          <div style="background:var(--subtle);border-radius:8px;padding:12px;margin:16px 0">
+            <div style="font-weight:600;font-size:15px;margin-bottom:4px">"${escHtml(rawText)}"</div>
+            <div style="color:var(--fg-secondary);font-size:13.5px">${escHtml(interpretedMsg)}</div>
+            ${warningMsg}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button class="btn btn-primary" id="sdConfirmBtn" style="width:100%;justify-content:center">Create Event</button>
+            <button class="btn" id="sdNotEventBtn" style="width:100%;justify-content:center">Not an event</button>
+            <button class="btn" id="sdCancelBtn" style="width:100%;justify-content:center;background:transparent;border:none">Cancel</button>
+          </div>
+        </div>
+      </div>`;
+
+      root.querySelector('.modal-overlay').onclick = e => { if(e.target===e.currentTarget) close(); };
+      document.getElementById('sdCancelBtn').onclick = close;
+      
+      document.getElementById('sdNotEventBtn').onclick = () => {
+        window.suppressedSmartDates.add(suppressionKey);
+        unwrapSpan(span);
+        close();
+      };
+
+      document.getElementById('sdConfirmBtn').onclick = () => {
+        if (!hasDate && !hasTime) return; // invalid
+        renderForm();
+      };
+    };
+
+    const renderForm = () => {
+      const startDVal = `${startDate.getFullYear()}-${String(startDate.getMonth()+1).padStart(2,'0')}-${String(startDate.getDate()).padStart(2,'0')}`;
+      const startTVal = `${String(startDate.getHours()).padStart(2,'0')}:${String(startDate.getMinutes()).padStart(2,'0')}`;
+      
+      const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // +1 hour
+      const endDVal = `${endDate.getFullYear()}-${String(endDate.getMonth()+1).padStart(2,'0')}-${String(endDate.getDate()).padStart(2,'0')}`;
+      const endTVal = `${String(endDate.getHours()).padStart(2,'0')}:${String(endDate.getMinutes()).padStart(2,'0')}`;
+
+      root.innerHTML = `<div class="modal-overlay">
+        <div class="modal" style="max-width:400px;max-height:90vh;overflow-y:auto">
+          <h3 style="margin-top:0">Create Event</h3>
+          <div class="form-group" style="margin-bottom:12px">
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--fg-secondary)">Title</label>
+            <input type="text" id="sdFormTitle" value="${escHtml(extractedTitle)}" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--fg)">
+          </div>
+          <div style="display:flex;gap:12px;margin-bottom:12px">
+            <div style="flex:1">
+              <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--fg-secondary)">Start Date</label>
+              <input type="date" id="sdFormStartDate" value="${hasDate ? startDVal : ''}" ${hasDate ? '' : 'required'} style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--fg)">
+            </div>
+            <div style="flex:1">
+              <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--fg-secondary)">Start Time</label>
+              <input type="time" id="sdFormStartTime" value="${hasTime ? startTVal : ''}" ${hasTime ? '' : 'required'} style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--fg)">
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;margin-bottom:12px">
+            <div style="flex:1">
+              <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--fg-secondary)">End Date</label>
+              <input type="date" id="sdFormEndDate" value="${hasDate ? endDVal : ''}" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--fg)">
+            </div>
+            <div style="flex:1">
+              <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--fg-secondary)">End Time</label>
+              <input type="time" id="sdFormEndTime" value="${(hasDate && hasTime) || hasTime ? endTVal : ''}" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--fg)">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:12px">
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--fg-secondary)">Type</label>
+            <select id="sdFormType" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--fg)">
+              <option value="event">Event</option>
+              <option value="meeting">Meeting</option>
+              <option value="deadline">Deadline</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:12px">
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--fg-secondary)">Description</label>
+            <textarea id="sdFormDesc" rows="2" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--fg);resize:vertical"></textarea>
+          </div>
+          <div style="display:flex;gap:16px;margin-bottom:16px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="sdFormNotify"> Reminder</label>
+            <select id="sdFormRepeat" style="padding:4px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--fg)">
+              <option value="none">Does not repeat</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+          <div class="modal-actions">
+            <button class="btn" id="sdFormCancel">Cancel</button>
+            <button class="btn btn-primary" id="sdFormSubmit">Create</button>
+          </div>
+        </div>
+      </div>`;
+
+      root.querySelector('.modal-overlay').onclick = e => { if(e.target===e.currentTarget) close(); };
+      document.getElementById('sdFormCancel').onclick = close;
+      
+      const submitBtn = document.getElementById('sdFormSubmit');
+      submitBtn.onclick = () => {
+        const tVal = document.getElementById('sdFormTitle').value.trim() || 'Untitled Event';
+        const sD = document.getElementById('sdFormStartDate').value;
+        const sT = document.getElementById('sdFormStartTime').value;
+        const eD = document.getElementById('sdFormEndDate').value || sD;
+        const eT = document.getElementById('sdFormEndTime').value || sT;
+        const typeVal = document.getElementById('sdFormType').value;
+        const descVal = document.getElementById('sdFormDesc').value.trim();
+        const notifyVal = document.getElementById('sdFormNotify').checked;
+        const repeatVal = document.getElementById('sdFormRepeat').value;
+
+        if (!sD || !sT) {
+          if (typeof toast === 'function') toast('Please provide both start date and time.');
+          return;
+        }
+
+        const startTs = new Date(`${sD}T${sT}:00`).getTime();
+        const endTs = new Date(`${eD}T${eT}:00`).getTime();
+
+        if (!Number.isFinite(startTs) || !Number.isFinite(endTs)) {
+          if (typeof toast === 'function') toast('Invalid date or time.');
+          return;
+        }
+        if (endTs < startTs) {
+          if (typeof toast === 'function') toast('Event end must be after its start.');
+          return;
+        }
+
+        submitBtn.disabled = true;
+
+        let tags = ['calendar'];
+        if (typeVal === 'meeting') tags.push('meeting');
+        if (typeVal === 'deadline') tags.push('deadline');
+        if (repeatVal !== 'none') { tags.push('recurring'); tags.push('repeat-' + repeatVal); }
+        
+        const startFmt = new Date(startTs).toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+        const endFmt = new Date(endTs).toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+        const safeDesc = escHtml(descVal);
+        
+        let htmlStr = `<p><strong>📅 ${escHtml(startFmt)}</strong></p><p>→ ${escHtml(endFmt)}</p>`;
+        if (repeatVal !== 'none') htmlStr += `<p>🔁 Repeats: ${escHtml(repeatVal)}</p>`;
+        if (safeDesc) htmlStr += `<p>${safeDesc}</p>`;
+        
+        const content_html = (typeof window.sanitizeNoteHTML === 'function') ? window.sanitizeNoteHTML(htmlStr) : htmlStr;
+        
+        const newId = typeof window.uid === 'function' ? window.uid() : Date.now().toString();
+        
+        const n = {
+          id: newId,
+          title: tVal,
+          content: content_html,
+          tags: tags,
+          pinned: false,
+          archived: false,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          fontStyle: 'sans',
+          calendarStart: startTs,
+          calendarEnd: endTs,
+          calendarRepeat: repeatVal === 'none' ? null : repeatVal,
+          calendarNotify: notifyVal,
+          calendarLastNotifiedAt: null,
+          calendarDescription: descVal
+        };
+
+        if (window.notes && Array.isArray(window.notes)) {
+          window.notes.unshift(n);
+        }
+        
+        Promise.resolve().then(() => {
+          if (typeof window.save === 'function') window.save();
+        }).then(() => {
+          if (notifyVal && typeof window.scheduleEventNotification === 'function') window.scheduleEventNotification(n);
+          if (typeof window.addNotification === 'function') {
+            window.addNotification({ type: 'calendar', title: 'Event Created: ' + tVal, body: startFmt, icon: 'calendar', activity: true });
+          }
+          if (typeof window.renderCalendarView === 'function') window.renderCalendarView();
+          if (typeof window.renderAll === 'function') window.renderAll();
+          if (typeof toast === 'function') toast('Event created successfully.');
+          close();
+        }).catch(err => {
+          console.error('Failed to save smart date event', err);
+          if (window.notes) {
+            const idx = window.notes.findIndex(xn => xn.id === newId);
+            if (idx > -1) window.notes.splice(idx, 1);
+          }
+          submitBtn.disabled = false;
+          if (typeof toast === 'function') toast('Failed to save event.');
+        });
+      };
+    };
+
+    renderConfirmation();
+  }
+
   // Single delegated root listener logic
   let listenerAttached = false;
   
@@ -480,7 +731,7 @@
       if (!span) return;
       e.preventDefault();
       e.stopPropagation();
-      if(typeof toast === 'function') toast('Date detected. Calendar creation will be added next.');
+      openSmartDateModal(span);
     };
     
     const keyHandler = (e) => {
@@ -488,11 +739,10 @@
         const span = e.target.closest('.smart-date-suggestion');
         if (!span) return;
         e.preventDefault();
-        if(typeof toast === 'function') toast('Date detected. Calendar creation will be added next.');
+        openSmartDateModal(span);
       }
     };
     
-    // We attach to document.body, avoiding duplicate attachments per Leaf switch
     document.body.addEventListener('click', clickHandler, true);
     document.body.addEventListener('keydown', keyHandler, true);
   }
