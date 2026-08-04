@@ -893,6 +893,7 @@
     e.stopPropagation();
     
     if (action === 'open' || action === 'edit') {
+      if (action === 'edit') window._sdPendingRefresh = true;
       if (typeof window.openCalendarEventEditor === 'function') window.openCalendarEventEditor(eventId);
     } else if (action === 'unlink' || action === 'remove') {
       await window.removeSmartDateLink(eventId);
@@ -932,6 +933,21 @@
     }
   };
 
+  function attachModalCloseObserver() {
+    const modalRoot = document.getElementById('modalRoot');
+    if (!modalRoot) return;
+    const obs = new MutationObserver(() => {
+      if (modalRoot.children.length === 0 && window._sdPendingRefresh) {
+        window._sdPendingRefresh = false;
+        const noteBody = document.getElementById('noteBody');
+        if (noteBody && typeof window.hydrateSmartDateSuggestions === 'function') {
+          window.hydrateSmartDateSuggestions(noteBody, new Date());
+        }
+      }
+    });
+    obs.observe(modalRoot, { childList: true });
+  }
+
   let listenerAttached = false;
   function attachDelegatedListeners() {
     if (listenerAttached) return;
@@ -966,8 +982,12 @@
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', attachDelegatedListeners);
+    document.addEventListener('DOMContentLoaded', () => {
+      attachDelegatedListeners();
+      attachModalCloseObserver();
+    });
   } else {
     attachDelegatedListeners();
+    attachModalCloseObserver();
   }
 })();
