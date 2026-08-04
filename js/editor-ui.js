@@ -627,7 +627,7 @@ function initSlashMenuActions(){
     else if(cmd==='image'||cmd==='audio'||cmd==='video'||cmd==='link'||cmd==='file') handleMediaAction(cmd);
     else if(cmd==='calevent'){
       const today=new Date();
-      openCalendarEventCreator(today.getFullYear(), today.getMonth(), today.getDate());
+      openCalendarEventCreator(today.getFullYear(), today.getMonth(), today.getDate(), { intent: 'insert' });
     }
     else if(cmd==='newtask'){
       openTaskCreatorModal();
@@ -742,7 +742,7 @@ function initImageContextMenu(){
   document.getElementById('icmInsertEvent').onclick=()=>{
     menu.classList.remove('show');
     const today=new Date();
-    openCalendarEventCreator(today.getFullYear(), today.getMonth(), today.getDate());
+    openCalendarEventCreator(today.getFullYear(), today.getMonth(), today.getDate(), { intent: 'insert' });
   };
   document.getElementById('icmInsertTask').onclick=()=>{
     menu.classList.remove('show');
