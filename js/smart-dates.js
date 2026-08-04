@@ -292,10 +292,93 @@
   // Suppression Set
   window.suppressedSmartDates = window.suppressedSmartDates || new Set();
 
-  window.scanSmartDatesInBlock = function(block, contextDate) {
+  window.getSmartDateLinksForActiveLeaf = async function() {
+    const activeNoteId = window.HistoryManager ? window.HistoryManager.activeNoteId : null;
+    if (!activeNoteId || !window.getNote) return [];
+    const n = window.getNote(activeNoteId);
+    if (!n) return [];
+    if (window.paperussLeaves) {
+      const leafId = window.paperussLeaves.getNoteActiveLeafId(n);
+      const leaf = await window.paperussLeaves.leafGet(leafId);
+      return (leaf && leaf.smartDateLinks) ? leaf.smartDateLinks : [];
+    }
+    return n.smartDateLinks || [];
+  };
+
+  window.saveSmartDateLink = async function(linkObj) {
+    const activeNoteId = window.HistoryManager ? window.HistoryManager.activeNoteId : null;
+    if (!activeNoteId || !window.getNote) return;
+    const n = window.getNote(activeNoteId);
+    if (!n) return;
+    if (window.paperussLeaves) {
+      const leafId = window.paperussLeaves.getNoteActiveLeafId(n);
+      const leaf = await window.paperussLeaves.leafGet(leafId);
+      if (leaf) {
+        leaf.smartDateLinks = leaf.smartDateLinks || [];
+        leaf.smartDateLinks.push(linkObj);
+        await window.paperussLeaves.leafPut(leaf);
+      }
+    } else {
+      n.smartDateLinks = n.smartDateLinks || [];
+      n.smartDateLinks.push(linkObj);
+      if (typeof window.save === 'function') window.save();
+    }
+  };
+
+  window.removeSmartDateLink = async function(eventId) {
+    const activeNoteId = window.HistoryManager ? window.HistoryManager.activeNoteId : null;
+    if (!activeNoteId || !window.getNote) return;
+    const n = window.getNote(activeNoteId);
+    if (!n) return;
+    if (window.paperussLeaves) {
+      const leafId = window.paperussLeaves.getNoteActiveLeafId(n);
+      const leaf = await window.paperussLeaves.leafGet(leafId);
+      if (leaf && leaf.smartDateLinks) {
+        leaf.smartDateLinks = leaf.smartDateLinks.filter(l => l.eventId !== eventId);
+        await window.paperussLeaves.leafPut(leaf);
+      }
+    } else {
+      if (n.smartDateLinks) {
+        n.smartDateLinks = n.smartDateLinks.filter(l => l.eventId !== eventId);
+        if (typeof window.save === 'function') window.save();
+      }
+    }
+  };
+
+  function escHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, function(m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+    });
+  }
+
+  window.scanSmartDatesInBlock = function(block, contextDate, links) {
     if (!block || !block.textContent) return;
     
-    if (block.closest('.smart-date-suggestion, .productivity-ref, [data-embed], pre, code, [contenteditable="false"]')) return;
+    // Dehydrate any existing schedule lines in this block so we rescan clean
+    const oldSchedules = block.querySelectorAll('.smart-date-linked-schedule');
+    oldSchedules.forEach(el => {
+      if (el.dataset.sdHiddenLi === 'true') {
+        el.remove();
+      } else {
+        const html = el.dataset.sdOriginalHtml;
+        const tag = el.dataset.sdOriginalTag || 'P';
+        if (html) {
+          const restored = document.createElement(tag);
+          restored.innerHTML = html;
+          el.replaceWith(restored);
+          block = restored; // update reference
+        }
+      }
+    });
+    
+    const hiddenLis = document.querySelectorAll('.smart-date-hidden-li');
+    hiddenLis.forEach(li => {
+      li.classList.remove('smart-date-hidden-li');
+      li.style.display = '';
+    });
+
+    if (block.closest('.smart-date-suggestion, .smart-date-linked-schedule, .productivity-ref, [data-embed], pre, code, [contenteditable="false"]')) return;
     
     const oldSpans = block.querySelectorAll('.smart-date-suggestion');
     oldSpans.forEach(span => {
@@ -304,13 +387,83 @@
     });
     
     block.normalize();
-    
     const text = block.textContent;
     const matches = window.parseSmartDatePhrase(text, contextDate);
+    
+    let matchedLink = null;
+    if (links && links.length > 0) {
+      for (let l of links) {
+        if (l.originalBlockText === text) {
+          matchedLink = l;
+          break;
+        }
+      }
+    }
+
+    if (matchedLink) {
+      const eventId = matchedLink.eventId;
+      const evObj = (window.notes || []).find(x => x.id === eventId);
+      
+      const isUnavailable = !evObj || evObj.deleted || evObj.archived || !evObj.tags.includes('calendar');
+      
+      const newEl = document.createElement('div');
+      newEl.className = 'smart-date-linked-schedule';
+      newEl.setAttribute('data-smart-date-state', isUnavailable ? 'unavailable' : 'linked');
+      newEl.setAttribute('contenteditable', 'false');
+      newEl.setAttribute('tabindex', '0');
+      newEl.dataset.sdOriginalHtml = matchedLink.originalBlockHTML || block.innerHTML;
+      newEl.dataset.sdOriginalTag = matchedLink.originalBlockTag || block.tagName;
+      newEl.dataset.eventId = eventId;
+      
+      if (isUnavailable) {
+        newEl.innerHTML = `<span class="smart-date-linked-main smart-date-unavailable">
+            <span aria-hidden="true">⚠️</span>
+            <span class="smart-date-linked-title">Event unavailable</span>
+            <span class="smart-date-linked-separator">·</span>
+            <span class="smart-date-linked-date">${escHtml(matchedLink.originalBlockText)}</span>
+          </span>
+          <span class="smart-date-linked-actions">
+            <button class="smart-date-action-btn" onclick="window.handleSmartDateAction(event, 'remove', '${eventId}')">Remove Link</button>
+          </span>`;
+      } else {
+        const start = new Date(evObj.calendarStart);
+        const end = new Date(evObj.calendarEnd);
+        const dateStr = start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+        const timeStrStart = start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }).replace(' AM','').replace(' PM','');
+        const timeStrEnd = end.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+        
+        newEl.innerHTML = `<span class="smart-date-linked-main">
+            <span aria-hidden="true">📅</span>
+            <span class="smart-date-linked-title">${escHtml(evObj.title)}</span>
+            <span class="smart-date-linked-separator">·</span>
+            <span class="smart-date-linked-date">${escHtml(dateStr)}</span>
+            <span class="smart-date-linked-separator">·</span>
+            <span class="smart-date-linked-time">${escHtml(timeStrStart)}–${escHtml(timeStrEnd)}</span>
+          </span>
+          <span class="smart-date-linked-actions">
+            <button class="smart-date-action-btn" onclick="window.handleSmartDateAction(event, 'open', '${eventId}')">Open</button>
+            <button class="smart-date-action-btn" onclick="window.handleSmartDateAction(event, 'edit', '${eventId}')">Edit</button>
+            <button class="smart-date-action-btn danger" onclick="window.handleSmartDateAction(event, 'unlink', '${eventId}')">Unlink</button>
+            <button class="smart-date-action-btn danger" onclick="window.handleSmartDateAction(event, 'delete', '${eventId}')">Delete Event</button>
+          </span>`;
+      }
+      
+      if (block.tagName === 'LI') {
+        const list = block.closest('ul, ol');
+        if (list && list.parentNode) {
+          list.parentNode.insertBefore(newEl, list.nextSibling);
+          block.style.display = 'none';
+          block.classList.add('smart-date-hidden-li');
+          newEl.dataset.sdHiddenLi = 'true';
+        }
+      } else {
+        block.replaceWith(newEl);
+      }
+      return;
+    }
+
     if (!matches.length) return;
-    
     const caret = getCaretOffsets(block);
-    
     let textNodes = [];
     let currentIndex = 0;
     
@@ -382,26 +535,17 @@
     });
     
     if (caret) {
-      try {
-        setCaretOffsets(block, caret.start, caret.end);
-      } catch (e) {
-        console.warn('Smart dates caret restore failed', e);
-      }
+      try { setCaretOffsets(block, caret.start, caret.end); } catch (e) {}
     }
   };
-
-  // =========================================================================
-  // LIFECYCLE
-  // =========================================================================
 
   let scanTimer = null;
   let isComposing = false;
   let scheduledBlock = null;
-
   let scheduledRoot = null;
   let scheduledContextDate = null;
 
-  function safeScan() {
+  async function safeScan() {
     if (isComposing) return;
     if (!scheduledBlock || !scheduledRoot) return;
     if (!document.contains(scheduledRoot)) return;
@@ -411,7 +555,8 @@
     const activeEditor = document.getElementById('noteBody');
     if (activeEditor && scheduledRoot !== activeEditor) return;
     
-    window.scanSmartDatesInBlock(scheduledBlock, scheduledContextDate || new Date());
+    const links = await window.getSmartDateLinksForActiveLeaf();
+    window.scanSmartDatesInBlock(scheduledBlock, scheduledContextDate || new Date(), links);
   }
 
   window.scheduleSmartDateScan = function(root, editedBlock, contextDate) {
@@ -420,7 +565,6 @@
     scheduledRoot = root;
     scheduledContextDate = contextDate || new Date();
     if (isComposing) return;
-    
     clearTimeout(scanTimer);
     scanTimer = setTimeout(safeScan, 500);
   };
@@ -437,36 +581,51 @@
   window.hydrateSmartDateSuggestions = function(root, contextDate) {
     if (!root) return;
     const cd = contextDate || new Date();
-    
-    const executeHydration = () => {
+    const executeHydration = async () => {
       if (!root.isConnected) return;
       const activeEditor = document.getElementById('noteBody');
       if (activeEditor && root !== activeEditor) return;
       
+      const links = await window.getSmartDateLinksForActiveLeaf();
       const blocks = root.querySelectorAll('p, div, li, h1, h2, h3, h4, h5, h6, blockquote');
       blocks.forEach(block => {
         if (!block.isConnected) return;
         if (!root.contains(block)) return;
-        window.scanSmartDatesInBlock(block, cd);
+        window.scanSmartDatesInBlock(block, cd, links);
       });
     };
-
-    if (window.requestIdleCallback) {
-      window.requestIdleCallback(executeHydration);
-    } else {
-      setTimeout(executeHydration, 500);
-    }
+    if (window.requestIdleCallback) window.requestIdleCallback(executeHydration);
+    else setTimeout(executeHydration, 500);
   };
 
   window.dehydrateSmartDateSuggestions = function(root) {
     if (!root) return;
+    
+    const schedules = root.querySelectorAll('.smart-date-linked-schedule');
+    schedules.forEach(el => {
+      if (el.dataset.sdHiddenLi === 'true') {
+        el.remove();
+        const hiddenLis = root.querySelectorAll('.smart-date-hidden-li');
+        hiddenLis.forEach(li => {
+          li.classList.remove('smart-date-hidden-li');
+          li.style.display = '';
+        });
+      } else {
+        const html = el.dataset.sdOriginalHtml;
+        const tag = el.dataset.sdOriginalTag || 'P';
+        if (html) {
+          const restored = document.createElement(tag);
+          restored.innerHTML = html;
+          el.replaceWith(restored);
+        }
+      }
+    });
+
     const spans = root.querySelectorAll('.smart-date-suggestion');
     spans.forEach(span => {
       const parent = span.parentNode;
       if (!parent) return;
-      while (span.firstChild) {
-        parent.insertBefore(span.firstChild, span);
-      }
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
       span.remove();
       parent.normalize();
     });
@@ -477,18 +636,9 @@
   function unwrapSpan(span) {
     const parent = span.parentNode;
     if (!parent) return;
-    while (span.firstChild) {
-      parent.insertBefore(span.firstChild, span);
-    }
+    while (span.firstChild) parent.insertBefore(span.firstChild, span);
     span.remove();
     parent.normalize();
-  }
-
-  function escHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/[&<>"']/g, function(m) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
-    });
   }
 
   function openSmartDateModal(span) {
@@ -502,9 +652,12 @@
     const rawText = span.textContent;
 
     const block = span.closest('p, div, li, h1, h2, h3, h4, h5, h6, blockquote') || span.parentNode;
-    let extractedTitle = block.textContent.replace(rawText, '').trim();
-    // Trim leading/trailing punctuation and whitespace
-    extractedTitle = extractedTitle.replace(/^[^\w\d]+|[^\w\d]+$/g, '').trim();
+    const originalBlockHTML = block.innerHTML;
+    const originalBlockTag = block.tagName;
+    const originalBlockText = block.textContent;
+    
+    let extractedTitle = originalBlockText.replace(rawText, '').trim();
+    extractedTitle = extractedTitle.replace(/^[^wd]+|[^wd]+$/g, '').trim();
     if (!extractedTitle) extractedTitle = 'Event';
 
     const dateStr = startDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
@@ -551,7 +704,7 @@
       };
 
       document.getElementById('sdConfirmBtn').onclick = () => {
-        if (!hasDate && !hasTime) return; // invalid
+        if (!hasDate && !hasTime) return;
         renderForm();
       };
     };
@@ -693,8 +846,25 @@
           window.notes.unshift(n);
         }
         
-        Promise.resolve().then(() => {
-          if (typeof window.save === 'function') window.save();
+        Promise.resolve().then(async () => {
+          const linkObj = {
+            id: typeof window.uid === 'function' ? window.uid() : Date.now().toString(),
+            eventId: newId,
+            rawText: rawText,
+            originalBlockText: originalBlockText,
+            originalBlockHTML: originalBlockHTML,
+            originalBlockTag: originalBlockTag,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          };
+          
+          await window.saveSmartDateLink(linkObj);
+
+          unwrapSpan(span);
+          
+          const links = await window.getSmartDateLinksForActiveLeaf();
+          window.scanSmartDatesInBlock(block, new Date(), links);
+
         }).then(() => {
           if (notifyVal && typeof window.scheduleEventNotification === 'function') window.scheduleEventNotification(n);
           if (typeof window.addNotification === 'function') {
@@ -715,23 +885,71 @@
         });
       };
     };
-
     renderConfirmation();
   }
 
-  // Single delegated root listener logic
+  window.handleSmartDateAction = async function(e, action, eventId) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (action === 'open' || action === 'edit') {
+      if (typeof window.openCalendarEventEditor === 'function') window.openCalendarEventEditor(eventId);
+    } else if (action === 'unlink' || action === 'remove') {
+      await window.removeSmartDateLink(eventId);
+      const schedule = e.target.closest('.smart-date-linked-schedule');
+      if (schedule) {
+         if (schedule.dataset.sdHiddenLi === 'true') {
+           schedule.remove();
+           const hiddenLis = document.querySelectorAll('.smart-date-hidden-li');
+           hiddenLis.forEach(li => {
+             li.classList.remove('smart-date-hidden-li');
+             li.style.display = '';
+             window.scanSmartDatesInBlock(li, new Date(), []);
+           });
+         } else {
+           const html = schedule.dataset.sdOriginalHtml;
+           const tag = schedule.dataset.sdOriginalTag || 'P';
+           const restored = document.createElement(tag);
+           restored.innerHTML = html;
+           schedule.replaceWith(restored);
+           window.scanSmartDatesInBlock(restored, new Date(), []);
+         }
+      }
+      if (typeof toast === 'function') toast('Link removed.');
+    } else if (action === 'delete') {
+      if (typeof window.deleteCalendarSource === 'function') {
+        window.deleteCalendarSource(eventId);
+        if (typeof toast === 'function') toast('Event deleted.');
+        const schedule = e.target.closest('.smart-date-linked-schedule');
+        if (schedule) {
+          const parent = schedule.parentNode;
+          window.dehydrateSmartDateSuggestions(parent);
+          const links = await window.getSmartDateLinksForActiveLeaf();
+          const blocks = parent.querySelectorAll('p, div, li, h1, h2, h3, h4, h5, h6, blockquote');
+          blocks.forEach(b => window.scanSmartDatesInBlock(b, new Date(), links));
+        }
+      }
+    }
+  };
+
   let listenerAttached = false;
-  
   function attachDelegatedListeners() {
     if (listenerAttached) return;
     listenerAttached = true;
     
     const clickHandler = (e) => {
       const span = e.target.closest('.smart-date-suggestion');
-      if (!span) return;
-      e.preventDefault();
-      e.stopPropagation();
-      openSmartDateModal(span);
+      if (span) {
+        e.preventDefault();
+        e.stopPropagation();
+        openSmartDateModal(span);
+        return;
+      }
+      const schedule = e.target.closest('.smart-date-linked-schedule');
+      if (schedule && !e.target.closest('.smart-date-action-btn')) {
+        document.querySelectorAll('.smart-date-linked-schedule').forEach(el => el.classList.remove('active-tap'));
+        schedule.classList.add('active-tap');
+      }
     };
     
     const keyHandler = (e) => {
@@ -747,11 +965,9 @@
     document.body.addEventListener('keydown', keyHandler, true);
   }
 
-  // Hook into generic leaf loading if we need to, but it's safer to just attach once on script load
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', attachDelegatedListeners);
   } else {
     attachDelegatedListeners();
   }
-
 })();

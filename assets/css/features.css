@@ -2774,3 +2774,98 @@ blockquote.note-callout.callout-info {
   outline: 2px solid var(--accent, #3b82f6);
   outline-offset: 2px;
 }
+
+/* ============ SMART DATES CHECKPOINT C ============ */
+.smart-date-linked-schedule {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 4px 0;
+  font-size: 14px;
+  color: var(--fg);
+  user-select: none;
+  cursor: default;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.smart-date-linked-schedule:hover,
+.smart-date-linked-schedule.active-tap {
+  background: var(--bg);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.smart-date-linked-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  flex: 1;
+}
+
+.smart-date-linked-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.smart-date-linked-separator {
+  color: var(--fg-muted);
+  font-weight: 400;
+  flex-shrink: 0;
+}
+
+.smart-date-linked-date,
+.smart-date-linked-time {
+  color: var(--fg-secondary);
+  flex-shrink: 0;
+}
+
+.smart-date-linked-actions {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+  flex-shrink: 0;
+}
+
+.smart-date-linked-schedule:hover .smart-date-linked-actions,
+.smart-date-linked-schedule:focus-within .smart-date-linked-actions,
+.smart-date-linked-schedule.active-tap .smart-date-linked-actions {
+  display: flex;
+}
+
+.smart-date-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.smart-date-action-btn:hover {
+  background: var(--accent-transparent, rgba(59, 130, 246, 0.1));
+}
+
+.smart-date-action-btn.danger {
+  color: var(--danger);
+}
+.smart-date-action-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.smart-date-unavailable {
+  color: var(--danger) !important;
+}
+
