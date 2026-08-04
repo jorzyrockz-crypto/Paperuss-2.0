@@ -16,7 +16,9 @@ function saveTasks(){
   if(typeof queueCloudSync==='function') queueCloudSync();
 }
 
-async function openTaskCreatorModal(){
+async function openTaskCreatorModal(options){
+  options = options || {};
+  const intent = options.intent || 'manage';
   const root=document.getElementById('modalRoot');
   let activeTab = 'select'; // 'select' or 'create'
   let selectedTaskIds = new Set();
@@ -85,7 +87,7 @@ async function openTaskCreatorModal(){
         </div>
         <div class="modal-actions">
           <button class="btn" id="tmCancel">Cancel</button>
-          <button class="btn btn-primary" id="tmCreate">Create Tasks</button>
+          <button class="btn btn-primary" id="tmCreate">${intent === 'insert' ? 'Create & Insert' : 'Create List'}</button>
         </div>
       `}
     </div></div>`;
@@ -219,11 +221,20 @@ async function openTaskCreatorModal(){
           }
           
           addNotification({type:'task',title:`${lines.length} tasks created`,body:lines.slice(0,3).join(', ')+(lines.length>3?'…':''),icon:'check-square',activity:true});
-          selectedTaskIds.clear();
-          validIds.forEach(id => selectedTaskIds.add(String(id)));
-          activeTab = 'select';
+          if (intent === 'insert') {
+            const selectedItems = loadedTasks.filter(t => validIds.includes(String(t.id)));
+            const checklistHtml = selectedItems.map(t => `<li data-task="1"><input type="checkbox" ${t.completed?'checked':''}> ${esc(t.text)}</li>`).join('');
+            
+            const ed = document.getElementById('noteBody');
+            if(ed) {
+              ed.focus();
+              document.execCommand('insertHTML', false, `<ul>${checklistHtml}</ul><p><br></p>`);
+              if(typeof handleBodyInput === 'function') handleBodyInput();
+            }
+            toast(`Inserted ${selectedItems.length} task(s) into note`);
+          }
           isCreatingTasks = false;
-          renderModalContent();
+          close();
         };
       }
       setTimeout(()=>document.getElementById('tmTasks')?.focus(), 50);

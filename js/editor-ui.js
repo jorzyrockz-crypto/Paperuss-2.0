@@ -630,7 +630,7 @@ function initSlashMenuActions(){
       openCalendarEventCreator(today.getFullYear(), today.getMonth(), today.getDate(), { intent: 'insert' });
     }
     else if(cmd==='newtask'){
-      openTaskCreatorModal();
+      openTaskCreatorModal({ intent: 'insert' });
     }
   };
 
@@ -746,7 +746,7 @@ function initImageContextMenu(){
   };
   document.getElementById('icmInsertTask').onclick=()=>{
     menu.classList.remove('show');
-    openTaskCreatorModal();
+    openTaskCreatorModal({ intent: 'insert' });
   };
   document.getElementById('icmDelete').onclick=()=>{
     menu.classList.remove('show');
