@@ -416,17 +416,8 @@ async function openCalendarEventCreator(year, month, day, options){
           const evObj = loadedEvents.find(e => e.note.id === selectedEventNoteId);
           if(!evObj) { toast('Selected event no longer exists in canonical store'); return; }
 
-          const title = titleOf(evObj.note);
-          const startFmt = new Date(evObj.start).toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-          const eventHtml = `<div class="callout callout-info" style="margin:12px 0"><span class="callout-badge">📅 Event</span> <strong>${esc(title)}</strong> &nbsp;·&nbsp; <span style="font-size:12px;opacity:0.8">${startFmt}</span></div><p><br></p>`;
-          
-          const ed = document.getElementById('noteBody');
-          if(ed) {
-            ed.focus();
-            document.execCommand('insertHTML', false, eventHtml);
-            if(typeof handleBodyInput === 'function') handleBodyInput();
-          }
-          toast(`Inserted event "${title}" into note`);
+          window.insertProductivityReference('calendar', selectedEventNoteId);
+          toast(`Inserted event "${titleOf(evObj.note)}" into note`);
           close();
         };
       }
@@ -487,13 +478,7 @@ async function openCalendarEventCreator(year, month, day, options){
         renderCalendarView(); renderAll();
         
         if(intent === 'insert') {
-          const eventHtml = `<div class="callout callout-info" style="margin:12px 0"><span class="callout-badge">📅 Event</span> <strong>${esc(title)}</strong> &nbsp;·&nbsp; <span style="font-size:12px;opacity:0.8">${startFmt}</span></div><p><br></p>`;
-          const ed = document.getElementById('noteBody');
-          if(ed) {
-            ed.focus();
-            document.execCommand('insertHTML', false, eventHtml);
-            if(typeof handleBodyInput === 'function') handleBodyInput();
-          }
+          window.insertProductivityReference('calendar', newId);
           toast(`Inserted event "${title}" into note`);
         }
         
@@ -810,3 +795,144 @@ function toggleTaskHubItem(noteId, idx, checked){
     toast(checked?'Task completed':'Task marked pending');
   }
 }
+
+window.resolveProductivitySource = function(type, sourceId) {
+  if (type === 'calendar') {
+    const canonicalNotes = typeof window.getCanonicalNotes === 'function' ? window.getCanonicalNotes() : (typeof notes !== 'undefined' ? notes : []);
+    return canonicalNotes.find(n => String(n.id) === String(sourceId));
+  } else if (type === 'todo-list') {
+    const canonicalTasks = typeof window.getCanonicalStandaloneTasks === 'function' ? window.getCanonicalStandaloneTasks() : (typeof standaloneTasks !== 'undefined' ? standaloneTasks : []);
+    return canonicalTasks.filter(t => String(t.groupId) === String(sourceId) && !t.deleted && !t.deletedAt);
+  }
+  return null;
+};
+
+window.buildProductivityStaticSnapshot = function(type, source) {
+  const escStr = (s) => (s||'').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  if (!source || (Array.isArray(source) && source.length === 0)) {
+    return `<div class="productivity-ref-missing">
+      <div class="ref-missing-title">⚠️ ${type==='calendar'?'Calendar event':'Todo list'} unavailable</div>
+      <div class="ref-missing-desc">The original item may have been deleted.</div>
+    </div>`;
+  }
+  
+  if (type === 'calendar') {
+    const title = source.title || 'Untitled Event';
+    const startFmt = new Date(source.calendarStart).toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    return `📅 Event: ${escStr(title)} (${escStr(startFmt)})`;
+  } else if (type === 'todo-list') {
+    const title = source[0].groupTitle || 'Todo List';
+    return `✅ Todo List: ${escStr(title)} (${source.length} tasks)`;
+  }
+  return '';
+};
+
+window.dehydrateProductivityReference = function(ref) {
+  if (!ref) return;
+  ref.removeAttribute('data-hydrated');
+  const transientUI = ref.querySelectorAll('[data-paperuss-ui="true"]');
+  transientUI.forEach(el => el.remove());
+  const staticCard = ref.querySelector('.productivity-ref-static');
+  if (staticCard) {
+    staticCard.style.display = '';
+  }
+};
+
+window.dehydrateProductivityReferences = function(rootElement) {
+  if (!rootElement) return;
+  if (rootElement.matches && rootElement.matches('.productivity-ref')) {
+    window.dehydrateProductivityReference(rootElement);
+  }
+  const refs = rootElement.querySelectorAll('.productivity-ref');
+  refs.forEach(ref => window.dehydrateProductivityReference(ref));
+};
+
+window.hydrateProductivityReferences = function(rootElement) {
+  if (!rootElement) return;
+  const refs = [];
+  if (rootElement.matches && rootElement.matches('.productivity-ref')) refs.push(rootElement);
+  rootElement.querySelectorAll('.productivity-ref').forEach(r => refs.push(r));
+  
+  refs.forEach(ref => {
+    window.dehydrateProductivityReference(ref); // Make hydration idempotent
+    ref.setAttribute('data-hydrated', 'true');
+    const type = ref.getAttribute('data-paperuss-productivity');
+    const sourceId = ref.getAttribute('data-source-id');
+    const source = window.resolveProductivitySource(type, sourceId);
+    
+    let staticCard = ref.querySelector('.productivity-ref-static');
+    if (!staticCard) {
+      staticCard = document.createElement('div');
+      staticCard.className = 'productivity-ref-static';
+      ref.appendChild(staticCard);
+    }
+    staticCard.innerHTML = window.buildProductivityStaticSnapshot(type, source);
+    staticCard.style.display = 'none';
+
+    const hydrateContainer = document.createElement('div');
+    hydrateContainer.setAttribute('data-paperuss-ui', 'true');
+    hydrateContainer.className = 'productivity-ref-hydrated';
+    
+    if (!source || (Array.isArray(source) && source.length === 0)) {
+      hydrateContainer.innerHTML = window.buildProductivityStaticSnapshot(type, source);
+      ref.appendChild(hydrateContainer);
+      return;
+    }
+
+    const escStr = (s) => (s||'').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    if (type === 'calendar') {
+      const title = source.title || 'Untitled Event';
+      const startFmt = new Date(source.calendarStart).toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+      hydrateContainer.innerHTML = `
+        <div class="ref-cal-header">📅 ${escStr(title)}</div>
+        <div class="ref-cal-meta">${escStr(startFmt)}</div>
+      `;
+    } else if (type === 'todo-list') {
+      const completed = source.filter(t => t.completed).length;
+      const total = source.length;
+      const title = source[0].groupTitle || 'Todo List';
+      hydrateContainer.innerHTML = `
+        <div class="ref-todo-header">✅ ${escStr(title)}</div>
+        <div class="ref-todo-meta">${completed} of ${total} completed</div>
+        <div class="ref-todo-preview">
+          ${source.slice(0, 3).map(t => `<div>${t.completed?'☑':'☐'} ${escStr(t.text)}</div>`).join('')}
+          ${total > 3 ? `<div style="color:var(--fg-muted)">+ ${total-3} more</div>` : ''}
+        </div>
+      `;
+    }
+    ref.appendChild(hydrateContainer);
+  });
+};
+
+window.insertProductivityReference = function(type, sourceId) {
+  if (type !== 'calendar' && type !== 'todo-list') {
+    if(typeof toast === 'function') toast('Invalid reference type');
+    return;
+  }
+  
+  const normSourceId = String(sourceId);
+  const safeId = typeof sanitizeId === 'function' ? sanitizeId(normSourceId) : normSourceId.replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!safeId) {
+    if(typeof toast === 'function') toast('Invalid source ID');
+    return;
+  }
+
+  const source = window.resolveProductivitySource(type, safeId);
+  if (!source || (Array.isArray(source) && source.length === 0)) {
+    if(typeof toast === 'function') toast('Source not found in canonical store');
+    return;
+  }
+  
+  const staticHtml = window.buildProductivityStaticSnapshot(type, source);
+  const html = `<div class="productivity-ref productivity-ref-${type}" data-paperuss-productivity="${type}" data-source-id="${safeId}" data-ref-version="1" contenteditable="false"><div class="productivity-ref-static">${staticHtml}</div></div><p><br></p>`;
+  
+  const ed = document.getElementById('noteBody');
+  if(ed) {
+    ed.focus();
+    document.execCommand('insertHTML', false, html);
+    if(typeof handleBodyInput === 'function') handleBodyInput();
+    window.hydrateProductivityReferences(ed);
+  }
+};
+

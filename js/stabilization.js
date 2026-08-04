@@ -105,6 +105,10 @@
         el.removeAttribute(attr.name); return;
       }
       const isData=name.startsWith('data-') && /^data-[a-z0-9_.:-]+$/i.test(name);
+      if(name === 'data-hydrated') { el.removeAttribute(attr.name); return; }
+      if(isData && name.startsWith('data-paperuss-') && name !== 'data-paperuss-productivity' && name !== 'data-paperuss-embed' && name !== 'data-paperuss-ui' && name !== 'data-paperuss-content-root') {
+        el.removeAttribute(attr.name); return;
+      }
       const isAria=name.startsWith('aria-') && /^aria-[a-z0-9_.:-]+$/i.test(name);
       if(!COMMON_ATTRS.has(name) && !tagAllowed.has(name) && !isData && !isAria){
         el.removeAttribute(attr.name); return;
@@ -272,6 +276,9 @@
     clone.querySelectorAll(UI_SELECTOR).forEach(el => el.remove());
     if (typeof window.dehydrateEmbeds === 'function') {
       window.dehydrateEmbeds(clone);
+    }
+    if (typeof window.dehydrateProductivityReferences === 'function') {
+      window.dehydrateProductivityReferences(clone);
     }
 
     const FORBIDDEN_IDS = ['noteBody', 'editorContent', 'editorScroll', 'formatBar', 'noteTitle', 'editorEmpty', 'findPanel'];

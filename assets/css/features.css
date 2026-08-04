@@ -2543,3 +2543,52 @@ blockquote.note-callout.callout-info {
 }
 
 
+
+/* Productivity Linked Compartments */
+.productivity-ref {
+  display: block;
+  margin: 1rem 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+  user-select: none;
+}
+.productivity-ref-static {
+  padding: 1rem;
+  color: var(--fg-muted);
+  font-style: italic;
+}
+.productivity-ref-hydrated {
+  padding: 1rem;
+  background: var(--subtle);
+}
+.ref-cal-header, .ref-todo-header {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--fg);
+  margin-bottom: 4px;
+}
+.ref-cal-meta, .ref-todo-meta {
+  font-size: 12px;
+  color: var(--fg-secondary);
+  margin-bottom: 8px;
+}
+.ref-todo-preview {
+  font-size: 13px;
+  color: var(--fg);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ref-missing-title {
+  color: var(--danger);
+  font-weight: 600;
+  font-size: 14px;
+}
+.ref-missing-desc {
+  color: var(--fg-muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
