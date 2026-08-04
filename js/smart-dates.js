@@ -449,16 +449,28 @@
 
   window.hydrateSmartDateSuggestions = function(root) {
     if (!root) return;
-    if (window.requestIdleCallback) {
-      window.requestIdleCallback(() => {
-        const blocks = root.querySelectorAll('p, div, li, h1, h2, h3, h4, h5, h6, blockquote');
-        blocks.forEach(b => window.scanSmartDatesInBlock(b));
+    
+    // Defer the execution to ensure DOM is stable and embed/productivity hydration has finished
+    const executeHydration = () => {
+      // 4. STALE-ROOT SAFETY
+      if (!root.isConnected) return;
+      
+      const activeEditor = document.getElementById('noteBody');
+      if (activeEditor && root !== activeEditor) return;
+      
+      const blocks = root.querySelectorAll('p, div, li, h1, h2, h3, h4, h5, h6, blockquote');
+      blocks.forEach(block => {
+        if (!block.isConnected) return;
+        if (!root.contains(block)) return;
+        
+        window.scanSmartDatesInBlock(block);
       });
+    };
+
+    if (window.requestIdleCallback) {
+      window.requestIdleCallback(executeHydration);
     } else {
-      setTimeout(() => {
-        const blocks = root.querySelectorAll('p, div, li, h1, h2, h3, h4, h5, h6, blockquote');
-        blocks.forEach(b => window.scanSmartDatesInBlock(b));
-      }, 500);
+      setTimeout(executeHydration, 500);
     }
   };
 
