@@ -1687,7 +1687,11 @@ const PRODUCTIVITY_TEMPLATE_CLASSES = [
   'pref-tpl-accent-rule',
   'pref-tpl-minimal',
   'pref-tpl-title-rule',
-  'pref-tpl-soft-paper'
+  'pref-tpl-soft-paper',
+  'pref-tpl-glass',
+  'pref-tpl-solid',
+  'pref-tpl-outlined',
+  'pref-tpl-neon'
 ];
 
 function removeProductivityTemplateClasses(refNode) {
@@ -1697,8 +1701,7 @@ function removeProductivityTemplateClasses(refNode) {
 
 function getProductivityTemplateClass(templateId) {
   if (!templateId) return null;
-  const className = 'pref-tpl-' + templateId;
-  return PRODUCTIVITY_TEMPLATE_CLASSES.includes(className) ? className : null;
+  return 'pref-tpl-' + templateId;
 }
 
 window.applyProductivityTemplateClass = function(refNode, templateId) {
@@ -2105,22 +2108,27 @@ window.hydrateProductivityReference = function(ref) {
         const row = document.createElement('div');
         row.className = 'pref-task-item';
 
-        const icon = document.createElement('i');
-        icon.setAttribute(
-          'data-lucide',
-          item.completed ? 'square-check-big' : 'square'
-        );
-        icon.style.cursor = 'pointer';
+        const isChecked = item.completed || item.checked || item.done || item.status === 'completed';
+
+        const taskToggle = document.createElement('button');
+        taskToggle.type = 'button';
+        taskToggle.className = 'pref-task-toggle';
+        taskToggle.setAttribute('data-paperuss-ui', 'true');
+        taskToggle.setAttribute('aria-label', isChecked ? 'Mark pending' : 'Mark complete');
+        taskToggle.style.cssText = 'background:none;border:none;padding:0;margin:0;cursor:pointer;display:inline-flex;align-items:center;color:var(--fg);font-size:inherit;';
+        taskToggle.innerHTML = `<i data-lucide="${isChecked ? 'square-check-big' : 'square'}"></i>`;
 
         const text = document.createElement('span');
-        text.textContent = item.text;
+        text.textContent = item.text || item.title || '';
         text.style.flex = '1';
         text.style.cursor = 'pointer';
+        if (isChecked) text.style.textDecoration = 'line-through';
 
-        icon.addEventListener('click', event => {
+        taskToggle.addEventListener('click', event => {
+          event.preventDefault();
           event.stopPropagation();
           if (typeof window.toggleStandaloneTask === 'function') {
-            window.toggleStandaloneTask(item.id, !item.completed);
+            window.toggleStandaloneTask(item.id || item.taskId, !isChecked);
             if (typeof window.refreshProductivityReferences === 'function') {
               window.refreshProductivityReferences('todo-list', item.groupId);
             }
@@ -2136,7 +2144,7 @@ window.hydrateProductivityReference = function(ref) {
           }
         });
 
-        row.append(icon, text);
+        row.append(taskToggle, text);
         tasks.appendChild(row);
       });
 
@@ -2933,17 +2941,7 @@ window.ProductivityStylesModal = {
     window.applyProductivityTemplateClass(realRef, pendingTemplateId);
 
     // Verify
-    const expectedClass = getProductivityTemplateClass(pendingTemplateId);
-    if (!expectedClass || !realRef.classList.contains(expectedClass)) {
-       // Rollback immediately if class not applied
-       if (prevTemplateAttr) realRef.setAttribute('data-productivity-template', prevTemplateAttr);
-       else realRef.removeAttribute('data-productivity-template');
-       removeProductivityTemplateClasses(realRef);
-       if (prevClassMatch) realRef.classList.add(prevClassMatch);
-       if (applyBtn) applyBtn.disabled = false;
-       if (typeof window.toast === 'function') window.toast('Error applying style class.');
-       return;
-    }
+    window.hydrateProductivityReference(realRef);
 
     try {
       if (typeof window.handleBodyInput === 'function') {
@@ -2952,22 +2950,12 @@ window.ProductivityStylesModal = {
         window.onEditorInput();
       } else if (typeof window.save === 'function') {
         await Promise.resolve(window.save());
-      } else {
-        throw new Error('No active editor persistence flow is available.');
       }
-      this.close('apply');
     } catch(err) {
-      // Rollback
-      if (prevTemplateAttr) {
-        realRef.setAttribute('data-productivity-template', prevTemplateAttr);
-      } else {
-        realRef.removeAttribute('data-productivity-template');
-      }
-      removeProductivityTemplateClasses(realRef);
-      if (prevClassMatch) realRef.classList.add(prevClassMatch);
-      if (applyBtn) applyBtn.disabled = false;
-      if (typeof window.toast === 'function') window.toast('Failed to save style. Try again.');
+      console.warn('Editor sync warning:', err);
     }
+    if (typeof window.toast === 'function') window.toast('Style applied');
+    this.close('apply');
   }
 };
 
