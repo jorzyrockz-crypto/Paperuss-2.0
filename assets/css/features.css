@@ -2986,3 +2986,15 @@ blockquote.note-callout.callout-info {
   padding-bottom: 0;
   margin-bottom: 0;
 }
+
+/* DELETION SELECTION STATE */
+.productivity-ref.pref-delete-selected {
+  outline: 2px solid var(--pref-accent);
+  outline-offset: 3px;
+  background-color: var(--accent-soft, transparent);
+}
+@supports (background-color: color-mix(in srgb, red 8%, transparent)) {
+  .productivity-ref.pref-delete-selected {
+    background-color: color-mix(in srgb, var(--pref-accent) 8%, transparent);
+  }
+}

@@ -854,7 +854,9 @@ window.buildProductivityStaticSnapshot = function(type, source) {
 };
 
 window.dehydrateProductivityReference = function(ref) {
-  if (!ref) return;
+    if (!ref) return;
+    ref.classList.remove('pref-delete-selected');
+    ref.removeAttribute('aria-selected');
   ref.removeAttribute('data-hydrated');
   const transientUI = ref.querySelectorAll('[data-paperuss-ui="true"], .productivity-ref-hydrated, .pref-actions, .lucide, [data-lucide], button');
   transientUI.forEach(el => el.remove());
@@ -1206,7 +1208,12 @@ window.getDefaultProductivityTemplate = function(sourceType) {
 
 
 window.hydrateProductivityReferences = function(rootElement) {
-  if (!rootElement) return;
+    if (!rootElement) return;
+    if (window.ProductivitySafeDelete) {
+        const ed = rootElement.id === 'noteBody' ? rootElement : document.getElementById('noteBody');
+        if (ed) window.ProductivitySafeDelete.init(ed);
+        window.ProductivitySafeDelete.clear();
+    }
   const refs = [];
   if (rootElement.matches && rootElement.matches('.productivity-ref')) refs.push(rootElement);
   rootElement.querySelectorAll('.productivity-ref').forEach(r => refs.push(r));
@@ -2187,6 +2194,239 @@ window.ProductivityStylesModal = {
       if (prevClassMatch) realRef.classList.add(prevClassMatch);
       if (applyBtn) applyBtn.disabled = false;
       if (typeof window.toast === 'function') window.toast('Failed to save style. Try again.');
+    }
+  }
+};
+
+
+
+window.ProductivitySafeDelete = {
+  initialized: false,
+  selectedRef: null,
+  activeLeafId: null,
+  activeNoteId: null,
+
+  init(editor) {
+    if (this.initialized || !editor) return;
+    this.initialized = true;
+
+    // Use capture phase for keydown to intercept before existing Backspace handlers
+    editor.addEventListener('keydown', this.handleKeydown.bind(this), true);
+
+    // Delegated click listener
+    editor.addEventListener('click', this.handleEditorClick.bind(this));
+
+    // Global mousedown to clear selection if clicked outside editor/ref
+    document.addEventListener('mousedown', (e) => {
+      if (!editor.contains(e.target)) {
+        this.clear();
+      }
+    });
+  },
+
+  handleEditorClick(e) {
+    // Ignore clicks on interactive controls
+    if (e.target.closest('button, a, input, select, textarea, [role="button"]')) {
+      this.clear();
+      return;
+    }
+
+    // Check if clicked inside a productivity reference
+    const ref = e.target.closest('.productivity-ref');
+    if (ref) {
+      // Don't select if they clicked a Todo task that toggles things
+      // The task elements are .pref-task-item
+      if (e.target.closest('.pref-task-item')) {
+         this.clear();
+         return;
+      }
+      this.select(ref);
+    } else {
+      this.clear();
+    }
+  },
+
+  handleKeydown(e) {
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      const isBackspace = e.key === 'Backspace';
+
+      // If already selected, handle second press
+      if (this.selectedRef) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        this.removeSelected();
+        return;
+      }
+
+      // First press: check for adjacency
+      const adjacentRef = this.getAdjacentProductivityRef(isBackspace);
+      if (adjacentRef) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        this.select(adjacentRef);
+        return;
+      }
+    } else if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key !== 'Escape') {
+      // Clear on any other normal typing
+      this.clear();
+    }
+  },
+
+  getEditorTopLevelChild(node, editor) {
+    let curr = node;
+    while (curr && curr.parentNode && curr.parentNode !== editor) {
+      curr = curr.parentNode;
+    }
+    return curr === editor ? null : curr;
+  },
+
+  isCaretAtLogicalStart(range, block) {
+    if (!block) return false;
+    const preCaretRange = range.cloneRange();
+    preCaretRange.selectNodeContents(block);
+    preCaretRange.setEnd(range.startContainer, range.startOffset);
+    // Ignore zero-width or empty text
+    const textBefore = preCaretRange.toString().replace(/[\u200B\u200C\u200D\uFEFF]/g, '').trim();
+    if (textBefore.length > 0) return false;
+
+    // Additional check for nodes before caret
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+      acceptNode: function(node) {
+        if (node === range.startContainer) return NodeFilter.FILTER_REJECT; // we stop before start
+        if (node.nodeType === 3 && node.nodeValue.replace(/[\u200B\u200C\u200D\uFEFF\s]/g, '').length === 0) return NodeFilter.FILTER_SKIP;
+        if (node.nodeType === 1 && (node.tagName === 'BR' || node.classList.contains('productivity-ref'))) return NodeFilter.FILTER_ACCEPT;
+        if (node.nodeType === 1) return NodeFilter.FILTER_SKIP;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    // If there is meaningful content before the caret in this block, return false.
+    // For simplicity, relying on preCaretRange string length is usually enough for empty text,
+    // but if there is an image before it, preCaretRange text is empty.
+    return true;
+  },
+
+  isCaretAtLogicalEnd(range, block) {
+    if (!block) return false;
+    const postCaretRange = range.cloneRange();
+    postCaretRange.selectNodeContents(block);
+    postCaretRange.setStart(range.endContainer, range.endOffset);
+    const textAfter = postCaretRange.toString().replace(/[\u200B\u200C\u200D\uFEFF]/g, '').trim();
+    return textAfter.length === 0;
+  },
+
+  getAdjacentProductivityRef(isBackspace) {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return null;
+
+    const editor = document.getElementById('noteBody');
+    if (!editor || !editor.contains(sel.anchorNode)) return null;
+
+    const range = sel.getRangeAt(0);
+    const block = this.getEditorTopLevelChild(range.startContainer, editor);
+
+    if (isBackspace) {
+      if (!this.isCaretAtLogicalStart(range, block)) return null;
+      let prev = block ? block.previousElementSibling : null;
+      // Skip empty whitespace nodes or BR-only paragraphs if needed, but for strictness just check immediate sibling
+      if (prev && prev.classList.contains('productivity-ref')) return prev;
+    } else {
+      if (!this.isCaretAtLogicalEnd(range, block)) return null;
+      let next = block ? block.nextElementSibling : null;
+      if (next && next.classList.contains('productivity-ref')) return next;
+    }
+
+    return null;
+  },
+
+  select(refNode) {
+    if (!refNode || !refNode.isConnected) return;
+
+    this.clear();
+    this.selectedRef = refNode;
+    this.activeNoteId = window.paperussState ? window.paperussState.currentId : null;
+    this.activeLeafId = document.getElementById('noteBody') ? document.getElementById('noteBody').getAttribute('data-active-leaf-id') : null;
+
+    refNode.classList.add('pref-delete-selected');
+
+    if (window.ProductivityFloatingUI) {
+      window.ProductivityFloatingUI.showFor(refNode);
+    }
+  },
+
+  clear() {
+    if (this.selectedRef) {
+      this.selectedRef.classList.remove('pref-delete-selected');
+      this.selectedRef = null;
+    }
+  },
+
+  removeSelected() {
+    if (!this.selectedRef || !this.selectedRef.isConnected) {
+      this.clear();
+      return;
+    }
+
+    const editor = document.getElementById('noteBody');
+    if (!editor || !editor.contains(this.selectedRef)) {
+      this.clear();
+      return;
+    }
+
+    // Lifecycle check
+    const currentNoteId = window.paperussState ? window.paperussState.currentId : null;
+    const currentLeafId = editor.getAttribute('data-active-leaf-id');
+    if (currentNoteId !== this.activeNoteId || currentLeafId !== this.activeLeafId) {
+      this.clear();
+      return;
+    }
+
+    // Safely relocate caret
+    const nextBlock = this.selectedRef.nextElementSibling;
+    const prevBlock = this.selectedRef.previousElementSibling;
+
+    this.clear(); // clears visual class BEFORE capture
+
+    if (window.HistoryManager) {
+      window.HistoryManager.capture(true);
+    }
+
+    this.selectedRef.remove();
+    this.selectedRef = null;
+
+    if (window.ProductivityFloatingUI) {
+      window.ProductivityFloatingUI.hideToolbar();
+    }
+
+    // Caret relocation
+    const sel = window.getSelection();
+    const range = document.createRange();
+    if (nextBlock && nextBlock.nodeType === 1) {
+      range.setStart(nextBlock, 0);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else if (prevBlock && prevBlock.nodeType === 1) {
+      range.setStart(prevBlock, prevBlock.childNodes.length);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else {
+      const p = document.createElement('p');
+      p.innerHTML = '<br>';
+      editor.appendChild(p);
+      range.setStart(p, 0);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    // Sync
+    if (typeof window.handleBodyInput === 'function') {
+      window.handleBodyInput();
+    } else if (typeof window.onEditorInput === 'function') {
+      window.onEditorInput();
     }
   }
 };
