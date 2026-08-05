@@ -2750,9 +2750,9 @@ window.ProductivityClipboard = {
         const payload = this.buildClipboardPayload(ref);
 
         if (e.clipboardData) {
-            e.clipboardData.setData('text/plain', payload.fallbackText);
-            e.clipboardData.setData('text/html', payload.fallbackHtml);
-            e.clipboardData.setData('application/x-paperuss-productivity+json', JSON.stringify(payload));
+            try { e.clipboardData.setData('text/plain', payload.fallbackText); } catch(err){}
+            try { e.clipboardData.setData('text/html', payload.fallbackHtml); } catch(err){}
+            try { e.clipboardData.setData('application/x-paperuss-productivity+json', JSON.stringify(payload)); } catch(err){}
         }
     },
 
@@ -2766,9 +2766,9 @@ window.ProductivityClipboard = {
         const payload = this.buildClipboardPayload(ref);
 
         if (e.clipboardData) {
-            e.clipboardData.setData('text/plain', payload.fallbackText);
-            e.clipboardData.setData('text/html', payload.fallbackHtml);
-            e.clipboardData.setData('application/x-paperuss-productivity+json', JSON.stringify(payload));
+            try { e.clipboardData.setData('text/plain', payload.fallbackText); } catch(err){}
+            try { e.clipboardData.setData('text/html', payload.fallbackHtml); } catch(err){}
+            try { e.clipboardData.setData('application/x-paperuss-productivity+json', JSON.stringify(payload)); } catch(err){}
         }
 
         if (window.ProductivitySafeDelete && window.ProductivitySafeDelete.removeReference) {
@@ -2780,7 +2780,11 @@ window.ProductivityClipboard = {
         if (!e.clipboardData) return false;
 
         let payload = null;
-        const jsonText = e.clipboardData.getData('application/x-paperuss-productivity+json');
+        let jsonText = '';
+        try {
+            jsonText = e.clipboardData.getData('application/x-paperuss-productivity+json');
+        } catch(err) {}
+        
         if (jsonText) {
             try {
                 payload = JSON.parse(jsonText);
@@ -2788,7 +2792,10 @@ window.ProductivityClipboard = {
         }
 
         if (!payload) {
-            const htmlText = e.clipboardData.getData('text/html');
+            let htmlText = '';
+            try {
+                htmlText = e.clipboardData.getData('text/html');
+            } catch(err) {}
             if (htmlText && htmlText.includes('data-paperuss-clipboard-kind="productivity-reference"')) {
                 const doc = new DOMParser().parseFromString(htmlText, 'text/html');
                 const marked = doc.querySelectorAll('[data-paperuss-clipboard-kind="productivity-reference"]');
