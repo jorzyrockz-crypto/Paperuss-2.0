@@ -1230,8 +1230,15 @@ window.ProductivityFloatingUI = {
     btnMore.innerHTML = '<i data-lucide="ellipsis"></i>';
     btnMore.title = 'More';
 
+        const btnSize = document.createElement('button');
+    btnSize.type = 'button';
+    btnSize.className = 'pref-btn pref-btn-size';
+    btnSize.innerHTML = '<i data-lucide="scaling"></i>';
+    btnSize.title = 'Card Size';
+
     this.toolbar.appendChild(btnOpen);
     this.toolbar.appendChild(btnEdit);
+    this.toolbar.appendChild(btnSize);
     this.toolbar.appendChild(btnStyles);
     this.toolbar.appendChild(btnMore);
 
@@ -1271,6 +1278,27 @@ window.ProductivityFloatingUI = {
     };
     btnOpen.onclick = doOpen;
     btnEdit.onclick = doOpen;
+
+    btnSize.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const ref = this.activeRef;
+      if (!ref || !ref.isConnected) return;
+      const currentSize = ref.getAttribute('data-productivity-card-size') || 'standard';
+      const nextSize = currentSize === 'standard' ? 'compact' : (currentSize === 'compact' ? 'expanded' : 'standard');
+      ref.setAttribute('data-productivity-card-size', nextSize);
+      if (typeof window.hydrateProductivityReference === 'function') {
+        window.hydrateProductivityReference(ref);
+      }
+      if (window.HistoryManager && typeof window.HistoryManager.capture === 'function') {
+        window.HistoryManager.capture(true);
+      }
+      if (typeof window.handleBodyInput === 'function') window.handleBodyInput();
+      if (typeof window.toast === 'function') {
+        window.toast('Card size: ' + nextSize);
+      }
+      this.showFor(ref);
+    };
 
     btnMore.onclick = (e) => {
       e.preventDefault(); e.stopPropagation();
@@ -1378,6 +1406,8 @@ window.ProductivityFloatingUI = {
     const isInline = ref.classList.contains('productivity-ref-inline');
     const stylesButton = this.toolbar.querySelector('.pref-btn-styles');
     if (stylesButton) stylesButton.hidden = isInline;
+    const sizeButton = this.toolbar.querySelector('.pref-btn-size');
+    if (sizeButton) sizeButton.hidden = isInline;
 
     this.toolbar.setAttribute('aria-label', ref.getAttribute('data-paperuss-productivity') === 'calendar' ? 'Calendar event actions' : 'Todo list actions');
 
@@ -1939,6 +1969,8 @@ window.hydrateProductivityReference = function(ref) {
 
   ref.classList.add('productivity-ref');
   ref.setAttribute('data-productivity-layout', 'full-row');
+  const cardSize = ref.getAttribute('data-productivity-card-size') || 'standard';
+  ref.setAttribute('data-productivity-card-size', cardSize);
 
   const currentTemplate =
     ref.getAttribute('data-productivity-template') ||
