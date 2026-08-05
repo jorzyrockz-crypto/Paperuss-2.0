@@ -554,7 +554,7 @@
 }
 .wysiwyg-paper .page-break {
   /* Hide explicit page breaks in WYSIWYG mode if we're rendering multiple sheets */
-  display: none; 
+  display: none;
 }
 
 .sz-opt{
@@ -2260,7 +2260,7 @@ blockquote.note-callout.callout-info {
   margin: 16px 0;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--bg-surface, var(--bg));
+  background: var(--bg-surface, var(--overlay));
   overflow: hidden;
   transition: box-shadow 0.2s ease;
 }
@@ -2383,7 +2383,7 @@ blockquote.note-callout.callout-info {
   flex-wrap: wrap;
   gap: 8px;
   padding: 6px 10px;
-  background: var(--bg-subtle, var(--bg));
+  background: var(--bg-subtle, var(--overlay));
   border-bottom: 1px solid var(--border);
   font-size: 12px;
   z-index: 5;
@@ -2401,7 +2401,7 @@ blockquote.note-callout.callout-info {
   font-size: 12px;
   border-radius: 4px;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--overlay);
   cursor: pointer;
   color: var(--fg);
   display: inline-flex;
@@ -2420,7 +2420,7 @@ blockquote.note-callout.callout-info {
 
 /* Embed Dialog Modal */
 .embed-modal-card {
-  background: var(--bg);
+  background: var(--overlay);
   border: 1px solid var(--border);
   border-radius: 12px;
   max-width: 620px;
@@ -2787,90 +2787,7 @@ blockquote.note-callout.callout-info {
 
 .productivity-ref,
 .pref-toolbar-portal,
-.pref-styles-panel,
-.pref-more-menu {
-  --pref-accent: var(--accent);
-}
 
-
-/* ==========================================================================
-   PRODUCTIVITY FLOATING UI SINGLETONS
-   ========================================================================== */
-.productivity-ref,
-.pref-toolbar-portal,
-.pref-styles-panel,
-.pref-more-menu {
-  --pref-accent: var(--accent, currentColor);
-}
-
-/* The toolbar buttons are compact 32px icons */
-.pref-toolbar-portal .pref-btn {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.pref-toolbar-portal .pref-btn svg {
-  margin: 0;
-}
-
-/* Styles Panel */
-.pref-styles-panel {
-  position: fixed;
-  z-index: 9999;
-  min-width: 180px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0,0,0,.15);
-  display: flex;
-  flex-direction: column;
-  padding: 6px;
-  gap: 4px;
-}
-.pref-style-option {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-  text-align: left;
-  padding: 8px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--fg);
-  transition: all 0.2s ease;
-}
-.pref-style-option:hover, .pref-style-option:focus {
-  background: var(--subtle);
-  outline: none;
-}
-.pref-style-option.selected {
-  background-color: transparent;
-  border-color: var(--pref-accent);
-}
-@supports (background: color-mix(in srgb, red 10%, transparent)) {
-  .pref-style-option.selected {
-    background-color: color-mix(in srgb, var(--pref-accent) 8%, transparent);
-  }
-}
-.pref-style-title {
-  font-size: 13px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.pref-style-preview {
-  pointer-events: none;
-  font-size: 11px;
-  transform-origin: top left;
-  transform: scale(0.85);
-  width: 117%;
-}
 
 /* ==========================================================================
    PRODUCTIVITY TEMPLATES
@@ -2920,6 +2837,150 @@ blockquote.note-callout.callout-info {
   margin-bottom: 4px;
 }
 .productivity-ref[data-paperuss-productivity="todo-list"].pref-tpl-soft-paper .pref-task-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+
+/* ==========================================================================
+   PRODUCTIVITY STYLES MODAL
+   ========================================================================== */
+.productivity-style-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 2147483647 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.productivity-style-modal {
+  --pref-accent: var(--accent, currentColor);
+  background: var(--overlay);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 680px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 32px rgba(0,0,0,0.25);
+  overflow: hidden;
+}
+.productivity-style-modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+.productivity-style-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.productivity-style-modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
+  background: var(--subtle);
+}
+
+/* Modal Options */
+.productivity-style-option {
+  --pref-accent: var(--accent, currentColor);
+  flex: 1;
+  min-width: 200px;
+  border: 1px solid var(--border);
+  background: var(--overlay);
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.productivity-style-option:hover {
+  border-color: var(--border-hover);
+}
+.productivity-style-option:focus {
+  outline: 2px solid var(--pref-accent);
+  outline-offset: 2px;
+}
+.productivity-style-option.selected {
+  border-color: var(--pref-accent);
+  background: transparent;
+}
+@supports (background: color-mix(in srgb, red 10%, transparent)) {
+  .productivity-style-option.selected {
+    background-color: color-mix(in srgb, var(--pref-accent) 6%, transparent);
+  }
+}
+
+/* Modal Preview Container */
+.productivity-style-preview-container {
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.productivity-style-preview {
+  --pref-accent: var(--accent, currentColor);
+  width: 100%;
+  max-width: 400px;
+  background: var(--overlay);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  border-radius: 8px;
+  pointer-events: none;
+  font-size: 14px;
+}
+
+/* Preview Mapping Rules (Mirrors real templates but isolated) */
+.productivity-style-preview-calendar.pref-preview-clean-row .pref-row-header {
+  /* Inherits transparent background */
+}
+.productivity-style-preview-calendar.pref-preview-accent-rule {
+  background: var(--subtle);
+  border-radius: 4px;
+  padding: 2px 6px;
+  border-inline-start: 2px solid var(--pref-accent);
+}
+.productivity-style-preview-todo.pref-preview-minimal .pref-row-tasks {
+  /* Inherits transparent background */
+}
+.productivity-style-preview-todo.pref-preview-title-rule .pref-row-header {
+  border-bottom: 1px solid var(--pref-accent);
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+.productivity-style-preview-todo.pref-preview-soft-paper {
+  background-color: transparent;
+  border: 1px solid var(--border-muted, rgba(128,128,128,0.15));
+  border-radius: 6px;
+  padding: 8px;
+}
+@supports (background: color-mix(in srgb, red 10%, transparent)) {
+  .productivity-style-preview-todo.pref-preview-soft-paper {
+    background-color: color-mix(in srgb, var(--pref-accent) 4%, transparent);
+    border-color: color-mix(in srgb, var(--pref-accent) 28%, transparent);
+  }
+}
+.productivity-style-preview-todo.pref-preview-soft-paper .pref-task-item {
+  border-bottom: 1px solid var(--border-muted, rgba(128,128,128,0.08));
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+.productivity-style-preview-todo.pref-preview-soft-paper .pref-task-item:last-child {
   border-bottom: none;
   padding-bottom: 0;
   margin-bottom: 0;
