@@ -932,6 +932,10 @@ window.ProductivityFloatingUI = {
     // Event handlers for toolbar itself
     this.toolbar.addEventListener('mouseenter', () => this.clearTimer());
     this.toolbar.addEventListener('mouseleave', () => this.scheduleHide());
+    this.toolbar.addEventListener('pointerdown', (e) => {
+      // Prevent clearing editor caret and ProductivitySafeDelete when interacting with toolbar
+      e.preventDefault();
+    });
 
     // Action Handlers
     const doOpen = (e) => {
@@ -1020,6 +1024,7 @@ window.ProductivityFloatingUI = {
     }
     this.closeMoreMenu();
 
+    this.menuRef = null;
     this.activeRef = null;
   },
 
@@ -1094,35 +1099,58 @@ window.ProductivityFloatingUI = {
 
     if (!this.moreMenu) {
       this.moreMenu = document.createElement('div');
-      this.moreMenu.className = 'productivity-ref-menu';
+      this.moreMenu.className = 'productivity-ref-menu leaf-context-menu';
       this.moreMenu.setAttribute('data-paperuss-ui', 'true');
 
       this.moreMenu.addEventListener('mouseenter', () => this.clearTimer());
       this.moreMenu.addEventListener('mouseleave', () => this.scheduleHide());
+      this.moreMenu.addEventListener('pointerdown', (e) => {
+        // Prevent clearing editor caret and ProductivitySafeDelete when clicking menu
+        e.preventDefault();
+      });
     }
 
     const type = this.activeRef.getAttribute('data-paperuss-productivity');
     const sourceId = this.activeRef.getAttribute('data-source-id');
     const typeLabel = type === 'calendar' ? 'Event' : 'Todo List';
 
+    this.menuRef = this.activeRef;
     this.moreMenu.innerHTML = '';
 
     const mkBtn = (cls, iconName, txt, danger) => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'pref-menu-item ' + cls;
+      b.className = 'pref-menu-item leaf-menu-item ' + cls + (danger ? ' danger' : '');
       b.innerHTML = `<i data-lucide="${iconName}"></i> <span>${txt}</span>`;
-      if (danger) b.style.color = 'var(--danger)';
       return b;
     };
 
+    const copyBtn = mkBtn('pref-mitem-copy', 'copy', 'Copy Reference', false);
+    const cutBtn = mkBtn('pref-mitem-cut', 'scissors', 'Cut Reference', false);
     const remBtn = mkBtn('pref-mitem-rem', 'unlink', 'Remove from Leaf', false);
     const delBtn = mkBtn('pref-mitem-del', 'trash-2', 'Delete Source ' + typeLabel, true);
 
+    const getMenuRef = () => (this.menuRef && this.menuRef.isConnected ? this.menuRef : null);
+
+    copyBtn.onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const ref = getMenuRef();
+        this.forceHide();
+        if (ref && window.ProductivityClipboard) window.ProductivityClipboard.toolbarCopy(ref);
+    };
+
+    cutBtn.onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const ref = getMenuRef();
+        this.forceHide();
+        if (ref && window.ProductivityClipboard) window.ProductivityClipboard.toolbarCut(ref);
+    };
+
     remBtn.onclick = (e) => {
       e.preventDefault(); e.stopPropagation();
-      if (typeof window.removeProductivityReference === 'function') window.removeProductivityReference(this.activeRef);
+      const ref = getMenuRef();
       this.forceHide();
+      if (ref && typeof window.removeProductivityReference === 'function') window.removeProductivityReference(ref);
     };
 
     delBtn.onclick = (e) => {
@@ -1132,6 +1160,8 @@ window.ProductivityFloatingUI = {
       else { if (typeof window.deleteTodoListSource === 'function') window.deleteTodoListSource(sourceId); }
     };
 
+    this.moreMenu.appendChild(copyBtn);
+    this.moreMenu.appendChild(cutBtn);
     this.moreMenu.appendChild(remBtn);
     this.moreMenu.appendChild(delBtn);
 
@@ -1145,7 +1175,7 @@ window.ProductivityFloatingUI = {
   positionMoreMenu() {
     if (!this.moreMenu || !this.moreMenuAnchorBtn) return;
     const btnRect = this.moreMenuAnchorBtn.getBoundingClientRect();
-    this.moreMenu.style.cssText = 'position:fixed;z-index:9999;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:7px;box-shadow:0 3px 12px rgba(0,0,0,.12);display:flex;flex-direction:column;padding:3px;';
+    this.moreMenu.style.cssText = 'position:fixed;z-index:9999;min-width:140px;display:flex;flex-direction:column;';
 
     let top = btnRect.bottom + 4;
     if (top + this.moreMenu.offsetHeight > window.innerHeight - 8) {
@@ -1209,10 +1239,13 @@ window.getDefaultProductivityTemplate = function(sourceType) {
 
 window.hydrateProductivityReferences = function(rootElement) {
     if (!rootElement) return;
-    if (window.ProductivitySafeDelete) {
-        const ed = rootElement.id === 'noteBody' ? rootElement : document.getElementById('noteBody');
-        if (ed) window.ProductivitySafeDelete.init(ed);
+    const ed = rootElement.id === 'noteBody' ? rootElement : document.getElementById('noteBody');
+    if (ed && window.ProductivitySafeDelete) {
+        window.ProductivitySafeDelete.init(ed);
         window.ProductivitySafeDelete.clear();
+    }
+    if (ed && window.ProductivityClipboard) {
+        window.ProductivityClipboard.init(ed);
     }
   const refs = [];
   if (rootElement.matches && rootElement.matches('.productivity-ref')) refs.push(rootElement);
@@ -2152,6 +2185,10 @@ window.ProductivitySafeDelete = {
 
     // Global mousedown to clear selection if clicked outside editor/ref
     document.addEventListener('mousedown', (e) => {
+      const runtimeUI = e.target.closest('.pref-toolbar-portal, .productivity-ref-menu');
+      if (runtimeUI) {
+        return;
+      }
       if (!editor.contains(e.target)) {
         this.clear();
       }
@@ -2297,77 +2334,84 @@ window.ProductivitySafeDelete = {
   },
 
   removeSelected() {
-    if (!this.selectedRef || !this.selectedRef.isConnected) {
-      this.clear();
-      return;
-    }
+    return this.removeReference(this.selectedRef, { captureHistory: true, sync: true, restoreCaret: true });
+  },
+
+  removeReference(refNode, options = { captureHistory: true, sync: true, restoreCaret: true }) {
+    if (!refNode || !refNode.isConnected) return false;
+    if (!refNode.classList.contains('productivity-ref')) return false;
 
     const editor = document.getElementById('noteBody');
-    if (!editor || !editor.contains(this.selectedRef)) {
-      this.clear();
-      return;
+    if (!editor || !editor.contains(refNode)) return false;
+
+    if (this.selectedRef === refNode) {
+        const currentNoteId = window.paperussState ? window.paperussState.currentId : null;
+        const currentLeafId = editor.getAttribute('data-active-leaf-id');
+        if (currentNoteId !== this.activeNoteId || currentLeafId !== this.activeLeafId) {
+            return false;
+        }
     }
 
-    // Lifecycle check
-    const currentNoteId = window.paperussState ? window.paperussState.currentId : null;
-    const currentLeafId = editor.getAttribute('data-active-leaf-id');
-    if (currentNoteId !== this.activeNoteId || currentLeafId !== this.activeLeafId) {
-      this.clear();
-      return;
+    const nextBlock = refNode.nextElementSibling;
+    const prevBlock = refNode.previousElementSibling;
+
+    refNode.classList.remove('pref-delete-selected');
+    refNode.removeAttribute('aria-selected');
+
+    if (this.selectedRef === refNode) {
+      this.selectedRef = null;
+      this.activeNoteId = null;
+      this.activeLeafId = null;
     }
 
-    // Safely relocate caret
-    const nextBlock = this.selectedRef.nextElementSibling;
-    const prevBlock = this.selectedRef.previousElementSibling;
-
-    this.clear(); // clears visual class BEFORE capture
-
-    if (window.HistoryManager) {
+    if (options.captureHistory && window.HistoryManager && typeof window.HistoryManager.capture === 'function') {
       window.HistoryManager.capture(true);
     }
 
-    this.selectedRef.remove();
-    this.selectedRef = null;
+    refNode.remove();
 
     if (window.ProductivityFloatingUI) {
-      window.ProductivityFloatingUI.hideToolbar();
+      window.ProductivityFloatingUI.forceHide();
     }
 
-    // Caret relocation
-    const sel = window.getSelection();
-    const range = document.createRange();
-    if (nextBlock && nextBlock.nodeType === 1) {
-      range.setStart(nextBlock, 0);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } else if (prevBlock && prevBlock.nodeType === 1) {
-      range.setStart(prevBlock, prevBlock.childNodes.length);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } else {
-      const p = document.createElement('p');
-      p.innerHTML = '<br>';
-      editor.appendChild(p);
-      range.setStart(p, 0);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
+    if (options.restoreCaret) {
+      const sel = window.getSelection();
+      const range = document.createRange();
+      if (nextBlock && nextBlock.nodeType === 1) {
+        range.setStart(nextBlock, 0);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else if (prevBlock && prevBlock.nodeType === 1) {
+        range.setStart(prevBlock, prevBlock.childNodes.length);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else {
+        const p = document.createElement('p');
+        p.innerHTML = '<br>';
+        editor.appendChild(p);
+        range.setStart(p, 0);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
     }
 
-    // Sync
-    if (typeof window.handleBodyInput === 'function') {
-      window.handleBodyInput();
-    } else if (typeof window.onEditorInput === 'function') {
-      window.onEditorInput();
+    if (options.sync) {
+      if (typeof window.handleBodyInput === 'function') {
+        window.handleBodyInput();
+      } else if (typeof window.onEditorInput === 'function') {
+        window.onEditorInput();
+      }
     }
+
+    return true;
   }
 };
 
-
 window.ProductivityInsertion = {
-  insert(type, sourceId) {
+  insert(type, sourceId, options = {}) {
     const editor = document.getElementById('noteBody');
     if (!editor) return;
 
@@ -2377,8 +2421,7 @@ window.ProductivityInsertion = {
 
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) {
-      this.insertAtEnd(editor, type, sourceId);
-      return;
+      return this.insertAtEnd(editor, type, sourceId, options);
     }
 
     const range = sel.getRangeAt(0).cloneRange();
@@ -2388,16 +2431,15 @@ window.ProductivityInsertion = {
 
     const context = this.resolveContext(editor, range);
     if (!context) {
-      this.insertAtEnd(editor, type, sourceId);
-      return;
+      return this.insertAtEnd(editor, type, sourceId, options);
     }
 
     if (window.HistoryManager && typeof window.HistoryManager.capture === 'function') {
       window.HistoryManager.capture(true);
     }
 
-    const reference = this.createReference(type, sourceId);
-    if (!reference) return;
+    const reference = this.createReference(type, sourceId, options);
+    if (!reference) return false;
 
     try {
       let caretTarget = null;
@@ -2438,16 +2480,17 @@ window.ProductivityInsertion = {
       }
 
       this.sync();
+      return true;
     } catch (e) {
       console.error('Contextual insertion failed:', e);
       if (typeof window.toast === 'function') window.toast('Insertion failed');
     }
   },
 
-  insertAtEnd(editor, type, sourceId) {
+  insertAtEnd(editor, type, sourceId, options = {}) {
     if (window.HistoryManager && typeof window.HistoryManager.capture === 'function') window.HistoryManager.capture(true);
-    const reference = this.createReference(type, sourceId);
-    if (!reference) return;
+    const reference = this.createReference(type, sourceId, options);
+    if (!reference) return false;
 
     let lastBlock = editor.lastElementChild;
     let appended = false;
@@ -2468,6 +2511,7 @@ window.ProductivityInsertion = {
       window.hydrateProductivityReferences(editor);
     }
     this.sync();
+    return true;
   },
 
   resolveContext(editor, range) {
@@ -2528,7 +2572,7 @@ window.ProductivityInsertion = {
     return curr.tagName === 'LI' ? curr : liNode;
   },
 
-  createReference(type, sourceId) {
+  createReference(type, sourceId, options = {}) {
     const normSourceId = String(sourceId);
     const safeId = typeof sanitizeId === 'function' ? sanitizeId(normSourceId) : normSourceId.replace(/[^a-zA-Z0-9_-]/g, '');
     if (!safeId) {
@@ -2537,6 +2581,17 @@ window.ProductivityInsertion = {
     }
     const source = window.resolveProductivitySource(type, safeId);
     if (!source || (Array.isArray(source) && source.length === 0)) {
+      if (options.allowUnavailableSource && options.fallbackHtml) {
+          const cleanHtml = typeof window.sanitizeNoteHTML === 'function' ? window.sanitizeNoteHTML(options.fallbackHtml) : options.fallbackHtml;
+          const tmp = document.createElement('div');
+          tmp.innerHTML = cleanHtml;
+          const refNode = tmp.querySelector('.productivity-ref') || tmp.firstElementChild;
+          if (refNode) {
+              refNode.classList.add('productivity-ref-unavailable');
+              if (options.templateId) refNode.setAttribute('data-productivity-template', options.templateId);
+              return refNode;
+          }
+      }
       if(typeof toast === 'function') toast('Source not found in canonical store');
       return null;
     }
@@ -2544,7 +2599,9 @@ window.ProductivityInsertion = {
     const typeClass = type === 'todo-list' ? 'productivity-ref-todo' : 'productivity-ref-calendar';
     const tmp = document.createElement('div');
     tmp.innerHTML = '<div class="productivity-ref ' + typeClass + '" data-paperuss-productivity="' + type + '" data-source-id="' + safeId + '" data-ref-version="1" contenteditable="false"><div class="productivity-ref-static">' + staticHtml + '</div></div>';
-    return tmp.firstElementChild;
+    const finalNode = tmp.firstElementChild;
+    if (options.templateId) finalNode.setAttribute('data-productivity-template', options.templateId);
+    return finalNode;
   },
 
   splitEditableBlock(context) {
@@ -2647,4 +2704,277 @@ window.ProductivityInsertion = {
       window.onEditorInput();
     }
   }
+};
+
+
+window.ProductivityClipboard = {
+    init(editor) {
+        if (!editor) return;
+        if (this._editor === editor && this._initialized) return;
+
+        this._boundCopy = this._boundCopy || this.handleCopy.bind(this);
+        this._boundCut = this._boundCut || this.handleCut.bind(this);
+
+        if (this._editor && this._editor !== editor) {
+            this._editor.removeEventListener('copy', this._boundCopy, true);
+            this._editor.removeEventListener('cut', this._boundCut, true);
+        }
+
+        this._editor = editor;
+        this._initialized = true;
+
+        editor.addEventListener('copy', this._boundCopy, true);
+        editor.addEventListener('cut', this._boundCut, true);
+    },
+
+    async writeToolbarPayload(payload) {
+        const customType = 'web application/x-paperuss-productivity+json';
+        const supportsCustom = window.ClipboardItem && typeof window.ClipboardItem.supports === 'function' && window.ClipboardItem.supports(customType);
+
+        try {
+            if (navigator.clipboard && navigator.clipboard.write) {
+                const htmlBlob = new Blob([payload.fallbackHtml], { type: 'text/html' });
+                const textBlob = new Blob([payload.fallbackText], { type: 'text/plain' });
+                const items = {
+                    'text/html': htmlBlob,
+                    'text/plain': textBlob
+                };
+
+                if (supportsCustom) {
+                    try {
+                        const jsonBlob = new Blob([JSON.stringify(payload)], { type: customType });
+                        items[customType] = jsonBlob;
+                        await navigator.clipboard.write([new window.ClipboardItem(items)]);
+                        return { success: true, rich: true };
+                    } catch(e) {
+                        // fallback to non-custom
+                    }
+                }
+
+                // Retry without custom type
+                const fallbackItems = {
+                    'text/html': htmlBlob,
+                    'text/plain': textBlob
+                };
+                await navigator.clipboard.write([new window.ClipboardItem(fallbackItems)]);
+
+                // Attempt manual execCommand fallback for the custom payload just in case? No, instructions say run during user-triggered action
+                // Actually fallback is just returning success.
+                return { success: true, rich: true };
+            } else if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(payload.fallbackText);
+                return { success: true, rich: false };
+            }
+        } catch(e) {}
+
+        return { success: false, error: 'Clipboard writing failed' };
+    },
+
+    getActiveReference(range) {
+        if (window.ProductivitySafeDelete && window.ProductivitySafeDelete.selectedRef && window.ProductivitySafeDelete.selectedRef.isConnected) {
+            return window.ProductivitySafeDelete.selectedRef;
+        }
+        if (!range) return null;
+        if (range.startContainer === range.endContainer && range.startContainer.nodeType === 1) {
+            const container = range.startContainer;
+            if (range.startOffset + 1 === range.endOffset) {
+                const node = container.childNodes[range.startOffset];
+                if (node && node.nodeType === 1 && node.classList.contains('productivity-ref')) {
+                    return node;
+                }
+            }
+        }
+        return null;
+    },
+
+    buildClipboardPayload(ref) {
+        const type = ref.getAttribute('data-paperuss-productivity');
+        const sourceId = ref.getAttribute('data-source-id');
+        let templateId = ref.getAttribute('data-productivity-template') || '';
+
+        // Normalize logical IDs
+        if (templateId.startsWith('pref-tpl-')) {
+            templateId = templateId.substring(9);
+        }
+
+        const clone = ref.cloneNode(true);
+        if (typeof window.dehydrateProductivityReference === 'function') {
+            window.dehydrateProductivityReference(clone);
+        }
+
+        // Generate HTML Marker
+        clone.setAttribute('data-paperuss-clipboard-kind', 'productivity-reference');
+        clone.setAttribute('data-paperuss-clipboard-version', '1');
+
+        // Strip wrapper div if it's there from generic clone, just get the outerHTML
+        const fallbackHtml = clone.outerHTML;
+
+        // Attempt a readable plain text version
+        const fallbackText = clone.innerText || `[${type === 'calendar' ? 'Calendar Event' : 'Todo List'}: ${sourceId}]`;
+
+        return {
+            version: 1,
+            kind: "productivity-reference",
+            type,
+            sourceId,
+            templateId,
+            fallbackHtml,
+            fallbackText
+        };
+    },
+
+    handleCopy(e) {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const ref = this.getActiveReference(sel.getRangeAt(0));
+        if (!ref) return;
+
+        e.preventDefault();
+        const payload = this.buildClipboardPayload(ref);
+
+        if (e.clipboardData) {
+            try { e.clipboardData.setData('text/plain', payload.fallbackText); } catch(err){}
+            try { e.clipboardData.setData('text/html', payload.fallbackHtml); } catch(err){}
+            try { e.clipboardData.setData('application/x-paperuss-productivity+json', JSON.stringify(payload)); } catch(err){}
+        }
+    },
+
+    handleCut(e) {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const ref = this.getActiveReference(sel.getRangeAt(0));
+        if (!ref) return;
+
+        e.preventDefault();
+        const payload = this.buildClipboardPayload(ref);
+
+        if (e.clipboardData) {
+            try { e.clipboardData.setData('text/plain', payload.fallbackText); } catch(err){}
+            try { e.clipboardData.setData('text/html', payload.fallbackHtml); } catch(err){}
+            try { e.clipboardData.setData('application/x-paperuss-productivity+json', JSON.stringify(payload)); } catch(err){}
+        }
+
+        if (window.ProductivitySafeDelete && window.ProductivitySafeDelete.removeReference) {
+            window.ProductivitySafeDelete.removeReference(ref, { captureHistory: true, sync: true, restoreCaret: true });
+        }
+    },
+
+    handlePaste(e) {
+        if (!e.clipboardData) return false;
+
+        let payload = null;
+        let jsonText = '';
+        try {
+            jsonText = e.clipboardData.getData('application/x-paperuss-productivity+json');
+        } catch(err) {}
+
+        if (jsonText) {
+            try {
+                payload = JSON.parse(jsonText);
+            } catch(err) {}
+        }
+
+        if (!payload) {
+            let htmlText = '';
+            try {
+                htmlText = e.clipboardData.getData('text/html');
+            } catch(err) {}
+            if (htmlText && htmlText.includes('data-paperuss-clipboard-kind="productivity-reference"')) {
+                const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+                const marked = doc.querySelectorAll('[data-paperuss-clipboard-kind="productivity-reference"]');
+                if (marked.length === 1) {
+                    const node = marked[0];
+                    if (node.querySelector('[data-paperuss-clipboard-kind]')) return false; // Nested marks rejected
+
+                    let templateId = node.getAttribute('data-productivity-template') || '';
+                    if (templateId.startsWith('pref-tpl-')) templateId = templateId.substring(9);
+
+                    payload = {
+                        version: parseInt(node.getAttribute('data-paperuss-clipboard-version') || '1', 10),
+                        kind: 'productivity-reference',
+                        type: node.getAttribute('data-paperuss-productivity'),
+                        sourceId: node.getAttribute('data-source-id'),
+                        templateId: templateId,
+                        fallbackHtml: node.outerHTML,
+                        fallbackText: node.innerText
+                    };
+                }
+            }
+        }
+
+        if (!payload) return false;
+
+        const valid = this.validatePayload(payload);
+        if (!valid || !window.ProductivityInsertion) return false;
+
+        e.preventDefault();
+
+        const inserted = window.ProductivityInsertion.insert(payload.type, payload.sourceId, {
+            templateId: payload.templateId,
+            fallbackHtml: payload.fallbackHtml,
+            fallbackText: payload.fallbackText,
+            allowUnavailableSource: true
+        });
+
+        if (!inserted) {
+            if(typeof window.toast === 'function') window.toast('Paste failed');
+        }
+        return inserted;
+    },
+
+    validatePayload(payload) {
+        if (!payload || typeof payload !== 'object') return false;
+        if (payload.version !== 1) return false;
+        if (payload.kind !== 'productivity-reference') return false;
+        if (payload.type !== 'calendar' && payload.type !== 'todo-list') return false;
+        if (!payload.sourceId || typeof payload.sourceId !== 'string') return false;
+
+        const source = window.resolveProductivitySource(payload.type, payload.sourceId);
+        // Valid if exists and matches type. (If missing, we allow it but handle via missing-source behavior).
+        if (source && Array.isArray(source) && source.length > 0) {
+            // Source exists, type assumed to match given our dual-store system.
+        }
+
+        return true;
+    },
+
+    async toolbarCopy(ref) {
+        if (!ref || !ref.isConnected) return;
+        const payload = this.buildClipboardPayload(ref);
+        const res = await this.writeToolbarPayload(payload);
+        if (res.success) {
+            if(typeof window.toast === 'function') window.toast('Reference copied');
+        } else {
+            if(typeof window.toast === 'function') window.toast('Copy failed');
+        }
+    },
+
+    async toolbarCut(ref) {
+        const payload = this.buildClipboardPayload(ref);
+        try {
+            if (navigator.clipboard && navigator.clipboard.write) {
+                const htmlBlob = new Blob([payload.fallbackHtml], { type: 'text/html' });
+                const textBlob = new Blob([payload.fallbackText], { type: 'text/plain' });
+                const items = {
+                    'text/html': htmlBlob,
+                    'text/plain': textBlob
+                };
+                try {
+                    const jsonBlob = new Blob([JSON.stringify(payload)], { type: 'web application/x-paperuss-productivity+json' });
+                    items['web application/x-paperuss-productivity+json'] = jsonBlob;
+                } catch(e) {}
+
+                await navigator.clipboard.write([new window.ClipboardItem(items)]);
+            } else if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(payload.fallbackText);
+            }
+
+            if (window.ProductivitySafeDelete && window.ProductivitySafeDelete.removeReference) {
+                window.ProductivitySafeDelete.removeReference(ref, { captureHistory: true, sync: true, restoreCaret: true });
+            }
+            if(typeof window.toast === 'function') window.toast('Reference cut');
+        } catch(e) {
+            if(typeof window.toast === 'function') window.toast('Cut failed');
+        }
+    }
 };
