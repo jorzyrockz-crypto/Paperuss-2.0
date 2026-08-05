@@ -1664,9 +1664,15 @@ window.ProductivityFloatingUI = {
 
     delBtn.onclick = (e) => {
       e.preventDefault(); e.stopPropagation();
-      this.forceHide();
-      if (type === 'calendar') { if (typeof window.deleteCalendarSource === 'function') window.deleteCalendarSource(sourceId); }
-      else { if (typeof window.deleteTodoListSource === 'function') window.deleteTodoListSource(sourceId); }
+      const ref = getMenuRef() || this.activeRef;
+      const anchor = this.moreMenuAnchorBtn;
+      this.closeMoreMenu();
+      if (ref && window.ProductivityDeleteSourceModal) {
+        window.ProductivityDeleteSourceModal.open(ref, anchor);
+      } else {
+        if (type === 'calendar') { if (typeof window.deleteCalendarSource === 'function') window.deleteCalendarSource(sourceId); }
+        else { if (typeof window.deleteTodoListSource === 'function') window.deleteTodoListSource(sourceId); }
+      }
     };
 
     this.moreMenu.appendChild(copyBtn);
@@ -2664,33 +2670,35 @@ window.removeProductivityReference = function(ref) {
   return removed;
 };
 
-window.deleteCalendarSource = function(eventId) {
-  if (!confirm('Are you sure you want to delete this event source?')) return;
+window.deleteCalendarSource = function(eventId, skipConfirm = false) {
+  if (!skipConfirm && !confirm('Are you sure you want to delete this event source?')) return Promise.resolve(false);
   const canonicalNotes = typeof window.getCanonicalNotes === 'function' ? window.getCanonicalNotes() : (typeof notes !== 'undefined' ? notes : []);
   const ev = canonicalNotes.find(n => String(n.id) === String(eventId));
   if (!ev) {
     if (typeof toast === 'function') toast('Event already deleted or missing');
-    return;
+    return Promise.resolve(false);
   }
   const backup = { ...ev };
   ev.deleted = true;
   ev.deletedAt = Date.now();
 
-  Promise.resolve().then(() => typeof save === 'function' ? save() : null).then(() => {
+  return Promise.resolve().then(() => typeof save === 'function' ? save() : null).then(() => {
     if (typeof renderCalendarView === 'function') renderCalendarView();
     if (typeof renderAll === 'function') renderAll();
     window.refreshProductivityReferences('calendar', eventId);
     if (typeof toast === 'function') toast('Calendar event source deleted');
+    return true;
   }).catch(e => {
     Object.assign(ev, backup);
     if (!('deleted' in backup)) delete ev.deleted;
     if (!('deletedAt' in backup)) delete ev.deletedAt;
     if (typeof toast === 'function') toast('Failed to delete event source');
+    throw e;
   });
 };
 
-window.deleteTodoListSource = function(groupId) {
-  if (!confirm('Are you sure you want to delete this todo list source?')) return;
+window.deleteTodoListSource = function(groupId, skipConfirm = false) {
+  if (!skipConfirm && !confirm('Are you sure you want to delete this todo list source?')) return Promise.resolve(false);
   const canonicalTasks = typeof window.getCanonicalStandaloneTasks === 'function' ? window.getCanonicalStandaloneTasks() : (typeof standaloneTasks !== 'undefined' ? standaloneTasks : []);
 
   const backupTasks = canonicalTasks.map(t => ({...t}));
@@ -2706,17 +2714,19 @@ window.deleteTodoListSource = function(groupId) {
 
   if (!changed) {
     if (typeof toast === 'function') toast('Todo list already deleted or missing');
-    return;
+    return Promise.resolve(false);
   }
 
-  Promise.resolve().then(() => typeof saveTasks === 'function' ? saveTasks() : null).then(() => {
+  return Promise.resolve().then(() => typeof saveTasks === 'function' ? saveTasks() : null).then(() => {
     if (typeof renderTasksView === 'function') renderTasksView();
     if (typeof updateTasksCount === 'function') updateTasksCount();
     window.refreshProductivityReferences('todo-list', groupId);
     if (typeof toast === 'function') toast('Todo list source deleted');
+    return true;
   }).catch(e => {
     canonicalTasks.splice(0, canonicalTasks.length, ...backupTasks.map(task => ({ ...task })));
     if (typeof toast === 'function') toast('Failed to delete todo list source');
+    throw e;
   });
 };
 
@@ -4184,4 +4194,177 @@ window.ProductivityClipboard = {
         return true;
     }
 
+};
+
+
+window.ProductivityDeleteSourceModal = {
+  initialized: false,
+  modalRoot: null,
+  context: null,
+
+  init() {
+    if (this.initialized) return;
+
+    this.modalRoot = document.createElement('div');
+    this.modalRoot.className = 'productivity-style-modal-overlay productivity-delete-source-modal-overlay';
+    this.modalRoot.style.display = 'none';
+
+    this.modalRoot.innerHTML = `
+      <div class="productivity-style-modal productivity-delete-modal" role="dialog" aria-modal="true" aria-labelledby="prodDelModalTitle" aria-describedby="prodDelModalDesc" style="max-width:440px">
+        <div class="productivity-style-modal-header">
+          <h3 id="prodDelModalTitle" style="margin:0;font-size:16px;color:var(--fg)">Delete Source?</h3>
+          <button type="button" class="btn" id="prodDelModalClose" aria-label="Close" style="background:transparent;border:none;box-shadow:none;padding:4px;cursor:pointer"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <div class="productivity-style-modal-body" style="padding:18px 20px">
+          <div id="prodDelModalItemTitle" style="font-weight:600;font-size:14px;color:var(--fg);margin-bottom:8px"></div>
+          <p id="prodDelModalDesc" style="margin:0;font-size:13px;color:var(--fg-secondary);line-height:1.5">
+            Deleting the source affects every connected reference. This cannot be undone through the editor history.
+          </p>
+        </div>
+        <div class="productivity-style-modal-footer" style="padding:14px 20px">
+          <button type="button" class="btn" id="prodDelModalCancel">Cancel</button>
+          <button type="button" class="btn btn-danger" id="prodDelModalConfirm" style="background:var(--danger, #ef4444);border-color:var(--danger, #ef4444);color:#ffffff;font-weight:600">Delete Source</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(this.modalRoot);
+
+    document.getElementById('prodDelModalClose').onclick = () => this.close('close');
+    document.getElementById('prodDelModalCancel').onclick = () => this.close('cancel');
+    document.getElementById('prodDelModalConfirm').onclick = () => this.confirm();
+
+    this.modalRoot.addEventListener('mousedown', (e) => {
+      if (e.target === this.modalRoot) this.close('backdrop');
+    });
+
+    this.modalRoot.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        this.close('escape');
+        return;
+      }
+      if (e.key === 'Tab') {
+        const focusables = this.modalRoot.querySelectorAll('button:not([disabled])');
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    });
+
+    this.initialized = true;
+  },
+
+  open(ref, openerBtn = null) {
+    if (!ref || !ref.isConnected) return;
+    this.init();
+
+    const sourceType = ref.getAttribute('data-paperuss-productivity');
+    const sourceId = ref.getAttribute('data-source-id');
+
+    if (!sourceType || !sourceId) return;
+
+    let sourceTitle = 'Untitled Source';
+    if (typeof window.resolveProductivitySource === 'function') {
+      const src = window.resolveProductivitySource(sourceType, sourceId);
+      if (sourceType === 'calendar' && src && src.title) {
+        sourceTitle = src.title;
+      } else if (sourceType === 'todo-list' && Array.isArray(src) && src[0] && src[0].groupTitle) {
+        sourceTitle = src[0].groupTitle;
+      }
+    }
+
+    this.context = {
+      storedRef: ref,
+      sourceType,
+      sourceId,
+      sourceTitle,
+      openerBtn,
+      isSubmitting: false
+    };
+
+    const titleEl = document.getElementById('prodDelModalTitle');
+    const itemTitleEl = document.getElementById('prodDelModalItemTitle');
+    const confirmBtn = document.getElementById('prodDelModalConfirm');
+
+    if (titleEl) {
+      titleEl.textContent = sourceType === 'calendar' ? 'Delete Calendar Event?' : 'Delete Todo List?';
+    }
+    if (itemTitleEl) {
+      itemTitleEl.textContent = sourceTitle;
+    }
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+    }
+
+    if (window.lucide) window.lucide.createIcons({ root: this.modalRoot });
+
+    this.modalRoot.style.display = 'flex';
+
+    const cancelBtn = document.getElementById('prodDelModalCancel');
+    if (cancelBtn) cancelBtn.focus();
+  },
+
+  close(reason = 'close') {
+    if (!this.modalRoot) return;
+    this.modalRoot.style.display = 'none';
+
+    if (this.context && this.context.openerBtn && this.context.openerBtn.isConnected) {
+      try { this.context.openerBtn.focus(); } catch(e) {}
+    } else if (this.context && this.context.storedRef && this.context.storedRef.isConnected) {
+      try { this.context.storedRef.focus(); } catch(e) {}
+    }
+
+    this.context = null;
+  },
+
+  async confirm() {
+    if (!this.context || this.context.isSubmitting) return;
+
+    const { storedRef, sourceType, sourceId } = this.context;
+    const confirmBtn = document.getElementById('prodDelModalConfirm');
+
+    // Revalidate before deletion
+    if (!storedRef || !storedRef.isConnected ||
+        storedRef.getAttribute('data-source-id') !== sourceId ||
+        storedRef.getAttribute('data-paperuss-productivity') !== sourceType) {
+      if (typeof window.toast === 'function') window.toast('Reference is no longer connected');
+      this.close('invalid-context');
+      return;
+    }
+
+    this.context.isSubmitting = true;
+    if (confirmBtn) confirmBtn.disabled = true;
+
+    try {
+      if (sourceType === 'calendar') {
+        if (typeof window.deleteCalendarSource === 'function') {
+          await window.deleteCalendarSource(sourceId, true);
+        }
+      } else {
+        if (typeof window.deleteTodoListSource === 'function') {
+          await window.deleteTodoListSource(sourceId, true);
+        }
+      }
+
+      if (window.ProductivityFloatingUI) {
+        window.ProductivityFloatingUI.forceHide();
+        window.ProductivityFloatingUI.closeMoreMenu();
+      }
+
+      this.close('confirm');
+    } catch(err) {
+      console.error('Delete source failed:', err);
+      if (confirmBtn) confirmBtn.disabled = false;
+      this.context.isSubmitting = false;
+      if (typeof window.toast === 'function') window.toast('Failed to delete source');
+    }
+  }
 };
