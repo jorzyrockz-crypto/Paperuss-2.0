@@ -3333,3 +3333,118 @@ blockquote.note-callout.callout-info {
   margin: 16px 0 !important;
   box-sizing: border-box !important;
 }
+
+
+/* ============================================================
+   UNIVERSAL COLOR PALETTES FOR BOTH COMPACT CHIPS & FULL CARDS
+   ============================================================ */
+
+.productivity-ref[data-productivity-color="cyan"],
+.productivity-ref-inline[data-productivity-color="cyan"],
+#prodStyleModalPreview[data-productivity-color="cyan"],
+#prodStyleModalPreview .productivity-style-preview[data-productivity-color="cyan"] {
+  --pref-accent: #06b6d4;
+  --pref-accent-rgb: 6, 182, 212;
+}
+
+.productivity-ref[data-productivity-color="emerald"],
+.productivity-ref-inline[data-productivity-color="emerald"],
+#prodStyleModalPreview[data-productivity-color="emerald"],
+#prodStyleModalPreview .productivity-style-preview[data-productivity-color="emerald"] {
+  --pref-accent: #10b981;
+  --pref-accent-rgb: 16, 185, 129;
+}
+
+.productivity-ref[data-productivity-color="coral"],
+.productivity-ref-inline[data-productivity-color="coral"],
+#prodStyleModalPreview[data-productivity-color="coral"],
+#prodStyleModalPreview .productivity-style-preview[data-productivity-color="coral"] {
+  --pref-accent: #f97316;
+  --pref-accent-rgb: 249, 115, 22;
+}
+
+.productivity-ref[data-productivity-color="violet"],
+.productivity-ref-inline[data-productivity-color="violet"],
+#prodStyleModalPreview[data-productivity-color="violet"],
+#prodStyleModalPreview .productivity-style-preview[data-productivity-color="violet"] {
+  --pref-accent: #8b5cf6;
+  --pref-accent-rgb: 139, 92, 246;
+}
+
+.productivity-ref[data-productivity-color="slate"],
+.productivity-ref-inline[data-productivity-color="slate"],
+#prodStyleModalPreview[data-productivity-color="slate"],
+#prodStyleModalPreview .productivity-style-preview[data-productivity-color="slate"] {
+  --pref-accent: #64748b;
+  --pref-accent-rgb: 100, 116, 139;
+}
+
+.productivity-ref[data-productivity-color="rose"],
+.productivity-ref-inline[data-productivity-color="rose"],
+#prodStyleModalPreview[data-productivity-color="rose"],
+#prodStyleModalPreview .productivity-style-preview[data-productivity-color="rose"] {
+  --pref-accent: #f43f5e;
+  --pref-accent-rgb: 244, 63, 94;
+}
+
+.productivity-ref[data-productivity-color="amber"],
+.productivity-ref-inline[data-productivity-color="amber"],
+#prodStyleModalPreview[data-productivity-color="amber"],
+#prodStyleModalPreview .productivity-style-preview[data-productivity-color="amber"] {
+  --pref-accent: #f59e0b;
+  --pref-accent-rgb: 245, 158, 11;
+}
+
+/* Glassmorphic Template */
+.productivity-ref[data-productivity-theme="glass"],
+.productivity-ref.pref-tpl-glass,
+.productivity-ref-inline[data-productivity-theme="glass"],
+.productivity-ref-inline.pref-tpl-glass,
+#prodStyleModalPreview .productivity-style-preview[data-productivity-theme="glass"] {
+  background: rgba(var(--pref-accent-rgb, 6, 182, 212), 0.12) !important;
+  backdrop-filter: blur(8px) !important;
+  border: 1px solid rgba(var(--pref-accent-rgb, 6, 182, 212), 0.35) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Vibrant Solid Template */
+.productivity-ref[data-productivity-theme="solid"],
+.productivity-ref.pref-tpl-solid,
+.productivity-ref-inline[data-productivity-theme="solid"],
+.productivity-ref-inline.pref-tpl-solid,
+#prodStyleModalPreview .productivity-style-preview[data-productivity-theme="solid"] {
+  background: var(--pref-accent, #06b6d4) !important;
+  color: #ffffff !important;
+  border: 1px solid transparent !important;
+}
+.productivity-ref[data-productivity-theme="solid"] *,
+.productivity-ref-inline[data-productivity-theme="solid"] *,
+#prodStyleModalPreview .productivity-style-preview[data-productivity-theme="solid"] * {
+  color: #ffffff !important;
+}
+
+/* Crisp Outlined Template */
+.productivity-ref[data-productivity-theme="outlined"],
+.productivity-ref.pref-tpl-outlined,
+.productivity-ref-inline[data-productivity-theme="outlined"],
+.productivity-ref-inline.pref-tpl-outlined,
+#prodStyleModalPreview .productivity-style-preview[data-productivity-theme="outlined"] {
+  background: transparent !important;
+  border: 1.5px solid var(--pref-accent, currentColor) !important;
+}
+
+/* Neon Glow Template */
+.productivity-ref[data-productivity-theme="neon"],
+.productivity-ref.pref-tpl-neon,
+.productivity-ref-inline[data-productivity-theme="neon"],
+.productivity-ref-inline.pref-tpl-neon,
+#prodStyleModalPreview .productivity-style-preview[data-productivity-theme="neon"] {
+  background: rgba(15, 23, 42, 0.75) !important;
+  color: #f8fafc !important;
+  border: 1px solid var(--pref-accent, #06b6d4) !important;
+  box-shadow: 0 0 12px rgba(var(--pref-accent-rgb, 6, 182, 212), 0.4) !important;
+}
+.productivity-ref-inline[data-productivity-theme="neon"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 18px rgba(var(--pref-accent-rgb, 6, 182, 212), 0.6) !important;
+}

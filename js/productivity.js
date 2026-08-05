@@ -1416,7 +1416,7 @@ window.ProductivityFloatingUI = {
 
     const isInline = ref.classList.contains('productivity-ref-inline');
     const stylesButton = this.toolbar.querySelector('.pref-btn-styles');
-    if (stylesButton) stylesButton.hidden = isInline;
+    if (stylesButton) stylesButton.hidden = false;
     const sizeButton = this.toolbar.querySelector('.pref-btn-size');
     if (sizeButton) sizeButton.hidden = isInline;
 
@@ -2639,38 +2639,21 @@ window.deleteTodoListSource = function(groupId) {
 
 window.PRODUCTIVITY_STYLE_TEMPLATES = Object.freeze({
   calendar: Object.freeze([
-    {
-      id: 'clean-row',
-      label: 'Clean Row',
-      description: 'A minimal one-line calendar reference.',
-      icon: 'calendar-days'
-    },
-    {
-      id: 'accent-rule',
-      label: 'Accent Rule',
-      description: 'Adds a subtle rule using the PapeRuss accent.',
-      icon: 'calendar-days'
-    }
+    { id: 'clean-row', label: 'Clean Row', description: 'A minimal one-line calendar reference.', icon: 'calendar-days' },
+    { id: 'accent-rule', label: 'Accent Rule', description: 'Subtle accent rule along the side.', icon: 'calendar-days' },
+    { id: 'glass', label: 'Glassmorphic', description: 'Translucent background with blur and glowing border.', icon: 'sparkles' },
+    { id: 'solid', label: 'Vibrant Solid', description: 'Bold solid accent fill with high-contrast text.', icon: 'square-fill' },
+    { id: 'outlined', label: 'Crisp Outlined', description: 'Clean 1.5px accent border with transparent backdrop.', icon: 'square' },
+    { id: 'neon', label: 'Neon Glow', description: 'Dark-mode glowing accent border with hover elevation.', icon: 'zap' }
   ]),
   'todo-list': Object.freeze([
-    {
-      id: 'minimal',
-      label: 'Minimal',
-      description: 'A clean title with compact task rows.',
-      icon: 'list-checks'
-    },
-    {
-      id: 'title-rule',
-      label: 'Title Rule',
-      description: 'Adds an accent divider beneath the list title.',
-      icon: 'list-checks'
-    },
-    {
-      id: 'soft-paper',
-      label: 'Soft Paper',
-      description: 'Adds a subtle accent tint and outline.',
-      icon: 'list-checks'
-    }
+    { id: 'minimal', label: 'Minimal', description: 'A clean title with compact task rows.', icon: 'list-checks' },
+    { id: 'title-rule', label: 'Title Rule', description: 'Adds an accent divider beneath the list title.', icon: 'list-checks' },
+    { id: 'soft-paper', label: 'Soft Paper', description: 'Subtle accent background tint and border.', icon: 'list-checks' },
+    { id: 'glass', label: 'Glassmorphic', description: 'Translucent background with blur and glowing border.', icon: 'sparkles' },
+    { id: 'solid', label: 'Vibrant Solid', description: 'Bold solid accent fill with high-contrast text.', icon: 'square-fill' },
+    { id: 'outlined', label: 'Crisp Outlined', description: 'Clean 1.5px accent border with transparent backdrop.', icon: 'square' },
+    { id: 'neon', label: 'Neon Glow', description: 'Dark-mode glowing accent border with hover elevation.', icon: 'zap' }
   ])
 });
 
@@ -2695,16 +2678,21 @@ window.ProductivityStylesModal = {
         </div>
         <div class="productivity-style-modal-body">
           <div class="productivity-style-modal-section">
-            <div class="productivity-style-preview-container" id="prodStyleModalPreview"></div>
+            <h4 style="margin:0 0 8px 0;font-size:13px;color:var(--fg-secondary)">Live Preview</h4>
+            <div class="productivity-style-preview-container" id="prodStyleModalPreview" style="padding:16px;background:var(--bg-secondary);border-radius:8px;display:flex;align-items:center;justify-content:center;min-height:70px"></div>
           </div>
-          <div class="productivity-style-modal-section">
-            <h4 style="margin:0 0 10px 0;font-size:13px;color:var(--fg-secondary)">Style</h4>
+          <div class="productivity-style-modal-section" style="margin-top:14px">
+            <h4 style="margin:0 0 8px 0;font-size:13px;color:var(--fg-secondary)">Color Palette</h4>
+            <div id="prodStyleModalColorOptions" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+          </div>
+          <div class="productivity-style-modal-section" style="margin-top:14px">
+            <h4 style="margin:0 0 8px 0;font-size:13px;color:var(--fg-secondary)">Style Template</h4>
             <div id="prodStyleModalOptions" role="radiogroup" style="display:flex;flex-wrap:wrap;gap:10px"></div>
           </div>
         </div>
         <div class="productivity-style-modal-footer">
           <button type="button" class="btn" id="prodStyleModalCancel">Cancel</button>
-          <button type="button" class="btn btn-primary" id="prodStyleModalApply" style="background:var(--pref-accent);border-color:var(--pref-accent)">Apply</button>
+          <button type="button" class="btn btn-primary" id="prodStyleModalApply">Apply</button>
         </div>
       </div>
     `;
@@ -2739,7 +2727,8 @@ window.ProductivityStylesModal = {
 
     const sourceType = activeRef.getAttribute('data-paperuss-productivity');
     const sourceId = activeRef.getAttribute('data-source-id');
-    const persistedTemplateId = activeRef.getAttribute('data-productivity-template') || (sourceType === 'calendar' ? 'clean-row' : 'minimal');
+    const persistedTemplateId = activeRef.getAttribute('data-productivity-template') || activeRef.getAttribute('data-productivity-theme') || (sourceType === 'calendar' ? 'clean-row' : 'minimal');
+    const persistedColorId = activeRef.getAttribute('data-productivity-color') || 'default';
     const activeNoteId = getProductivityActiveNoteId();
 
     this.context = {
@@ -2749,6 +2738,8 @@ window.ProductivityStylesModal = {
       sourceId,
       persistedTemplateId,
       pendingTemplateId: persistedTemplateId,
+      persistedColorId,
+      pendingColorId: persistedColorId,
       activeNoteId,
       openerBtn
     };
@@ -2782,6 +2773,43 @@ window.ProductivityStylesModal = {
   },
 
   renderOptions() {
+    // Render Color Swatches
+    const colorContainer = document.getElementById('prodStyleModalColorOptions');
+    if (colorContainer) {
+      colorContainer.innerHTML = '';
+      const colors = [
+        { id: 'default', label: 'Default Accent', hex: 'var(--accent, #6366f1)' },
+        { id: 'cyan', label: 'Oceanic Cyan', hex: '#06b6d4' },
+        { id: 'emerald', label: 'Emerald Mint', hex: '#10b981' },
+        { id: 'coral', label: 'Sunset Coral', hex: '#f97316' },
+        { id: 'violet', label: 'Amethyst Violet', hex: '#8b5cf6' },
+        { id: 'slate', label: 'Minimal Slate', hex: '#64748b' },
+        { id: 'rose', label: 'Rose Crimson', hex: '#f43f5e' },
+        { id: 'amber', label: 'Amber Gold', hex: '#f59e0b' }
+      ];
+
+      colors.forEach(c => {
+        const swatch = document.createElement('button');
+        swatch.type = 'button';
+        swatch.title = c.label;
+        swatch.style.width = '28px';
+        swatch.style.height = '28px';
+        swatch.style.borderRadius = '50%';
+        swatch.style.background = c.hex;
+        swatch.style.border = this.context.pendingColorId === c.id ? '2px solid var(--fg)' : '2px solid transparent';
+        swatch.style.outline = this.context.pendingColorId === c.id ? '2px solid ' + c.hex : 'none';
+        swatch.style.outlineOffset = '2px';
+        swatch.style.cursor = 'pointer';
+        swatch.onclick = (e) => {
+          e.preventDefault();
+          this.context.pendingColorId = c.id;
+          this.renderOptions();
+          this.renderPreview();
+        };
+        colorContainer.appendChild(swatch);
+      });
+    }
+
     const container = document.getElementById('prodStyleModalOptions');
     container.innerHTML = '';
 
@@ -2833,51 +2861,32 @@ window.ProductivityStylesModal = {
     if (window.lucide) window.lucide.createIcons({ root: container });
   },
 
-  renderPreview() {
+    renderPreview() {
     const container = document.getElementById('prodStyleModalPreview');
+    if (!container || !this.context) return;
 
-    const typeClass = this.context.sourceType === 'calendar' ? 'productivity-style-preview-calendar' : 'productivity-style-preview-todo';
-    const tplClass = 'pref-preview-' + this.context.pendingTemplateId;
+    const ref = this.context.storedRef;
+    const isInline = ref && (ref.classList.contains('productivity-ref-inline') || ref.getAttribute('data-productivity-layout') === 'compact');
+    const colorId = this.context.pendingColorId || 'default';
+    const themeId = this.context.pendingTemplateId || (this.context.sourceType === 'calendar' ? 'clean-row' : 'minimal');
+
+    container.setAttribute('data-productivity-color', colorId);
+    container.setAttribute('data-productivity-theme', themeId);
 
     let previewHtml = '';
 
-    if (this.context.sourceType === 'calendar') {
-      previewHtml = `
-<div class="productivity-style-preview ${typeClass} ${tplClass} productivity-ref-card">
-  <div class="pref-row pref-row-header">
-    <span class="pref-title">
-      <i data-lucide="calendar-days"></i>
-      Project Review · Aug 11 · 3:00–4:00 PM
-    </span>
-  </div>
-</div>`;
+    if (isInline) {
+      if (this.context.sourceType === 'calendar') {
+        previewHtml = '<span class="productivity-style-preview productivity-ref-inline" data-productivity-theme="' + themeId + '" data-productivity-color="' + colorId + '"><span class="pref-inline-icon" aria-hidden="true"><i data-lucide="calendar"></i></span><span class="pref-inline-title">Project Review</span><span class="pref-inline-meta">Aug 11 · 3:00 PM</span></span>';
+      } else {
+        previewHtml = '<span class="productivity-style-preview productivity-ref-inline" data-productivity-theme="' + themeId + '" data-productivity-color="' + colorId + '"><button class="pref-inline-expand" type="button" aria-label="Toggle"><i data-lucide="chevron-down"></i></button><span class="pref-inline-icon" aria-hidden="true">☑</span><span class="pref-inline-title">Shopping List</span><span class="pref-inline-meta">1/3</span></span>';
+      }
     } else {
-      previewHtml = `
-<div class="productivity-style-preview ${typeClass} ${tplClass} productivity-ref-card">
-  <div class="pref-row pref-row-header">
-    <span class="pref-title">
-      <i data-lucide="list-checks"></i>
-      Shopping List
-    </span>
-  </div>
-
-  <div class="pref-row-tasks">
-    <div class="pref-task-item">
-      <i data-lucide="square"></i>
-      <span>Milk</span>
-    </div>
-
-    <div class="pref-task-item">
-      <i data-lucide="square"></i>
-      <span>Eggs</span>
-    </div>
-
-    <div class="pref-task-item">
-      <i data-lucide="square-check-big"></i>
-      <span>Bread</span>
-    </div>
-  </div>
-</div>`;
+      if (this.context.sourceType === 'calendar') {
+        previewHtml = '<div class="productivity-style-preview productivity-ref productivity-ref-calendar productivity-ref-card pref-tpl-' + themeId + '" data-productivity-theme="' + themeId + '" data-productivity-color="' + colorId + '" style="width:100%"><div class="pref-row pref-row-header"><span class="pref-title"><i data-lucide="calendar-days"></i> Project Review · Aug 11 · 3:00–4:00 PM</span></div></div>';
+      } else {
+        previewHtml = '<div class="productivity-style-preview productivity-ref productivity-ref-todo productivity-ref-card pref-tpl-' + themeId + '" data-productivity-theme="' + themeId + '" data-productivity-color="' + colorId + '" style="width:100%"><div class="pref-row pref-row-header"><span class="pref-title"><i data-lucide="list-checks"></i> Shopping List</span></div><div class="pref-row-tasks"><div class="pref-task-item"><i data-lucide="square"></i> <span>Milk</span></div><div class="pref-task-item"><i data-lucide="square"></i> <span>Eggs</span></div><div class="pref-task-item"><i data-lucide="square-check-big"></i> <span style="text-decoration:line-through">Bread</span></div></div></div>';
+      }
     }
 
     container.innerHTML = previewHtml;
@@ -2915,6 +2924,12 @@ window.ProductivityStylesModal = {
 
     // Apply changes
     realRef.setAttribute('data-productivity-template', pendingTemplateId);
+    realRef.setAttribute('data-productivity-theme', pendingTemplateId);
+    if (this.context.pendingColorId && this.context.pendingColorId !== 'default') {
+      realRef.setAttribute('data-productivity-color', this.context.pendingColorId);
+    } else {
+      realRef.removeAttribute('data-productivity-color');
+    }
     window.applyProductivityTemplateClass(realRef, pendingTemplateId);
 
     // Verify
