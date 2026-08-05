@@ -1189,6 +1189,7 @@ window.ProductivityFloatingUI = {
   moreMenu: null,
 
   activeRef: null,
+  isPinned: false,
   closeTimer: null,
   scrollRaf: null,
   pointerRaf: null,
@@ -1325,6 +1326,7 @@ window.ProductivityFloatingUI = {
   },
 
   scheduleHide() {
+    if (this.isPinned) return;
     this.clearTimer();
     this.closeTimer = setTimeout(() => {
       if (this.moreMenu && this.moreMenu.parentNode) return; // don't close if menu open
@@ -1343,6 +1345,7 @@ window.ProductivityFloatingUI = {
     this.menuRef = null;
     this.activeRef = null;
     this.pointerTracking = false;
+    this.isPinned = false;
   },
 
   forceHide() {
@@ -1383,7 +1386,14 @@ window.ProductivityFloatingUI = {
     this.positionToolbar();
   },
 
+  pinFor(ref) {
+    this.isPinned = true;
+    this.pointerTracking = false;
+    this.showFor(ref);
+  },
+
   trackPointer(ref, event) {
+    if (this.isPinned) return;
     if (
       !ref ||
       ref !== this.activeRef ||
@@ -1669,6 +1679,12 @@ window.getDefaultProductivityTemplate = function(sourceType) {
 function bindProductivityReferenceInteractions(ref) {
   if (!ref || ref.__paperussProductivityBound) return;
   ref.__paperussProductivityBound = true;
+
+  ref.addEventListener('click', event => {
+    if (window.ProductivityFloatingUI) {
+      window.ProductivityFloatingUI.pinFor(ref);
+    }
+  });
 
   ref.addEventListener('pointerenter', event => {
     if (window.ProductivityFloatingUI) {
