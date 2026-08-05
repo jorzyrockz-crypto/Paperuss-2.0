@@ -932,6 +932,10 @@ window.ProductivityFloatingUI = {
     // Event handlers for toolbar itself
     this.toolbar.addEventListener('mouseenter', () => this.clearTimer());
     this.toolbar.addEventListener('mouseleave', () => this.scheduleHide());
+    this.toolbar.addEventListener('pointerdown', (e) => {
+      // Prevent clearing editor caret and ProductivitySafeDelete when interacting with toolbar
+      e.preventDefault();
+    });
 
     // Action Handlers
     const doOpen = (e) => {
@@ -1020,6 +1024,7 @@ window.ProductivityFloatingUI = {
     }
     this.closeMoreMenu();
 
+    this.menuRef = null;
     this.activeRef = null;
   },
 
@@ -1099,12 +1104,17 @@ window.ProductivityFloatingUI = {
 
       this.moreMenu.addEventListener('mouseenter', () => this.clearTimer());
       this.moreMenu.addEventListener('mouseleave', () => this.scheduleHide());
+      this.moreMenu.addEventListener('pointerdown', (e) => {
+        // Prevent clearing editor caret and ProductivitySafeDelete when clicking menu
+        e.preventDefault();
+      });
     }
 
     const type = this.activeRef.getAttribute('data-paperuss-productivity');
     const sourceId = this.activeRef.getAttribute('data-source-id');
     const typeLabel = type === 'calendar' ? 'Event' : 'Todo List';
 
+    this.menuRef = this.activeRef;
     this.moreMenu.innerHTML = '';
 
     const mkBtn = (cls, iconName, txt, danger) => {
@@ -1121,22 +1131,27 @@ window.ProductivityFloatingUI = {
     const remBtn = mkBtn('pref-mitem-rem', 'unlink', 'Remove from Leaf', false);
     const delBtn = mkBtn('pref-mitem-del', 'trash-2', 'Delete Source ' + typeLabel, true);
 
+    const getMenuRef = () => (this.menuRef && this.menuRef.isConnected ? this.menuRef : null);
+
     copyBtn.onclick = (e) => {
         e.preventDefault(); e.stopPropagation();
+        const ref = getMenuRef();
         this.forceHide();
-        if (window.ProductivityClipboard) window.ProductivityClipboard.toolbarCopy(this.activeRef);
+        if (ref && window.ProductivityClipboard) window.ProductivityClipboard.toolbarCopy(ref);
     };
 
     cutBtn.onclick = (e) => {
         e.preventDefault(); e.stopPropagation();
+        const ref = getMenuRef();
         this.forceHide();
-        if (window.ProductivityClipboard) window.ProductivityClipboard.toolbarCut(this.activeRef);
+        if (ref && window.ProductivityClipboard) window.ProductivityClipboard.toolbarCut(ref);
     };
 
     remBtn.onclick = (e) => {
       e.preventDefault(); e.stopPropagation();
-      if (typeof window.removeProductivityReference === 'function') window.removeProductivityReference(this.activeRef);
+      const ref = getMenuRef();
       this.forceHide();
+      if (ref && typeof window.removeProductivityReference === 'function') window.removeProductivityReference(ref);
     };
 
     delBtn.onclick = (e) => {
@@ -2171,6 +2186,10 @@ window.ProductivitySafeDelete = {
 
     // Global mousedown to clear selection if clicked outside editor/ref
     document.addEventListener('mousedown', (e) => {
+      const runtimeUI = e.target.closest('.pref-toolbar-portal, .productivity-ref-menu');
+      if (runtimeUI) {
+        return;
+      }
       if (!editor.contains(e.target)) {
         this.clear();
       }
