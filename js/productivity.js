@@ -1295,7 +1295,8 @@ window.ProductivityFloatingUI = {
       }
       if (typeof window.handleBodyInput === 'function') window.handleBodyInput();
       if (typeof window.toast === 'function') {
-        window.toast('Card size: ' + nextSize);
+        const widthLabels = { compact: 'Compact (320px)', standard: 'Medium (580px)', expanded: 'Full Width (100%)' };
+      window.toast('Card width: ' + (widthLabels[nextSize] || nextSize));
       }
       this.showFor(ref);
     };

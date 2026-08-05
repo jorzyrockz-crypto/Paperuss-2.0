@@ -3294,33 +3294,28 @@ blockquote.note-callout.callout-info {
 
 
 /* ============================================================
-   FULL ROW CARD SIZE PRESETS
+   FULL ROW CARD WIDTH PRESETS
    ============================================================ */
 
 .productivity-ref[data-productivity-card-size="compact"] {
-  margin: 6px 0 !important;
-  padding: 6px 10px !important;
-  font-size: 0.88em !important;
-}
-.productivity-ref[data-productivity-card-size="compact"] .pref-row-header {
-  padding: 2px 0 !important;
-  gap: 4px !important;
-}
-.productivity-ref[data-productivity-card-size="compact"] .pref-task-item {
-  padding: 2px 0 !important;
-  gap: 4px !important;
+  width: 320px !important;
+  max-width: 100% !important;
+  margin: 10px 0 !important;
+  box-sizing: border-box !important;
 }
 
-.productivity-ref[data-productivity-card-size="expanded"] {
+.productivity-ref[data-productivity-card-size="standard"],
+.productivity-ref[data-productivity-card-size="medium"] {
+  width: 580px !important;
+  max-width: 100% !important;
+  margin: 12px 0 !important;
+  box-sizing: border-box !important;
+}
+
+.productivity-ref[data-productivity-card-size="expanded"],
+.productivity-ref[data-productivity-card-size="full"] {
+  width: 100% !important;
+  max-width: 100% !important;
   margin: 16px 0 !important;
-  padding: 16px 20px !important;
-  font-size: 1.05em !important;
-}
-.productivity-ref[data-productivity-card-size="expanded"] .pref-row-header {
-  padding: 8px 0 !important;
-  gap: 10px !important;
-}
-.productivity-ref[data-productivity-card-size="expanded"] .pref-task-item {
-  padding: 8px 0 !important;
-  gap: 10px !important;
+  box-sizing: border-box !important;
 }
