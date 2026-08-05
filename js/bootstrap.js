@@ -901,6 +901,9 @@ function isMarkdownText(text) {
 
   // Paste images, spreadsheet tables, or clean formatted HTML from clipboard
   edEl.addEventListener('paste', e=>{
+    if (window.ProductivityClipboard && window.ProductivityClipboard.handlePaste(e)) {
+        return;
+    }
     if(!e.clipboardData) return;
     const items=e.clipboardData.items||[];
     for(const it of items){

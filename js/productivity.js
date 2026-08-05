@@ -1116,8 +1116,22 @@ window.ProductivityFloatingUI = {
       return b;
     };
 
+    const copyBtn = mkBtn('pref-mitem-copy', 'copy', 'Copy Reference', false);
+    const cutBtn = mkBtn('pref-mitem-cut', 'scissors', 'Cut Reference', false);
     const remBtn = mkBtn('pref-mitem-rem', 'unlink', 'Remove from Leaf', false);
     const delBtn = mkBtn('pref-mitem-del', 'trash-2', 'Delete Source ' + typeLabel, true);
+
+    copyBtn.onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        this.forceHide();
+        if (window.ProductivityClipboard) window.ProductivityClipboard.toolbarCopy(this.activeRef);
+    };
+
+    cutBtn.onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        this.forceHide();
+        if (window.ProductivityClipboard) window.ProductivityClipboard.toolbarCut(this.activeRef);
+    };
 
     remBtn.onclick = (e) => {
       e.preventDefault(); e.stopPropagation();
@@ -1132,6 +1146,8 @@ window.ProductivityFloatingUI = {
       else { if (typeof window.deleteTodoListSource === 'function') window.deleteTodoListSource(sourceId); }
     };
 
+    this.moreMenu.appendChild(copyBtn);
+    this.moreMenu.appendChild(cutBtn);
     this.moreMenu.appendChild(remBtn);
     this.moreMenu.appendChild(delBtn);
 
@@ -2367,7 +2383,7 @@ window.ProductivitySafeDelete = {
 
 
 window.ProductivityInsertion = {
-  insert(type, sourceId) {
+  insert(type, sourceId, options = {}) {
     const editor = document.getElementById('noteBody');
     if (!editor) return;
 
@@ -2377,7 +2393,7 @@ window.ProductivityInsertion = {
 
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) {
-      this.insertAtEnd(editor, type, sourceId);
+      this.insertAtEnd(editor, type, sourceId, options);
       return;
     }
 
@@ -2388,7 +2404,7 @@ window.ProductivityInsertion = {
 
     const context = this.resolveContext(editor, range);
     if (!context) {
-      this.insertAtEnd(editor, type, sourceId);
+      this.insertAtEnd(editor, type, sourceId, options);
       return;
     }
 
@@ -2396,7 +2412,7 @@ window.ProductivityInsertion = {
       window.HistoryManager.capture(true);
     }
 
-    const reference = this.createReference(type, sourceId);
+    const reference = this.createReference(type, sourceId, options);
     if (!reference) return;
 
     try {
@@ -2444,9 +2460,9 @@ window.ProductivityInsertion = {
     }
   },
 
-  insertAtEnd(editor, type, sourceId) {
+  insertAtEnd(editor, type, sourceId, options = {}) {
     if (window.HistoryManager && typeof window.HistoryManager.capture === 'function') window.HistoryManager.capture(true);
-    const reference = this.createReference(type, sourceId);
+    const reference = this.createReference(type, sourceId, options);
     if (!reference) return;
 
     let lastBlock = editor.lastElementChild;
@@ -2528,7 +2544,7 @@ window.ProductivityInsertion = {
     return curr.tagName === 'LI' ? curr : liNode;
   },
 
-  createReference(type, sourceId) {
+  createReference(type, sourceId, options = {}) {
     const normSourceId = String(sourceId);
     const safeId = typeof sanitizeId === 'function' ? sanitizeId(normSourceId) : normSourceId.replace(/[^a-zA-Z0-9_-]/g, '');
     if (!safeId) {
@@ -2537,6 +2553,17 @@ window.ProductivityInsertion = {
     }
     const source = window.resolveProductivitySource(type, safeId);
     if (!source || (Array.isArray(source) && source.length === 0)) {
+      if (options.allowUnavailableSource && options.fallbackHtml) {
+          const cleanHtml = typeof window.sanitizeNoteHTML === 'function' ? window.sanitizeNoteHTML(options.fallbackHtml) : options.fallbackHtml;
+          const tmp = document.createElement('div');
+          tmp.innerHTML = cleanHtml;
+          const refNode = tmp.querySelector('.productivity-ref') || tmp.firstElementChild;
+          if (refNode) {
+              refNode.classList.add('productivity-ref-unavailable');
+              if (options.templateId) refNode.setAttribute('data-productivity-template', 'pref-tpl-' + options.templateId);
+              return refNode;
+          }
+      }
       if(typeof toast === 'function') toast('Source not found in canonical store');
       return null;
     }
@@ -2544,7 +2571,9 @@ window.ProductivityInsertion = {
     const typeClass = type === 'todo-list' ? 'productivity-ref-todo' : 'productivity-ref-calendar';
     const tmp = document.createElement('div');
     tmp.innerHTML = '<div class="productivity-ref ' + typeClass + '" data-paperuss-productivity="' + type + '" data-source-id="' + safeId + '" data-ref-version="1" contenteditable="false"><div class="productivity-ref-static">' + staticHtml + '</div></div>';
-    return tmp.firstElementChild;
+    const finalNode = tmp.firstElementChild;
+    if (options.templateId) finalNode.setAttribute('data-productivity-template', 'pref-tpl-' + options.templateId);
+    return finalNode;
   },
 
   splitEditableBlock(context) {
@@ -2647,4 +2676,229 @@ window.ProductivityInsertion = {
       window.onEditorInput();
     }
   }
+};
+
+
+window.ProductivityClipboard = {
+    init(editor) {
+        if (this._initialized) return;
+        this._initialized = true;
+        editor.addEventListener('copy', this.handleCopy.bind(this), true);
+        editor.addEventListener('cut', this.handleCut.bind(this), true);
+    },
+
+    getActiveReference(range) {
+        if (window.ProductivitySafeDelete && window.ProductivitySafeDelete.selectedRef && window.ProductivitySafeDelete.selectedRef.isConnected) {
+            return window.ProductivitySafeDelete.selectedRef;
+        }
+        if (!range) return null;
+        if (range.startContainer === range.endContainer && range.startContainer.nodeType === 1) {
+            const container = range.startContainer;
+            if (range.startOffset + 1 === range.endOffset) {
+                const node = container.childNodes[range.startOffset];
+                if (node && node.nodeType === 1 && node.classList.contains('productivity-ref')) {
+                    return node;
+                }
+            }
+        }
+        return null;
+    },
+
+    buildClipboardPayload(ref) {
+        const type = ref.getAttribute('data-paperuss-productivity');
+        const sourceId = ref.getAttribute('data-source-id');
+        let templateId = ref.getAttribute('data-productivity-template') || '';
+
+        // Normalize logical IDs
+        if (templateId.startsWith('pref-tpl-')) {
+            templateId = templateId.substring(9);
+        }
+
+        const clone = ref.cloneNode(true);
+        if (typeof window.dehydrateProductivityReference === 'function') {
+            window.dehydrateProductivityReference(clone);
+        }
+
+        // Generate HTML Marker
+        clone.setAttribute('data-paperuss-clipboard-kind', 'productivity-reference');
+        clone.setAttribute('data-paperuss-clipboard-version', '1');
+
+        // Strip wrapper div if it's there from generic clone, just get the outerHTML
+        const fallbackHtml = clone.outerHTML;
+
+        // Attempt a readable plain text version
+        const fallbackText = clone.innerText || `[${type === 'calendar' ? 'Calendar Event' : 'Todo List'}: ${sourceId}]`;
+
+        return {
+            version: 1,
+            kind: "productivity-reference",
+            type,
+            sourceId,
+            templateId,
+            fallbackHtml,
+            fallbackText
+        };
+    },
+
+    async handleCopy(e) {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const ref = this.getActiveReference(sel.getRangeAt(0));
+        if (!ref) return;
+
+        e.preventDefault();
+        const payload = this.buildClipboardPayload(ref);
+
+        if (e.clipboardData) {
+            e.clipboardData.setData('text/plain', payload.fallbackText);
+            e.clipboardData.setData('text/html', payload.fallbackHtml);
+            e.clipboardData.setData('application/x-paperuss-productivity+json', JSON.stringify(payload));
+        }
+    },
+
+    async handleCut(e) {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const ref = this.getActiveReference(sel.getRangeAt(0));
+        if (!ref) return;
+
+        e.preventDefault();
+        const payload = this.buildClipboardPayload(ref);
+
+        if (e.clipboardData) {
+            e.clipboardData.setData('text/plain', payload.fallbackText);
+            e.clipboardData.setData('text/html', payload.fallbackHtml);
+            e.clipboardData.setData('application/x-paperuss-productivity+json', JSON.stringify(payload));
+        }
+
+        if (window.ProductivitySafeDelete && window.ProductivitySafeDelete.removeReference) {
+            window.ProductivitySafeDelete.removeReference(ref, { captureHistory: true, sync: true, restoreCaret: true });
+        }
+    },
+
+    handlePaste(e) {
+        if (!e.clipboardData) return false;
+
+        let payload = null;
+        const jsonText = e.clipboardData.getData('application/x-paperuss-productivity+json');
+        if (jsonText) {
+            try {
+                payload = JSON.parse(jsonText);
+            } catch(err) {}
+        }
+
+        if (!payload) {
+            const htmlText = e.clipboardData.getData('text/html');
+            if (htmlText && htmlText.includes('data-paperuss-clipboard-kind="productivity-reference"')) {
+                const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+                const marked = doc.querySelectorAll('[data-paperuss-clipboard-kind="productivity-reference"]');
+                if (marked.length === 1) {
+                    const node = marked[0];
+                    if (node.querySelector('[data-paperuss-clipboard-kind]')) return false; // Nested marks rejected
+
+                    let templateId = node.getAttribute('data-productivity-template') || '';
+                    if (templateId.startsWith('pref-tpl-')) templateId = templateId.substring(9);
+
+                    payload = {
+                        version: parseInt(node.getAttribute('data-paperuss-clipboard-version') || '1', 10),
+                        kind: 'productivity-reference',
+                        type: node.getAttribute('data-paperuss-productivity'),
+                        sourceId: node.getAttribute('data-source-id'),
+                        templateId: templateId,
+                        fallbackHtml: node.outerHTML,
+                        fallbackText: node.innerText
+                    };
+                }
+            }
+        }
+
+        if (!payload) return false;
+
+        const valid = this.validatePayload(payload);
+        if (!valid) return false;
+
+        e.preventDefault();
+
+        if (window.ProductivityInsertion) {
+            window.ProductivityInsertion.insert(payload.type, payload.sourceId, {
+                templateId: payload.templateId,
+                fallbackHtml: payload.fallbackHtml,
+                fallbackText: payload.fallbackText,
+                allowUnavailableSource: true
+            });
+        }
+        return true;
+    },
+
+    validatePayload(payload) {
+        if (!payload || typeof payload !== 'object') return false;
+        if (payload.version !== 1) return false;
+        if (payload.kind !== 'productivity-reference') return false;
+        if (payload.type !== 'calendar' && payload.type !== 'todo-list') return false;
+        if (!payload.sourceId || typeof payload.sourceId !== 'string') return false;
+
+        const source = window.resolveProductivitySource(payload.type, payload.sourceId);
+        // Valid if exists and matches type. (If missing, we allow it but handle via missing-source behavior).
+        if (source && Array.isArray(source) && source.length > 0) {
+            // Source exists, type assumed to match given our dual-store system.
+        }
+
+        return true;
+    },
+
+    async toolbarCopy(ref) {
+        const payload = this.buildClipboardPayload(ref);
+        try {
+            if (navigator.clipboard && navigator.clipboard.write) {
+                const htmlBlob = new Blob([payload.fallbackHtml], { type: 'text/html' });
+                const textBlob = new Blob([payload.fallbackText], { type: 'text/plain' });
+
+                const items = {
+                    'text/html': htmlBlob,
+                    'text/plain': textBlob
+                };
+
+                try {
+                    const jsonBlob = new Blob([JSON.stringify(payload)], { type: 'web application/x-paperuss-productivity+json' });
+                    items['web application/x-paperuss-productivity+json'] = jsonBlob;
+                } catch(e) {}
+
+                await navigator.clipboard.write([new window.ClipboardItem(items)]);
+            } else if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(payload.fallbackText);
+            }
+            if(typeof window.toast === 'function') window.toast('Reference copied');
+        } catch(e) {
+            if(typeof window.toast === 'function') window.toast('Copy failed');
+        }
+    },
+
+    async toolbarCut(ref) {
+        const payload = this.buildClipboardPayload(ref);
+        try {
+            if (navigator.clipboard && navigator.clipboard.write) {
+                const htmlBlob = new Blob([payload.fallbackHtml], { type: 'text/html' });
+                const textBlob = new Blob([payload.fallbackText], { type: 'text/plain' });
+                const items = {
+                    'text/html': htmlBlob,
+                    'text/plain': textBlob
+                };
+                try {
+                    const jsonBlob = new Blob([JSON.stringify(payload)], { type: 'web application/x-paperuss-productivity+json' });
+                    items['web application/x-paperuss-productivity+json'] = jsonBlob;
+                } catch(e) {}
+
+                await navigator.clipboard.write([new window.ClipboardItem(items)]);
+            } else if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(payload.fallbackText);
+            }
+
+            if (window.ProductivitySafeDelete && window.ProductivitySafeDelete.removeReference) {
+                window.ProductivitySafeDelete.removeReference(ref, { captureHistory: true, sync: true, restoreCaret: true });
+            }
+            if(typeof window.toast === 'function') window.toast('Reference cut');
+        } catch(e) {
+            if(typeof window.toast === 'function') window.toast('Cut failed');
+        }
+    }
 };
