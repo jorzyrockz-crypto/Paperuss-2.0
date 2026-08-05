@@ -5,12 +5,9 @@ window.convertProductivityReferenceLayout = function(ref, targetLayout) {
   const sourceId = ref.getAttribute('data-source-id');
   if (!type || !sourceId) return null;
 
-  const theme = ref.getAttribute('data-productivity-theme') || ref.getAttribute('data-productivity-template');
-  const color = ref.getAttribute('data-productivity-color');
   const options = {
     layout: targetLayout,
-    placement: targetLayout === 'compact' ? 'inline' : 'block',
-    templateId: theme
+    placement: targetLayout === 'compact' ? 'inline' : 'block'
   };
 
   const newRef = window.ProductivityInsertion.createReference(type, sourceId, options);
@@ -28,8 +25,6 @@ window.convertProductivityReferenceLayout = function(ref, targetLayout) {
     ref.parentNode.replaceChild(newRef, ref);
   }
 
-  if (theme) newRef.setAttribute('data-productivity-theme', theme);
-  if (color) newRef.setAttribute('data-productivity-color', color);
   if (typeof window.hydrateProductivityReference === 'function') {
     window.hydrateProductivityReference(newRef);
   }
@@ -172,7 +167,7 @@ function injectProductivityToolbarButtons() {
   const formatBar = document.getElementById('formatBar');
   if (!formatBar) return;
   if (document.getElementById('tbInsertCalendar')) return;
-
+  
   const btnCal = document.createElement('button');
   btnCal.id = 'tbInsertCalendar';
   btnCal.className = 'tool-btn';
@@ -1382,7 +1377,7 @@ window.ProductivityFloatingUI = {
 
     const isInline = ref.classList.contains('productivity-ref-inline');
     const stylesButton = this.toolbar.querySelector('.pref-btn-styles');
-    if (stylesButton) stylesButton.hidden = false;
+    if (stylesButton) stylesButton.hidden = isInline;
 
     this.toolbar.setAttribute('aria-label', ref.getAttribute('data-paperuss-productivity') === 'calendar' ? 'Calendar event actions' : 'Todo list actions');
 
@@ -2601,21 +2596,38 @@ window.deleteTodoListSource = function(groupId) {
 
 window.PRODUCTIVITY_STYLE_TEMPLATES = Object.freeze({
   calendar: Object.freeze([
-    { id: 'clean-row', label: 'Clean Row', description: 'A minimal one-line calendar reference.', icon: 'calendar-days' },
-    { id: 'accent-rule', label: 'Accent Rule', description: 'Adds a subtle rule using the accent color.', icon: 'calendar-days' },
-    { id: 'glass', label: 'Glassmorphic', description: 'Translucent background with blur and glowing border.', icon: 'sparkles' },
-    { id: 'solid', label: 'Vibrant Solid', description: 'Bold solid accent fill with high contrast text.', icon: 'square-fill' },
-    { id: 'outlined', label: 'Crisp Outlined', description: 'Clean 1px accent border with transparent backdrop.', icon: 'square' },
-    { id: 'neon', label: 'Neon Glow', description: 'Dark-mode glowing accent with hover elevation.', icon: 'zap' }
+    {
+      id: 'clean-row',
+      label: 'Clean Row',
+      description: 'A minimal one-line calendar reference.',
+      icon: 'calendar-days'
+    },
+    {
+      id: 'accent-rule',
+      label: 'Accent Rule',
+      description: 'Adds a subtle rule using the PapeRuss accent.',
+      icon: 'calendar-days'
+    }
   ]),
   'todo-list': Object.freeze([
-    { id: 'minimal', label: 'Minimal', description: 'A clean title with compact task rows.', icon: 'list-checks' },
-    { id: 'title-rule', label: 'Title Rule', description: 'Adds an accent divider beneath the list title.', icon: 'list-checks' },
-    { id: 'soft-paper', label: 'Soft Paper', description: 'Adds a subtle accent tint and outline.', icon: 'list-checks' },
-    { id: 'glass', label: 'Glassmorphic', description: 'Translucent background with blur and glowing border.', icon: 'sparkles' },
-    { id: 'solid', label: 'Vibrant Solid', description: 'Bold solid accent fill with high contrast text.', icon: 'square-fill' },
-    { id: 'outlined', label: 'Crisp Outlined', description: 'Clean 1px accent border with transparent backdrop.', icon: 'square' },
-    { id: 'neon', label: 'Neon Glow', description: 'Dark-mode glowing accent with hover elevation.', icon: 'zap' }
+    {
+      id: 'minimal',
+      label: 'Minimal',
+      description: 'A clean title with compact task rows.',
+      icon: 'list-checks'
+    },
+    {
+      id: 'title-rule',
+      label: 'Title Rule',
+      description: 'Adds an accent divider beneath the list title.',
+      icon: 'list-checks'
+    },
+    {
+      id: 'soft-paper',
+      label: 'Soft Paper',
+      description: 'Adds a subtle accent tint and outline.',
+      icon: 'list-checks'
+    }
   ])
 });
 
@@ -2684,8 +2696,7 @@ window.ProductivityStylesModal = {
 
     const sourceType = activeRef.getAttribute('data-paperuss-productivity');
     const sourceId = activeRef.getAttribute('data-source-id');
-    const persistedTemplateId = activeRef.getAttribute('data-productivity-template') || activeRef.getAttribute('data-productivity-theme') || (sourceType === 'calendar' ? 'clean-row' : 'minimal');
-    const persistedColorId = activeRef.getAttribute('data-productivity-color') || 'default';
+    const persistedTemplateId = activeRef.getAttribute('data-productivity-template') || (sourceType === 'calendar' ? 'clean-row' : 'minimal');
     const activeNoteId = getProductivityActiveNoteId();
 
     this.context = {
@@ -2695,8 +2706,6 @@ window.ProductivityStylesModal = {
       sourceId,
       persistedTemplateId,
       pendingTemplateId: persistedTemplateId,
-      persistedColorId,
-      pendingColorId: persistedColorId,
       activeNoteId,
       openerBtn
     };
@@ -2736,43 +2745,7 @@ window.ProductivityStylesModal = {
     const templates = window.PRODUCTIVITY_STYLE_TEMPLATES[this.context.sourceType];
     if (!templates) return;
 
-
-    const colorSection = document.createElement('div');
-    colorSection.style.marginTop = '16px';
-    colorSection.innerHTML = '<h4 style="margin:0 0 10px 0;font-size:13px;color:var(--fg-secondary)">Color Palette</h4>';
-    const colorGrid = document.createElement('div');
-    colorGrid.style.display = 'flex';
-    colorGrid.style.gap = '8px';
-
-    const colors = [
-      { id: 'default', label: 'Default', hex: 'var(--accent, #6366f1)' },
-      { id: 'cyan', label: 'Cyan', hex: '#06b6d4' },
-      { id: 'emerald', label: 'Emerald', hex: '#10b981' },
-      { id: 'coral', label: 'Coral', hex: '#f97316' },
-      { id: 'violet', label: 'Violet', hex: '#8b5cf6' },
-      { id: 'slate', label: 'Slate', hex: '#64748b' }
-    ];
-
-    colors.forEach(c => {
-      const swatch = document.createElement('button');
-      swatch.type = 'button';
-      swatch.title = c.label;
-      swatch.style.width = '28px';
-      swatch.style.height = '28px';
-      swatch.style.borderRadius = '50%';
-      swatch.style.background = c.hex;
-      swatch.style.border = this.context.pendingColorId === c.id ? '2px solid var(--fg)' : '2px solid transparent';
-      swatch.style.cursor = 'pointer';
-      swatch.onclick = () => {
-        this.context.pendingColorId = c.id;
-        this.renderOptions();
-        this.renderPreview();
-      };
-      colorGrid.appendChild(swatch);
-    });
-    colorSection.appendChild(colorGrid);
-    container.appendChild(colorSection);
-templates.forEach((tpl, idx) => {
+    templates.forEach((tpl, idx) => {
       const btn = document.createElement('div');
       btn.className = 'productivity-style-option ' + (this.context.pendingTemplateId === tpl.id ? 'selected' : '');
       btn.setAttribute('role', 'radio');
@@ -2899,12 +2872,6 @@ templates.forEach((tpl, idx) => {
 
     // Apply changes
     realRef.setAttribute('data-productivity-template', pendingTemplateId);
-    realRef.setAttribute('data-productivity-theme', pendingTemplateId);
-    if (this.context.pendingColorId && this.context.pendingColorId !== 'default') {
-      realRef.setAttribute('data-productivity-color', this.context.pendingColorId);
-    } else {
-      realRef.removeAttribute('data-productivity-color');
-    }
     window.applyProductivityTemplateClass(realRef, pendingTemplateId);
 
     // Verify
