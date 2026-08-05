@@ -1,3 +1,123 @@
+
+window.ProductivityInsertionContext = {
+  range: null,
+  noteId: null,
+  leafId: null,
+  capture() {
+    const sel = window.getSelection();
+    const ed = document.getElementById('noteBody');
+    if (sel && sel.rangeCount > 0 && ed && ed.contains(sel.anchorNode)) {
+       this.range = sel.getRangeAt(0).cloneRange();
+       this.noteId = window.paperussState ? window.paperussState.currentId : null;
+       this.leafId = ed.getAttribute('data-active-leaf-id');
+    }
+  },
+  restore() {
+    const ed = document.getElementById('noteBody');
+    if (!ed || !this.range) return false;
+    const currentNoteId = window.paperussState ? window.paperussState.currentId : null;
+    const currentLeafId = ed.getAttribute('data-active-leaf-id');
+    if (this.noteId !== currentNoteId || this.leafId !== currentLeafId) return false;
+    
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(this.range);
+    return true;
+  }
+};
+
+['pointerup', 'keyup', 'focusin'].forEach(ev => {
+  document.addEventListener(ev, (e) => {
+    const ed = document.getElementById('noteBody');
+    if (ed && (e.target === ed || ed.contains(e.target))) {
+      window.ProductivityInsertionContext.capture();
+    }
+  });
+});
+
+function injectProductivityToolbarButtons() {
+  const formatBar = document.getElementById('formatBar');
+  if (!formatBar) return;
+  if (document.getElementById('tbInsertCalendar')) return;
+  
+  const btnCal = document.createElement('button');
+  btnCal.id = 'tbInsertCalendar';
+  btnCal.className = 'tool-btn';
+  btnCal.setAttribute('data-cmd', 'calevent');
+  btnCal.title = 'Insert Calendar Event';
+  btnCal.innerHTML = '<i data-lucide="calendar" class="w-4 h-4"></i>';
+  btnCal.onmousedown = (e) => e.preventDefault();
+  btnCal.onclick = () => {
+    const editor = document.getElementById('noteBody');
+    if (editor && (editor.innerHTML.trim() === '' || (editor.children.length === 1 && editor.children[0].tagName === 'P' && editor.textContent.trim() === ''))) {
+       editor.innerHTML = '<p><br></p>';
+       const p = editor.querySelector('p');
+       const sel = window.getSelection();
+       const range = document.createRange();
+       range.setStart(p, 0);
+       range.collapse(true);
+       sel.removeAllRanges();
+       sel.addRange(range);
+       window.ProductivityInsertionContext.capture();
+    }
+    const today = new Date();
+    if (typeof window.openCalendarEventCreator === 'function') {
+      window.openCalendarEventCreator(today.getFullYear(), today.getMonth(), today.getDate(), { intent: 'insert' });
+    }
+  };
+
+  const btnTask = document.createElement('button');
+  btnTask.id = 'tbInsertTask';
+  btnTask.className = 'tool-btn';
+  btnTask.setAttribute('data-cmd', 'newtask');
+  btnTask.title = 'Insert Todo List';
+  btnTask.innerHTML = '<i data-lucide="check-square" class="w-4 h-4"></i>';
+  btnTask.onmousedown = (e) => e.preventDefault();
+  btnTask.onclick = () => {
+    const editor = document.getElementById('noteBody');
+    if (editor && (editor.innerHTML.trim() === '' || (editor.children.length === 1 && editor.children[0].tagName === 'P' && editor.textContent.trim() === ''))) {
+       editor.innerHTML = '<p><br></p>';
+       const p = editor.querySelector('p');
+       const sel = window.getSelection();
+       const range = document.createRange();
+       range.setStart(p, 0);
+       range.collapse(true);
+       sel.removeAllRanges();
+       sel.addRange(range);
+       window.ProductivityInsertionContext.capture();
+    }
+    if (typeof window.openTaskCreatorModal === 'function') {
+      window.openTaskCreatorModal({ intent: 'insert' });
+    }
+  };
+
+  formatBar.appendChild(btnCal);
+  formatBar.appendChild(btnTask);
+  if (window.lucide) window.lucide.createIcons({ root: formatBar });
+}
+document.addEventListener('DOMContentLoaded', injectProductivityToolbarButtons);
+
+window.buildProductivityInlineStaticSnapshot = function(type, source) {
+    const esc = (s) => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    if (type === 'calendar') {
+        const title = esc(source.title || 'Untitled Event');
+        const start = new Date(source.start);
+        let dStr = start.toLocaleDateString();
+        let tStr = start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        return `<span class="pref-inline-icon"><i data-lucide="calendar"></i></span><span class="pref-inline-title">${title}</span><span class="pref-inline-meta">${dStr} · ${tStr}</span>`;
+    } else if (type === 'todo-list') {
+        const title = esc(source.title || 'Untitled List');
+        let completed = 0;
+        let total = 0;
+        if (Array.isArray(source.items)) {
+            total = source.items.length;
+            completed = source.items.filter(i => i.checked).length;
+        }
+        return `<span class="pref-inline-icon"><i data-lucide="check-square"></i></span><span class="pref-inline-title">${title}</span><span class="pref-inline-meta">${completed}/${total}</span>`;
+    }
+    return '';
+};
+
 /* ============================================================
    CALENDAR VIEW
    ============================================================ */
@@ -421,7 +541,7 @@ async function openCalendarEventCreator(year, month, day, options){
           const evObj = loadedEvents.find(e => e.note.id === selectedEventNoteId);
           if(!evObj) { toast('Selected event no longer exists in canonical store'); return; }
 
-          window.insertProductivityReference('calendar', selectedEventNoteId);
+          const isCompact = document.getElementById('evInsertCompactToggle') ? document.getElementById('evInsertCompactToggle').checked : false; window.insertProductivityReference('calendar', selectedEventNoteId, { placement: isCompact ? 'inline' : 'block', layout: isCompact ? 'compact' : 'full-row' });
           toast(`Inserted event "${titleOf(evObj.note)}" into note`);
           close();
         };
@@ -484,7 +604,7 @@ async function openCalendarEventCreator(year, month, day, options){
         renderCalendarView(); renderAll();
 
         if(intent === 'insert') {
-          window.insertProductivityReference('calendar', newId);
+          const isCompact = document.getElementById('evInsertCompactToggle') ? document.getElementById('evInsertCompactToggle').checked : false; window.insertProductivityReference('calendar', newId, { placement: isCompact ? 'inline' : 'block', layout: isCompact ? 'compact' : 'full-row' });
           toast(`Inserted event "${title}" into note`);
         }
 
@@ -872,7 +992,7 @@ window.dehydrateProductivityReferences = function(rootElement) {
   if (rootElement.matches && rootElement.matches('.productivity-ref')) {
     window.dehydrateProductivityReference(rootElement);
   }
-  const refs = rootElement.querySelectorAll('.productivity-ref');
+  const refs = rootElement.querySelectorAll('.productivity-ref, .productivity-ref-inline');
   refs.forEach(ref => window.dehydrateProductivityReference(ref));
 };
 
@@ -1249,7 +1369,7 @@ window.hydrateProductivityReferences = function(rootElement) {
     }
   const refs = [];
   if (rootElement.matches && rootElement.matches('.productivity-ref')) refs.push(rootElement);
-  rootElement.querySelectorAll('.productivity-ref').forEach(r => refs.push(r));
+  rootElement.querySelectorAll('.productivity-ref, .productivity-ref-inline').forEach(r => refs.push(r));
 
   // Initialize Singleton UI if not already done
   window.ProductivityFloatingUI.init();
@@ -1266,6 +1386,18 @@ window.hydrateProductivityReferences = function(rootElement) {
     const type = ref.getAttribute('data-paperuss-productivity');
     const sourceId = ref.getAttribute('data-source-id');
     const currentTemplate = ref.getAttribute('data-productivity-template') || window.getDefaultProductivityTemplate(type);
+
+    if (ref.getAttribute('data-productivity-layout') === 'compact') {
+        ref.classList.add('productivity-ref-hydrated');
+        const source = window.resolveProductivitySource(type, sourceId);
+        if (!source) {
+            ref.innerHTML = '<span class="pref-inline-icon"><i data-lucide="alert-circle"></i></span><span class="pref-inline-title">Missing ' + (type==='calendar'?'Event':'Task') + '</span>';
+        } else {
+            ref.innerHTML = window.buildProductivityInlineStaticSnapshot(type, source);
+        }
+        if (window.lucide) window.lucide.createIcons({ root: ref });
+        return;
+    }
 
     window.applyProductivityTemplateClass(ref, currentTemplate);
 
@@ -1406,7 +1538,7 @@ window.insertProductivityReference = function(type, sourceId) {
 window.refreshProductivityReferences = function(type, sourceId) {
   const normType = String(type);
   const normId = String(sourceId);
-  const allRefs = document.querySelectorAll('.productivity-ref');
+  const allRefs = document.querySelectorAll('.productivity-ref, .productivity-ref-inline');
   const refs = Array.from(allRefs).filter(r => r.getAttribute('data-paperuss-productivity') === normType && String(r.getAttribute('data-source-id')) === normId);
   if (refs.length === 0) return;
 
@@ -2419,19 +2551,20 @@ window.ProductivityInsertion = {
       window.ProductivitySafeDelete.clear();
     }
 
+    let range = null;
+    if (window.ProductivityInsertionContext && window.ProductivityInsertionContext.restore()) {
+      window.ProductivityInsertionContext.range = null;
+    }
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) {
-      return this.insertAtEnd(editor, type, sourceId, options);
-    }
-
-    const range = sel.getRangeAt(0).cloneRange();
-    if (!range.collapsed) {
-      range.collapse(false);
-    }
-
-    const context = this.resolveContext(editor, range);
-    if (!context) {
-      return this.insertAtEnd(editor, type, sourceId, options);
+    if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
+      range = sel.getRangeAt(0).cloneRange();
+    } else {
+      let trailingP = document.createElement('p');
+      trailingP.innerHTML = '<br>';
+      editor.appendChild(trailingP);
+      this.placeCaret(trailingP, 0);
+      const sel2 = window.getSelection();
+      range = sel2.getRangeAt(0).cloneRange();
     }
 
     if (window.HistoryManager && typeof window.HistoryManager.capture === 'function') {
@@ -2441,50 +2574,59 @@ window.ProductivityInsertion = {
     const reference = this.createReference(type, sourceId, options);
     if (!reference) return false;
 
-    try {
-      let caretTarget = null;
-      let caretPos = 0;
-
-      if (context.type === 'existing-reference') {
-        const next = context.block.nextElementSibling;
-        editor.insertBefore(reference, next);
-        caretTarget = this.ensureCaretTarget(reference, editor, true);
-        caretPos = 0;
-      } else if (context.type === 'table' || context.type === 'complex') {
-        const next = context.block.nextElementSibling;
-        editor.insertBefore(reference, next);
-        caretTarget = this.ensureCaretTarget(reference, editor, true);
-        caretPos = 0;
-      } else if (context.type === 'list') {
-        const res = this.splitListAtItem(context);
-        editor.insertBefore(reference, res.nextSibling);
-        caretTarget = this.ensureCaretTarget(reference, editor, true);
-        caretPos = 0;
-      } else if (context.type === 'empty-paragraph') {
-        editor.insertBefore(reference, context.block);
-        caretTarget = context.block;
-        caretPos = 0;
-      } else {
-        const res = this.splitEditableBlock(context);
-        editor.insertBefore(reference, res.nextSibling);
-        caretTarget = res.caretTarget;
-        caretPos = res.caretPos;
+    if (options.layout === 'compact' || options.placement === 'inline') {
+      range.insertNode(reference);
+      range.setStartAfter(reference);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else {
+      const context = this.resolveContext(editor, range);
+      if (!context) {
+        return this.insertAtEnd(editor, type, sourceId, options);
       }
-
-      this.placeCaret(caretTarget, caretPos);
-
-      if (typeof window.hydrateProductivityReference === 'function') {
-        window.hydrateProductivityReference(reference);
-      } else if (typeof window.hydrateProductivityReferences === 'function') {
-        window.hydrateProductivityReferences(editor);
+      try {
+        let caretTarget = null;
+        let caretPos = 0;
+        if (context.type === 'existing-reference') {
+          const next = context.block.nextElementSibling;
+          editor.insertBefore(reference, next);
+          caretTarget = this.ensureCaretTarget(reference, editor, true);
+          caretPos = 0;
+        } else if (context.type === 'table' || context.type === 'complex') {
+          const next = context.block.nextElementSibling;
+          editor.insertBefore(reference, next);
+          caretTarget = this.ensureCaretTarget(reference, editor, true);
+          caretPos = 0;
+        } else if (context.type === 'list') {
+          const res = this.splitListAtItem(context);
+          editor.insertBefore(reference, res.nextSibling);
+          caretTarget = this.ensureCaretTarget(reference, editor, true);
+          caretPos = 0;
+        } else if (context.type === 'empty-paragraph') {
+          editor.insertBefore(reference, context.block);
+          caretTarget = context.block;
+          caretPos = 0;
+        } else {
+          const res = this.splitEditableBlock(context);
+          editor.insertBefore(reference, res.nextSibling);
+          caretTarget = res.caretTarget;
+          caretPos = res.caretPos;
+        }
+        this.placeCaret(caretTarget, caretPos);
+      } catch(e) {
+        return this.insertAtEnd(editor, type, sourceId, options);
       }
-
-      this.sync();
-      return true;
-    } catch (e) {
-      console.error('Contextual insertion failed:', e);
-      if (typeof window.toast === 'function') window.toast('Insertion failed');
     }
+
+    if (typeof window.hydrateProductivityReference === 'function') {
+      window.hydrateProductivityReference(reference);
+    } else if (typeof window.hydrateProductivityReferences === 'function') {
+      window.hydrateProductivityReferences(editor);
+    }
+
+    this.sync();
+    return true;
   },
 
   insertAtEnd(editor, type, sourceId, options = {}) {
@@ -2598,7 +2740,13 @@ window.ProductivityInsertion = {
     const staticHtml = window.buildProductivityStaticSnapshot(type, source);
     const typeClass = type === 'todo-list' ? 'productivity-ref-todo' : 'productivity-ref-calendar';
     const tmp = document.createElement('div');
-    tmp.innerHTML = '<div class="productivity-ref ' + typeClass + '" data-paperuss-productivity="' + type + '" data-source-id="' + safeId + '" data-ref-version="1" contenteditable="false"><div class="productivity-ref-static">' + staticHtml + '</div></div>';
+        const isCompact = options.layout === 'compact' || options.placement === 'inline';
+    if (isCompact) {
+      const inlineStatic = window.buildProductivityInlineStaticSnapshot(type, source);
+      tmp.innerHTML = '<span class="productivity-ref-inline" data-paperuss-productivity="' + type + '" data-source-id="' + safeId + '" data-productivity-layout="compact" contenteditable="false">' + inlineStatic + '</span>';
+    } else {
+      tmp.innerHTML = '<div class="productivity-ref ' + typeClass + '" data-paperuss-productivity="' + type + '" data-source-id="' + safeId + '" data-productivity-layout="full-row" data-ref-version="1" contenteditable="false"><div class="productivity-ref-static">' + staticHtml + '</div></div>';
+    }
     const finalNode = tmp.firstElementChild;
     if (options.templateId) finalNode.setAttribute('data-productivity-template', options.templateId);
     return finalNode;

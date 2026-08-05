@@ -249,7 +249,7 @@ async function openTaskCreatorModal(options){
           
           addNotification({type:'task',title:`${lines.length} tasks created`,body:lines.slice(0,3).join(', ')+(lines.length>3?'…':''),icon:'check-square',activity:true});
                     if (intent === 'insert') {
-            window.insertProductivityReference('todo-list', groupId);
+            const isCompact = document.getElementById('tmInsertCompactToggle') ? document.getElementById('tmInsertCompactToggle').checked : false; window.insertProductivityReference('todo-list', groupId, { placement: isCompact ? 'inline' : 'block', layout: isCompact ? 'compact' : 'full-row' });
             toast(`Inserted ${lines.length} task(s) into note`);
           }
           isCreatingTasks = false;

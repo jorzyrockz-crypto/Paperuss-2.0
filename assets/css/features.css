@@ -3029,3 +3029,39 @@ blockquote.note-callout.callout-info {
     opacity: 1;
   }
 }
+
+.productivity-ref-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  color: var(--fg);
+  user-select: all;
+  vertical-align: middle;
+  max-width: 100%;
+  white-space: nowrap;
+}
+.pref-inline-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--fg-muted);
+}
+.pref-inline-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.pref-inline-title {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.pref-inline-meta {
+  color: var(--fg-muted);
+  font-size: 0.9em;
+  flex-shrink: 0;
+}
