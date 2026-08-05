@@ -1099,7 +1099,7 @@ window.ProductivityFloatingUI = {
 
     if (!this.moreMenu) {
       this.moreMenu = document.createElement('div');
-      this.moreMenu.className = 'productivity-ref-menu';
+      this.moreMenu.className = 'productivity-ref-menu leaf-context-menu';
       this.moreMenu.setAttribute('data-paperuss-ui', 'true');
 
       this.moreMenu.addEventListener('mouseenter', () => this.clearTimer());
@@ -1120,9 +1120,8 @@ window.ProductivityFloatingUI = {
     const mkBtn = (cls, iconName, txt, danger) => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'pref-menu-item ' + cls;
+      b.className = 'pref-menu-item leaf-menu-item ' + cls + (danger ? ' danger' : '');
       b.innerHTML = `<i data-lucide="${iconName}"></i> <span>${txt}</span>`;
-      if (danger) b.style.color = 'var(--danger)';
       return b;
     };
 
