@@ -3006,13 +3006,7 @@ blockquote.note-callout.callout-info {
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.14);
   padding: 3px;
 }
-@supports (background: color-mix(in srgb, red 10%, transparent)) {
-  .productivity-ref-menu {
-    background: color-mix(in srgb, var(--bg) 78%, transparent);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-  }
-}
+
 
 .pref-menu-item {
   opacity: 0.62;
