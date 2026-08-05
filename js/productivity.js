@@ -1284,8 +1284,13 @@ window.ProductivityFloatingUI = {
       e.stopPropagation();
       const ref = this.activeRef;
       if (!ref || !ref.isConnected) return;
-      const currentSize = ref.getAttribute('data-productivity-card-size') || 'standard';
-      const nextSize = currentSize === 'standard' ? 'compact' : (currentSize === 'compact' ? 'expanded' : 'standard');
+      const currentSize = ref.getAttribute('data-productivity-card-size') || 'full';
+      let nextSize = 'full';
+      if (currentSize === 'full' || currentSize === 'expanded') nextSize = 'medium';
+      else if (currentSize === 'medium' || currentSize === 'standard') nextSize = 'compact';
+      else if (currentSize === 'compact') nextSize = 'tight';
+      else if (currentSize === 'tight') nextSize = 'full';
+
       ref.setAttribute('data-productivity-card-size', nextSize);
       if (typeof window.hydrateProductivityReference === 'function') {
         window.hydrateProductivityReference(ref);
@@ -1295,8 +1300,13 @@ window.ProductivityFloatingUI = {
       }
       if (typeof window.handleBodyInput === 'function') window.handleBodyInput();
       if (typeof window.toast === 'function') {
-        const widthLabels = { compact: 'Compact (320px)', standard: 'Medium (580px)', expanded: 'Full Width (100%)' };
-      window.toast('Card width: ' + (widthLabels[nextSize] || nextSize));
+        const widthLabels = {
+          full: 'Full Width (100% Block)',
+          medium: 'Medium (580px Reflow)',
+          compact: 'Compact (320px Reflow)',
+          tight: 'Tight (Hug Content Reflow)'
+        };
+        window.toast('Card width: ' + (widthLabels[nextSize] || nextSize));
       }
       this.showFor(ref);
     };
