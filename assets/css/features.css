@@ -2998,3 +2998,40 @@ blockquote.note-callout.callout-info {
     background-color: color-mix(in srgb, var(--pref-accent) 8%, transparent);
   }
 }
+\n
+.productivity-ref-menu {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.14);
+  padding: 3px;
+}
+@supports (background: color-mix(in srgb, red 10%, transparent)) {
+  .productivity-ref-menu {
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+}
+
+.pref-menu-item {
+  opacity: 0.62;
+  transition: opacity 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+
+.pref-menu-item:hover,
+.pref-menu-item:focus-visible {
+  opacity: 1;
+  background: color-mix(in srgb, var(--pref-accent) 10%, var(--subtle));
+}
+
+.pref-menu-item:active {
+  opacity: 1;
+  transform: scale(0.98);
+}
+
+@media (hover: none), (pointer: coarse) {
+  .pref-menu-item {
+    opacity: 1;
+  }
+}

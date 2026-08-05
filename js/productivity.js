@@ -1176,7 +1176,7 @@ window.ProductivityFloatingUI = {
   positionMoreMenu() {
     if (!this.moreMenu || !this.moreMenuAnchorBtn) return;
     const btnRect = this.moreMenuAnchorBtn.getBoundingClientRect();
-    this.moreMenu.style.cssText = 'position:fixed;z-index:9999;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:7px;box-shadow:0 3px 12px rgba(0,0,0,.12);display:flex;flex-direction:column;padding:3px;';
+    this.moreMenu.style.cssText = 'position:fixed;z-index:9999;min-width:140px;display:flex;flex-direction:column;';
 
     let top = btnRect.bottom + 4;
     if (top + this.moreMenu.offsetHeight > window.innerHeight - 8) {
@@ -2335,74 +2335,81 @@ window.ProductivitySafeDelete = {
   },
 
   removeSelected() {
-    if (!this.selectedRef || !this.selectedRef.isConnected) {
-      this.clear();
-      return;
-    }
+    return this.removeReference(this.selectedRef, { captureHistory: true, sync: true, restoreCaret: true });
+  },
+
+  removeReference(refNode, options = { captureHistory: true, sync: true, restoreCaret: true }) {
+    if (!refNode || !refNode.isConnected) return false;
+    if (!refNode.classList.contains('productivity-ref')) return false;
 
     const editor = document.getElementById('noteBody');
-    if (!editor || !editor.contains(this.selectedRef)) {
-      this.clear();
-      return;
+    if (!editor || !editor.contains(refNode)) return false;
+
+    if (this.selectedRef === refNode) {
+        const currentNoteId = window.paperussState ? window.paperussState.currentId : null;
+        const currentLeafId = editor.getAttribute('data-active-leaf-id');
+        if (currentNoteId !== this.activeNoteId || currentLeafId !== this.activeLeafId) {
+            return false;
+        }
     }
 
-    // Lifecycle check
-    const currentNoteId = window.paperussState ? window.paperussState.currentId : null;
-    const currentLeafId = editor.getAttribute('data-active-leaf-id');
-    if (currentNoteId !== this.activeNoteId || currentLeafId !== this.activeLeafId) {
-      this.clear();
-      return;
+    const nextBlock = refNode.nextElementSibling;
+    const prevBlock = refNode.previousElementSibling;
+
+    refNode.classList.remove('pref-delete-selected');
+    refNode.removeAttribute('aria-selected');
+
+    if (this.selectedRef === refNode) {
+      this.selectedRef = null;
+      this.activeNoteId = null;
+      this.activeLeafId = null;
     }
 
-    // Safely relocate caret
-    const nextBlock = this.selectedRef.nextElementSibling;
-    const prevBlock = this.selectedRef.previousElementSibling;
-
-    this.clear(); // clears visual class BEFORE capture
-
-    if (window.HistoryManager) {
+    if (options.captureHistory && window.HistoryManager && typeof window.HistoryManager.capture === 'function') {
       window.HistoryManager.capture(true);
     }
 
-    this.selectedRef.remove();
-    this.selectedRef = null;
+    refNode.remove();
 
     if (window.ProductivityFloatingUI) {
-      window.ProductivityFloatingUI.hideToolbar();
+      window.ProductivityFloatingUI.forceHide();
     }
 
-    // Caret relocation
-    const sel = window.getSelection();
-    const range = document.createRange();
-    if (nextBlock && nextBlock.nodeType === 1) {
-      range.setStart(nextBlock, 0);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } else if (prevBlock && prevBlock.nodeType === 1) {
-      range.setStart(prevBlock, prevBlock.childNodes.length);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } else {
-      const p = document.createElement('p');
-      p.innerHTML = '<br>';
-      editor.appendChild(p);
-      range.setStart(p, 0);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
+    if (options.restoreCaret) {
+      const sel = window.getSelection();
+      const range = document.createRange();
+      if (nextBlock && nextBlock.nodeType === 1) {
+        range.setStart(nextBlock, 0);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else if (prevBlock && prevBlock.nodeType === 1) {
+        range.setStart(prevBlock, prevBlock.childNodes.length);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else {
+        const p = document.createElement('p');
+        p.innerHTML = '<br>';
+        editor.appendChild(p);
+        range.setStart(p, 0);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
     }
 
-    // Sync
-    if (typeof window.handleBodyInput === 'function') {
-      window.handleBodyInput();
-    } else if (typeof window.onEditorInput === 'function') {
-      window.onEditorInput();
+    if (options.sync) {
+      if (typeof window.handleBodyInput === 'function') {
+        window.handleBodyInput();
+      } else if (typeof window.onEditorInput === 'function') {
+        window.onEditorInput();
+      }
     }
+
+    return true;
   }
 };
-
 
 window.ProductivityInsertion = {
   insert(type, sourceId, options = {}) {
