@@ -1236,9 +1236,16 @@ window.ProductivityFloatingUI = {
     btnSize.innerHTML = '<i data-lucide="scaling"></i>';
     btnSize.title = 'Card Size';
 
+    const btnDensity = document.createElement('button');
+    btnDensity.type = 'button';
+    btnDensity.className = 'pref-btn pref-btn-density';
+    btnDensity.innerHTML = '<i data-lucide="rows-3"></i>';
+    btnDensity.title = 'Content Density';
+
     this.toolbar.appendChild(btnOpen);
     this.toolbar.appendChild(btnEdit);
     this.toolbar.appendChild(btnSize);
+    this.toolbar.appendChild(btnDensity);
     this.toolbar.appendChild(btnStyles);
     this.toolbar.appendChild(btnMore);
 
@@ -1278,6 +1285,28 @@ window.ProductivityFloatingUI = {
     };
     btnOpen.onclick = doOpen;
     btnEdit.onclick = doOpen;
+
+    btnDensity.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const ref = this.activeRef;
+      if (!ref || !ref.isConnected) return;
+      const currentDensity = ref.getAttribute('data-productivity-density') || 'cozy';
+      const nextDensity = currentDensity === 'cozy' ? 'compact' : (currentDensity === 'compact' ? 'comfortable' : 'cozy');
+      ref.setAttribute('data-productivity-density', nextDensity);
+      if (typeof window.hydrateProductivityReference === 'function') {
+        window.hydrateProductivityReference(ref);
+      }
+      if (window.HistoryManager && typeof window.HistoryManager.capture === 'function') {
+        window.HistoryManager.capture(true);
+      }
+      if (typeof window.handleBodyInput === 'function') window.handleBodyInput();
+      if (typeof window.toast === 'function') {
+        const labels = { cozy: 'Cozy Density (Standard Spacing)', compact: 'Compact Density (Tight Spacing)', comfortable: 'Comfortable Density (Spacious Spacing)' };
+        window.toast(labels[nextDensity] || nextDensity);
+      }
+      this.showFor(ref);
+    };
 
     btnSize.onclick = (e) => {
       e.preventDefault();
@@ -1419,6 +1448,8 @@ window.ProductivityFloatingUI = {
     if (stylesButton) stylesButton.hidden = false;
     const sizeButton = this.toolbar.querySelector('.pref-btn-size');
     if (sizeButton) sizeButton.hidden = isInline;
+    const densityButton = this.toolbar.querySelector('.pref-btn-density');
+    if (densityButton) densityButton.hidden = isInline;
 
     this.toolbar.setAttribute('aria-label', ref.getAttribute('data-paperuss-productivity') === 'calendar' ? 'Calendar event actions' : 'Todo list actions');
 
@@ -2088,6 +2119,11 @@ window.hydrateProductivityReference = function(ref) {
       headerRow.appendChild(title);
       card.appendChild(headerRow);
     } else {
+      const cardSize = ref.getAttribute('data-productivity-card-size') || 'full';
+      const density = ref.getAttribute('data-productivity-density') || 'cozy';
+      const completedCount = source.filter(i => i.completed || i.checked || i.done || i.status === 'completed').length;
+      const percent = source.length > 0 ? Math.round((completedCount / source.length) * 100) : 0;
+
       title.innerHTML = `<i data-lucide="list-checks"></i> ${String(
         source[0] && source[0].groupTitle
           ? source[0].groupTitle
@@ -2096,9 +2132,18 @@ window.hydrateProductivityReference = function(ref) {
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')}`;
+        .replace(/"/g, '&quot;')} <span class="pref-inline-meta" style="margin-left:auto;font-weight:normal">${completedCount}/${source.length}</span>`;
 
       headerRow.appendChild(title);
+
+      // Header progress bar for medium & full sizes
+      if (cardSize === 'medium' || cardSize === 'full' || cardSize === 'standard' || cardSize === 'expanded') {
+        const progressWrap = document.createElement('div');
+        progressWrap.className = 'pref-progress-bar-wrap';
+        progressWrap.innerHTML = `<div class="pref-progress-bar-fill" style="width:${percent}%"></div>`;
+        headerRow.appendChild(progressWrap);
+      }
+
       card.appendChild(headerRow);
 
       const tasks = document.createElement('div');
@@ -2145,10 +2190,41 @@ window.hydrateProductivityReference = function(ref) {
         });
 
         row.append(taskToggle, text);
+
+        // Render Priority Badge (in compact, medium, full)
+        if (item.priority && item.priority !== 'none' && cardSize !== 'tight') {
+          const prioBadge = document.createElement('span');
+          prioBadge.className = `pref-task-badge pref-badge-priority-${item.priority}`;
+          prioBadge.textContent = item.priority === 'high' ? 'High' : (item.priority === 'medium' ? 'Medium' : 'Low');
+          row.appendChild(prioBadge);
+        }
+
+        // Render Due Date Badge (in compact, medium, full)
+        const dueTs = item.due || item.dueDate;
+        if (dueTs && cardSize !== 'tight') {
+          const dueDate = new Date(dueTs);
+          if (!isNaN(dueDate.getTime())) {
+            const isOverdue = dueDate.getTime() < Date.now() && !isChecked;
+            const dueBadge = document.createElement('span');
+            dueBadge.className = `pref-task-badge ${isOverdue ? 'pref-badge-overdue' : 'pref-badge-due'}`;
+            const formattedDate = dueDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            dueBadge.innerHTML = isOverdue ? `⚠️ ${formattedDate}` : `📅 ${formattedDate}`;
+            row.appendChild(dueBadge);
+          }
+        }
+
         tasks.appendChild(row);
       });
 
       card.appendChild(tasks);
+
+      // Footer progress bar for tight & compact sizes
+      if (cardSize === 'tight' || cardSize === 'compact') {
+        const footerProgress = document.createElement('div');
+        footerProgress.className = 'pref-footer-progress-bar';
+        footerProgress.innerHTML = `<div class="pref-footer-progress-fill" style="width:${percent}%"></div>`;
+        card.appendChild(footerProgress);
+      }
     }
   }
 
