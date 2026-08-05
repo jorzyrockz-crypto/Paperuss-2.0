@@ -1225,10 +1225,13 @@ window.getDefaultProductivityTemplate = function(sourceType) {
 
 window.hydrateProductivityReferences = function(rootElement) {
     if (!rootElement) return;
-    if (window.ProductivitySafeDelete) {
-        const ed = rootElement.id === 'noteBody' ? rootElement : document.getElementById('noteBody');
-        if (ed) window.ProductivitySafeDelete.init(ed);
+    const ed = rootElement.id === 'noteBody' ? rootElement : document.getElementById('noteBody');
+    if (ed && window.ProductivitySafeDelete) {
+        window.ProductivitySafeDelete.init(ed);
         window.ProductivitySafeDelete.clear();
+    }
+    if (ed && window.ProductivityClipboard) {
+        window.ProductivityClipboard.init(ed);
     }
   const refs = [];
   if (rootElement.matches && rootElement.matches('.productivity-ref')) refs.push(rootElement);
@@ -2393,8 +2396,7 @@ window.ProductivityInsertion = {
 
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) {
-      this.insertAtEnd(editor, type, sourceId, options);
-      return;
+      return this.insertAtEnd(editor, type, sourceId, options);
     }
 
     const range = sel.getRangeAt(0).cloneRange();
@@ -2404,8 +2406,7 @@ window.ProductivityInsertion = {
 
     const context = this.resolveContext(editor, range);
     if (!context) {
-      this.insertAtEnd(editor, type, sourceId, options);
-      return;
+      return this.insertAtEnd(editor, type, sourceId, options);
     }
 
     if (window.HistoryManager && typeof window.HistoryManager.capture === 'function') {
@@ -2413,7 +2414,7 @@ window.ProductivityInsertion = {
     }
 
     const reference = this.createReference(type, sourceId, options);
-    if (!reference) return;
+    if (!reference) return false;
 
     try {
       let caretTarget = null;
@@ -2454,6 +2455,7 @@ window.ProductivityInsertion = {
       }
 
       this.sync();
+      return true;
     } catch (e) {
       console.error('Contextual insertion failed:', e);
       if (typeof window.toast === 'function') window.toast('Insertion failed');
@@ -2463,7 +2465,7 @@ window.ProductivityInsertion = {
   insertAtEnd(editor, type, sourceId, options = {}) {
     if (window.HistoryManager && typeof window.HistoryManager.capture === 'function') window.HistoryManager.capture(true);
     const reference = this.createReference(type, sourceId, options);
-    if (!reference) return;
+    if (!reference) return false;
 
     let lastBlock = editor.lastElementChild;
     let appended = false;
@@ -2484,6 +2486,7 @@ window.ProductivityInsertion = {
       window.hydrateProductivityReferences(editor);
     }
     this.sync();
+    return true;
   },
 
   resolveContext(editor, range) {
@@ -2560,7 +2563,7 @@ window.ProductivityInsertion = {
           const refNode = tmp.querySelector('.productivity-ref') || tmp.firstElementChild;
           if (refNode) {
               refNode.classList.add('productivity-ref-unavailable');
-              if (options.templateId) refNode.setAttribute('data-productivity-template', 'pref-tpl-' + options.templateId);
+              if (options.templateId) refNode.setAttribute('data-productivity-template', options.templateId);
               return refNode;
           }
       }
@@ -2572,7 +2575,7 @@ window.ProductivityInsertion = {
     const tmp = document.createElement('div');
     tmp.innerHTML = '<div class="productivity-ref ' + typeClass + '" data-paperuss-productivity="' + type + '" data-source-id="' + safeId + '" data-ref-version="1" contenteditable="false"><div class="productivity-ref-static">' + staticHtml + '</div></div>';
     const finalNode = tmp.firstElementChild;
-    if (options.templateId) finalNode.setAttribute('data-productivity-template', 'pref-tpl-' + options.templateId);
+    if (options.templateId) finalNode.setAttribute('data-productivity-template', options.templateId);
     return finalNode;
   },
 
@@ -2681,10 +2684,65 @@ window.ProductivityInsertion = {
 
 window.ProductivityClipboard = {
     init(editor) {
-        if (this._initialized) return;
+        if (!editor) return;
+        if (this._editor === editor && this._initialized) return;
+
+        this._boundCopy = this._boundCopy || this.handleCopy.bind(this);
+        this._boundCut = this._boundCut || this.handleCut.bind(this);
+
+        if (this._editor && this._editor !== editor) {
+            this._editor.removeEventListener('copy', this._boundCopy, true);
+            this._editor.removeEventListener('cut', this._boundCut, true);
+        }
+
+        this._editor = editor;
         this._initialized = true;
-        editor.addEventListener('copy', this.handleCopy.bind(this), true);
-        editor.addEventListener('cut', this.handleCut.bind(this), true);
+
+        editor.addEventListener('copy', this._boundCopy, true);
+        editor.addEventListener('cut', this._boundCut, true);
+    },
+
+    async writeToolbarPayload(payload) {
+        const customType = 'web application/x-paperuss-productivity+json';
+        const supportsCustom = window.ClipboardItem && typeof window.ClipboardItem.supports === 'function' && window.ClipboardItem.supports(customType);
+
+        try {
+            if (navigator.clipboard && navigator.clipboard.write) {
+                const htmlBlob = new Blob([payload.fallbackHtml], { type: 'text/html' });
+                const textBlob = new Blob([payload.fallbackText], { type: 'text/plain' });
+                const items = {
+                    'text/html': htmlBlob,
+                    'text/plain': textBlob
+                };
+
+                if (supportsCustom) {
+                    try {
+                        const jsonBlob = new Blob([JSON.stringify(payload)], { type: customType });
+                        items[customType] = jsonBlob;
+                        await navigator.clipboard.write([new window.ClipboardItem(items)]);
+                        return { success: true, rich: true };
+                    } catch(e) {
+                        // fallback to non-custom
+                    }
+                }
+
+                // Retry without custom type
+                const fallbackItems = {
+                    'text/html': htmlBlob,
+                    'text/plain': textBlob
+                };
+                await navigator.clipboard.write([new window.ClipboardItem(fallbackItems)]);
+
+                // Attempt manual execCommand fallback for the custom payload just in case? No, instructions say run during user-triggered action
+                // Actually fallback is just returning success.
+                return { success: true, rich: true };
+            } else if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(payload.fallbackText);
+                return { success: true, rich: false };
+            }
+        } catch(e) {}
+
+        return { success: false, error: 'Clipboard writing failed' };
     },
 
     getActiveReference(range) {
@@ -2740,7 +2798,7 @@ window.ProductivityClipboard = {
         };
     },
 
-    async handleCopy(e) {
+    handleCopy(e) {
         const sel = window.getSelection();
         if (!sel || sel.rangeCount === 0) return;
         const ref = this.getActiveReference(sel.getRangeAt(0));
@@ -2756,7 +2814,7 @@ window.ProductivityClipboard = {
         }
     },
 
-    async handleCut(e) {
+    handleCut(e) {
         const sel = window.getSelection();
         if (!sel || sel.rangeCount === 0) return;
         const ref = this.getActiveReference(sel.getRangeAt(0));
@@ -2784,7 +2842,7 @@ window.ProductivityClipboard = {
         try {
             jsonText = e.clipboardData.getData('application/x-paperuss-productivity+json');
         } catch(err) {}
-        
+
         if (jsonText) {
             try {
                 payload = JSON.parse(jsonText);
@@ -2822,19 +2880,21 @@ window.ProductivityClipboard = {
         if (!payload) return false;
 
         const valid = this.validatePayload(payload);
-        if (!valid) return false;
+        if (!valid || !window.ProductivityInsertion) return false;
 
         e.preventDefault();
 
-        if (window.ProductivityInsertion) {
-            window.ProductivityInsertion.insert(payload.type, payload.sourceId, {
-                templateId: payload.templateId,
-                fallbackHtml: payload.fallbackHtml,
-                fallbackText: payload.fallbackText,
-                allowUnavailableSource: true
-            });
+        const inserted = window.ProductivityInsertion.insert(payload.type, payload.sourceId, {
+            templateId: payload.templateId,
+            fallbackHtml: payload.fallbackHtml,
+            fallbackText: payload.fallbackText,
+            allowUnavailableSource: true
+        });
+
+        if (!inserted) {
+            if(typeof window.toast === 'function') window.toast('Paste failed');
         }
-        return true;
+        return inserted;
     },
 
     validatePayload(payload) {
@@ -2854,28 +2914,12 @@ window.ProductivityClipboard = {
     },
 
     async toolbarCopy(ref) {
+        if (!ref || !ref.isConnected) return;
         const payload = this.buildClipboardPayload(ref);
-        try {
-            if (navigator.clipboard && navigator.clipboard.write) {
-                const htmlBlob = new Blob([payload.fallbackHtml], { type: 'text/html' });
-                const textBlob = new Blob([payload.fallbackText], { type: 'text/plain' });
-
-                const items = {
-                    'text/html': htmlBlob,
-                    'text/plain': textBlob
-                };
-
-                try {
-                    const jsonBlob = new Blob([JSON.stringify(payload)], { type: 'web application/x-paperuss-productivity+json' });
-                    items['web application/x-paperuss-productivity+json'] = jsonBlob;
-                } catch(e) {}
-
-                await navigator.clipboard.write([new window.ClipboardItem(items)]);
-            } else if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(payload.fallbackText);
-            }
+        const res = await this.writeToolbarPayload(payload);
+        if (res.success) {
             if(typeof window.toast === 'function') window.toast('Reference copied');
-        } catch(e) {
+        } else {
             if(typeof window.toast === 'function') window.toast('Copy failed');
         }
     },
