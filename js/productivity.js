@@ -1364,75 +1364,9 @@ window.hydrateProductivityReferences = function(rootElement) {
 
 
 window.insertProductivityReference = function(type, sourceId) {
-  if (type !== 'calendar' && type !== 'todo-list') {
-    if(typeof toast === 'function') toast('Invalid reference type');
-    return;
+  if (window.ProductivityInsertion) {
+    window.ProductivityInsertion.insert(type, sourceId);
   }
-
-  const normSourceId = String(sourceId);
-  const safeId = typeof sanitizeId === 'function' ? sanitizeId(normSourceId) : normSourceId.replace(/[^a-zA-Z0-9_-]/g, '');
-  if (!safeId) {
-    if(typeof toast === 'function') toast('Invalid source ID');
-    return;
-  }
-
-  const source = window.resolveProductivitySource(type, safeId);
-  if (!source || (Array.isArray(source) && source.length === 0)) {
-    if(typeof toast === 'function') toast('Source not found in canonical store');
-    return;
-  }
-
-  const staticHtml = window.buildProductivityStaticSnapshot(type, source);
-  const typeClass = type === 'todo-list' ? 'productivity-ref-todo' : 'productivity-ref-calendar';
-
-  const ed = document.getElementById('noteBody');
-  if (!ed) return;
-  ed.focus();
-
-  // Build block element
-  const tmp = document.createElement('div');
-  tmp.innerHTML = '<div class="productivity-ref ' + typeClass + '" data-paperuss-productivity="' + type + '" data-source-id="' + safeId + '" data-ref-version="1" contenteditable="false"><div class="productivity-ref-static">' + staticHtml + '</div></div>';
-  const block = tmp.firstElementChild;
-
-  // Walk up from caret; exit any list or existing productivity-ref before inserting
-  const sel = typeof window.getSelection === 'function' ? window.getSelection() : null;
-  let insertAfter = null;
-  if (sel && sel.rangeCount > 0) {
-    let node = sel.getRangeAt(0).startContainer;
-    while (node && node !== ed) {
-      const tag = (node.tagName || '').toUpperCase();
-      if (tag === 'LI' || tag === 'UL' || tag === 'OL' || (node.classList && node.classList.contains('productivity-ref'))) {
-        let parent = node.parentNode;
-        while (parent && parent !== ed) { node = parent; parent = parent.parentNode; }
-        if (node.parentNode === ed) insertAfter = node;
-        break;
-      }
-      node = node.parentNode;
-    }
-  }
-
-  const trailer = document.createElement('p');
-  trailer.innerHTML = '<br>';
-
-  if (insertAfter && insertAfter.parentNode === ed) {
-    ed.insertBefore(trailer, insertAfter.nextSibling);
-    ed.insertBefore(block, trailer);
-  } else {
-    ed.appendChild(block);
-    ed.appendChild(trailer);
-  }
-
-  // Move caret into trailing paragraph
-  try {
-    const range = document.createRange();
-    range.setStart(trailer, 0);
-    range.collapse(true);
-    const s = typeof window.getSelection === 'function' ? window.getSelection() : null;
-    if (s) { s.removeAllRanges(); s.addRange(range); }
-  } catch (_) {}
-
-  if (typeof handleBodyInput === 'function') handleBodyInput();
-  window.hydrateProductivityReferences(ed);
 };
 
 
@@ -2423,6 +2357,290 @@ window.ProductivitySafeDelete = {
     }
 
     // Sync
+    if (typeof window.handleBodyInput === 'function') {
+      window.handleBodyInput();
+    } else if (typeof window.onEditorInput === 'function') {
+      window.onEditorInput();
+    }
+  }
+};
+
+
+window.ProductivityInsertion = {
+  insert(type, sourceId) {
+    const editor = document.getElementById('noteBody');
+    if (!editor) return;
+
+    if (window.ProductivitySafeDelete && typeof window.ProductivitySafeDelete.clear === 'function') {
+      window.ProductivitySafeDelete.clear();
+    }
+
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) {
+      this.insertAtEnd(editor, type, sourceId);
+      return;
+    }
+
+    const range = sel.getRangeAt(0).cloneRange();
+    if (!range.collapsed) {
+      range.collapse(false);
+    }
+
+    const context = this.resolveContext(editor, range);
+    if (!context) {
+      this.insertAtEnd(editor, type, sourceId);
+      return;
+    }
+
+    if (window.HistoryManager && typeof window.HistoryManager.capture === 'function') {
+      window.HistoryManager.capture(true);
+    }
+
+    const reference = this.createReference(type, sourceId);
+    if (!reference) return;
+
+    try {
+      let caretTarget = null;
+      let caretPos = 0;
+
+      if (context.type === 'existing-reference') {
+        const next = context.block.nextElementSibling;
+        editor.insertBefore(reference, next);
+        caretTarget = this.ensureCaretTarget(reference, editor, true);
+        caretPos = 0;
+      } else if (context.type === 'table' || context.type === 'complex') {
+        const next = context.block.nextElementSibling;
+        editor.insertBefore(reference, next);
+        caretTarget = this.ensureCaretTarget(reference, editor, true);
+        caretPos = 0;
+      } else if (context.type === 'list') {
+        const res = this.splitListAtItem(context);
+        editor.insertBefore(reference, res.nextSibling);
+        caretTarget = this.ensureCaretTarget(reference, editor, true);
+        caretPos = 0;
+      } else if (context.type === 'empty-paragraph') {
+        editor.insertBefore(reference, context.block);
+        caretTarget = context.block;
+        caretPos = 0;
+      } else {
+        const res = this.splitEditableBlock(context);
+        editor.insertBefore(reference, res.nextSibling);
+        caretTarget = res.caretTarget;
+        caretPos = res.caretPos;
+      }
+
+      this.placeCaret(caretTarget, caretPos);
+
+      if (typeof window.hydrateProductivityReference === 'function') {
+        window.hydrateProductivityReference(reference);
+      } else if (typeof window.hydrateProductivityReferences === 'function') {
+        window.hydrateProductivityReferences(editor);
+      }
+
+      this.sync();
+    } catch (e) {
+      console.error('Contextual insertion failed:', e);
+      if (typeof window.toast === 'function') window.toast('Insertion failed');
+    }
+  },
+
+  insertAtEnd(editor, type, sourceId) {
+    if (window.HistoryManager && typeof window.HistoryManager.capture === 'function') window.HistoryManager.capture(true);
+    const reference = this.createReference(type, sourceId);
+    if (!reference) return;
+
+    let lastBlock = editor.lastElementChild;
+    let appended = false;
+    if (lastBlock && lastBlock.tagName === 'P' && lastBlock.innerHTML.trim() === '<br>') {
+      editor.insertBefore(reference, lastBlock);
+      appended = true;
+    } else {
+      editor.appendChild(reference);
+      lastBlock = document.createElement('p');
+      lastBlock.innerHTML = '<br>';
+      editor.appendChild(lastBlock);
+    }
+    this.placeCaret(lastBlock, 0);
+
+    if (typeof window.hydrateProductivityReference === 'function') {
+      window.hydrateProductivityReference(reference);
+    } else if (typeof window.hydrateProductivityReferences === 'function') {
+      window.hydrateProductivityReferences(editor);
+    }
+    this.sync();
+  },
+
+  resolveContext(editor, range) {
+    let node = range.endContainer;
+    let topLevelBlock = null;
+    let listInfo = null;
+
+    while (node && node !== editor) {
+      const tag = (node.tagName || '').toLowerCase();
+
+      if (tag === 'li') {
+        if (!listInfo) listInfo = { li: node };
+      }
+      if (tag === 'ul' || tag === 'ol') {
+        if (listInfo && !listInfo.list) {
+          listInfo.list = node;
+        }
+      }
+
+      if (node.parentNode === editor) {
+        topLevelBlock = node;
+        break;
+      }
+      node = node.parentNode;
+    }
+
+    if (!topLevelBlock) return null;
+
+    if (topLevelBlock.classList && topLevelBlock.classList.contains('productivity-ref')) {
+      return { type: 'existing-reference', block: topLevelBlock };
+    }
+
+    if (topLevelBlock.tagName === 'TABLE' || topLevelBlock.querySelector('table')) {
+      return { type: 'table', block: topLevelBlock };
+    }
+
+    if (listInfo && listInfo.list && listInfo.li) {
+      const topLevelLi = this.findTopLevelLi(listInfo.li, topLevelBlock);
+      return { type: 'list', block: topLevelBlock, li: topLevelLi };
+    }
+
+    if (topLevelBlock.tagName === 'P' && topLevelBlock.innerHTML.trim() === '<br>') {
+      return { type: 'empty-paragraph', block: topLevelBlock };
+    }
+
+    if (['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(topLevelBlock.tagName) || topLevelBlock.tagName === 'BLOCKQUOTE') {
+      return { type: 'block', block: topLevelBlock, range: range };
+    }
+
+    return { type: 'complex', block: topLevelBlock };
+  },
+
+  findTopLevelLi(liNode, listNode) {
+    let curr = liNode;
+    while (curr && curr.parentNode !== listNode) {
+      curr = curr.parentNode;
+    }
+    return curr.tagName === 'LI' ? curr : liNode;
+  },
+
+  createReference(type, sourceId) {
+    const normSourceId = String(sourceId);
+    const safeId = typeof sanitizeId === 'function' ? sanitizeId(normSourceId) : normSourceId.replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!safeId) {
+      if(typeof toast === 'function') toast('Invalid source ID');
+      return null;
+    }
+    const source = window.resolveProductivitySource(type, safeId);
+    if (!source || (Array.isArray(source) && source.length === 0)) {
+      if(typeof toast === 'function') toast('Source not found in canonical store');
+      return null;
+    }
+    const staticHtml = window.buildProductivityStaticSnapshot(type, source);
+    const typeClass = type === 'todo-list' ? 'productivity-ref-todo' : 'productivity-ref-calendar';
+    const tmp = document.createElement('div');
+    tmp.innerHTML = '<div class="productivity-ref ' + typeClass + '" data-paperuss-productivity="' + type + '" data-source-id="' + safeId + '" data-ref-version="1" contenteditable="false"><div class="productivity-ref-static">' + staticHtml + '</div></div>';
+    return tmp.firstElementChild;
+  },
+
+  splitEditableBlock(context) {
+    const block = context.block;
+    const range = context.range;
+
+    // Check if caret is exactly at start
+    const startRange = document.createRange();
+    startRange.selectNodeContents(block);
+    startRange.setEnd(range.startContainer, range.startOffset);
+    if (startRange.toString().length === 0 && startRange.cloneContents().textContent.length === 0) {
+      return { nextSibling: block, caretTarget: block, caretPos: 0 };
+    }
+
+    // Check if caret is exactly at end
+    const endRange = document.createRange();
+    endRange.selectNodeContents(block);
+    endRange.setStart(range.endContainer, range.endOffset);
+    if (endRange.toString().length === 0 && endRange.cloneContents().textContent.length === 0) {
+      return { nextSibling: block.nextSibling, caretTarget: null, caretPos: 0 };
+    }
+
+    // Split block
+    const trailingContent = endRange.extractContents();
+    const newBlock = block.cloneNode(false);
+    newBlock.appendChild(trailingContent);
+
+    // Remove meaningless empty inline wrappers from block
+    if (block.innerHTML === '') block.innerHTML = '<br>';
+    if (newBlock.innerHTML === '') newBlock.innerHTML = '<br>';
+
+    block.parentNode.insertBefore(newBlock, block.nextSibling);
+    return { nextSibling: newBlock, caretTarget: newBlock, caretPos: 0 };
+  },
+
+  splitListAtItem(context) {
+    const list = context.block;
+    const currentLi = context.li;
+    const nextSiblings = [];
+    let next = currentLi.nextElementSibling;
+    while (next) {
+      nextSiblings.push(next);
+      next = next.nextElementSibling;
+    }
+
+    let trailingList = null;
+    if (nextSiblings.length > 0) {
+      trailingList = list.cloneNode(false);
+      nextSiblings.forEach(sib => trailingList.appendChild(sib));
+      list.parentNode.insertBefore(trailingList, list.nextSibling);
+
+      if (list.tagName === 'OL') {
+        const start = parseInt(list.getAttribute('start') || '1', 10);
+        let retainedCount = 0;
+        for (let i = 0; i < list.children.length; i++) {
+          if (list.children[i].tagName === 'LI') retainedCount++;
+        }
+        trailingList.setAttribute('start', start + retainedCount);
+      }
+    }
+
+    return { nextSibling: trailingList ? trailingList : list.nextSibling };
+  },
+
+  ensureCaretTarget(reference, editor, requireFollowing) {
+    let target = reference.nextElementSibling;
+    if (target && target.tagName !== 'TABLE' && target.tagName !== 'UL' && target.tagName !== 'OL' && !target.classList.contains('productivity-ref') && target.contentEditable !== 'false') {
+      return target;
+    }
+    target = document.createElement('p');
+    target.innerHTML = '<br>';
+    editor.insertBefore(target, reference.nextElementSibling);
+    return target;
+  },
+
+  placeCaret(target, position) {
+    if (!target) return;
+    const sel = window.getSelection();
+    const r = document.createRange();
+
+    if (target.tagName === 'P' && target.innerHTML === '<br>') {
+      r.setStart(target, 0);
+    } else {
+      if (position === 0) {
+        if (target.firstChild) r.setStart(target.firstChild, 0);
+        else r.setStart(target, 0);
+      } else {
+        r.setStart(target, target.childNodes.length);
+      }
+    }
+    r.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r);
+  },
+
+  sync() {
     if (typeof window.handleBodyInput === 'function') {
       window.handleBodyInput();
     } else if (typeof window.onEditorInput === 'function') {
