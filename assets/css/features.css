@@ -2783,3 +2783,144 @@ blockquote.note-callout.callout-info {
     min-height: 44px;
   }
 }
+\n
+
+.productivity-ref,
+.pref-toolbar-portal,
+.pref-styles-panel,
+.pref-more-menu {
+  --pref-accent: var(--accent);
+}
+
+
+/* ==========================================================================
+   PRODUCTIVITY FLOATING UI SINGLETONS
+   ========================================================================== */
+.productivity-ref,
+.pref-toolbar-portal,
+.pref-styles-panel,
+.pref-more-menu {
+  --pref-accent: var(--accent, currentColor);
+}
+
+/* The toolbar buttons are compact 32px icons */
+.pref-toolbar-portal .pref-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pref-toolbar-portal .pref-btn svg {
+  margin: 0;
+}
+
+/* Styles Panel */
+.pref-styles-panel {
+  position: fixed;
+  z-index: 9999;
+  min-width: 180px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.15);
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  gap: 4px;
+}
+.pref-style-option {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  padding: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--fg);
+  transition: all 0.2s ease;
+}
+.pref-style-option:hover, .pref-style-option:focus {
+  background: var(--subtle);
+  outline: none;
+}
+.pref-style-option.selected {
+  background-color: transparent;
+  border-color: var(--pref-accent);
+}
+@supports (background: color-mix(in srgb, red 10%, transparent)) {
+  .pref-style-option.selected {
+    background-color: color-mix(in srgb, var(--pref-accent) 8%, transparent);
+  }
+}
+.pref-style-title {
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pref-style-preview {
+  pointer-events: none;
+  font-size: 11px;
+  transform-origin: top left;
+  transform: scale(0.85);
+  width: 117%;
+}
+
+/* ==========================================================================
+   PRODUCTIVITY TEMPLATES
+   ========================================================================== */
+
+/* CALENDAR: Clean Row (default) */
+.productivity-ref[data-paperuss-productivity="calendar"].pref-tpl-clean-row .pref-row-header {
+  /* Inherits transparent background */
+}
+
+/* CALENDAR: Accent Rule */
+.productivity-ref[data-paperuss-productivity="calendar"].pref-tpl-accent-rule {
+  background: var(--subtle);
+  border-radius: 4px;
+  padding: 2px 6px;
+  border-inline-start: 2px solid var(--pref-accent);
+}
+
+/* TODO: Minimal (default) */
+.productivity-ref[data-paperuss-productivity="todo-list"].pref-tpl-minimal .pref-row-tasks {
+  /* Inherits transparent background */
+}
+
+/* TODO: Title Rule */
+.productivity-ref[data-paperuss-productivity="todo-list"].pref-tpl-title-rule .pref-row-header {
+  border-bottom: 1px solid var(--pref-accent);
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+
+/* TODO: Soft Paper */
+.productivity-ref[data-paperuss-productivity="todo-list"].pref-tpl-soft-paper {
+  background-color: transparent;
+  border: 1px solid var(--border-muted, rgba(128,128,128,0.15));
+  border-radius: 6px;
+  padding: 8px;
+}
+@supports (background: color-mix(in srgb, red 10%, transparent)) {
+  .productivity-ref[data-paperuss-productivity="todo-list"].pref-tpl-soft-paper {
+    background-color: color-mix(in srgb, var(--pref-accent) 4%, transparent);
+    border-color: color-mix(in srgb, var(--pref-accent) 28%, transparent);
+  }
+}
+.productivity-ref[data-paperuss-productivity="todo-list"].pref-tpl-soft-paper .pref-task-item {
+  border-bottom: 1px solid var(--border-muted, rgba(128,128,128,0.08));
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+.productivity-ref[data-paperuss-productivity="todo-list"].pref-tpl-soft-paper .pref-task-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
