@@ -2071,22 +2071,55 @@ window.ProductivityStylesModal = {
   renderPreview() {
     const container = document.getElementById('prodStyleModalPreview');
 
-    // Resolve source safely
-    const source = window.resolveProductivitySource(this.context.sourceType, this.context.sourceId);
-
-    // Build synthetic preview classes mirroring the actual reference
     const typeClass = this.context.sourceType === 'calendar' ? 'productivity-style-preview-calendar' : 'productivity-style-preview-todo';
     const tplClass = 'pref-preview-' + this.context.pendingTemplateId;
 
-    container.innerHTML = `
-      <div class="productivity-style-preview ${typeClass} ${tplClass} productivity-ref-card">
-        ${window.buildProductivityStaticSnapshot(this.context.sourceType, source, this.context.pendingTemplateId)}
-      </div>
-    `;
+    let previewHtml = '';
+
+    if (this.context.sourceType === 'calendar') {
+      previewHtml = `
+<div class="productivity-style-preview ${typeClass} ${tplClass} productivity-ref-card">
+  <div class="pref-row pref-row-header">
+    <span class="pref-title">
+      <i data-lucide="calendar-days"></i>
+      Project Review · Aug 11 · 3:00–4:00 PM
+    </span>
+  </div>
+</div>`;
+    } else {
+      previewHtml = `
+<div class="productivity-style-preview ${typeClass} ${tplClass} productivity-ref-card">
+  <div class="pref-row pref-row-header">
+    <span class="pref-title">
+      <i data-lucide="list-checks"></i>
+      Shopping List
+    </span>
+  </div>
+
+  <div class="pref-row-tasks">
+    <div class="pref-task-item">
+      <i data-lucide="square"></i>
+      <span>Milk</span>
+    </div>
+
+    <div class="pref-task-item">
+      <i data-lucide="square"></i>
+      <span>Eggs</span>
+    </div>
+
+    <div class="pref-task-item">
+      <i data-lucide="square-check-big"></i>
+      <span>Bread</span>
+    </div>
+  </div>
+</div>`;
+    }
+
+    container.innerHTML = previewHtml;
     if (window.lucide) window.lucide.createIcons({ root: container });
 
     const applyBtn = document.getElementById('prodStyleModalApply');
-    applyBtn.disabled = false;
+    if (applyBtn) applyBtn.disabled = false;
   },
 
   async apply() {

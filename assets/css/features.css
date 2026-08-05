@@ -2787,7 +2787,9 @@ blockquote.note-callout.callout-info {
 
 .productivity-ref,
 .pref-toolbar-portal,
-
+.productivity-ref-menu {
+  --pref-accent: var(--accent, currentColor);
+}
 
 /* ==========================================================================
    PRODUCTIVITY TEMPLATES
