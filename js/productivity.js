@@ -836,21 +836,19 @@ window.buildProductivityStaticSnapshot = function(type, source) {
   if (type === 'calendar') {
     const title = source.title || 'Untitled Event';
     const dStart = normalizeProductivityDate(source.calendarStart);
-    const startFmt = isNaN(dStart) ? 'Date unavailable' : dStart.toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
     const dEnd = normalizeProductivityDate(source.calendarEnd);
-    const endFmt = isNaN(dEnd) ? '' : dEnd.toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-    const repeatStr = source.calendarRepeat && source.calendarRepeat !== 'none' ? ` 🔁 ${escStr(source.calendarRepeat)}` : '';
-    const notifyStr = source.calendarNotify ? ` 🔔` : '';
-    const rawDesc = source.content ? source.content.replace(/<[^>]*>?/gm, '') : '';
-    const descStr = rawDesc ? `<br><small style="color:var(--fg-muted)">${escStr(rawDesc.substring(0,60))}${rawDesc.length>60?'...':''}</small>` : '';
-    return `<div>📅 Event: <strong>${escStr(title)}</strong></div><div>${escStr(startFmt)} → ${escStr(endFmt)}${repeatStr}${notifyStr}</div>${descStr}`;
+    
+    let dateStr = isNaN(dStart) ? 'Date unavailable' : dStart.toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric'});
+    let timeStr = isNaN(dStart) ? '' : dStart.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'});
+    if (!isNaN(dEnd) && dEnd.getTime() !== dStart.getTime()) {
+      timeStr += ' \u2013 ' + dEnd.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'});
+    }
+    
+    return `📅 ${escStr(title)} · ${escStr(dateStr)}${timeStr ? ' · ' + escStr(timeStr) : ''}`;
   } else if (type === 'todo-list') {
     const title = source[0].groupTitle || 'Todo List';
-    const total = source.length;
-    const completed = source.filter(t => t.completed).length;
-    const itemsHtml = source.slice(0, 3).map(t => `<div>${t.completed?'☑':'☐'} ${escStr(t.text)}</div>`).join('');
-    const moreHtml = total > 3 ? `<div style="color:var(--fg-muted)">+ ${total-3} more</div>` : '';
-    return `<div>✅ Todo List: <strong>${escStr(title)}</strong> (${completed}/${total} completed)</div>${itemsHtml}${moreHtml}`;
+    const itemsHtml = source.map(t => `<div>${t.completed?'☑':'☐'} ${escStr(t.text)}</div>`).join('');
+    return `<div>${escStr(title)}</div>${itemsHtml}`;
   }
   return '';
 };
@@ -858,11 +856,12 @@ window.buildProductivityStaticSnapshot = function(type, source) {
 window.dehydrateProductivityReference = function(ref) {
   if (!ref) return;
   ref.removeAttribute('data-hydrated');
-  const transientUI = ref.querySelectorAll('[data-paperuss-ui="true"]');
+  const transientUI = ref.querySelectorAll('[data-paperuss-ui="true"], .productivity-ref-hydrated, .pref-actions, .lucide, [data-lucide], button');
   transientUI.forEach(el => el.remove());
   const staticCard = ref.querySelector('.productivity-ref-static');
   if (staticCard) {
     staticCard.style.display = '';
+    staticCard.removeAttribute('hidden');
   }
 };
 
@@ -880,6 +879,12 @@ window.hydrateProductivityReferences = function(rootElement) {
   const refs = [];
   if (rootElement.matches && rootElement.matches('.productivity-ref')) refs.push(rootElement);
   rootElement.querySelectorAll('.productivity-ref').forEach(r => refs.push(r));
+
+  // Remove any floating toolbar portals from a previous cycle
+  document.querySelectorAll('.pref-toolbar-portal').forEach(t => {
+    if (typeof t._portalCleanup === 'function') t._portalCleanup();
+    t.remove();
+  });
 
   // Close any already-open menus from a previous cycle before re-hydrating
   document.querySelectorAll('.productivity-ref-menu').forEach(m => {
@@ -926,88 +931,222 @@ window.hydrateProductivityReferences = function(rootElement) {
       rowEl.appendChild(btnRem);
       card.appendChild(rowEl);
     } else {
+      const escStr = (s) => (s||'').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      
       const headerRow = document.createElement('div');
       headerRow.className = 'pref-row pref-row-header';
 
       const titleSpan = document.createElement('span');
       titleSpan.className = 'pref-title';
-      if (type === 'calendar') {
-        titleSpan.textContent = '\uD83D\uDCC5 ' + (source.title || 'Untitled Event');
-      } else {
-        titleSpan.textContent = '\u2705 ' + ((source[0] && source[0].groupTitle) ? source[0].groupTitle : 'Todo List');
-      }
 
-      const actionsEl = document.createElement('div');
-      actionsEl.className = 'pref-actions';
+      // ── PORTAL TOOLBAR (position:fixed, appended to document.body) ──────────
+      const toolbar = document.createElement('div');
+      toolbar.className = 'pref-toolbar-portal';
+      toolbar.setAttribute('data-paperuss-ui', 'true');
+      toolbar.setAttribute('role', 'toolbar');
+      toolbar.setAttribute('aria-label', type === 'calendar' ? 'Calendar event actions' : 'Todo list actions');
 
       const btnOpen = document.createElement('button');
       btnOpen.type = 'button';
       btnOpen.className = 'pref-btn pref-btn-open';
-      btnOpen.textContent = 'Open';
+      btnOpen.innerHTML = '<i data-lucide="external-link"></i> Open';
+      btnOpen.title = 'Open';
+
+      const btnEdit = document.createElement('button');
+      btnEdit.type = 'button';
+      btnEdit.className = 'pref-btn pref-btn-edit';
+      btnEdit.innerHTML = '<i data-lucide="pencil"></i> Edit';
+      btnEdit.title = 'Edit';
 
       const btnMore = document.createElement('button');
       btnMore.type = 'button';
       btnMore.className = 'pref-btn pref-btn-more';
       btnMore.setAttribute('aria-label', 'More options');
-      btnMore.textContent = '\u2022\u2022\u2022';
+      btnMore.title = 'More';
+      btnMore.innerHTML = '<i data-lucide="ellipsis"></i>';
 
-      actionsEl.appendChild(btnOpen);
-      actionsEl.appendChild(btnMore);
-      headerRow.appendChild(titleSpan);
-      headerRow.appendChild(actionsEl);
-      card.appendChild(headerRow);
+      toolbar.appendChild(btnOpen);
+      toolbar.appendChild(btnEdit);
+      toolbar.appendChild(btnMore);
 
-      // Metadata row
-      const metaRow = document.createElement('div');
-      metaRow.className = 'pref-row pref-row-meta';
+      // ── PORTAL POSITIONING HELPER ────────────────────────────────────────────
+      const positionToolbar = () => {
+        // Anchor to the title row for tighter vertical proximity
+        const anchor = card.querySelector('.pref-row-header') || card;
+        const refRect = anchor.getBoundingClientRect();
+        const tbHeight = toolbar.offsetHeight || 30;
+        const spacing = 3;
+        const spaceAbove = refRect.top;
+        const spaceBelow = window.innerHeight - refRect.bottom;
+        let top;
+        if (spaceAbove >= tbHeight + spacing) {
+          // Preferred: just above the title row
+          top = refRect.top - tbHeight - spacing;
+          toolbar.classList.remove('pref-toolbar-below');
+        } else if (spaceBelow >= tbHeight + spacing) {
+          // Fallback: just below the title row
+          top = refRect.bottom + spacing;
+          toolbar.classList.add('pref-toolbar-below');
+        } else {
+          top = Math.max(4, refRect.top - tbHeight - spacing);
+          toolbar.classList.remove('pref-toolbar-below');
+        }
+        const right = Math.max(4, window.innerWidth - refRect.right);
+        toolbar.style.top = top + 'px';
+        toolbar.style.right = right + 'px';
+      };
+
+      // ── PORTAL LIFECYCLE ─────────────────────────────────────────────────────
+      let hideTimer = null;
+      let toolbarVisible = false;
+
+      const showToolbar = () => {
+        clearTimeout(hideTimer);
+        if (!toolbarVisible) {
+          document.body.appendChild(toolbar);
+          if (window.lucide) window.lucide.createIcons({ root: toolbar });
+          toolbarVisible = true;
+        }
+        positionToolbar();
+        toolbar.style.opacity = '1';
+        toolbar.style.pointerEvents = 'auto';
+      };
+
+      const scheduleHide = () => {
+        clearTimeout(hideTimer);
+        hideTimer = setTimeout(() => {
+          toolbar.style.opacity = '0';
+          toolbar.style.pointerEvents = 'none';
+          setTimeout(() => {
+            if (toolbarVisible && toolbar.parentNode) {
+              toolbar.parentNode.removeChild(toolbar);
+              toolbarVisible = false;
+            }
+          }, 160);
+        }, 120);
+      };
+
+      const forceHide = () => {
+        clearTimeout(hideTimer);
+        if (toolbarVisible && toolbar.parentNode) {
+          toolbar.parentNode.removeChild(toolbar);
+          toolbarVisible = false;
+        }
+      };
+
+      // Cleanup bound to the portal so it can be called from anywhere
+      const portalCleanup = () => {
+        clearTimeout(hideTimer);
+        card.removeEventListener('mouseenter', onCardEnter);
+        card.removeEventListener('mouseleave', onCardLeave);
+        card.removeEventListener('focusin', onCardFocus);
+        card.removeEventListener('focusout', onCardLeave);
+        toolbar.removeEventListener('mouseenter', onToolbarEnter);
+        toolbar.removeEventListener('mouseleave', scheduleHide);
+        document.removeEventListener('keydown', onEscape);
+        document.removeEventListener('mousedown', onOutsideClick);
+        forceHide();
+      };
+      toolbar._portalCleanup = portalCleanup;
+
+      const onCardEnter = () => showToolbar();
+      const onCardLeave = () => scheduleHide();
+      const onCardFocus = () => showToolbar();
+      const onToolbarEnter = () => { clearTimeout(hideTimer); };
+      const onEscape = (e) => { if (e.key === 'Escape') forceHide(); };
+      const onOutsideClick = (e) => {
+        if (!card.contains(e.target) && !toolbar.contains(e.target)) {
+          forceHide();
+        }
+      };
+
+      card.addEventListener('mouseenter', onCardEnter);
+      card.addEventListener('mouseleave', onCardLeave);
+      card.addEventListener('focusin', onCardFocus);
+      card.addEventListener('focusout', onCardLeave);
+      toolbar.addEventListener('mouseenter', onToolbarEnter);
+      toolbar.addEventListener('mouseleave', scheduleHide);
+      document.addEventListener('keydown', onEscape);
+      document.addEventListener('mousedown', onOutsideClick);
+      // ─────────────────────────────────────────────────────────────────────────
+
       if (type === 'calendar') {
         const normDate = window.normalizeProductivityDate || ((v) => new Date(typeof v === 'object' && v && v.seconds ? v.seconds * 1000 : v));
-        const dS = normDate(source.calendarStart);
-        const dE = normDate(source.calendarEnd);
-        const fmtDate = (d) => isNaN(d) ? '' : d.toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-        const fmtTime = (d) => isNaN(d) ? '' : d.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'});
-        let meta = fmtDate(dS);
-        if (!isNaN(dE)) meta += ' \u2013 ' + fmtTime(dE);
-        if (source.calendarRepeat && source.calendarRepeat !== 'none') meta += ' \uD83D\uDD01';
-        if (source.calendarNotify) meta += ' \uD83D\uDD14';
-        metaRow.textContent = meta;
-        card.appendChild(metaRow);
-        if (source.calendarDescription) {
-          const descRow = document.createElement('div');
-          descRow.className = 'pref-row pref-row-desc';
-          descRow.textContent = source.calendarDescription.slice(0, 80) + (source.calendarDescription.length > 80 ? '\u2026' : '');
-          card.appendChild(descRow);
+        const dStart = normDate(source.calendarStart);
+        const dEnd = normDate(source.calendarEnd);
+        let dateStr = isNaN(dStart) ? 'Date unavailable' : dStart.toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric'});
+        let timeStr = isNaN(dStart) ? '' : dStart.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'});
+        if (!isNaN(dEnd) && dEnd.getTime() !== dStart.getTime()) {
+          timeStr += ' \u2013 ' + dEnd.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'});
         }
+        
+        titleSpan.innerHTML = `<i data-lucide="calendar-days"></i> ${escStr(source.title || 'Untitled Event')} \u00b7 ${escStr(dateStr)}${timeStr ? ' \u00b7 ' + escStr(timeStr) : ''}`;
+        headerRow.appendChild(titleSpan);
+        card.appendChild(headerRow);
       } else {
-        const total = source.length;
-        const completed = source.filter(t => t.completed).length;
-        const dues = source.filter(t => t.due && !t.completed).map(t => t.due).sort();
-        let meta = completed + ' of ' + total + ' completed';
-        if (dues.length) {
-          const nearest = new Date(dues[0]);
-          if (!isNaN(nearest)) meta += ' \u00b7 due ' + nearest.toLocaleDateString(undefined, {month:'short', day:'numeric'});
-        }
-        metaRow.textContent = meta;
-        card.appendChild(metaRow);
-        const previewRow = document.createElement('div');
-        previewRow.className = 'pref-row pref-row-tasks';
-        const previewItems = source.slice(0, 2).map(t => (t.completed ? '\u2611' : '\u2610') + ' ' + (t.text || '').slice(0, 30)).join('  \u00b7  ');
-        const moreStr = total > 2 ? '  +' + (total - 2) + ' more' : '';
-        previewRow.textContent = previewItems + moreStr;
-        card.appendChild(previewRow);
+        titleSpan.innerHTML = `<i data-lucide="list-checks"></i> ${escStr((source[0] && source[0].groupTitle) ? source[0].groupTitle : 'Todo List')}`;
+        headerRow.appendChild(titleSpan);
+        card.appendChild(headerRow);
+
+        const tasksContainer = document.createElement('div');
+        tasksContainer.className = 'pref-row-tasks';
+        
+        source.forEach(t => {
+           const tRow = document.createElement('div');
+           tRow.className = 'pref-task-item';
+           
+           const icon = document.createElement('i');
+           icon.setAttribute('data-lucide', t.completed ? 'square-check-big' : 'square');
+           icon.style.cursor = 'pointer';
+           
+           const txt = document.createElement('span');
+           txt.textContent = t.text;
+           txt.style.flex = '1';
+           txt.style.cursor = 'pointer';
+
+           icon.onclick = (e) => {
+              e.stopPropagation();
+              try {
+                 if (typeof window.toggleStandaloneTask === 'function') {
+                    window.toggleStandaloneTask(t.id, !t.completed);
+                    if (typeof window.refreshProductivityReferences === 'function') {
+                       window.refreshProductivityReferences('todo-list', t.groupId);
+                    }
+                 }
+              } catch (err) {
+                 if(typeof window.toast === 'function') window.toast('Failed to update task');
+              }
+           };
+
+           txt.onclick = (e) => {
+              e.stopPropagation();
+              if (typeof window.openTaskCreatorModal === 'function') {
+                 window.openTaskCreatorModal({ intent: 'edit', sourceId: sourceId });
+              } else if (typeof window.openTodoListEditor === 'function') {
+                 window.openTodoListEditor(sourceId);
+              }
+           };
+           
+           tRow.appendChild(icon);
+           tRow.appendChild(txt);
+           tasksContainer.appendChild(tRow);
+        });
+        card.appendChild(tasksContainer);
       }
 
       const doOpen = (e) => {
         e.preventDefault(); e.stopPropagation();
+        forceHide();
         if (type === 'calendar') {
           if (typeof window.openCalendarEventEditor === 'function') window.openCalendarEventEditor(sourceId);
+          else if (typeof window.openCalendarEventCreator === 'function') window.openCalendarEventCreator(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), { intent: 'edit' });
         } else {
           if (typeof window.openTodoListEditor === 'function') window.openTodoListEditor(sourceId);
+          else if (typeof window.openTaskCreatorModal === 'function') window.openTaskCreatorModal({ intent: 'edit' });
         }
       };
       btnOpen.onclick = doOpen;
-      card.onclick = doOpen;
-      card.style.cursor = 'pointer';
+      btnEdit.onclick = doOpen;
 
       btnMore.onclick = (e) => {
         e.preventDefault(); e.stopPropagation();
@@ -1021,18 +1160,16 @@ window.hydrateProductivityReferences = function(rootElement) {
         menu.className = 'productivity-ref-menu';
         menu.setAttribute('data-paperuss-ui', 'true');
         const typeLabel = type === 'calendar' ? 'Event' : 'Todo List';
-        const mkBtn = (cls, txt, danger) => {
+        const mkBtn = (cls, iconName, txt, danger) => {
           const b = document.createElement('button');
           b.type = 'button';
           b.className = 'pref-menu-item ' + cls;
-          b.textContent = txt;
+          b.innerHTML = `<i data-lucide="${iconName}"></i> <span>${txt}</span>`;
           if (danger) b.style.color = 'var(--danger)';
           return b;
         };
-        const editBtn = mkBtn('pref-mitem-edit', 'Edit ' + typeLabel, false);
-        const remBtn  = mkBtn('pref-mitem-rem',  'Remove from Leaf', false);
-        const delBtn  = mkBtn('pref-mitem-del',  'Delete Source ' + typeLabel, true);
-        editBtn.onclick = doOpen;
+        const remBtn  = mkBtn('pref-mitem-rem', 'unlink', 'Remove from Leaf', false);
+        const delBtn  = mkBtn('pref-mitem-del', 'trash-2', 'Delete Source ' + typeLabel, true);
         remBtn.onclick = (e2) => { e2.preventDefault(); e2.stopPropagation(); if (typeof window.removeProductivityReference === 'function') window.removeProductivityReference(ref); };
         delBtn.onclick  = (e2) => {
           e2.preventDefault(); e2.stopPropagation();
@@ -1041,7 +1178,6 @@ window.hydrateProductivityReferences = function(rootElement) {
           if (type === 'calendar') { if (typeof window.deleteCalendarSource === 'function') window.deleteCalendarSource(sourceId); }
           else { if (typeof window.deleteTodoListSource === 'function') window.deleteTodoListSource(sourceId); }
         };
-        menu.appendChild(editBtn);
         menu.appendChild(remBtn);
         menu.appendChild(delBtn);
 
@@ -1057,15 +1193,30 @@ window.hydrateProductivityReferences = function(rootElement) {
 
         // Use fixed positioning to avoid clip from overflow:hidden
         const rect = btnMore.getBoundingClientRect();
-        menu.style.cssText = 'position:fixed;z-index:9999;min-width:170px;background:var(--bg);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);display:flex;flex-direction:column;padding:4px;';
+        menu.style.cssText = 'position:fixed;z-index:9999;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:7px;box-shadow:0 3px 12px rgba(0,0,0,.12);display:flex;flex-direction:column;padding:3px;';
         menu.style.top = (rect.bottom + 4) + 'px';
         menu.style.right = Math.max(4, window.innerWidth - rect.right) + 'px';
         document.body.appendChild(menu);
+        if (window.lucide) window.lucide.createIcons({ root: menu });
       };
     }
 
     ref.appendChild(card);
   });
+  // createIcons covers the card content (task icons, title icon)
+  if (window.lucide) window.lucide.createIcons({ root: rootElement || document });
+
+  // Cleanup portals when the user switches notes or leaves
+  const cleanupAllPortals = () => {
+    document.querySelectorAll('.pref-toolbar-portal').forEach(t => {
+      if (typeof t._portalCleanup === 'function') t._portalCleanup();
+      else t.remove();
+    });
+    document.removeEventListener('paperuss:note-switched', cleanupAllPortals);
+    document.removeEventListener('paperuss:leaf-switched', cleanupAllPortals);
+  };
+  document.addEventListener('paperuss:note-switched', cleanupAllPortals, { once: true });
+  document.addEventListener('paperuss:leaf-switched', cleanupAllPortals, { once: true });
 };
 
 window.insertProductivityReference = function(type, sourceId) {

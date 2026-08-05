@@ -2548,10 +2548,6 @@ blockquote.note-callout.callout-info {
 .productivity-ref {
   display: block;
   margin: 1rem 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  overflow: hidden;
   user-select: none;
   width: 100%;
   max-width: 100%;
@@ -2560,11 +2556,8 @@ blockquote.note-callout.callout-info {
 
 @media (max-width: 600px) {
   .productivity-ref {
-    margin: 1rem -16px;
-    width: calc(100% + 32px);
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
+    margin: 1rem 0;
+    width: 100%;
   }
 }
 
@@ -2603,124 +2596,135 @@ blockquote.note-callout.callout-info {
   opacity: 1;
 }
 .productivity-ref-static {
-  padding: 1rem;
-  color: var(--fg-muted);
-  font-style: italic;
+  display: none;
 }
 .productivity-ref-hydrated {
-  padding: 1rem;
-  background: var(--subtle);
+  position: relative;
 }
-.ref-cal-header, .ref-todo-header {
-  font-weight: 600;
-  font-size: 14px;
-  color: var(--fg);
-  margin-bottom: 4px;
-}
-.ref-cal-meta, .ref-todo-meta {
-  font-size: 12px;
-  color: var(--fg-secondary);
-  margin-bottom: 8px;
-}
-.ref-todo-preview {
-  font-size: 13px;
-  color: var(--fg);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.ref-missing-title {
-  color: var(--danger);
-  font-weight: 600;
-  font-size: 14px;
-}
-.ref-missing-desc {
-  color: var(--fg-muted);
-  font-size: 12px;
-  margin-top: 4px;
-}
-
-
 
 /* ============================================================
-   PRODUCTIVITY COMPARTMENT COMPACT CARDS
+   PRODUCTIVITY DOCUMENT REFERENCES
    ============================================================ */
 
 .productivity-ref-card {
   margin: 12px 0;
-  padding: 10px 14px;
-  background: var(--subtle);
-  border: 1px solid var(--border);
-  border-radius: 8px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  transition: border-color 0.2s, background 0.2s;
+  gap: 4px;
   user-select: none;
-}
-.productivity-ref-card:hover {
-  border-color: var(--border-hover, #ccc);
-  background: var(--subtle-hover, #f0f0f0);
+  position: relative;
 }
 
 .pref-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
 }
 
 .pref-row-header {
-  justify-content: space-between;
+  justify-content: flex-start;
 }
 
 .pref-title {
-  font-weight: 600;
-  font-size: 14px;
+  font-weight: 500;
+  font-size: 15px;
   color: var(--fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: block;
+}
+.productivity-ref-todo .pref-title {
+  font-weight: 600;
+}
+.pref-title svg {
+  width: 16px;
+  height: 16px;
+  color: var(--fg-secondary);
+  display: inline-block;
+  vertical-align: text-bottom;
+  margin-right: 4px;
 }
 
-.pref-actions {
+/* Portal toolbar – floats above/below reference, never inside document flow */
+.pref-toolbar-portal {
+  position: fixed;
+  z-index: 9100;
   display: flex;
-  gap: 4px;
   align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: var(--bg, #fff);
+  border: 1px solid var(--border, #ddd);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.14);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  /* no layout effect – portal is outside editor DOM */
 }
 
 .pref-btn {
   background: transparent;
-  border: 1px solid transparent;
-  color: var(--fg-secondary);
+  border: none;
+  color: var(--fg);
   font-size: 12px;
   font-weight: 500;
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: 5px;
   cursor: pointer;
-  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.15s;
+  white-space: nowrap;
 }
 .pref-btn:hover {
-  background: var(--bg);
-  border-color: var(--border);
-  color: var(--fg);
+  background: var(--subtle, rgba(0,0,0,.06));
+}
+.pref-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 .pref-btn-more {
   padding: 4px 6px;
-  font-size: 14px;
-  line-height: 1;
+}
+
+.pref-row-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.pref-task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 15px;
+  color: var(--fg);
+  cursor: pointer;
+  line-height: 1.5;
+}
+.pref-task-item:hover {
+  opacity: 0.8;
+}
+.pref-task-item svg {
+  width: 16px;
+  height: 16px;
+  color: var(--fg-secondary);
+  flex-shrink: 0;
+  margin-top: 3px;
 }
 
 .pref-row-meta {
-  font-size: 12px;
-  color: var(--fg-secondary);
+  font-size: 15px;
+  color: var(--fg);
 }
 
-.pref-row-desc, .pref-row-tasks {
-  font-size: 12.5px;
-  color: var(--fg-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.pref-row-desc {
+  display: none;
 }
 
 .pref-row-missing {
@@ -2732,16 +2736,25 @@ blockquote.note-callout.callout-info {
 }
 
 .pref-menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   text-align: left;
-  padding: 8px 12px;
+  padding: 6px 10px;
   background: transparent;
   border: none;
-  border-radius: 4px;
-  font-size: 13px;
+  border-radius: 5px;
+  font-size: 12px;
   cursor: pointer;
   color: var(--fg);
+  white-space: nowrap;
+}
+.pref-menu-item svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  opacity: 0.75;
 }
 .pref-menu-item:hover {
   background: var(--subtle);
@@ -2749,12 +2762,24 @@ blockquote.note-callout.callout-info {
 
 /* Touch targets for mobile */
 @media (max-width: 640px) {
+  .pref-toolbar-portal {
+    gap: 2px;
+    padding: 4px;
+  }
   .pref-btn {
-    padding: 8px 12px;
+    padding: 8px 10px;
     font-size: 13px;
+    min-height: 44px;
+    min-width: 44px;
+    justify-content: center;
+  }
+  /* On mobile hide text labels – show icon only */
+  .pref-btn span {
+    display: none;
   }
   .pref-menu-item {
     padding: 12px;
     font-size: 14px;
+    min-height: 44px;
   }
 }
