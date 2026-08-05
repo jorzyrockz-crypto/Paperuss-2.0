@@ -1,3 +1,259 @@
+
+window.convertProductivityReferenceLayout = function(ref, targetLayout) {
+  if (!ref || !ref.isConnected) return null;
+  const type = ref.getAttribute('data-paperuss-productivity');
+  const sourceId = ref.getAttribute('data-source-id');
+  if (!type || !sourceId) return null;
+
+  const options = {
+    layout: targetLayout,
+    placement: targetLayout === 'compact' ? 'inline' : 'block'
+  };
+
+  const newRef = window.ProductivityInsertion.createReference(type, sourceId, options);
+  if (!newRef) return null;
+
+  if (targetLayout === 'full-row') {
+    let host = ref.parentElement;
+    if (host && host.id !== 'noteBody' && ['P', 'LI', 'TD', 'TH', 'BLOCKQUOTE'].includes(host.tagName)) {
+      host.parentNode.insertBefore(newRef, host.nextSibling);
+      ref.remove();
+    } else {
+      ref.parentNode.replaceChild(newRef, ref);
+    }
+  } else {
+    ref.parentNode.replaceChild(newRef, ref);
+  }
+
+  if (typeof window.hydrateProductivityReference === 'function') {
+    window.hydrateProductivityReference(newRef);
+  }
+  if (window.HistoryManager && typeof window.HistoryManager.capture === 'function') {
+    window.HistoryManager.capture(true);
+  }
+  if (typeof window.handleBodyInput === 'function') {
+    window.handleBodyInput();
+  }
+  return newRef;
+};
+
+
+function getProductivityActiveNoteId() {
+  try {
+    if (window.paperussState && window.paperussState.currentId != null) {
+      return String(window.paperussState.currentId);
+    }
+    if (window.state && window.state.currentId != null) {
+      return String(window.state.currentId);
+    }
+    if (typeof state !== 'undefined' && state && state.currentId != null) {
+      return String(state.currentId);
+    }
+  } catch (_) {}
+  return null;
+}
+
+window.ProductivityInsertionContext = {
+  range: null,
+  noteId: null,
+  leafId: null,
+
+  capture() {
+    const sel = window.getSelection();
+    const editor = document.getElementById('noteBody');
+    if (!sel || sel.rangeCount === 0 || !editor || !editor.contains(sel.anchorNode)) {
+      return false;
+    }
+
+    const range = sel.getRangeAt(0).cloneRange();
+    this.range = range;
+    this.noteId = getProductivityActiveNoteId();
+    this.leafId = editor.getAttribute('data-active-leaf-id');
+    return true;
+  },
+
+  isValid(editor = document.getElementById('noteBody')) {
+    if (!editor || !this.range) return false;
+    const start = this.range.startContainer;
+    const end = this.range.endContainer;
+    if (!start || !end || !start.isConnected || !end.isConnected) return false;
+    if (!editor.contains(start) || !editor.contains(end)) return false;
+
+    const noteId = getProductivityActiveNoteId();
+    const leafId = editor.getAttribute('data-active-leaf-id');
+    return this.noteId === noteId && this.leafId === leafId;
+  },
+
+  restore() {
+    const editor = document.getElementById('noteBody');
+    if (!this.isValid(editor)) return false;
+
+    const sel = window.getSelection();
+    if (!sel) return false;
+
+    try {
+      sel.removeAllRanges();
+      sel.addRange(this.range.cloneRange());
+      return true;
+    } catch (_) {
+      return false;
+    }
+  },
+
+  clear() {
+    this.range = null;
+    this.noteId = null;
+    this.leafId = null;
+  },
+
+  ensureEditorCaret() {
+    const editor = document.getElementById('noteBody');
+    if (!editor) return false;
+
+    if (this.capture()) return true;
+    if (this.isValid(editor)) return true;
+
+    let target = null;
+    const onlyChild = editor.children.length === 1 ? editor.firstElementChild : null;
+    const editorIsEmpty =
+      editor.innerHTML.trim() === '' ||
+      (onlyChild && onlyChild.tagName === 'P' && onlyChild.textContent.trim() === '');
+
+    if (editorIsEmpty) {
+      editor.innerHTML = '<p><br></p>';
+      target = editor.firstElementChild;
+    } else {
+      const last = editor.lastElementChild;
+      if (last && last.tagName === 'P' && last.innerHTML.trim().toLowerCase() === '<br>') {
+        target = last;
+      } else {
+        target = document.createElement('p');
+        target.innerHTML = '<br>';
+        editor.appendChild(target);
+      }
+    }
+
+    const sel = window.getSelection();
+    const range = document.createRange();
+    range.setStart(target, 0);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    return this.capture();
+  }
+};
+
+if (!document.__paperussProductivityInsertionTracking) {
+  document.__paperussProductivityInsertionTracking = true;
+  ['pointerup', 'keyup', 'focusin'].forEach(eventName => {
+    document.addEventListener(eventName, event => {
+      const editor = document.getElementById('noteBody');
+      if (editor && (event.target === editor || editor.contains(event.target))) {
+        window.ProductivityInsertionContext.capture();
+      }
+    });
+  });
+
+  document.addEventListener('selectionchange', () => {
+    const editor = document.getElementById('noteBody');
+    const sel = window.getSelection();
+    if (editor && sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
+      window.ProductivityInsertionContext.capture();
+    }
+  });
+}
+
+function injectProductivityToolbarButtons() {
+  const formatBar = document.getElementById('formatBar');
+  if (!formatBar) return;
+  if (document.getElementById('tbInsertCalendar')) return;
+  
+  const btnCal = document.createElement('button');
+  btnCal.id = 'tbInsertCalendar';
+  btnCal.className = 'tool-btn';
+  btnCal.setAttribute('data-cmd', 'calevent');
+  btnCal.title = 'Insert Calendar Event';
+  btnCal.innerHTML = '<i data-lucide="calendar" class="w-4 h-4"></i>';
+  btnCal.onmousedown = (e) => e.preventDefault();
+  btnCal.onclick = () => {
+    window.ProductivityInsertionContext.ensureEditorCaret();
+    const today = new Date();
+    if (typeof window.openCalendarEventCreator === 'function') {
+      window.openCalendarEventCreator(today.getFullYear(), today.getMonth(), today.getDate(), { intent: 'insert' });
+    }
+  };
+
+  const btnTask = document.createElement('button');
+  btnTask.id = 'tbInsertTask';
+  btnTask.className = 'tool-btn';
+  btnTask.setAttribute('data-cmd', 'newtask');
+  btnTask.title = 'Insert Todo List';
+  btnTask.innerHTML = '<i data-lucide="check-square" class="w-4 h-4"></i>';
+  btnTask.onmousedown = (e) => e.preventDefault();
+  btnTask.onclick = () => {
+    window.ProductivityInsertionContext.ensureEditorCaret();
+    if (typeof window.openTaskCreatorModal === 'function') {
+      window.openTaskCreatorModal({ intent: 'insert' });
+    }
+  };
+
+  formatBar.appendChild(btnCal);
+  formatBar.appendChild(btnTask);
+  if (window.lucide) window.lucide.createIcons({ root: formatBar });
+}
+document.addEventListener('DOMContentLoaded', injectProductivityToolbarButtons);
+
+window.buildProductivityInlineStaticSnapshot = function(type, source) {
+  const esc = value => String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+  const asDate = value => {
+    if (!value) return new Date(NaN);
+    if (typeof value === 'object') {
+      if (typeof value.toDate === 'function') return value.toDate();
+      if (typeof value.toMillis === 'function') return new Date(value.toMillis());
+      if (value.seconds !== undefined) return new Date(value.seconds * 1000);
+    }
+    return new Date(value);
+  };
+
+  if (type === 'calendar') {
+    const title = esc(source && source.title ? source.title : 'Untitled Event');
+    const start = asDate(source && source.calendarStart);
+    const end = asDate(source && source.calendarEnd);
+    const dateText = Number.isNaN(start.getTime())
+      ? 'Date unavailable'
+      : start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    let timeText = Number.isNaN(start.getTime())
+      ? ''
+      : start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+    if (
+      !Number.isNaN(end.getTime()) &&
+      !Number.isNaN(start.getTime()) &&
+      end.getTime() !== start.getTime()
+    ) {
+      timeText += '–' + end.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    }
+
+    const meta = timeText ? `${dateText} · ${timeText}` : dateText;
+    return `<span class="pref-inline-icon" aria-hidden="true">📅</span><span class="pref-inline-title">${title}</span><span class="pref-inline-meta">${esc(meta)}</span>`;
+  }
+
+  if (type === 'todo-list') {
+    const items = Array.isArray(source) ? source : [];
+    const title = esc(items[0] && items[0].groupTitle ? items[0].groupTitle : 'Todo List');
+    const completed = items.filter(item => item && (item.completed || item.checked || item.done || item.status === 'completed')).length;
+    return `<button class="pref-inline-chevron" type="button" aria-label="Toggle Tasks"><i data-lucide="chevron-down"></i></button><span class="pref-inline-icon" aria-hidden="true">☑</span><span class="pref-inline-title">${title}</span><span class="pref-inline-meta">${completed}/${items.length}</span>`;
+  }
+
+  return '';
+};
+
+
 /* ============================================================
    CALENDAR VIEW
    ============================================================ */
@@ -271,6 +527,19 @@ async function openCalendarEventCreator(year, month, day, options){
   let isLoading = true;
   let errorState = null;
   let isCreatingEvent = false;
+  let insertCompact = false;
+
+  if (intent === 'insert' && window.ProductivityInsertionContext) {
+    window.ProductivityInsertionContext.ensureEditorCaret();
+  }
+
+  function renderInsertLayoutToggle() {
+    if (intent !== 'insert') return '';
+    return `<label class="productivity-insert-layout-toggle">
+      <input type="checkbox" id="evInsertCompactToggle" ${insertCompact ? 'checked' : ''}>
+      <span><strong>Compact Flow</strong><small>Insert at the saved caret inside text, lists, or tables.</small></span>
+    </label>`;
+  }
 
   async function performLoad() {
     isLoading = true;
@@ -278,20 +547,20 @@ async function openCalendarEventCreator(year, month, day, options){
     renderModalContent();
     try {
       if(typeof load === 'function') await Promise.resolve(load());
-      
+
       loadedEvents = [];
       notes.forEach(n => {
         if(n.deletedAt) return;
         if(!(n.tags||[]).includes('calendar')) return;
-        
+
         let eventStart=n.calendarStart||n.createdAt;
         let eventEnd=n.calendarEnd||n.updatedAt;
         if(eventStart>eventEnd){ const tmp=eventStart; eventStart=eventEnd; eventEnd=tmp; }
-        
+
         if(eventStart) loadedEvents.push({note: n, start: eventStart});
       });
       loadedEvents.sort((a,b)=>b.start - a.start);
-      
+
     } catch(e) {
       errorState = e.message || 'Failed to load calendar events';
     }
@@ -322,6 +591,7 @@ async function openCalendarEventCreator(year, month, day, options){
         <div class="modal-item-list" id="evList" role="listbox">
           ${renderEventListRows('')}
         </div>
+        ${renderInsertLayoutToggle()}
         <div class="modal-actions">
           <button class="btn" id="evCancel">Cancel</button>
           <button class="btn btn-primary" id="evInsertSelected" ${!selectedEventNoteId||isLoading?'disabled':''}>Insert Selected Event</button>
@@ -359,6 +629,7 @@ async function openCalendarEventCreator(year, month, day, options){
           </label>
           <small style="color:var(--fg-muted);line-height:1.4">Reminder checks run while PapeRuss is open.</small>
         </div>
+        ${renderInsertLayoutToggle()}
         <div class="modal-actions">
           <button class="btn" id="evCancel">Cancel</button>
           <button class="btn btn-primary" id="evCreate">${intent === 'insert' ? 'Create & Insert Event' : 'Create Event'}</button>
@@ -367,6 +638,13 @@ async function openCalendarEventCreator(year, month, day, options){
     </div></div>`;
 
     if(typeof refreshIcons === 'function') refreshIcons();
+
+    const compactToggle = document.getElementById('evInsertCompactToggle');
+    if (compactToggle) {
+      compactToggle.onchange = () => {
+        insertCompact = compactToggle.checked;
+      };
+    }
 
     const close=()=>root.innerHTML='';
     const cancelBtn = document.getElementById('evCancel');
@@ -393,7 +671,7 @@ async function openCalendarEventCreator(year, month, day, options){
           const row = e.target.closest('[data-item-id]');
           if(!row) return;
           selectedEventNoteId = String(row.getAttribute('data-item-id'));
-          
+
           listEl.querySelectorAll('[data-item-id]').forEach(r => {
             const isSel = String(r.getAttribute('data-item-id')) === selectedEventNoteId;
             r.classList.toggle('selected', isSel);
@@ -402,7 +680,7 @@ async function openCalendarEventCreator(year, month, day, options){
           const btn = document.getElementById('evInsertSelected');
           if(btn) btn.disabled = !selectedEventNoteId;
         };
-        
+
         listEl.onkeydown = (e) => {
           if(e.key === 'Enter' || e.key === ' ') {
             const row = e.target.closest('[data-item-id]');
@@ -421,7 +699,7 @@ async function openCalendarEventCreator(year, month, day, options){
           const evObj = loadedEvents.find(e => e.note.id === selectedEventNoteId);
           if(!evObj) { toast('Selected event no longer exists in canonical store'); return; }
 
-          window.insertProductivityReference('calendar', selectedEventNoteId);
+          window.insertProductivityReference('calendar', selectedEventNoteId, { placement: insertCompact ? 'inline' : 'block', layout: insertCompact ? 'compact' : 'full-row' });
           toast(`Inserted event "${titleOf(evObj.note)}" into note`);
           close();
         };
@@ -430,7 +708,7 @@ async function openCalendarEventCreator(year, month, day, options){
       document.getElementById('evCreate').onclick=async ()=>{
         if(isCreatingEvent) return;
         const btn=document.getElementById('evCreate');
-        
+
         const titleEl=document.getElementById('evTitle');
         const startDateEl=document.getElementById('evStartDate');
         const startTimeEl=document.getElementById('evStartTime');
@@ -452,10 +730,10 @@ async function openCalendarEventCreator(year, month, day, options){
         const notify=notifyEl.checked;
         if(!Number.isFinite(startTs)||!Number.isFinite(endTs)){ toast('Enter valid event dates and times'); return; }
         if(endTs<startTs){ toast('Event end must be after its start'); return; }
-        
+
         isCreatingEvent = true;
         btn.disabled = true;
-        
+
         let tags=['calendar'];
         if(type==='meeting') tags.push('meeting');
         if(type==='deadline') tags.push('deadline');
@@ -482,12 +760,12 @@ async function openCalendarEventCreator(year, month, day, options){
           addNotification({type:'calendar',title:'Event Created: '+title,body:startFmt,icon:'calendar',activity:true});
         }
         renderCalendarView(); renderAll();
-        
+
         if(intent === 'insert') {
-          window.insertProductivityReference('calendar', newId);
+          window.insertProductivityReference('calendar', newId, { placement: insertCompact ? 'inline' : 'block', layout: insertCompact ? 'compact' : 'full-row' });
           toast(`Inserted event "${title}" into note`);
         }
-        
+
         close();
       };
     }
@@ -496,7 +774,7 @@ async function openCalendarEventCreator(year, month, day, options){
   function renderEventListRows(query) {
     if(isLoading) return `<div style="padding:16px;text-align:center;color:var(--fg-muted);font-size:13px"><i class="w-4 h-4 spinner" style="border:2px solid;border-right-color:transparent;border-radius:50%;width:14px;height:14px;animation:spin 1s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px"></i>Loading...</div>`;
     if(errorState) return `<div style="padding:16px;text-align:center;color:var(--danger);font-size:13px">${esc(errorState)}</div>`;
-    
+
     const q = query.toLowerCase().trim();
     const filtered = loadedEvents.filter(e => !q || titleOf(e.note).toLowerCase().includes(q));
     if(!filtered.length) return `<div class="list-empty" style="padding:16px;text-align:center;color:var(--fg-muted);font-size:13px">No calendar events found.</div>`;
@@ -506,7 +784,7 @@ async function openCalendarEventCreator(year, month, day, options){
       const title = titleOf(ev.note);
       const startFmt = new Date(ev.start).toLocaleString(undefined, {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
       return `<div class="modal-item-row ${isSel?'selected':''}" data-item-id="${ev.note.id}" tabindex="0" role="option" aria-selected="${isSel}">
-        <i data-lucide="calendar" class="w-4 h-4" style="color:var(--accent)"></i>
+        <i data-lucide="calendar" class="w-4 h-4" style="color:var(--pref-accent)"></i>
         <div style="flex:1;font-size:13px;font-weight:600;color:var(--fg)">${esc(title)}</div>
         <span style="font-size:11px;color:var(--fg-muted);background:var(--hover);padding:2px 6px;border-radius:4px">${startFmt}</span>
       </div>`;
@@ -822,7 +1100,7 @@ window.buildProductivityStaticSnapshot = function(type, source) {
       <div class="ref-missing-desc">The original item may have been deleted.</div>
     </div>`;
   }
-  
+
   const normalizeProductivityDate = (val) => {
     if (!val) return new Date(NaN);
     if (typeof val === 'object') {
@@ -836,359 +1114,1214 @@ window.buildProductivityStaticSnapshot = function(type, source) {
   if (type === 'calendar') {
     const title = source.title || 'Untitled Event';
     const dStart = normalizeProductivityDate(source.calendarStart);
-    const startFmt = isNaN(dStart) ? 'Date unavailable' : dStart.toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
     const dEnd = normalizeProductivityDate(source.calendarEnd);
-    const endFmt = isNaN(dEnd) ? '' : dEnd.toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-    const repeatStr = source.calendarRepeat && source.calendarRepeat !== 'none' ? ` 🔁 ${escStr(source.calendarRepeat)}` : '';
-    const notifyStr = source.calendarNotify ? ` 🔔` : '';
-    const rawDesc = source.content ? source.content.replace(/<[^>]*>?/gm, '') : '';
-    const descStr = rawDesc ? `<br><small style="color:var(--fg-muted)">${escStr(rawDesc.substring(0,60))}${rawDesc.length>60?'...':''}</small>` : '';
-    return `<div>📅 Event: <strong>${escStr(title)}</strong></div><div>${escStr(startFmt)} → ${escStr(endFmt)}${repeatStr}${notifyStr}</div>${descStr}`;
+
+    let dateStr = isNaN(dStart) ? 'Date unavailable' : dStart.toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric'});
+    let timeStr = isNaN(dStart) ? '' : dStart.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'});
+    if (!isNaN(dEnd) && dEnd.getTime() !== dStart.getTime()) {
+      timeStr += ' \u2013 ' + dEnd.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'});
+    }
+
+    return `📅 ${escStr(title)} · ${escStr(dateStr)}${timeStr ? ' · ' + escStr(timeStr) : ''}`;
   } else if (type === 'todo-list') {
     const title = source[0].groupTitle || 'Todo List';
-    const total = source.length;
-    const completed = source.filter(t => t.completed).length;
-    const itemsHtml = source.slice(0, 3).map(t => `<div>${t.completed?'☑':'☐'} ${escStr(t.text)}</div>`).join('');
-    const moreHtml = total > 3 ? `<div style="color:var(--fg-muted)">+ ${total-3} more</div>` : '';
-    return `<div>✅ Todo List: <strong>${escStr(title)}</strong> (${completed}/${total} completed)</div>${itemsHtml}${moreHtml}`;
+    const itemsHtml = source.map(t => `<div>${t.completed?'☑':'☐'} ${escStr(t.text)}</div>`).join('');
+    return `<div>${escStr(title)}</div>${itemsHtml}`;
   }
   return '';
 };
 
+const PRODUCTIVITY_REFERENCE_SELECTOR = '.productivity-ref, .productivity-ref-inline';
+
 window.dehydrateProductivityReference = function(ref) {
   if (!ref) return;
+
+  ref.classList.remove(
+    'pref-delete-selected',
+    'productivity-ref-hydrated',
+    'productivity-ref-inline-expanded'
+  );
+  ref.removeAttribute('aria-selected');
   ref.removeAttribute('data-hydrated');
-  const transientUI = ref.querySelectorAll('[data-paperuss-ui="true"]');
-  transientUI.forEach(el => el.remove());
+
+  if (ref.classList.contains('productivity-ref-inline')) {
+    const type = ref.getAttribute('data-paperuss-productivity');
+    const sourceId = ref.getAttribute('data-source-id');
+    const source = typeof window.resolveProductivitySource === 'function'
+      ? window.resolveProductivitySource(type, sourceId)
+      : null;
+
+    if (source && (!Array.isArray(source) || source.length > 0)) {
+      ref.innerHTML = window.buildProductivityInlineStaticSnapshot(type, source);
+    } else {
+      ref.innerHTML = `<span class="pref-inline-icon" aria-hidden="true">⚠</span><span class="pref-inline-title">${type === 'calendar' ? 'Calendar event unavailable' : 'Todo list unavailable'}</span>`;
+    }
+    return;
+  }
+
+  const transientUI = ref.querySelectorAll(
+    '[data-paperuss-ui="true"], .productivity-ref-hydrated, .pref-actions, .lucide, [data-lucide], button'
+  );
+  transientUI.forEach(element => element.remove());
+
   const staticCard = ref.querySelector('.productivity-ref-static');
   if (staticCard) {
     staticCard.style.display = '';
+    staticCard.removeAttribute('hidden');
   }
 };
 
 window.dehydrateProductivityReferences = function(rootElement) {
   if (!rootElement) return;
-  if (rootElement.matches && rootElement.matches('.productivity-ref')) {
+
+  if (rootElement.matches && rootElement.matches(PRODUCTIVITY_REFERENCE_SELECTOR)) {
     window.dehydrateProductivityReference(rootElement);
   }
-  const refs = rootElement.querySelectorAll('.productivity-ref');
-  refs.forEach(ref => window.dehydrateProductivityReference(ref));
+
+  rootElement
+    .querySelectorAll(PRODUCTIVITY_REFERENCE_SELECTOR)
+    .forEach(ref => window.dehydrateProductivityReference(ref));
+};
+
+
+window.ProductivityFloatingUI = {
+  toolbar: null,
+  moreMenu: null,
+
+  activeRef: null,
+  isPinned: false,
+  closeTimer: null,
+  scrollRaf: null,
+  pointerRaf: null,
+  pointerX: 0,
+  pointerY: 0,
+  pointerTracking: false,
+
+  init() {
+    if (this.toolbar) return;
+
+    // Create Toolbar
+    this.toolbar = document.createElement('div');
+    this.toolbar.className = 'pref-toolbar-portal';
+    this.toolbar.setAttribute('data-paperuss-ui', 'true');
+    this.toolbar.setAttribute('role', 'toolbar');
+
+    const btnOpen = document.createElement('button');
+    btnOpen.type = 'button';
+    btnOpen.className = 'pref-btn pref-btn-open';
+    btnOpen.innerHTML = '<i data-lucide="external-link"></i>';
+    btnOpen.title = 'Open';
+
+    const btnEdit = document.createElement('button');
+    btnEdit.type = 'button';
+    btnEdit.className = 'pref-btn pref-btn-edit';
+    btnEdit.innerHTML = '<i data-lucide="pencil"></i>';
+    btnEdit.title = 'Edit';
+
+    const btnStyles = document.createElement('button');
+    btnStyles.type = 'button';
+    btnStyles.className = 'pref-btn pref-btn-styles';
+    btnStyles.innerHTML = '<i data-lucide="palette"></i>';
+    btnStyles.title = 'Styles';
+
+    const btnMore = document.createElement('button');
+    btnMore.type = 'button';
+    btnMore.className = 'pref-btn pref-btn-more';
+    btnMore.innerHTML = '<i data-lucide="ellipsis"></i>';
+    btnMore.title = 'More';
+
+        const btnSize = document.createElement('button');
+    btnSize.type = 'button';
+    btnSize.className = 'pref-btn pref-btn-size';
+    btnSize.innerHTML = '<i data-lucide="scaling"></i>';
+    btnSize.title = 'Card Size';
+
+    const btnDensity = document.createElement('button');
+    btnDensity.type = 'button';
+    btnDensity.className = 'pref-btn pref-btn-density';
+    btnDensity.innerHTML = '<i data-lucide="rows-3"></i>';
+    btnDensity.title = 'Content Density';
+
+    this.toolbar.appendChild(btnOpen);
+    this.toolbar.appendChild(btnEdit);
+    this.toolbar.appendChild(btnSize);
+    this.toolbar.appendChild(btnDensity);
+    this.toolbar.appendChild(btnStyles);
+    this.toolbar.appendChild(btnMore);
+
+    this.toolbar.style.opacity = '0';
+    this.toolbar.style.pointerEvents = 'none';
+    document.body.appendChild(this.toolbar);
+
+    if (window.lucide) window.lucide.createIcons({ root: this.toolbar });
+
+    // Event handlers for toolbar itself
+    this.toolbar.addEventListener('mouseenter', () => {
+      this.clearTimer();
+      this.pointerTracking = false;
+    });
+    this.toolbar.addEventListener('mouseleave', () => this.scheduleHide());
+    this.toolbar.addEventListener('pointerdown', (e) => {
+      // Prevent clearing editor caret and ProductivitySafeDelete when interacting with toolbar
+      e.preventDefault();
+    });
+
+    // Action Handlers
+    const doOpen = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const ref = this.activeRef;
+      this.forceHide();
+      if (!ref || !ref.isConnected) return;
+      const type = ref.getAttribute('data-paperuss-productivity');
+      const sourceId = ref.getAttribute('data-source-id');
+      if (type === 'calendar') {
+        if (typeof window.openCalendarEventEditor === 'function') window.openCalendarEventEditor(sourceId);
+        else if (typeof window.openCalendarEventCreator === 'function') window.openCalendarEventCreator(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), { intent: 'edit' });
+      } else {
+        if (typeof window.openTodoListEditor === 'function') window.openTodoListEditor(sourceId);
+        else if (typeof window.openTaskCreatorModal === 'function') window.openTaskCreatorModal({ intent: 'edit', sourceId });
+      }
+    };
+    btnOpen.onclick = doOpen;
+    btnEdit.onclick = doOpen;
+
+    btnDensity.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const ref = this.activeRef;
+      if (!ref || !ref.isConnected) return;
+      const currentDensity = ref.getAttribute('data-productivity-density') || 'cozy';
+      const nextDensity = currentDensity === 'cozy' ? 'compact' : (currentDensity === 'compact' ? 'comfortable' : 'cozy');
+      ref.setAttribute('data-productivity-density', nextDensity);
+      if (typeof window.hydrateProductivityReference === 'function') {
+        window.hydrateProductivityReference(ref);
+      }
+      if (window.HistoryManager && typeof window.HistoryManager.capture === 'function') {
+        window.HistoryManager.capture(true);
+      }
+      if (typeof window.handleBodyInput === 'function') window.handleBodyInput();
+      if (typeof window.toast === 'function') {
+        const labels = { cozy: 'Cozy Density (Standard Spacing)', compact: 'Compact Density (Tight Spacing)', comfortable: 'Comfortable Density (Spacious Spacing)' };
+        window.toast(labels[nextDensity] || nextDensity);
+      }
+      this.showFor(ref);
+    };
+
+    btnSize.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const ref = this.activeRef;
+      if (!ref || !ref.isConnected) return;
+      const currentSize = ref.getAttribute('data-productivity-card-size') || 'full';
+      let nextSize = 'full';
+      if (currentSize === 'full' || currentSize === 'expanded') nextSize = 'medium';
+      else if (currentSize === 'medium' || currentSize === 'standard') nextSize = 'compact';
+      else if (currentSize === 'compact') nextSize = 'tight';
+      else if (currentSize === 'tight') nextSize = 'full';
+
+      ref.setAttribute('data-productivity-card-size', nextSize);
+      if (typeof window.hydrateProductivityReference === 'function') {
+        window.hydrateProductivityReference(ref);
+      }
+      if (window.HistoryManager && typeof window.HistoryManager.capture === 'function') {
+        window.HistoryManager.capture(true);
+      }
+      if (typeof window.handleBodyInput === 'function') window.handleBodyInput();
+      if (typeof window.toast === 'function') {
+        const widthLabels = {
+          full: 'Full Width (100% Block)',
+          medium: 'Medium (580px Reflow)',
+          compact: 'Compact (320px Reflow)',
+          tight: 'Tight (Hug Content Reflow)'
+        };
+        window.toast('Card width: ' + (widthLabels[nextSize] || nextSize));
+      }
+      this.showFor(ref);
+    };
+
+    btnMore.onclick = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      this.toggleMoreMenu(btnMore);
+    };
+
+    btnStyles.onclick = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      this.closeMoreMenu();
+      this.clearTimer();
+      if (window.ProductivityStylesModal) {
+        window.ProductivityStylesModal.open(this.activeRef, btnStyles);
+      }
+      this.hideToolbar();
+    };
+
+    // Global listeners
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (this.moreMenu && this.moreMenu.parentNode) {
+            this.closeMoreMenu();
+            if (this.moreMenuAnchorBtn) this.moreMenuAnchorBtn.focus();
+        }
+        else if (this.stylesPanel && this.stylesPanel.parentNode) {
+
+            if (this.stylesPanelAnchorBtn) this.stylesPanelAnchorBtn.focus();
+        }
+        else this.forceHide();
+      }
+    });
+
+    document.addEventListener('mousedown', (e) => {
+      if (
+        (this.toolbar && this.toolbar.contains(e.target)) ||
+        (this.moreMenu && this.moreMenu.contains(e.target)) ||
+
+        (this.activeRef && this.activeRef.contains(e.target))
+      ) {
+        return; // Clicked inside safe zone
+      }
+      this.forceHide();
+    });
+
+    window.addEventListener('scroll', () => this.requestReposition(), { passive: true, capture: true });
+    window.addEventListener('resize', () => this.requestReposition(), { passive: true });
+
+    document.addEventListener('paperuss:note-switched', () => this.forceHide());
+    document.addEventListener('paperuss:leaf-switched', () => this.forceHide());
+  },
+
+  clearTimer() {
+    if (this.closeTimer) clearTimeout(this.closeTimer);
+  },
+
+  scheduleHide() {
+    if (this.isPinned) return;
+    this.clearTimer();
+    this.closeTimer = setTimeout(() => {
+      if (this.moreMenu && this.moreMenu.parentNode) return; // don't close if menu open
+
+      this.hideToolbar();
+    }, 300);
+  },
+
+  hideToolbar() {
+    if (this.toolbar) {
+      this.toolbar.style.opacity = '0';
+      this.toolbar.style.pointerEvents = 'none';
+    }
+    this.closeMoreMenu();
+
+    this.menuRef = null;
+    this.activeRef = null;
+    this.pointerTracking = false;
+    this.isPinned = false;
+  },
+
+  forceHide() {
+    this.clearTimer();
+    this.hideToolbar();
+  },
+
+  showFor(ref, pointerEvent) {
+    if (!this.toolbar) this.init();
+    this.clearTimer();
+
+    if (
+      pointerEvent &&
+      ref &&
+      ref.classList.contains('productivity-ref-inline') &&
+      pointerEvent.pointerType !== 'touch'
+    ) {
+      this.pointerX = pointerEvent.clientX;
+      this.pointerY = pointerEvent.clientY;
+      this.pointerTracking = true;
+    } else {
+      this.pointerTracking = false;
+    }
+    if (this.activeRef !== ref) {
+      this.closeMoreMenu();
+
+    }
+    this.activeRef = ref;
+
+    const isInline = ref.classList.contains('productivity-ref-inline');
+    const stylesButton = this.toolbar.querySelector('.pref-btn-styles');
+    if (stylesButton) stylesButton.hidden = false;
+    const sizeButton = this.toolbar.querySelector('.pref-btn-size');
+    if (sizeButton) sizeButton.hidden = isInline;
+    const densityButton = this.toolbar.querySelector('.pref-btn-density');
+    if (densityButton) densityButton.hidden = isInline;
+
+    this.toolbar.setAttribute('aria-label', ref.getAttribute('data-paperuss-productivity') === 'calendar' ? 'Calendar event actions' : 'Todo list actions');
+
+    this.toolbar.style.opacity = '1';
+    this.toolbar.style.pointerEvents = 'auto';
+    this.positionToolbar();
+  },
+
+  pinFor(ref) {
+    this.isPinned = true;
+    this.pointerTracking = false;
+    this.showFor(ref);
+  },
+
+  trackPointer(ref, event) {
+    if (this.isPinned) return;
+    if (
+      !ref ||
+      ref !== this.activeRef ||
+      !ref.classList.contains('productivity-ref-inline') ||
+      !event ||
+      event.pointerType === 'touch'
+    ) {
+      return;
+    }
+
+    this.pointerX = event.clientX;
+    this.pointerY = event.clientY;
+    this.pointerTracking = true;
+
+    if (this.pointerRaf) return;
+    this.pointerRaf = requestAnimationFrame(() => {
+      this.pointerRaf = null;
+      if (this.pointerTracking && this.activeRef === ref) {
+        this.positionToolbar();
+      }
+    });
+  },
+
+  requestReposition() {
+    if (!this.activeRef || this.toolbar.style.opacity === '0') return;
+    if (this.scrollRaf) cancelAnimationFrame(this.scrollRaf);
+    this.scrollRaf = requestAnimationFrame(() => {
+      if (!this.activeRef || !this.activeRef.isConnected) {
+        this.forceHide();
+        return;
+      }
+      this.positionToolbar();
+      if (this.moreMenu && this.moreMenu.parentNode) this.positionMoreMenu();
+
+    });
+  },
+
+  positionToolbar() {
+    if (!this.activeRef || !this.toolbar) return;
+    const anchor = this.activeRef.querySelector('.pref-row-header') || this.activeRef;
+    const refRect = anchor.getBoundingClientRect();
+    const tbRect = this.toolbar.getBoundingClientRect();
+    const tbHeight = tbRect.height || 36;
+    const tbWidth = tbRect.width || 120;
+    const spacing = 8;
+
+    let top;
+    let left;
+
+    if (
+      this.pointerTracking &&
+      this.activeRef.classList.contains('productivity-ref-inline') &&
+      Number.isFinite(this.pointerX) &&
+      Number.isFinite(this.pointerY)
+    ) {
+      const pointerGap = 12;
+      top = this.pointerY + pointerGap;
+      left = this.pointerX + pointerGap;
+
+      if (top + tbHeight > window.innerHeight - spacing) {
+        top = this.pointerY - tbHeight - pointerGap;
+      }
+      if (left + tbWidth > window.innerWidth - spacing) {
+        left = this.pointerX - tbWidth - pointerGap;
+      }
+    } else {
+      top = refRect.top - tbHeight - spacing;
+      left = refRect.right - tbWidth;
+
+      if (top < spacing) {
+        top = refRect.bottom + spacing;
+      }
+    }
+
+    // Viewport collision
+    if (left + tbWidth > window.innerWidth - spacing) {
+      left = window.innerWidth - tbWidth - spacing;
+    }
+    if (left < spacing) left = spacing;
+
+    this.toolbar.style.top = top + 'px';
+    this.toolbar.style.left = left + 'px';
+    this.toolbar.style.right = 'auto'; // override old behavior
+  },
+
+  toggleMoreMenu(anchorBtn) {
+    if (this.moreMenu && this.moreMenu.parentNode) {
+      this.closeMoreMenu();
+      return;
+    }
+     // mutually exclusive
+
+    if (!this.moreMenu) {
+      this.moreMenu = document.createElement('div');
+      this.moreMenu.className = 'productivity-ref-menu leaf-context-menu';
+      this.moreMenu.setAttribute('data-paperuss-ui', 'true');
+
+      this.moreMenu.addEventListener('mouseenter', () => this.clearTimer());
+      this.moreMenu.addEventListener('mouseleave', () => this.scheduleHide());
+      this.moreMenu.addEventListener('pointerdown', (e) => {
+        // Prevent clearing editor caret and ProductivitySafeDelete when clicking menu
+        e.preventDefault();
+      });
+    }
+
+    const type = this.activeRef.getAttribute('data-paperuss-productivity');
+    const sourceId = this.activeRef.getAttribute('data-source-id');
+    const typeLabel = type === 'calendar' ? 'Event' : 'Todo List';
+
+    this.menuRef = this.activeRef;
+    this.moreMenu.innerHTML = '';
+
+    const mkBtn = (cls, iconName, txt, danger) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pref-menu-item leaf-menu-item ' + cls + (danger ? ' danger' : '');
+      b.innerHTML = `<i data-lucide="${iconName}"></i> <span>${txt}</span>`;
+      return b;
+    };
+
+    const copyBtn = mkBtn('pref-mitem-copy', 'copy', 'Copy Reference', false);
+    const cutBtn = mkBtn('pref-mitem-cut', 'scissors', 'Cut Reference', false);
+    const remBtn = mkBtn('pref-mitem-rem', 'unlink', 'Remove from Leaf', false);
+    const delBtn = mkBtn('pref-mitem-del', 'trash-2', 'Delete Source ' + typeLabel, true);
+    const isCompact = this.activeRef.classList.contains('productivity-ref-inline');
+    const convertBtn = mkBtn(
+      'pref-mitem-convert',
+      isCompact ? 'maximize-2' : 'minimize-2',
+      isCompact ? 'Convert to Full Row' : 'Convert to Compact',
+      false
+    );
+    const isCompactTodo = type === 'todo-list' && isCompact;
+    const compactState = this.activeRef.getAttribute('data-productivity-compact-state') === 'expanded'
+      ? 'expanded'
+      : 'collapsed';
+    const compactToggleBtn = isCompactTodo
+      ? mkBtn(
+          'pref-mitem-compact-toggle',
+          compactState === 'expanded' ? 'chevron-up' : 'chevron-down',
+          compactState === 'expanded' ? 'Collapse Compact List' : 'Expand Compact List',
+          false
+        )
+      : null;
+
+    const getMenuRef = () => (this.menuRef && this.menuRef.isConnected ? this.menuRef : null);
+
+    copyBtn.onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const ref = getMenuRef();
+        this.forceHide();
+        if (ref && window.ProductivityClipboard) window.ProductivityClipboard.toolbarCopy(ref);
+    };
+
+    cutBtn.onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const ref = getMenuRef();
+        this.forceHide();
+        if (ref && window.ProductivityClipboard) window.ProductivityClipboard.toolbarCut(ref);
+    };
+
+    convertBtn.onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const ref = getMenuRef();
+        this.forceHide();
+        if (ref && window.convertProductivityReferenceLayout) {
+            const targetLayout = ref.classList.contains('productivity-ref-inline') ? 'full-row' : 'compact';
+            window.convertProductivityReferenceLayout(ref, targetLayout);
+        }
+    };
+
+    if (compactToggleBtn) {
+      compactToggleBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const ref = getMenuRef();
+        this.closeMoreMenu();
+        if (!ref) return;
+
+        const nextState = ref.getAttribute('data-productivity-compact-state') === 'expanded'
+          ? 'collapsed'
+          : 'expanded';
+
+        ref.setAttribute('data-productivity-compact-state', nextState);
+        window.hydrateProductivityReference(ref);
+        syncProductivityEditorOnce();
+        this.showFor(ref);
+      };
+    }
+
+    remBtn.onclick = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const ref = getMenuRef();
+      this.forceHide();
+      if (ref && typeof window.removeProductivityReference === 'function') window.removeProductivityReference(ref);
+    };
+
+    delBtn.onclick = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const ref = getMenuRef() || this.activeRef;
+      const anchor = this.moreMenuAnchorBtn;
+      this.closeMoreMenu();
+      if (ref && window.ProductivityDeleteSourceModal) {
+        window.ProductivityDeleteSourceModal.open(ref, anchor);
+      } else {
+        if (type === 'calendar') { if (typeof window.deleteCalendarSource === 'function') window.deleteCalendarSource(sourceId); }
+        else { if (typeof window.deleteTodoListSource === 'function') window.deleteTodoListSource(sourceId); }
+      }
+    };
+
+    this.moreMenu.appendChild(copyBtn);
+    this.moreMenu.appendChild(cutBtn);
+    this.moreMenu.appendChild(convertBtn);
+    if (compactToggleBtn) this.moreMenu.appendChild(compactToggleBtn);
+    this.moreMenu.appendChild(remBtn);
+    this.moreMenu.appendChild(delBtn);
+
+    document.body.appendChild(this.moreMenu);
+    if (window.lucide) window.lucide.createIcons({ root: this.moreMenu });
+
+    this.moreMenuAnchorBtn = anchorBtn;
+    this.positionMoreMenu();
+  },
+
+  positionMoreMenu() {
+    if (!this.moreMenu || !this.moreMenuAnchorBtn) return;
+    const btnRect = this.moreMenuAnchorBtn.getBoundingClientRect();
+    this.moreMenu.style.cssText = 'position:fixed;z-index:9999;min-width:140px;display:flex;flex-direction:column;';
+
+    let top = btnRect.bottom + 4;
+    if (top + this.moreMenu.offsetHeight > window.innerHeight - 8) {
+       top = btnRect.top - this.moreMenu.offsetHeight - 4;
+    }
+
+    let right = window.innerWidth - btnRect.right;
+    if (right < 4) right = 4;
+
+    this.moreMenu.style.top = top + 'px';
+    this.moreMenu.style.right = right + 'px';
+  },
+
+  closeMoreMenu() {
+    if (this.moreMenu && this.moreMenu.parentNode) {
+      this.moreMenu.parentNode.removeChild(this.moreMenu);
+    }
+    this.moreMenuAnchorBtn = null;
+  },
+
+
+};
+
+
+
+
+const PRODUCTIVITY_TEMPLATE_CLASSES = [
+  'pref-tpl-clean-row',
+  'pref-tpl-accent-rule',
+  'pref-tpl-minimal',
+  'pref-tpl-title-rule',
+  'pref-tpl-soft-paper',
+  'pref-tpl-glass',
+  'pref-tpl-solid',
+  'pref-tpl-outlined',
+  'pref-tpl-neon'
+];
+
+function removeProductivityTemplateClasses(refNode) {
+  if (!refNode) return;
+  refNode.classList.remove(...PRODUCTIVITY_TEMPLATE_CLASSES);
+}
+
+function getProductivityTemplateClass(templateId) {
+  if (!templateId) return null;
+  return 'pref-tpl-' + templateId;
+}
+
+window.applyProductivityTemplateClass = function(refNode, templateId) {
+  if (!refNode) return false;
+  const className = getProductivityTemplateClass(templateId);
+  if (!className) return false;
+  removeProductivityTemplateClasses(refNode);
+  refNode.classList.add(className);
+  return true;
+};
+
+window.getDefaultProductivityTemplate = function(sourceType) {
+  if (sourceType === 'calendar') return 'clean-row';
+  if (sourceType === 'todo-list') return 'minimal';
+  return '';
+};
+
+
+function bindProductivityReferenceInteractions(ref) {
+  if (!ref || ref.__paperussProductivityBound) return;
+  ref.__paperussProductivityBound = true;
+
+  ref.addEventListener('click', event => {
+    if (window.ProductivityFloatingUI) {
+      window.ProductivityFloatingUI.pinFor(ref);
+    }
+  });
+
+  ref.addEventListener('pointerenter', event => {
+    if (window.ProductivityFloatingUI) {
+      window.ProductivityFloatingUI.showFor(ref, event);
+    }
+  });
+
+  ref.addEventListener('pointermove', event => {
+    if (window.ProductivityFloatingUI) {
+      window.ProductivityFloatingUI.trackPointer(ref, event);
+    }
+  });
+
+  ref.addEventListener('pointerleave', () => {
+    if (window.ProductivityFloatingUI) {
+      window.ProductivityFloatingUI.scheduleHide();
+    }
+  });
+
+  ref.addEventListener('focusin', () => {
+    if (window.ProductivityFloatingUI) {
+      window.ProductivityFloatingUI.showFor(ref);
+    }
+  });
+
+  ref.addEventListener('focusout', () => {
+    if (window.ProductivityFloatingUI) {
+      window.ProductivityFloatingUI.scheduleHide();
+    }
+  });
+
+  ref.addEventListener('touchstart', () => {
+    if (
+      window.ProductivityFloatingUI &&
+      window.ProductivityFloatingUI.activeRef !== ref
+    ) {
+      window.ProductivityFloatingUI.showFor(ref);
+    }
+  }, { passive: true });
+}
+
+function syncProductivityEditorOnce() {
+  if (typeof window.handleBodyInput === 'function') {
+    window.handleBodyInput();
+  } else if (typeof window.onEditorInput === 'function') {
+    window.onEditorInput();
+  }
+}
+
+function renderInlineProductivityReference(ref, type, source) {
+  ref.innerHTML = '';
+  ref.classList.add('productivity-ref-hydrated');
+  ref.classList.remove('productivity-ref-inline-expanded');
+
+  const isMissing = !source || (Array.isArray(source) && source.length === 0);
+  if (isMissing) {
+    ref.classList.add('productivity-ref-unavailable');
+
+    const icon = document.createElement('span');
+    icon.className = 'pref-inline-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '⚠';
+
+    const label = document.createElement('span');
+    label.className = 'pref-inline-title';
+    label.textContent = type === 'calendar'
+      ? 'Calendar event unavailable'
+      : 'Todo list unavailable';
+
+    ref.append(icon, label);
+    return;
+  }
+
+  ref.classList.remove('productivity-ref-unavailable');
+
+  if (type === 'calendar') {
+    const asDate = value => {
+      if (!value) return new Date(NaN);
+      if (typeof value === 'object') {
+        if (typeof value.toDate === 'function') return value.toDate();
+        if (typeof value.toMillis === 'function') return new Date(value.toMillis());
+        if (value.seconds !== undefined) return new Date(value.seconds * 1000);
+      }
+      return new Date(value);
+    };
+
+    const start = asDate(source.calendarStart);
+    const end = asDate(source.calendarEnd);
+    const dateText = Number.isNaN(start.getTime())
+      ? 'Date unavailable'
+      : start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    let timeText = Number.isNaN(start.getTime())
+      ? ''
+      : start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+    if (
+      !Number.isNaN(start.getTime()) &&
+      !Number.isNaN(end.getTime()) &&
+      end.getTime() !== start.getTime()
+    ) {
+      timeText += '–' + end.toLocaleTimeString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    const icon = document.createElement('span');
+    icon.className = 'pref-inline-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '📅';
+
+    const title = document.createElement('span');
+    title.className = 'pref-inline-title';
+    title.textContent = source.title || 'Untitled Event';
+
+    const meta = document.createElement('span');
+    meta.className = 'pref-inline-meta';
+    meta.textContent = timeText ? `${dateText} · ${timeText}` : dateText;
+
+    ref.append(icon, title, meta);
+    return;
+  }
+
+  const items = Array.isArray(source) ? source : [];
+  const completed = items.filter(item => item && item.completed).length;
+  const state = ref.getAttribute('data-productivity-compact-state') === 'expanded'
+    ? 'expanded'
+    : 'collapsed';
+
+  ref.setAttribute('data-productivity-compact-state', state);
+  ref.classList.toggle('productivity-ref-inline-expanded', state === 'expanded');
+
+  const header = document.createElement('span');
+  header.className = 'pref-inline-header';
+
+  const icon = document.createElement('span');
+  icon.className = 'pref-inline-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = '☑';
+
+  const title = document.createElement('span');
+  title.className = 'pref-inline-title';
+  title.textContent = items[0] && items[0].groupTitle
+    ? items[0].groupTitle
+    : 'Todo List';
+
+  const meta = document.createElement('span');
+  meta.className = 'pref-inline-meta';
+  meta.textContent = `${completed}/${items.length}`;
+
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'pref-inline-expand';
+  toggle.setAttribute('data-paperuss-ui', 'true');
+  toggle.setAttribute(
+    'aria-label',
+    state === 'expanded' ? 'Collapse compact list' : 'Expand compact list'
+  );
+  toggle.title = state === 'expanded'
+    ? 'Collapse compact list'
+    : 'Expand compact list';
+  toggle.innerHTML = `<i data-lucide="${state === 'expanded' ? 'chevron-up' : 'chevron-down'}"></i>`;
+  toggle.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const nextState = ref.getAttribute('data-productivity-compact-state') === 'expanded'
+      ? 'collapsed'
+      : 'expanded';
+
+    ref.setAttribute('data-productivity-compact-state', nextState);
+    window.hydrateProductivityReference(ref);
+    syncProductivityEditorOnce();
+
+    if (window.ProductivityFloatingUI) {
+      window.ProductivityFloatingUI.showFor(ref);
+    }
+  });
+
+  header.append(icon, title, meta, toggle);
+  ref.appendChild(header);
+
+  if (state === 'expanded') {
+    const tasks = document.createElement('span');
+    tasks.className = 'pref-inline-tasks';
+
+    items.forEach(item => {
+      const row = document.createElement('span');
+      row.className = 'pref-inline-task';
+
+      const taskToggle = document.createElement('button');
+      taskToggle.type = 'button';
+      taskToggle.className = 'pref-inline-task-toggle';
+      taskToggle.setAttribute('data-paperuss-ui', 'true');
+      taskToggle.setAttribute(
+        'aria-label',
+        item.completed ? 'Mark task pending' : 'Complete task'
+      );
+      taskToggle.innerHTML = `<i data-lucide="${item.completed ? 'square-check-big' : 'square'}"></i>`;
+      taskToggle.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (typeof window.toggleStandaloneTask === 'function') {
+          window.toggleStandaloneTask(item.id, !item.completed);
+          if (typeof window.refreshProductivityReferences === 'function') {
+            window.refreshProductivityReferences('todo-list', item.groupId);
+          }
+        }
+      });
+
+      const text = document.createElement('span');
+      text.className = 'pref-inline-task-text';
+      text.textContent = item.text || '';
+      if (item.completed) text.classList.add('completed');
+
+      row.append(taskToggle, text);
+      tasks.appendChild(row);
+    });
+
+    ref.appendChild(tasks);
+  }
+}
+
+window.hydrateProductivityReference = function(ref) {
+  if (!ref || !ref.matches || !ref.matches(PRODUCTIVITY_REFERENCE_SELECTOR)) {
+    return false;
+  }
+
+  window.dehydrateProductivityReference(ref);
+  ref.setAttribute('data-hydrated', 'true');
+
+  const type = ref.getAttribute('data-paperuss-productivity');
+  const sourceId = ref.getAttribute('data-source-id');
+  const isInline =
+    ref.classList.contains('productivity-ref-inline') ||
+    ref.getAttribute('data-productivity-layout') === 'compact';
+
+  if (isInline) {
+    ref.classList.add('productivity-ref-inline');
+    ref.setAttribute('data-productivity-layout', 'compact');
+
+    const source = window.resolveProductivitySource(type, sourceId);
+    renderInlineProductivityReference(ref, type, source);
+    bindProductivityReferenceInteractions(ref);
+
+    if (window.lucide) {
+      window.lucide.createIcons({ root: ref });
+    }
+    return true;
+  }
+
+  ref.classList.add('productivity-ref');
+  ref.setAttribute('data-productivity-layout', 'full-row');
+  const cardSize = ref.getAttribute('data-productivity-card-size') || 'standard';
+  ref.setAttribute('data-productivity-card-size', cardSize);
+
+  const currentTemplate =
+    ref.getAttribute('data-productivity-template') ||
+    window.getDefaultProductivityTemplate(type);
+
+  window.applyProductivityTemplateClass(ref, currentTemplate);
+
+  const source = window.resolveProductivitySource(type, sourceId);
+
+  let staticCard = ref.querySelector('.productivity-ref-static');
+  if (!staticCard) {
+    staticCard = document.createElement('div');
+    staticCard.className = 'productivity-ref-static';
+    ref.appendChild(staticCard);
+  }
+
+  staticCard.innerHTML = window.buildProductivityStaticSnapshot(type, source);
+  staticCard.hidden = true;
+
+  const isMissing = !source || (Array.isArray(source) && source.length === 0);
+  const card = document.createElement('div');
+  card.setAttribute('data-paperuss-ui', 'true');
+  card.className = 'productivity-ref-hydrated productivity-ref-card';
+  card.style.position = 'relative';
+
+  if (isMissing) {
+    const row = document.createElement('div');
+    row.className = 'pref-row pref-row-missing';
+
+    const label = document.createElement('span');
+    label.className = 'pref-unavailable';
+    label.textContent = type === 'calendar'
+      ? '⚠️ Calendar event unavailable'
+      : '⚠️ Todo list unavailable';
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'pref-btn pref-btn-remove';
+    remove.textContent = 'Remove';
+    remove.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof window.removeProductivityReference === 'function') {
+        window.removeProductivityReference(ref);
+      }
+    });
+
+    row.append(label, remove);
+    card.appendChild(row);
+  } else {
+    const headerRow = document.createElement('div');
+    headerRow.className = 'pref-row pref-row-header';
+
+    const title = document.createElement('span');
+    title.className = 'pref-title';
+
+    if (type === 'calendar') {
+      const asDate = value => {
+        if (!value) return new Date(NaN);
+        if (typeof value === 'object') {
+          if (typeof value.toDate === 'function') return value.toDate();
+          if (typeof value.toMillis === 'function') return new Date(value.toMillis());
+          if (value.seconds !== undefined) return new Date(value.seconds * 1000);
+        }
+        return new Date(value);
+      };
+
+      const start = asDate(source.calendarStart);
+      const end = asDate(source.calendarEnd);
+      const dateText = Number.isNaN(start.getTime())
+        ? 'Date unavailable'
+        : start.toLocaleDateString(undefined, {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric'
+          });
+      let timeText = Number.isNaN(start.getTime())
+        ? ''
+        : start.toLocaleTimeString(undefined, {
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+
+      if (
+        !Number.isNaN(start.getTime()) &&
+        !Number.isNaN(end.getTime()) &&
+        end.getTime() !== start.getTime()
+      ) {
+        timeText += ' – ' + end.toLocaleTimeString(undefined, {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
+
+      title.innerHTML = `<i data-lucide="calendar-days"></i> ${String(source.title || 'Untitled Event')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')} · ${dateText}${timeText ? ' · ' + timeText : ''}`;
+
+      headerRow.appendChild(title);
+      card.appendChild(headerRow);
+    } else {
+      const cardSize = ref.getAttribute('data-productivity-card-size') || 'full';
+      const density = ref.getAttribute('data-productivity-density') || 'cozy';
+      const completedCount = source.filter(i => i.completed || i.checked || i.done || i.status === 'completed').length;
+      const percent = source.length > 0 ? Math.round((completedCount / source.length) * 100) : 0;
+
+      title.innerHTML = `<i data-lucide="list-checks"></i> ${String(
+        source[0] && source[0].groupTitle
+          ? source[0].groupTitle
+          : 'Todo List'
+      )
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')} <span class="pref-inline-meta" style="margin-left:auto;font-weight:normal">${completedCount}/${source.length}</span>`;
+
+      headerRow.appendChild(title);
+
+      // Header progress bar for medium & full sizes
+      if (cardSize === 'medium' || cardSize === 'full' || cardSize === 'standard' || cardSize === 'expanded') {
+        const progressWrap = document.createElement('div');
+        progressWrap.className = 'pref-progress-bar-wrap';
+        progressWrap.innerHTML = `<div class="pref-progress-bar-fill" style="width:${percent}%"></div>`;
+        headerRow.appendChild(progressWrap);
+      }
+
+      card.appendChild(headerRow);
+
+      const tasks = document.createElement('div');
+      tasks.className = 'pref-row-tasks';
+
+      source.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'pref-task-item';
+
+        const isChecked = item.completed || item.checked || item.done || item.status === 'completed';
+
+        const taskToggle = document.createElement('button');
+        taskToggle.type = 'button';
+        taskToggle.className = 'pref-task-toggle';
+        taskToggle.setAttribute('data-paperuss-ui', 'true');
+        taskToggle.setAttribute('aria-label', isChecked ? 'Mark pending' : 'Mark complete');
+        taskToggle.style.cssText = 'background:none;border:none;padding:0;margin:0;cursor:pointer;display:inline-flex;align-items:center;color:var(--fg);font-size:inherit;';
+        taskToggle.innerHTML = `<i data-lucide="${isChecked ? 'square-check-big' : 'square'}"></i>`;
+
+        const text = document.createElement('span');
+        text.textContent = item.text || item.title || '';
+        text.style.flex = '1';
+        text.style.cursor = 'pointer';
+        if (isChecked) text.style.textDecoration = 'line-through';
+
+        taskToggle.addEventListener('click', event => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (typeof window.toggleStandaloneTask === 'function') {
+            window.toggleStandaloneTask(item.id || item.taskId, !isChecked);
+            if (typeof window.refreshProductivityReferences === 'function') {
+              window.refreshProductivityReferences('todo-list', item.groupId);
+            }
+          }
+        });
+
+        text.addEventListener('click', event => {
+          event.stopPropagation();
+          if (typeof window.openTodoListEditor === 'function') {
+            window.openTodoListEditor(sourceId);
+          } else if (typeof window.openTaskCreatorModal === 'function') {
+            window.openTaskCreatorModal({ intent: 'edit', sourceId });
+          }
+        });
+
+        row.append(taskToggle, text);
+
+        // Render Priority Badge (in compact, medium, full)
+        if (item.priority && item.priority !== 'none' && cardSize !== 'tight') {
+          const prioBadge = document.createElement('span');
+          prioBadge.className = `pref-task-badge pref-badge-priority-${item.priority}`;
+          prioBadge.textContent = item.priority === 'high' ? 'High' : (item.priority === 'medium' ? 'Medium' : 'Low');
+          row.appendChild(prioBadge);
+        }
+
+        // Render Due Date Badge (in compact, medium, full)
+        const dueTs = item.due || item.dueDate;
+        if (dueTs && cardSize !== 'tight') {
+          const dueDate = new Date(dueTs);
+          if (!isNaN(dueDate.getTime())) {
+            const isOverdue = dueDate.getTime() < Date.now() && !isChecked;
+            const dueBadge = document.createElement('span');
+            dueBadge.className = `pref-task-badge ${isOverdue ? 'pref-badge-overdue' : 'pref-badge-due'}`;
+            const formattedDate = dueDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            dueBadge.innerHTML = isOverdue ? `⚠️ ${formattedDate}` : `📅 ${formattedDate}`;
+            row.appendChild(dueBadge);
+          }
+        }
+
+        tasks.appendChild(row);
+      });
+
+      card.appendChild(tasks);
+
+      // Footer progress bar for tight & compact sizes
+      if (cardSize === 'tight' || cardSize === 'compact') {
+        const footerProgress = document.createElement('div');
+        footerProgress.className = 'pref-footer-progress-bar';
+        footerProgress.innerHTML = `<div class="pref-footer-progress-fill" style="width:${percent}%"></div>`;
+        card.appendChild(footerProgress);
+      }
+    }
+  }
+
+  ref.appendChild(card);
+  bindProductivityReferenceInteractions(ref);
+
+  if (window.lucide) {
+    window.lucide.createIcons({ root: ref });
+  }
+
+  return true;
 };
 
 window.hydrateProductivityReferences = function(rootElement) {
   if (!rootElement) return;
+
+  const editor =
+    rootElement.id === 'noteBody'
+      ? rootElement
+      : document.getElementById('noteBody');
+
+  if (editor && window.ProductivitySafeDelete) {
+    window.ProductivitySafeDelete.init(editor);
+    window.ProductivitySafeDelete.clear();
+  }
+
+  if (editor && window.ProductivityClipboard) {
+    window.ProductivityClipboard.init(editor);
+  }
+
+  if (window.ProductivityFloatingUI) {
+    window.ProductivityFloatingUI.init();
+  }
+
   const refs = [];
-  if (rootElement.matches && rootElement.matches('.productivity-ref')) refs.push(rootElement);
-  rootElement.querySelectorAll('.productivity-ref').forEach(r => refs.push(r));
+  if (
+    rootElement.matches &&
+    rootElement.matches(PRODUCTIVITY_REFERENCE_SELECTOR)
+  ) {
+    refs.push(rootElement);
+  }
 
-  // Close any already-open menus from a previous cycle before re-hydrating
-  document.querySelectorAll('.productivity-ref-menu').forEach(m => {
-    if (typeof m._cleanup === 'function') m._cleanup();
-    m.remove();
-  });
+  rootElement
+    .querySelectorAll(PRODUCTIVITY_REFERENCE_SELECTOR)
+    .forEach(ref => {
+      if (!refs.includes(ref)) refs.push(ref);
+    });
 
-  refs.forEach(ref => {
-    window.dehydrateProductivityReference(ref);
-    ref.setAttribute('data-hydrated', 'true');
-    const type = ref.getAttribute('data-paperuss-productivity');
-    const sourceId = ref.getAttribute('data-source-id');
-    const source = window.resolveProductivitySource(type, sourceId);
+  refs.forEach(ref => window.hydrateProductivityReference(ref));
 
-    // Keep static fallback updated but hidden
-    let staticCard = ref.querySelector('.productivity-ref-static');
-    if (!staticCard) {
-      staticCard = document.createElement('div');
-      staticCard.className = 'productivity-ref-static';
-      ref.appendChild(staticCard);
-    }
-    staticCard.innerHTML = window.buildProductivityStaticSnapshot(type, source);
-    staticCard.hidden = true;
-
-    const isMissing = !source || (Array.isArray(source) && source.length === 0);
-
-    const card = document.createElement('div');
-    card.setAttribute('data-paperuss-ui', 'true');
-    card.className = 'productivity-ref-hydrated productivity-ref-card';
-    card.style.position = 'relative';
-
-    if (isMissing) {
-      const rowEl = document.createElement('div');
-      rowEl.className = 'pref-row pref-row-missing';
-      const unavailSpan = document.createElement('span');
-      unavailSpan.className = 'pref-unavailable';
-      unavailSpan.textContent = (type === 'calendar' ? '\u26a0\ufe0f Calendar event' : '\u26a0\ufe0f Todo list') + ' unavailable';
-      const btnRem = document.createElement('button');
-      btnRem.type = 'button';
-      btnRem.className = 'pref-btn pref-btn-remove';
-      btnRem.textContent = 'Remove';
-      btnRem.onclick = (e) => { e.preventDefault(); e.stopPropagation(); if (typeof window.removeProductivityReference === 'function') window.removeProductivityReference(ref); };
-      rowEl.appendChild(unavailSpan);
-      rowEl.appendChild(btnRem);
-      card.appendChild(rowEl);
-    } else {
-      const headerRow = document.createElement('div');
-      headerRow.className = 'pref-row pref-row-header';
-
-      const titleSpan = document.createElement('span');
-      titleSpan.className = 'pref-title';
-      if (type === 'calendar') {
-        titleSpan.textContent = '\uD83D\uDCC5 ' + (source.title || 'Untitled Event');
-      } else {
-        titleSpan.textContent = '\u2705 ' + ((source[0] && source[0].groupTitle) ? source[0].groupTitle : 'Todo List');
-      }
-
-      const actionsEl = document.createElement('div');
-      actionsEl.className = 'pref-actions';
-
-      const btnOpen = document.createElement('button');
-      btnOpen.type = 'button';
-      btnOpen.className = 'pref-btn pref-btn-open';
-      btnOpen.textContent = 'Open';
-
-      const btnMore = document.createElement('button');
-      btnMore.type = 'button';
-      btnMore.className = 'pref-btn pref-btn-more';
-      btnMore.setAttribute('aria-label', 'More options');
-      btnMore.textContent = '\u2022\u2022\u2022';
-
-      actionsEl.appendChild(btnOpen);
-      actionsEl.appendChild(btnMore);
-      headerRow.appendChild(titleSpan);
-      headerRow.appendChild(actionsEl);
-      card.appendChild(headerRow);
-
-      // Metadata row
-      const metaRow = document.createElement('div');
-      metaRow.className = 'pref-row pref-row-meta';
-      if (type === 'calendar') {
-        const normDate = window.normalizeProductivityDate || ((v) => new Date(typeof v === 'object' && v && v.seconds ? v.seconds * 1000 : v));
-        const dS = normDate(source.calendarStart);
-        const dE = normDate(source.calendarEnd);
-        const fmtDate = (d) => isNaN(d) ? '' : d.toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-        const fmtTime = (d) => isNaN(d) ? '' : d.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'});
-        let meta = fmtDate(dS);
-        if (!isNaN(dE)) meta += ' \u2013 ' + fmtTime(dE);
-        if (source.calendarRepeat && source.calendarRepeat !== 'none') meta += ' \uD83D\uDD01';
-        if (source.calendarNotify) meta += ' \uD83D\uDD14';
-        metaRow.textContent = meta;
-        card.appendChild(metaRow);
-        if (source.calendarDescription) {
-          const descRow = document.createElement('div');
-          descRow.className = 'pref-row pref-row-desc';
-          descRow.textContent = source.calendarDescription.slice(0, 80) + (source.calendarDescription.length > 80 ? '\u2026' : '');
-          card.appendChild(descRow);
-        }
-      } else {
-        const total = source.length;
-        const completed = source.filter(t => t.completed).length;
-        const dues = source.filter(t => t.due && !t.completed).map(t => t.due).sort();
-        let meta = completed + ' of ' + total + ' completed';
-        if (dues.length) {
-          const nearest = new Date(dues[0]);
-          if (!isNaN(nearest)) meta += ' \u00b7 due ' + nearest.toLocaleDateString(undefined, {month:'short', day:'numeric'});
-        }
-        metaRow.textContent = meta;
-        card.appendChild(metaRow);
-        const previewRow = document.createElement('div');
-        previewRow.className = 'pref-row pref-row-tasks';
-        const previewItems = source.slice(0, 2).map(t => (t.completed ? '\u2611' : '\u2610') + ' ' + (t.text || '').slice(0, 30)).join('  \u00b7  ');
-        const moreStr = total > 2 ? '  +' + (total - 2) + ' more' : '';
-        previewRow.textContent = previewItems + moreStr;
-        card.appendChild(previewRow);
-      }
-
-      const doOpen = (e) => {
-        e.preventDefault(); e.stopPropagation();
-        if (type === 'calendar') {
-          if (typeof window.openCalendarEventEditor === 'function') window.openCalendarEventEditor(sourceId);
-        } else {
-          if (typeof window.openTodoListEditor === 'function') window.openTodoListEditor(sourceId);
-        }
-      };
-      btnOpen.onclick = doOpen;
-      card.onclick = doOpen;
-      card.style.cursor = 'pointer';
-
-      btnMore.onclick = (e) => {
-        e.preventDefault(); e.stopPropagation();
-        // Close any existing menus globally
-        document.querySelectorAll('.productivity-ref-menu').forEach(m => {
-          if (typeof m._cleanup === 'function') m._cleanup();
-          m.remove();
-        });
-
-        const menu = document.createElement('div');
-        menu.className = 'productivity-ref-menu';
-        menu.setAttribute('data-paperuss-ui', 'true');
-        const typeLabel = type === 'calendar' ? 'Event' : 'Todo List';
-        const mkBtn = (cls, txt, danger) => {
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.className = 'pref-menu-item ' + cls;
-          b.textContent = txt;
-          if (danger) b.style.color = 'var(--danger)';
-          return b;
-        };
-        const editBtn = mkBtn('pref-mitem-edit', 'Edit ' + typeLabel, false);
-        const remBtn  = mkBtn('pref-mitem-rem',  'Remove from Leaf', false);
-        const delBtn  = mkBtn('pref-mitem-del',  'Delete Source ' + typeLabel, true);
-        editBtn.onclick = doOpen;
-        remBtn.onclick = (e2) => { e2.preventDefault(); e2.stopPropagation(); if (typeof window.removeProductivityReference === 'function') window.removeProductivityReference(ref); };
-        delBtn.onclick  = (e2) => {
-          e2.preventDefault(); e2.stopPropagation();
-          if (typeof menu._cleanup === 'function') menu._cleanup();
-          menu.remove();
-          if (type === 'calendar') { if (typeof window.deleteCalendarSource === 'function') window.deleteCalendarSource(sourceId); }
-          else { if (typeof window.deleteTodoListSource === 'function') window.deleteTodoListSource(sourceId); }
-        };
-        menu.appendChild(editBtn);
-        menu.appendChild(remBtn);
-        menu.appendChild(delBtn);
-
-        const cleanup = () => {
-          document.removeEventListener('click', clickAway);
-          document.removeEventListener('keydown', escHandler);
-        };
-        menu._cleanup = cleanup;
-        const clickAway = (ce) => { if (!menu.contains(ce.target) && ce.target !== btnMore) { cleanup(); menu.remove(); } };
-        const escHandler = (ke) => { if (ke.key === 'Escape') { cleanup(); menu.remove(); } };
-        document.addEventListener('click', clickAway);
-        document.addEventListener('keydown', escHandler);
-
-        // Use fixed positioning to avoid clip from overflow:hidden
-        const rect = btnMore.getBoundingClientRect();
-        menu.style.cssText = 'position:fixed;z-index:9999;min-width:170px;background:var(--bg);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);display:flex;flex-direction:column;padding:4px;';
-        menu.style.top = (rect.bottom + 4) + 'px';
-        menu.style.right = Math.max(4, window.innerWidth - rect.right) + 'px';
-        document.body.appendChild(menu);
-      };
-    }
-
-    ref.appendChild(card);
-  });
+  if (window.lucide) {
+    window.lucide.createIcons({ root: rootElement });
+  }
 };
 
-window.insertProductivityReference = function(type, sourceId) {
-  if (type !== 'calendar' && type !== 'todo-list') {
-    if(typeof toast === 'function') toast('Invalid reference type');
-    return;
-  }
-  
-  const normSourceId = String(sourceId);
-  const safeId = typeof sanitizeId === 'function' ? sanitizeId(normSourceId) : normSourceId.replace(/[^a-zA-Z0-9_-]/g, '');
-  if (!safeId) {
-    if(typeof toast === 'function') toast('Invalid source ID');
-    return;
-  }
 
-  const source = window.resolveProductivitySource(type, safeId);
-  if (!source || (Array.isArray(source) && source.length === 0)) {
-    if(typeof toast === 'function') toast('Source not found in canonical store');
-    return;
-  }
-  
-  const staticHtml = window.buildProductivityStaticSnapshot(type, source);
-  const typeClass = type === 'todo-list' ? 'productivity-ref-todo' : 'productivity-ref-calendar';
-
-  const ed = document.getElementById('noteBody');
-  if (!ed) return;
-  ed.focus();
-
-  // Build block element
-  const tmp = document.createElement('div');
-  tmp.innerHTML = '<div class="productivity-ref ' + typeClass + '" data-paperuss-productivity="' + type + '" data-source-id="' + safeId + '" data-ref-version="1" contenteditable="false"><div class="productivity-ref-static">' + staticHtml + '</div></div>';
-  const block = tmp.firstElementChild;
-
-  // Walk up from caret; exit any list or existing productivity-ref before inserting
-  const sel = typeof window.getSelection === 'function' ? window.getSelection() : null;
-  let insertAfter = null;
-  if (sel && sel.rangeCount > 0) {
-    let node = sel.getRangeAt(0).startContainer;
-    while (node && node !== ed) {
-      const tag = (node.tagName || '').toUpperCase();
-      if (tag === 'LI' || tag === 'UL' || tag === 'OL' || (node.classList && node.classList.contains('productivity-ref'))) {
-        let parent = node.parentNode;
-        while (parent && parent !== ed) { node = parent; parent = parent.parentNode; }
-        if (node.parentNode === ed) insertAfter = node;
-        break;
-      }
-      node = node.parentNode;
-    }
-  }
-
-  const trailer = document.createElement('p');
-  trailer.innerHTML = '<br>';
-
-  if (insertAfter && insertAfter.parentNode === ed) {
-    ed.insertBefore(trailer, insertAfter.nextSibling);
-    ed.insertBefore(block, trailer);
-  } else {
-    ed.appendChild(block);
-    ed.appendChild(trailer);
-  }
-
-  // Move caret into trailing paragraph
-  try {
-    const range = document.createRange();
-    range.setStart(trailer, 0);
-    range.collapse(true);
-    const s = typeof window.getSelection === 'function' ? window.getSelection() : null;
-    if (s) { s.removeAllRanges(); s.addRange(range); }
-  } catch (_) {}
-
-  if (typeof handleBodyInput === 'function') handleBodyInput();
-  window.hydrateProductivityReferences(ed);
+window.insertProductivityReference = function(type, sourceId, options = {}) {
+  if (!window.ProductivityInsertion) return false;
+  return window.ProductivityInsertion.insert(type, sourceId, options);
 };
 
 
 window.refreshProductivityReferences = function(type, sourceId) {
-  const normType = String(type);
-  const normId = String(sourceId);
-  const allRefs = document.querySelectorAll('.productivity-ref');
-  const refs = Array.from(allRefs).filter(r => r.getAttribute('data-paperuss-productivity') === normType && String(r.getAttribute('data-source-id')) === normId);
+  const normalizedType = String(type);
+  const normalizedId = String(sourceId);
+
+  const refs = Array.from(
+    document.querySelectorAll(PRODUCTIVITY_REFERENCE_SELECTOR)
+  ).filter(ref =>
+    ref.getAttribute('data-paperuss-productivity') === normalizedType &&
+    String(ref.getAttribute('data-source-id')) === normalizedId
+  );
+
   if (refs.length === 0) return;
-  
-  const source = window.resolveProductivitySource(normType, normId);
-  const staticHtml = window.buildProductivityStaticSnapshot(normType, source);
-  
-  let changed = false;
-  
-  refs.forEach(ref => {
-    window.dehydrateProductivityReference(ref);
-    let staticCard = ref.querySelector('.productivity-ref-static');
-    if (!staticCard) {
-      staticCard = document.createElement('div');
-      staticCard.className = 'productivity-ref-static';
-      ref.appendChild(staticCard);
-    }
-    if (staticCard.innerHTML !== staticHtml) {
-      staticCard.innerHTML = staticHtml;
-      changed = true;
-    }
-    window.hydrateProductivityReferences(ref);
-  });
-  
-  if (changed) {
-    if (typeof handleBodyInput === 'function') {
-      handleBodyInput();
-    } else if (typeof onEditorInput === 'function') {
-      onEditorInput();
-    }
-  }
+
+  refs.forEach(ref => window.hydrateProductivityReference(ref));
+  syncProductivityEditorOnce();
 };
 
 window.openCalendarEventEditor = function(eventId) {
   const root = document.getElementById('modalRoot');
   if (!root) return;
-  
+
   const canonicalNotes = typeof window.getCanonicalNotes === 'function' ? window.getCanonicalNotes() : (typeof notes !== 'undefined' ? notes : []);
   const evNote = canonicalNotes.find(n => String(n.id) === String(eventId));
-  
+
   if (!evNote || evNote.deletedAt || !(evNote.tags||[]).includes('calendar')) {
     if(typeof toast === 'function') toast('Calendar event unavailable.');
     return;
   }
-  
+
   const esc = (s) => (s||'').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   let rawDesc = '';
   if (evNote.calendarDescription !== undefined) {
@@ -1200,7 +2333,7 @@ window.openCalendarEventEditor = function(eventId) {
     lines = lines.filter(l => !toStrip.some(p => l.includes(p))).map(l => l.trim()).filter(l => l);
     rawDesc = lines.join('\n');
   }
-  
+
   let startTs = evNote.calendarStart;
   let endTs = evNote.calendarEnd;
   const normalizeProductivityDate = window.normalizeProductivityDate || ((val) => {
@@ -1212,27 +2345,27 @@ window.openCalendarEventEditor = function(eventId) {
     }
     return new Date(val);
   });
-  
+
   const dStart = normalizeProductivityDate(startTs);
   const dEnd = normalizeProductivityDate(endTs);
-  
+
   if (isNaN(dStart) || isNaN(dEnd)) {
     if(typeof toast === 'function') toast('Calendar event date unavailable.');
     return;
   }
-  
+
   const yS = dStart.getFullYear();
   const mS = String(dStart.getMonth()+1).padStart(2, '0');
   const dS = String(dStart.getDate()).padStart(2, '0');
   const hs = String(dStart.getHours()).padStart(2, '0');
   const ms = String(dStart.getMinutes()).padStart(2, '0');
-  
+
   const yE = dEnd.getFullYear();
   const mE = String(dEnd.getMonth()+1).padStart(2, '0');
   const dE = String(dEnd.getDate()).padStart(2, '0');
   const he = String(dEnd.getHours()).padStart(2, '0');
   const me = String(dEnd.getMinutes()).padStart(2, '0');
-  
+
   let eventType = 'event';
   if ((evNote.tags||[]).includes('meeting')) eventType = 'meeting';
   if ((evNote.tags||[]).includes('deadline')) eventType = 'deadline';
@@ -1279,15 +2412,15 @@ window.openCalendarEventEditor = function(eventId) {
       <button class="btn btn-primary" id="evEditSave">Save Changes</button>
     </div>
   </div></div>`;
-  
+
   const close = () => { root.innerHTML = ''; };
   document.getElementById('evEditCancel').onclick = close;
   const overlay = root.querySelector('.modal-overlay');
   if (overlay) overlay.onclick = (e) => { if (e.target === overlay) close(); };
-  
+
   document.getElementById('evEditSave').onclick = () => {
     if (isSaving) return;
-    
+
     const freshNotes = typeof window.getCanonicalNotes === 'function' ? window.getCanonicalNotes() : (typeof notes !== 'undefined' ? notes : []);
     const freshEv = freshNotes.find(n => String(n.id) === String(eventId));
     if (!freshEv) {
@@ -1295,16 +2428,16 @@ window.openCalendarEventEditor = function(eventId) {
       close();
       return;
     }
-    
+
     const title = document.getElementById('evEditTitle').value.trim() || 'Untitled Event';
     const sD = document.getElementById('evEditStartDate').value;
     const sT = document.getElementById('evEditStartTime').value || '09:00';
     const eD = document.getElementById('evEditEndDate').value || sD;
     const eT = document.getElementById('evEditEndTime').value || '10:00';
-    
+
     const newStartTs = new Date(sD + 'T' + sT + ':00').getTime();
     const newEndTs = new Date(eD + 'T' + eT + ':00').getTime();
-    
+
     if(!Number.isFinite(newStartTs) || !Number.isFinite(newEndTs)) {
       if(typeof toast === 'function') toast('Enter valid event dates and times');
       return;
@@ -1313,27 +2446,27 @@ window.openCalendarEventEditor = function(eventId) {
       if(typeof toast === 'function') toast('Event end must be after its start');
       return;
     }
-    
+
     isSaving = true;
     const type = document.getElementById('evEditType').value;
     const repeatVal = document.getElementById('evEditRepeat').value;
     const notify = document.getElementById('evEditNotify').checked;
     const desc = document.getElementById('evEditDesc').value.trim();
-    
+
     let tags = (freshEv.tags || []).filter(t => t !== 'meeting' && t !== 'deadline' && t !== 'planner' && t !== 'recurring' && !t.startsWith('repeat-'));
     if (!tags.includes('calendar')) tags.push('calendar');
     if (type === 'meeting') tags.push('meeting');
     if (type === 'deadline') tags.push('deadline');
     if (type === 'planner') tags.push('planner');
     if (repeatVal !== 'none') { tags.push('recurring'); tags.push('repeat-'+repeatVal); }
-    
+
     const startFmt = new Date(newStartTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
     const endFmt = new Date(newEndTs).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
     const content_html = (typeof sanitizeNoteHTML === 'function') ? sanitizeNoteHTML(`<p><strong>📅 ${esc(startFmt)}</strong></p><p>→ ${esc(endFmt)}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${esc(repeatVal)}</p>`:''}${desc?`<p>${esc(desc)}</p>`:''}`) : `<p><strong>📅 ${esc(startFmt)}</strong></p><p>→ ${esc(endFmt)}</p>${repeatVal!=='none'?`<p>🔁 Repeats: ${esc(repeatVal)}</p>`:''}${desc?`<p>${esc(desc)}</p>`:''}`;
 
     document.getElementById('evEditSave').disabled = true;
     const backupEv = { ...freshEv };
-    
+
     freshEv.title = title;
     freshEv.content = content_html;
     freshEv.tags = tags;
@@ -1343,14 +2476,14 @@ window.openCalendarEventEditor = function(eventId) {
     freshEv.calendarNotify = notify;
     freshEv.calendarDescription = desc;
     freshEv.updatedAt = Date.now();
-    
+
     Promise.resolve().then(() => typeof save === 'function' ? save() : null).then(() => {
       if (typeof renderCalendarView === 'function') renderCalendarView();
       if (typeof renderAll === 'function') renderAll();
-      
+
       window.refreshProductivityReferences('calendar', eventId);
       if(typeof toast === 'function') toast('Event updated successfully');
-      
+
       close();
     }).catch(e => {
       if(typeof toast === 'function') toast('Failed to save event');
@@ -1365,18 +2498,18 @@ window.openCalendarEventEditor = function(eventId) {
 window.openTodoListEditor = function(groupId) {
   const root = document.getElementById('modalRoot');
   if (!root) return;
-  
+
   const canonicalTasks = typeof window.getCanonicalStandaloneTasks === 'function' ? window.getCanonicalStandaloneTasks() : (typeof standaloneTasks !== 'undefined' ? standaloneTasks : []);
   const groupTasks = canonicalTasks.filter(t => String(t.groupId) === String(groupId) && !t.deleted && !t.deletedAt);
-  
+
   if (groupTasks.length === 0) {
     if(typeof toast === 'function') toast('Todo list unavailable.');
     return;
   }
-  
+
   const esc = (s) => (s||'').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   let draftTitle = groupTasks[0].groupTitle || 'Todo List';
-  
+
   let draftTasks = groupTasks.map(t => ({ ...t }));
   let isSaving = false;
 
@@ -1410,7 +2543,7 @@ window.openTodoListEditor = function(groupId) {
         </div>
       `;
     });
-    
+
     root.innerHTML=`<div class="modal-overlay"><div class="modal" style="max-width:500px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <h3 style="margin:0">✏️ Edit Todo List</h3>
@@ -1427,20 +2560,20 @@ window.openTodoListEditor = function(groupId) {
         <button class="btn btn-primary" id="todoEditSave">Save Changes</button>
       </div>
     </div></div>`;
-    
+
     if (typeof refreshIcons === 'function') refreshIcons();
-    
+
     document.getElementById('todoEditCancel').onclick = close;
     const overlay = root.querySelector('.modal-overlay');
     if (overlay) overlay.onclick = (e) => { if (e.target === overlay) close(); };
-    
+
     document.getElementById('todoEditTitle').oninput = (e) => { draftTitle = e.target.value; };
-    
+
     document.getElementById('todoEditAddRow').onclick = () => {
       draftTasks.push({ id: (typeof uid === 'function' ? uid() : Date.now().toString()), text: '', completed: false, priority: 'none', groupId: groupId });
       renderDraft();
     };
-    
+
     root.querySelectorAll('.draft-task-text').forEach(el => el.oninput = (e) => { draftTasks[e.target.dataset.idx].text = e.target.value; });
     root.querySelectorAll('.draft-task-done').forEach(el => el.onchange = (e) => { draftTasks[e.target.dataset.idx].completed = e.target.checked; });
     root.querySelectorAll('.draft-task-pri').forEach(el => el.onchange = (e) => { draftTasks[e.target.dataset.idx].priority = e.target.value; });
@@ -1449,7 +2582,7 @@ window.openTodoListEditor = function(groupId) {
       draftTasks.splice(e.currentTarget.dataset.idx, 1);
       renderDraft();
     });
-    
+
     document.getElementById('todoEditSave').onclick = () => {
       if (isSaving) return;
       draftTasks = draftTasks.filter(t => t.text.trim());
@@ -1458,21 +2591,21 @@ window.openTodoListEditor = function(groupId) {
         return;
       }
       isSaving = true;
-      
+
       const freshTasks = typeof window.getCanonicalStandaloneTasks === 'function' ? window.getCanonicalStandaloneTasks() : (typeof standaloneTasks !== 'undefined' ? standaloneTasks : []);
       const newTitle = draftTitle.trim() || 'Todo List';
-      
+
       const backupTasks = freshTasks.map(t => ({...t}));
       const existingIds = new Set(groupTasks.map(t => String(t.id)));
       const newIds = new Set(draftTasks.map(t => String(t.id)));
-      
+
       existingIds.forEach(id => {
         if (!newIds.has(id)) {
           const t = freshTasks.find(x => String(x.id) === id);
           if (t) { t.deleted = true; t.deletedAt = Date.now(); }
         }
       });
-      
+
       draftTasks.forEach(dt => {
         dt.groupTitle = newTitle;
         dt.groupId = groupId;
@@ -1491,23 +2624,23 @@ window.openTodoListEditor = function(groupId) {
           freshTasks.push(dt);
         }
       });
-      
+
       document.getElementById('todoEditSave').disabled = true;
-      
+
       Promise.resolve().then(() => typeof saveTasks === 'function' ? saveTasks() : null).then(() => {
         if (typeof renderTasksView === 'function') renderTasksView();
         if (typeof updateTasksCount === 'function') updateTasksCount();
-        
+
         window.refreshProductivityReferences('todo-list', groupId);
         if(typeof toast === 'function') toast('Todo list updated successfully');
-        
+
         close();
       }).catch(e => {
         if(typeof toast === 'function') toast('Failed to save todo list');
-        
+
         // Restore from backup in place
         freshTasks.splice(0, freshTasks.length, ...backupTasks.map(task => ({ ...task })));
-        
+
         isSaving = false;
         const btn = document.getElementById('todoEditSave');
         if (btn) btn.disabled = false;
@@ -1520,45 +2653,57 @@ window.openTodoListEditor = function(groupId) {
 };
 
 window.removeProductivityReference = function(ref) {
-  if (ref && ref.parentNode) {
-    ref.remove();
-    if (typeof handleBodyInput === 'function') handleBodyInput();
-    if (typeof toast === 'function') toast('Reference removed from note');
+  const removed =
+    window.ProductivitySafeDelete &&
+    typeof window.ProductivitySafeDelete.removeReference === 'function'
+      ? window.ProductivitySafeDelete.removeReference(ref, {
+          captureHistory: true,
+          sync: true,
+          restoreCaret: true
+        })
+      : false;
+
+  if (removed && typeof toast === 'function') {
+    toast('Reference removed from note');
   }
+
+  return removed;
 };
 
-window.deleteCalendarSource = function(eventId) {
-  if (!confirm('Are you sure you want to delete this event source?')) return;
+window.deleteCalendarSource = function(eventId, skipConfirm = false) {
+  if (!skipConfirm && !confirm('Are you sure you want to delete this event source?')) return Promise.resolve(false);
   const canonicalNotes = typeof window.getCanonicalNotes === 'function' ? window.getCanonicalNotes() : (typeof notes !== 'undefined' ? notes : []);
   const ev = canonicalNotes.find(n => String(n.id) === String(eventId));
   if (!ev) {
     if (typeof toast === 'function') toast('Event already deleted or missing');
-    return;
+    return Promise.resolve(false);
   }
   const backup = { ...ev };
   ev.deleted = true;
   ev.deletedAt = Date.now();
-  
-  Promise.resolve().then(() => typeof save === 'function' ? save() : null).then(() => {
+
+  return Promise.resolve().then(() => typeof save === 'function' ? save() : null).then(() => {
     if (typeof renderCalendarView === 'function') renderCalendarView();
     if (typeof renderAll === 'function') renderAll();
     window.refreshProductivityReferences('calendar', eventId);
     if (typeof toast === 'function') toast('Calendar event source deleted');
+    return true;
   }).catch(e => {
     Object.assign(ev, backup);
     if (!('deleted' in backup)) delete ev.deleted;
     if (!('deletedAt' in backup)) delete ev.deletedAt;
     if (typeof toast === 'function') toast('Failed to delete event source');
+    throw e;
   });
 };
 
-window.deleteTodoListSource = function(groupId) {
-  if (!confirm('Are you sure you want to delete this todo list source?')) return;
+window.deleteTodoListSource = function(groupId, skipConfirm = false) {
+  if (!skipConfirm && !confirm('Are you sure you want to delete this todo list source?')) return Promise.resolve(false);
   const canonicalTasks = typeof window.getCanonicalStandaloneTasks === 'function' ? window.getCanonicalStandaloneTasks() : (typeof standaloneTasks !== 'undefined' ? standaloneTasks : []);
-  
+
   const backupTasks = canonicalTasks.map(t => ({...t}));
   let changed = false;
-  
+
   canonicalTasks.forEach(t => {
     if (String(t.groupId) === String(groupId) && !t.deleted && !t.deletedAt) {
       t.deleted = true;
@@ -1566,19 +2711,1660 @@ window.deleteTodoListSource = function(groupId) {
       changed = true;
     }
   });
-  
+
   if (!changed) {
     if (typeof toast === 'function') toast('Todo list already deleted or missing');
-    return;
+    return Promise.resolve(false);
   }
-  
-  Promise.resolve().then(() => typeof saveTasks === 'function' ? saveTasks() : null).then(() => {
+
+  return Promise.resolve().then(() => typeof saveTasks === 'function' ? saveTasks() : null).then(() => {
     if (typeof renderTasksView === 'function') renderTasksView();
     if (typeof updateTasksCount === 'function') updateTasksCount();
     window.refreshProductivityReferences('todo-list', groupId);
     if (typeof toast === 'function') toast('Todo list source deleted');
+    return true;
   }).catch(e => {
     canonicalTasks.splice(0, canonicalTasks.length, ...backupTasks.map(task => ({ ...task })));
     if (typeof toast === 'function') toast('Failed to delete todo list source');
+    throw e;
   });
+};
+
+
+window.PRODUCTIVITY_STYLE_TEMPLATES = Object.freeze({
+  calendar: Object.freeze([
+    { id: 'clean-row', label: 'Clean Row', description: 'A minimal one-line calendar reference.', icon: 'calendar-days' },
+    { id: 'accent-rule', label: 'Accent Rule', description: 'Subtle accent rule along the side.', icon: 'calendar-days' },
+    { id: 'glass', label: 'Glassmorphic', description: 'Translucent background with blur and glowing border.', icon: 'sparkles' },
+    { id: 'solid', label: 'Vibrant Solid', description: 'Bold solid accent fill with high-contrast text.', icon: 'square-fill' },
+    { id: 'outlined', label: 'Crisp Outlined', description: 'Clean 1.5px accent border with transparent backdrop.', icon: 'square' },
+    { id: 'neon', label: 'Neon Glow', description: 'Dark-mode glowing accent border with hover elevation.', icon: 'zap' }
+  ]),
+  'todo-list': Object.freeze([
+    { id: 'minimal', label: 'Minimal', description: 'A clean title with compact task rows.', icon: 'list-checks' },
+    { id: 'title-rule', label: 'Title Rule', description: 'Adds an accent divider beneath the list title.', icon: 'list-checks' },
+    { id: 'soft-paper', label: 'Soft Paper', description: 'Subtle accent background tint and border.', icon: 'list-checks' },
+    { id: 'glass', label: 'Glassmorphic', description: 'Translucent background with blur and glowing border.', icon: 'sparkles' },
+    { id: 'solid', label: 'Vibrant Solid', description: 'Bold solid accent fill with high-contrast text.', icon: 'square-fill' },
+    { id: 'outlined', label: 'Crisp Outlined', description: 'Clean 1.5px accent border with transparent backdrop.', icon: 'square' },
+    { id: 'neon', label: 'Neon Glow', description: 'Dark-mode glowing accent border with hover elevation.', icon: 'zap' }
+  ])
+});
+
+window.ProductivityStylesModal = {
+  initialized: false,
+  modalRoot: null,
+  context: null,
+
+  init() {
+    if (this.initialized) return;
+
+    this.modalRoot = document.createElement('div');
+    this.modalRoot.className = 'productivity-style-modal-overlay';
+    this.modalRoot.style.display = 'none';
+
+    // Base layout
+    this.modalRoot.innerHTML = `
+      <div class="productivity-style-modal" role="dialog" aria-modal="true" aria-labelledby="productivityStyleModalTitle">
+        <div class="productivity-style-modal-header">
+          <h3 id="productivityStyleModalTitle" style="margin:0"></h3>
+          <button type="button" class="btn" id="prodStyleModalClose" aria-label="Close" style="background:transparent;border:none;box-shadow:none;padding:4px"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <div class="productivity-style-modal-body">
+          <div class="productivity-style-modal-section">
+            <h4 style="margin:0 0 8px 0;font-size:13px;color:var(--fg-secondary)">Live Preview</h4>
+            <div class="productivity-style-preview-container" id="prodStyleModalPreview" style="padding:16px;background:var(--bg-secondary);border-radius:8px;display:flex;align-items:center;justify-content:center;min-height:70px"></div>
+          </div>
+          <div class="productivity-style-modal-section" style="margin-top:14px">
+            <h4 style="margin:0 0 8px 0;font-size:13px;color:var(--fg-secondary)">Color Palette</h4>
+            <div id="prodStyleModalColorOptions" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+          </div>
+          <div class="productivity-style-modal-section" style="margin-top:14px">
+            <h4 style="margin:0 0 8px 0;font-size:13px;color:var(--fg-secondary)">Style Template</h4>
+            <div id="prodStyleModalOptions" role="radiogroup" style="display:flex;flex-wrap:wrap;gap:10px"></div>
+          </div>
+        </div>
+        <div class="productivity-style-modal-footer">
+          <button type="button" class="btn" id="prodStyleModalCancel">Cancel</button>
+          <button type="button" class="btn btn-primary" id="prodStyleModalApply">Apply</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(this.modalRoot);
+    if (window.lucide) window.lucide.createIcons({ root: this.modalRoot });
+
+    // Listeners
+    document.getElementById('prodStyleModalClose').onclick = () => this.close('close-button');
+    document.getElementById('prodStyleModalCancel').onclick = () => this.close('cancel');
+    document.getElementById('prodStyleModalApply').onclick = () => this.apply();
+
+    this.modalRoot.addEventListener('mousedown', (e) => {
+      if (e.target === this.modalRoot) this.close('backdrop');
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (this.modalRoot.style.display !== 'none' && e.key === 'Escape') {
+         this.close('escape');
+      }
+    });
+
+    document.addEventListener('paperuss:note-switched', () => this.close('context-change'));
+    document.addEventListener('paperuss:leaf-switched', () => this.close('context-change'));
+
+    this.initialized = true;
+  },
+
+  open(activeRef, openerBtn) {
+    this.init();
+    if (!activeRef || !activeRef.isConnected) return;
+
+    const sourceType = activeRef.getAttribute('data-paperuss-productivity');
+    const sourceId = activeRef.getAttribute('data-source-id');
+    const persistedTemplateId = activeRef.getAttribute('data-productivity-template') || activeRef.getAttribute('data-productivity-theme') || (sourceType === 'calendar' ? 'clean-row' : 'minimal');
+    const persistedColorId = activeRef.getAttribute('data-productivity-color') || 'default';
+    const activeNoteId = getProductivityActiveNoteId();
+
+    this.context = {
+      storedRef: activeRef,
+      hydratedRef: activeRef.querySelector('.productivity-ref-hydrated'),
+      sourceType,
+      sourceId,
+      persistedTemplateId,
+      pendingTemplateId: persistedTemplateId,
+      persistedColorId,
+      pendingColorId: persistedColorId,
+      activeNoteId,
+      openerBtn
+    };
+
+    document.getElementById('productivityStyleModalTitle').textContent = sourceType === 'calendar' ? 'Calendar Style' : 'Todo List Style';
+
+    this.renderOptions();
+    this.renderPreview();
+
+    this.modalRoot.style.display = 'flex';
+
+    // Trap focus setup
+    const options = this.modalRoot.querySelectorAll('.productivity-style-option');
+    if (options.length > 0) {
+      const selected = Array.from(options).find(o => o.getAttribute('aria-checked') === 'true');
+      if (selected) selected.focus();
+      else options[0].focus();
+    }
+  },
+
+  close(reason) {
+    if (this.modalRoot) this.modalRoot.style.display = 'none';
+    if (this.context && this.context.openerBtn && document.body.contains(this.context.openerBtn)) {
+      if (reason !== 'context-change') {
+         // Show toolbar again since we just closed the modal, unless context changed
+         if (window.ProductivityFloatingUI) window.ProductivityFloatingUI.showFor(this.context.storedRef);
+         this.context.openerBtn.focus();
+      }
+    }
+    this.context = null;
+  },
+
+  renderOptions() {
+    // Render Color Swatches
+    const colorContainer = document.getElementById('prodStyleModalColorOptions');
+    if (colorContainer) {
+      colorContainer.innerHTML = '';
+      const colors = [
+        { id: 'default', label: 'Default Accent', hex: 'var(--accent, #6366f1)' },
+        { id: 'cyan', label: 'Oceanic Cyan', hex: '#06b6d4' },
+        { id: 'emerald', label: 'Emerald Mint', hex: '#10b981' },
+        { id: 'coral', label: 'Sunset Coral', hex: '#f97316' },
+        { id: 'violet', label: 'Amethyst Violet', hex: '#8b5cf6' },
+        { id: 'slate', label: 'Minimal Slate', hex: '#64748b' },
+        { id: 'rose', label: 'Rose Crimson', hex: '#f43f5e' },
+        { id: 'amber', label: 'Amber Gold', hex: '#f59e0b' }
+      ];
+
+      colors.forEach(c => {
+        const swatch = document.createElement('button');
+        swatch.type = 'button';
+        swatch.title = c.label;
+        swatch.style.width = '28px';
+        swatch.style.height = '28px';
+        swatch.style.borderRadius = '50%';
+        swatch.style.background = c.hex;
+        swatch.style.border = this.context.pendingColorId === c.id ? '2px solid var(--fg)' : '2px solid transparent';
+        swatch.style.outline = this.context.pendingColorId === c.id ? '2px solid ' + c.hex : 'none';
+        swatch.style.outlineOffset = '2px';
+        swatch.style.cursor = 'pointer';
+        swatch.onclick = (e) => {
+          e.preventDefault();
+          this.context.pendingColorId = c.id;
+          this.renderOptions();
+          this.renderPreview();
+        };
+        colorContainer.appendChild(swatch);
+      });
+    }
+
+    const container = document.getElementById('prodStyleModalOptions');
+    container.innerHTML = '';
+
+    const templates = window.PRODUCTIVITY_STYLE_TEMPLATES[this.context.sourceType];
+    if (!templates) return;
+
+    templates.forEach((tpl, idx) => {
+      const btn = document.createElement('div');
+      btn.className = 'productivity-style-option ' + (this.context.pendingTemplateId === tpl.id ? 'selected' : '');
+      btn.setAttribute('role', 'radio');
+      btn.setAttribute('aria-checked', this.context.pendingTemplateId === tpl.id ? 'true' : 'false');
+      btn.tabIndex = 0;
+
+      const checkHtml = this.context.pendingTemplateId === tpl.id ? '<i data-lucide="circle-check" class="w-4 h-4" style="color:var(--pref-accent)"></i>' : '<div style="width:16px;height:16px;border:2px solid var(--border);border-radius:50%"></div>';
+
+      btn.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <span style="font-weight:600;font-size:14px;color:var(--fg)">${tpl.label}</span>
+            <span style="font-size:12px;color:var(--fg-secondary)">${tpl.description}</span>
+          </div>
+          ${checkHtml}
+        </div>
+      `;
+
+      const selectAction = () => {
+        this.context.pendingTemplateId = tpl.id;
+        this.renderOptions();
+        this.renderPreview();
+      };
+
+      btn.onclick = selectAction;
+      btn.onkeydown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectAction(); }
+        else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          const next = container.children[(idx + 1) % templates.length];
+          if (next) next.focus();
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          const prev = container.children[(idx - 1 + templates.length) % templates.length];
+          if (prev) prev.focus();
+        }
+      };
+
+      container.appendChild(btn);
+    });
+
+    if (window.lucide) window.lucide.createIcons({ root: container });
+  },
+
+    renderPreview() {
+    const container = document.getElementById('prodStyleModalPreview');
+    if (!container || !this.context) return;
+
+    const ref = this.context.storedRef;
+    const isInline = ref && (ref.classList.contains('productivity-ref-inline') || ref.getAttribute('data-productivity-layout') === 'compact');
+    const colorId = this.context.pendingColorId || 'default';
+    const themeId = this.context.pendingTemplateId || (this.context.sourceType === 'calendar' ? 'clean-row' : 'minimal');
+
+    container.setAttribute('data-productivity-color', colorId);
+    container.setAttribute('data-productivity-theme', themeId);
+
+    let previewHtml = '';
+
+    if (isInline) {
+      if (this.context.sourceType === 'calendar') {
+        previewHtml = '<span class="productivity-style-preview productivity-ref-inline" data-productivity-theme="' + themeId + '" data-productivity-color="' + colorId + '"><span class="pref-inline-icon" aria-hidden="true"><i data-lucide="calendar"></i></span><span class="pref-inline-title">Project Review</span><span class="pref-inline-meta">Aug 11 · 3:00 PM</span></span>';
+      } else {
+        previewHtml = '<span class="productivity-style-preview productivity-ref-inline" data-productivity-theme="' + themeId + '" data-productivity-color="' + colorId + '"><button class="pref-inline-expand" type="button" aria-label="Toggle"><i data-lucide="chevron-down"></i></button><span class="pref-inline-icon" aria-hidden="true">☑</span><span class="pref-inline-title">Shopping List</span><span class="pref-inline-meta">1/3</span></span>';
+      }
+    } else {
+      if (this.context.sourceType === 'calendar') {
+        previewHtml = '<div class="productivity-style-preview productivity-ref productivity-ref-calendar productivity-ref-card pref-tpl-' + themeId + '" data-productivity-theme="' + themeId + '" data-productivity-color="' + colorId + '" style="width:100%"><div class="pref-row pref-row-header"><span class="pref-title"><i data-lucide="calendar-days"></i> Project Review · Aug 11 · 3:00–4:00 PM</span></div></div>';
+      } else {
+        previewHtml = '<div class="productivity-style-preview productivity-ref productivity-ref-todo productivity-ref-card pref-tpl-' + themeId + '" data-productivity-theme="' + themeId + '" data-productivity-color="' + colorId + '" style="width:100%"><div class="pref-row pref-row-header"><span class="pref-title"><i data-lucide="list-checks"></i> Shopping List</span></div><div class="pref-row-tasks"><div class="pref-task-item"><i data-lucide="square"></i> <span>Milk</span></div><div class="pref-task-item"><i data-lucide="square"></i> <span>Eggs</span></div><div class="pref-task-item"><i data-lucide="square-check-big"></i> <span style="text-decoration:line-through">Bread</span></div></div></div>';
+      }
+    }
+
+    container.innerHTML = previewHtml;
+    if (window.lucide) window.lucide.createIcons({ root: container });
+
+    const applyBtn = document.getElementById('prodStyleModalApply');
+    if (applyBtn) applyBtn.disabled = false;
+  },
+
+  async apply() {
+    if (!this.context) return;
+    const { storedRef, sourceType, sourceId, pendingTemplateId, persistedTemplateId, activeNoteId } = this.context;
+
+    const applyBtn = document.getElementById('prodStyleModalApply');
+    if (applyBtn) applyBtn.disabled = true;
+
+    // Validate Context
+    if (!storedRef || !storedRef.isConnected) { this.close('invalid-context'); return; }
+    if (activeNoteId && window.paperussState && window.paperussState.currentId !== activeNoteId) { this.close('invalid-context'); return; }
+
+    // Resolve live ref safely
+    const realRef = storedRef; // In paperuss, storedRef is the persistent wrapper
+    if (realRef.getAttribute('data-paperuss-productivity') !== sourceType) { this.close('invalid-context'); return; }
+    if (realRef.getAttribute('data-source-id') !== sourceId) { this.close('invalid-context'); return; }
+
+    const templates = window.PRODUCTIVITY_STYLE_TEMPLATES[sourceType];
+    if (!templates || !templates.find(t => t.id === pendingTemplateId)) {
+      if (typeof window.toast === 'function') window.toast('Invalid template for this source type.');
+      this.close('invalid-context');
+      return;
+    }
+
+    const prevTemplateAttr = realRef.getAttribute('data-productivity-template');
+    const prevClassMatch = [...realRef.classList].find(c => PRODUCTIVITY_TEMPLATE_CLASSES.includes(c));
+
+    // Apply changes
+    realRef.setAttribute('data-productivity-template', pendingTemplateId);
+    realRef.setAttribute('data-productivity-theme', pendingTemplateId);
+    if (this.context.pendingColorId && this.context.pendingColorId !== 'default') {
+      realRef.setAttribute('data-productivity-color', this.context.pendingColorId);
+    } else {
+      realRef.removeAttribute('data-productivity-color');
+    }
+    window.applyProductivityTemplateClass(realRef, pendingTemplateId);
+
+    // Verify
+    window.hydrateProductivityReference(realRef);
+
+    try {
+      if (typeof window.handleBodyInput === 'function') {
+        window.handleBodyInput();
+      } else if (typeof window.onEditorInput === 'function') {
+        window.onEditorInput();
+      } else if (typeof window.save === 'function') {
+        await Promise.resolve(window.save());
+      }
+    } catch(err) {
+      console.warn('Editor sync warning:', err);
+    }
+    if (typeof window.toast === 'function') window.toast('Style applied');
+    this.close('apply');
+  }
+};
+
+
+
+window.ProductivitySafeDelete = {
+  initialized: false,
+  selectedRef: null,
+  activeLeafId: null,
+  activeNoteId: null,
+
+  init(editor) {
+    if (this.initialized || !editor) return;
+    this.initialized = true;
+
+    // Use capture phase for keydown to intercept before existing Backspace handlers
+    editor.addEventListener('keydown', this.handleKeydown.bind(this), true);
+
+    // Delegated click listener
+    editor.addEventListener('click', this.handleEditorClick.bind(this));
+
+    // Global mousedown to clear selection if clicked outside editor/ref
+    document.addEventListener('mousedown', (e) => {
+      const runtimeUI = e.target.closest('.pref-toolbar-portal, .productivity-ref-menu');
+      if (runtimeUI) {
+        return;
+      }
+      if (!editor.contains(e.target)) {
+        this.clear();
+      }
+    });
+  },
+
+  handleEditorClick(e) {
+    // Ignore clicks on interactive controls
+    if (e.target.closest('button, a, input, select, textarea, [role="button"]')) {
+      this.clear();
+      return;
+    }
+
+    // Check if clicked inside a productivity reference
+    const ref = e.target.closest(PRODUCTIVITY_REFERENCE_SELECTOR);
+    if (ref) {
+      // Don't select if they clicked a Todo task that toggles things
+      // The task elements are .pref-task-item
+      if (e.target.closest('.pref-task-item')) {
+         this.clear();
+         return;
+      }
+      this.select(ref);
+    } else {
+      this.clear();
+    }
+  },
+
+  handleKeydown(e) {
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      const isBackspace = e.key === 'Backspace';
+
+      // If already selected, handle second press
+      if (this.selectedRef) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        this.removeSelected();
+        return;
+      }
+
+      // First press: check for adjacency
+      const adjacentRef = this.getAdjacentProductivityRef(isBackspace);
+      if (adjacentRef) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        this.select(adjacentRef);
+        return;
+      }
+    } else if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key !== 'Escape') {
+      // Clear on any other normal typing
+      this.clear();
+    }
+  },
+
+  getEditorTopLevelChild(node, editor) {
+    let curr = node;
+    while (curr && curr.parentNode && curr.parentNode !== editor) {
+      curr = curr.parentNode;
+    }
+    return curr === editor ? null : curr;
+  },
+
+  isCaretAtLogicalStart(range, block) {
+    if (!block) return false;
+    const preCaretRange = range.cloneRange();
+    preCaretRange.selectNodeContents(block);
+    preCaretRange.setEnd(range.startContainer, range.startOffset);
+    // Ignore zero-width or empty text
+    const textBefore = preCaretRange.toString().replace(/[\u200B\u200C\u200D\uFEFF]/g, '').trim();
+    if (textBefore.length > 0) return false;
+
+    // Additional check for nodes before caret
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+      acceptNode: function(node) {
+        if (node === range.startContainer) return NodeFilter.FILTER_REJECT; // we stop before start
+        if (node.nodeType === 3 && node.nodeValue.replace(/[\u200B\u200C\u200D\uFEFF\s]/g, '').length === 0) return NodeFilter.FILTER_SKIP;
+        if (node.nodeType === 1 && (node.tagName === 'BR' || node.matches && node.matches(PRODUCTIVITY_REFERENCE_SELECTOR))) return NodeFilter.FILTER_ACCEPT;
+        if (node.nodeType === 1) return NodeFilter.FILTER_SKIP;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    // If there is meaningful content before the caret in this block, return false.
+    // For simplicity, relying on preCaretRange string length is usually enough for empty text,
+    // but if there is an image before it, preCaretRange text is empty.
+    return true;
+  },
+
+  isCaretAtLogicalEnd(range, block) {
+    if (!block) return false;
+    const postCaretRange = range.cloneRange();
+    postCaretRange.selectNodeContents(block);
+    postCaretRange.setStart(range.endContainer, range.endOffset);
+    const textAfter = postCaretRange.toString().replace(/[\u200B\u200C\u200D\uFEFF]/g, '').trim();
+    return textAfter.length === 0;
+  },
+
+  getAdjacentProductivityRef(isBackspace) {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return null;
+
+    const editor = document.getElementById('noteBody');
+    if (!editor || !editor.contains(sel.anchorNode)) return null;
+
+    const range = sel.getRangeAt(0);
+    const container = range.startContainer;
+    const offset = range.startOffset;
+    let candidate = null;
+
+    if (container.nodeType === Node.TEXT_NODE) {
+      if (isBackspace && offset === 0) {
+        candidate = container.previousSibling;
+      } else if (!isBackspace && offset === container.nodeValue.length) {
+        candidate = container.nextSibling;
+      }
+    } else if (container.nodeType === Node.ELEMENT_NODE) {
+      candidate = isBackspace
+        ? container.childNodes[offset - 1] || null
+        : container.childNodes[offset] || null;
+    }
+
+    if (
+      candidate &&
+      candidate.nodeType === Node.ELEMENT_NODE &&
+      candidate.matches(PRODUCTIVITY_REFERENCE_SELECTOR)
+    ) {
+      return candidate;
+    }
+
+    const block = this.getEditorTopLevelChild(container, editor);
+    if (isBackspace) {
+      if (!this.isCaretAtLogicalStart(range, block)) return null;
+      const previous = block ? block.previousElementSibling : null;
+      if (previous && previous.matches(PRODUCTIVITY_REFERENCE_SELECTOR)) {
+        return previous;
+      }
+    } else {
+      if (!this.isCaretAtLogicalEnd(range, block)) return null;
+      const next = block ? block.nextElementSibling : null;
+      if (next && next.matches(PRODUCTIVITY_REFERENCE_SELECTOR)) {
+        return next;
+      }
+    }
+
+    return null;
+  },
+
+
+  select(refNode) {
+    if (!refNode || !refNode.isConnected) return;
+
+    this.clear();
+    this.selectedRef = refNode;
+    this.activeNoteId = getProductivityActiveNoteId();
+    this.activeLeafId = document.getElementById('noteBody') ? document.getElementById('noteBody').getAttribute('data-active-leaf-id') : null;
+
+    refNode.classList.add('pref-delete-selected');
+
+    if (window.ProductivityFloatingUI) {
+      window.ProductivityFloatingUI.showFor(refNode);
+    }
+  },
+
+  clear() {
+    if (this.selectedRef) {
+      this.selectedRef.classList.remove('pref-delete-selected');
+      this.selectedRef = null;
+    }
+  },
+
+  removeSelected() {
+    return this.removeReference(this.selectedRef, { captureHistory: true, sync: true, restoreCaret: true });
+  },
+
+  removeReference(refNode, options = {}) {
+    const settings = {
+      captureHistory: true,
+      sync: true,
+      restoreCaret: true,
+      ...options
+    };
+
+    if (!refNode || !refNode.isConnected) return false;
+    if (!refNode.matches(PRODUCTIVITY_REFERENCE_SELECTOR)) return false;
+
+    const editor = document.getElementById('noteBody');
+    if (!editor || !editor.contains(refNode)) return false;
+
+    if (this.selectedRef === refNode) {
+      const currentNoteId = getProductivityActiveNoteId();
+      const currentLeafId = editor.getAttribute('data-active-leaf-id');
+      if (
+        currentNoteId !== this.activeNoteId ||
+        currentLeafId !== this.activeLeafId
+      ) {
+        return false;
+      }
+    }
+
+    const isInline = refNode.classList.contains('productivity-ref-inline');
+    const parent = refNode.parentNode;
+    const childIndex = parent
+      ? Array.prototype.indexOf.call(parent.childNodes, refNode)
+      : -1;
+    const nextBlock = refNode.nextElementSibling;
+    const previousBlock = refNode.previousElementSibling;
+
+    refNode.classList.remove('pref-delete-selected');
+    refNode.removeAttribute('aria-selected');
+
+    if (this.selectedRef === refNode) {
+      this.selectedRef = null;
+      this.activeNoteId = null;
+      this.activeLeafId = null;
+    }
+
+    if (
+      settings.captureHistory &&
+      window.HistoryManager &&
+      typeof window.HistoryManager.capture === 'function'
+    ) {
+      window.HistoryManager.capture(true);
+    }
+
+    refNode.remove();
+
+    if (window.ProductivityFloatingUI) {
+      window.ProductivityFloatingUI.forceHide();
+    }
+
+    if (settings.restoreCaret) {
+      const sel = window.getSelection();
+      const range = document.createRange();
+
+      if (isInline && parent && parent.isConnected) {
+        if (
+          parent.nodeType === Node.ELEMENT_NODE &&
+          ['P', 'LI', 'TD', 'TH', 'BLOCKQUOTE'].includes(parent.tagName) &&
+          parent.textContent.trim() === '' &&
+          parent.querySelector(PRODUCTIVITY_REFERENCE_SELECTOR) == null
+        ) {
+          parent.innerHTML = '<br>';
+        }
+
+        range.setStart(
+          parent,
+          Math.max(0, Math.min(childIndex, parent.childNodes.length))
+        );
+      } else if (
+        nextBlock &&
+        nextBlock.isConnected &&
+        nextBlock.contentEditable !== 'false' &&
+        !nextBlock.matches(PRODUCTIVITY_REFERENCE_SELECTOR)
+      ) {
+        range.setStart(nextBlock, 0);
+      } else if (
+        previousBlock &&
+        previousBlock.isConnected &&
+        previousBlock.contentEditable !== 'false' &&
+        !previousBlock.matches(PRODUCTIVITY_REFERENCE_SELECTOR)
+      ) {
+        range.selectNodeContents(previousBlock);
+        range.collapse(false);
+      } else {
+        const paragraph = document.createElement('p');
+        paragraph.innerHTML = '<br>';
+        editor.appendChild(paragraph);
+        range.setStart(paragraph, 0);
+      }
+
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    if (settings.sync) {
+      syncProductivityEditorOnce();
+    }
+
+    return true;
+  }
+
+};
+
+window.ProductivityInsertion = {
+  insert(type, sourceId, options = {}) {
+    const editor = document.getElementById('noteBody');
+    if (!editor) return false;
+
+    if (
+      window.ProductivitySafeDelete &&
+      typeof window.ProductivitySafeDelete.clear === 'function'
+    ) {
+      window.ProductivitySafeDelete.clear();
+    }
+
+    if (
+      window.ProductivityInsertionContext &&
+      window.ProductivityInsertionContext.restore()
+    ) {
+      window.ProductivityInsertionContext.clear();
+    }
+
+    let selection = window.getSelection();
+    let range = null;
+
+    if (
+      selection &&
+      selection.rangeCount > 0 &&
+      editor.contains(selection.anchorNode)
+    ) {
+      range = selection.getRangeAt(0).cloneRange();
+    } else {
+      if (window.ProductivityInsertionContext) {
+        window.ProductivityInsertionContext.ensureEditorCaret();
+      }
+
+      selection = window.getSelection();
+      if (
+        selection &&
+        selection.rangeCount > 0 &&
+        editor.contains(selection.anchorNode)
+      ) {
+        range = selection.getRangeAt(0).cloneRange();
+      }
+    }
+
+    let placement = options.placement;
+    if (options.layout === 'compact') placement = 'inline';
+    if (options.layout === 'full-row') placement = 'block';
+
+    if (placement === 'auto') {
+      placement = this.shouldUseInlinePlacement(editor, range)
+        ? 'inline'
+        : 'block';
+    }
+
+    if (placement !== 'inline') placement = 'block';
+
+    const effectiveOptions = {
+      ...options,
+      placement,
+      layout: placement === 'inline' ? 'compact' : 'full-row'
+    };
+
+    const reference = this.createReference(type, sourceId, effectiveOptions);
+    if (!reference) return false;
+
+    if (
+      window.HistoryManager &&
+      typeof window.HistoryManager.capture === 'function'
+    ) {
+      window.HistoryManager.capture(true);
+    }
+
+    try {
+      if (!range) {
+        this.insertAtEnd(editor, reference, placement);
+      } else if (placement === 'inline') {
+        this.insertInlineAtRange(editor, range, reference);
+      } else {
+        const context = this.resolveContext(editor, range);
+        if (!context) {
+          this.insertAtEnd(editor, reference, 'block');
+        } else {
+          let caretTarget = null;
+          let caretPosition = 0;
+
+          if (context.type === 'existing-reference') {
+            editor.insertBefore(reference, context.block.nextElementSibling);
+            caretTarget = this.ensureCaretTarget(reference, editor, true);
+          } else if (
+            context.type === 'table' ||
+            context.type === 'complex'
+          ) {
+            editor.insertBefore(reference, context.block.nextElementSibling);
+            caretTarget = this.ensureCaretTarget(reference, editor, true);
+          } else if (context.type === 'list') {
+            const split = this.splitListAtItem(context);
+            editor.insertBefore(reference, split.nextSibling);
+            caretTarget = this.ensureCaretTarget(reference, editor, true);
+          } else if (context.type === 'empty-paragraph') {
+            editor.insertBefore(reference, context.block);
+            caretTarget = context.block;
+          } else {
+            const split = this.splitEditableBlock(context);
+            editor.insertBefore(reference, split.nextSibling);
+            caretTarget =
+              split.caretTarget ||
+              this.ensureCaretTarget(reference, editor, true);
+            caretPosition = split.caretPos;
+          }
+
+          this.placeCaret(caretTarget, caretPosition);
+        }
+      }
+    } catch (error) {
+      if (reference.isConnected) reference.remove();
+      this.insertAtEnd(editor, reference, placement);
+    }
+
+    window.hydrateProductivityReference(reference);
+    this.sync();
+    return true;
+  },
+
+  shouldUseInlinePlacement(editor, range) {
+    if (!range || !editor) return false;
+
+    let node = range.endContainer;
+    if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+
+    const host = node && node.closest
+      ? node.closest('p, h1, h2, h3, h4, h5, h6, blockquote, li, td, th')
+      : null;
+
+    if (!host || !editor.contains(host)) return false;
+
+    if (host.closest(PRODUCTIVITY_REFERENCE_SELECTOR)) return false;
+
+    const meaningfulText = host.textContent
+      .replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
+      .trim();
+
+    return meaningfulText.length > 0 || ['LI', 'TD', 'TH'].includes(host.tagName);
+  },
+
+  insertInlineAtRange(editor, sourceRange, reference) {
+    const range = sourceRange.cloneRange();
+    if (!range.collapsed) range.collapse(false);
+
+    let containerElement =
+      range.startContainer.nodeType === Node.ELEMENT_NODE
+        ? range.startContainer
+        : range.startContainer.parentElement;
+
+    const nestedReference = containerElement
+      ? containerElement.closest(PRODUCTIVITY_REFERENCE_SELECTOR)
+      : null;
+
+    if (nestedReference) {
+      range.setStartAfter(nestedReference);
+      range.collapse(true);
+      containerElement = nestedReference.parentElement;
+    }
+
+    const anchor = containerElement ? containerElement.closest('a') : null;
+    if (anchor && editor.contains(anchor)) {
+      range.setStartAfter(anchor);
+      range.collapse(true);
+    }
+
+    const host = containerElement && containerElement.closest
+      ? containerElement.closest('p, h1, h2, h3, h4, h5, h6, blockquote, li, td, th')
+      : null;
+
+    const emptyTopLevelParagraph =
+      host &&
+      host.tagName === 'P' &&
+      host.parentElement === editor &&
+      host.textContent.trim() === '' &&
+      !host.querySelector(PRODUCTIVITY_REFERENCE_SELECTOR);
+
+    if (emptyTopLevelParagraph) {
+      host.innerHTML = '';
+      range.selectNodeContents(host);
+      range.collapse(true);
+    }
+
+    range.insertNode(reference);
+
+    if (emptyTopLevelParagraph) {
+      let next = host.nextElementSibling;
+      if (
+        !next ||
+        next.tagName !== 'P' ||
+        next.textContent.trim() !== '' ||
+        next.querySelector(PRODUCTIVITY_REFERENCE_SELECTOR)
+      ) {
+        next = document.createElement('p');
+        next.innerHTML = '<br>';
+        host.parentNode.insertBefore(next, host.nextSibling);
+      }
+
+      this.placeCaret(next, 0);
+      return;
+    }
+
+    let spacer = null;
+    const nextNode = reference.nextSibling;
+    const nextNeedsNoSpacer =
+      nextNode &&
+      nextNode.nodeType === Node.TEXT_NODE &&
+      /^[\s,.;:!?)}\]]/.test(nextNode.nodeValue || '');
+
+    if (!nextNeedsNoSpacer) {
+      spacer = document.createTextNode(' ');
+      reference.parentNode.insertBefore(spacer, reference.nextSibling);
+    }
+
+    const selection = window.getSelection();
+    const caret = document.createRange();
+
+    if (spacer) {
+      caret.setStart(spacer, spacer.nodeValue.length);
+    } else {
+      caret.setStartAfter(reference);
+    }
+
+    caret.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(caret);
+  },
+
+  insertAtEnd(editor, reference, placement) {
+    if (placement === 'inline') {
+      let host = editor.lastElementChild;
+
+      if (
+        !host ||
+        host.tagName !== 'P' ||
+        host.querySelector(PRODUCTIVITY_REFERENCE_SELECTOR)
+      ) {
+        host = document.createElement('p');
+        host.innerHTML = '<br>';
+        editor.appendChild(host);
+      }
+
+      if (host.textContent.trim() === '' && host.innerHTML.trim().toLowerCase() === '<br>') {
+        host.innerHTML = '';
+      }
+
+      host.appendChild(reference);
+
+      let trailing = host.nextElementSibling;
+      if (
+        !trailing ||
+        trailing.tagName !== 'P' ||
+        trailing.textContent.trim() !== '' ||
+        trailing.querySelector(PRODUCTIVITY_REFERENCE_SELECTOR)
+      ) {
+        trailing = document.createElement('p');
+        trailing.innerHTML = '<br>';
+        host.parentNode.insertBefore(trailing, host.nextSibling);
+      }
+
+      this.placeCaret(trailing, 0);
+      return;
+    }
+
+    let trailing = editor.lastElementChild;
+
+    if (
+      trailing &&
+      trailing.tagName === 'P' &&
+      trailing.textContent.trim() === '' &&
+      !trailing.querySelector(PRODUCTIVITY_REFERENCE_SELECTOR)
+    ) {
+      editor.insertBefore(reference, trailing);
+    } else {
+      editor.appendChild(reference);
+      trailing = document.createElement('p');
+      trailing.innerHTML = '<br>';
+      editor.appendChild(trailing);
+    }
+
+    this.placeCaret(trailing, 0);
+  },
+
+  resolveContext(editor, range) {
+    let node = range.endContainer;
+    let topLevelBlock = null;
+    let listInfo = null;
+
+    while (node && node !== editor) {
+      const tag = (node.tagName || '').toLowerCase();
+
+      if (tag === 'li') {
+        if (!listInfo) listInfo = { li: node };
+      }
+      if (tag === 'ul' || tag === 'ol') {
+        if (listInfo && !listInfo.list) {
+          listInfo.list = node;
+        }
+      }
+
+      if (node.parentNode === editor) {
+        topLevelBlock = node;
+        break;
+      }
+      node = node.parentNode;
+    }
+
+    if (!topLevelBlock) return null;
+
+    if (topLevelBlock.classList && topLevelBlock.classList.contains('productivity-ref')) {
+      return { type: 'existing-reference', block: topLevelBlock };
+    }
+
+    if (topLevelBlock.tagName === 'TABLE' || topLevelBlock.querySelector('table')) {
+      return { type: 'table', block: topLevelBlock };
+    }
+
+    if (listInfo && listInfo.list && listInfo.li) {
+      const topLevelLi = this.findTopLevelLi(listInfo.li, topLevelBlock);
+      return { type: 'list', block: topLevelBlock, li: topLevelLi };
+    }
+
+    if (topLevelBlock.tagName === 'P' && topLevelBlock.innerHTML.trim() === '<br>') {
+      return { type: 'empty-paragraph', block: topLevelBlock };
+    }
+
+    if (['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(topLevelBlock.tagName) || topLevelBlock.tagName === 'BLOCKQUOTE') {
+      return { type: 'block', block: topLevelBlock, range: range };
+    }
+
+    return { type: 'complex', block: topLevelBlock };
+  },
+
+  findTopLevelLi(liNode, listNode) {
+    let curr = liNode;
+    while (curr && curr.parentNode !== listNode) {
+      curr = curr.parentNode;
+    }
+    return curr.tagName === 'LI' ? curr : liNode;
+  },
+
+  createReference(type, sourceId, options = {}) {
+    const normSourceId = String(sourceId);
+    const safeId = typeof sanitizeId === 'function' ? sanitizeId(normSourceId) : normSourceId.replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!safeId) {
+      if(typeof toast === 'function') toast('Invalid source ID');
+      return null;
+    }
+    const source = window.resolveProductivitySource(type, safeId);
+    if (!source || (Array.isArray(source) && source.length === 0)) {
+      if (options.allowUnavailableSource) {
+        const isCompact =
+          options.layout === 'compact' ||
+          options.placement === 'inline';
+        const unavailable = document.createElement(isCompact ? 'span' : 'div');
+
+        unavailable.className = isCompact
+          ? 'productivity-ref-inline productivity-ref-unavailable'
+          : `productivity-ref ${type === 'todo-list' ? 'productivity-ref-todo' : 'productivity-ref-calendar'} productivity-ref-unavailable`;
+
+        unavailable.setAttribute('data-paperuss-productivity', type);
+        unavailable.setAttribute('data-source-id', safeId);
+        unavailable.setAttribute(
+          'data-productivity-layout',
+          isCompact ? 'compact' : 'full-row'
+        );
+        unavailable.setAttribute('contenteditable', 'false');
+
+        if (type === 'todo-list' && isCompact) {
+          unavailable.setAttribute(
+            'data-productivity-compact-state',
+            options.compactState === 'expanded' ? 'expanded' : 'collapsed'
+          );
+        }
+
+        if (options.templateId) {
+          unavailable.setAttribute(
+            'data-productivity-template',
+            options.templateId
+          );
+        }
+
+        if (isCompact) {
+          const icon = document.createElement('span');
+          icon.className = 'pref-inline-icon';
+          icon.setAttribute('aria-hidden', 'true');
+          icon.textContent = '⚠';
+
+          const label = document.createElement('span');
+          label.className = 'pref-inline-title';
+          label.textContent =
+            String(options.fallbackText || '').trim() ||
+            (type === 'calendar'
+              ? 'Calendar event unavailable'
+              : 'Todo list unavailable');
+
+          unavailable.append(icon, label);
+        } else {
+          unavailable.setAttribute('data-ref-version', '1');
+          const staticCard = document.createElement('div');
+          staticCard.className = 'productivity-ref-static';
+          staticCard.textContent =
+            String(options.fallbackText || '').trim() ||
+            (type === 'calendar'
+              ? 'Calendar event unavailable'
+              : 'Todo list unavailable');
+          unavailable.appendChild(staticCard);
+        }
+
+        return unavailable;
+      }
+
+      if (typeof toast === 'function') {
+        toast('Source not found in canonical store');
+      }
+      return null;
+    }
+
+    const staticHtml = window.buildProductivityStaticSnapshot(type, source);
+    const typeClass = type === 'todo-list' ? 'productivity-ref-todo' : 'productivity-ref-calendar';
+    const tmp = document.createElement('div');
+        const isCompact = options.layout === 'compact' || options.placement === 'inline';
+    if (isCompact) {
+      const inlineStatic = window.buildProductivityInlineStaticSnapshot(type, source);
+      const compactState = type === 'todo-list' && options.compactState === 'expanded'
+        ? 'expanded'
+        : 'collapsed';
+      tmp.innerHTML = '<span class="productivity-ref-inline" data-paperuss-productivity="' + type + '" data-source-id="' + safeId + '" data-productivity-layout="compact"' + (type === 'todo-list' ? ' data-productivity-compact-state="' + compactState + '"' : '') + ' contenteditable="false">' + inlineStatic + '</span>';
+    } else {
+      tmp.innerHTML = '<div class="productivity-ref ' + typeClass + '" data-paperuss-productivity="' + type + '" data-source-id="' + safeId + '" data-productivity-layout="full-row" data-ref-version="1" contenteditable="false"><div class="productivity-ref-static">' + staticHtml + '</div></div>';
+    }
+    const finalNode = tmp.firstElementChild;
+    if (options.templateId) finalNode.setAttribute('data-productivity-template', options.templateId);
+    return finalNode;
+  },
+
+  splitEditableBlock(context) {
+    const block = context.block;
+    const range = context.range;
+
+    // Check if caret is exactly at start
+    const startRange = document.createRange();
+    startRange.selectNodeContents(block);
+    startRange.setEnd(range.startContainer, range.startOffset);
+    if (startRange.toString().length === 0 && startRange.cloneContents().textContent.length === 0) {
+      return { nextSibling: block, caretTarget: block, caretPos: 0 };
+    }
+
+    // Check if caret is exactly at end
+    const endRange = document.createRange();
+    endRange.selectNodeContents(block);
+    endRange.setStart(range.endContainer, range.endOffset);
+    if (endRange.toString().length === 0 && endRange.cloneContents().textContent.length === 0) {
+      return { nextSibling: block.nextSibling, caretTarget: null, caretPos: 0 };
+    }
+
+    // Split block
+    const trailingContent = endRange.extractContents();
+    const newBlock = block.cloneNode(false);
+    newBlock.appendChild(trailingContent);
+
+    // Remove meaningless empty inline wrappers from block
+    if (block.innerHTML === '') block.innerHTML = '<br>';
+    if (newBlock.innerHTML === '') newBlock.innerHTML = '<br>';
+
+    block.parentNode.insertBefore(newBlock, block.nextSibling);
+    return { nextSibling: newBlock, caretTarget: newBlock, caretPos: 0 };
+  },
+
+  splitListAtItem(context) {
+    const list = context.block;
+    const currentLi = context.li;
+    const nextSiblings = [];
+    let next = currentLi.nextElementSibling;
+    while (next) {
+      nextSiblings.push(next);
+      next = next.nextElementSibling;
+    }
+
+    let trailingList = null;
+    if (nextSiblings.length > 0) {
+      trailingList = list.cloneNode(false);
+      nextSiblings.forEach(sib => trailingList.appendChild(sib));
+      list.parentNode.insertBefore(trailingList, list.nextSibling);
+
+      if (list.tagName === 'OL') {
+        const start = parseInt(list.getAttribute('start') || '1', 10);
+        let retainedCount = 0;
+        for (let i = 0; i < list.children.length; i++) {
+          if (list.children[i].tagName === 'LI') retainedCount++;
+        }
+        trailingList.setAttribute('start', start + retainedCount);
+      }
+    }
+
+    return { nextSibling: trailingList ? trailingList : list.nextSibling };
+  },
+
+  ensureCaretTarget(reference, editor, requireFollowing) {
+    let target = reference.nextElementSibling;
+    if (target && target.tagName !== 'TABLE' && target.tagName !== 'UL' && target.tagName !== 'OL' && !target.classList.contains('productivity-ref') && target.contentEditable !== 'false') {
+      return target;
+    }
+    target = document.createElement('p');
+    target.innerHTML = '<br>';
+    editor.insertBefore(target, reference.nextElementSibling);
+    return target;
+  },
+
+  placeCaret(target, position) {
+    if (!target) return;
+    const sel = window.getSelection();
+    const r = document.createRange();
+
+    if (target.tagName === 'P' && target.innerHTML === '<br>') {
+      r.setStart(target, 0);
+    } else {
+      if (position === 0) {
+        if (target.firstChild) r.setStart(target.firstChild, 0);
+        else r.setStart(target, 0);
+      } else {
+        r.setStart(target, target.childNodes.length);
+      }
+    }
+    r.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r);
+  },
+
+  sync() {
+    if (typeof window.handleBodyInput === 'function') {
+      window.handleBodyInput();
+    } else if (typeof window.onEditorInput === 'function') {
+      window.onEditorInput();
+    }
+  }
+};
+
+
+window.ProductivityClipboard = {
+    init(editor) {
+        if (!editor) return;
+        if (this._editor === editor && this._initialized) return;
+
+        this._boundCopy = this._boundCopy || this.handleCopy.bind(this);
+        this._boundCut = this._boundCut || this.handleCut.bind(this);
+
+        if (this._editor && this._editor !== editor) {
+            this._editor.removeEventListener('copy', this._boundCopy, true);
+            this._editor.removeEventListener('cut', this._boundCut, true);
+        }
+
+        this._editor = editor;
+        this._initialized = true;
+
+        editor.addEventListener('copy', this._boundCopy, true);
+        editor.addEventListener('cut', this._boundCut, true);
+    },
+
+    async writeToolbarPayload(payload) {
+        const customType = 'web application/x-paperuss-productivity+json';
+        const supportsCustom = window.ClipboardItem && typeof window.ClipboardItem.supports === 'function' && window.ClipboardItem.supports(customType);
+
+        try {
+            if (navigator.clipboard && navigator.clipboard.write) {
+                const htmlBlob = new Blob([payload.fallbackHtml], { type: 'text/html' });
+                const textBlob = new Blob([payload.fallbackText], { type: 'text/plain' });
+                const items = {
+                    'text/html': htmlBlob,
+                    'text/plain': textBlob
+                };
+
+                if (supportsCustom) {
+                    try {
+                        const jsonBlob = new Blob([JSON.stringify(payload)], { type: customType });
+                        items[customType] = jsonBlob;
+                        await navigator.clipboard.write([new window.ClipboardItem(items)]);
+                        return { success: true, rich: true };
+                    } catch(e) {
+                        // fallback to non-custom
+                    }
+                }
+
+                // Retry without custom type
+                const fallbackItems = {
+                    'text/html': htmlBlob,
+                    'text/plain': textBlob
+                };
+                await navigator.clipboard.write([new window.ClipboardItem(fallbackItems)]);
+
+                // Attempt manual execCommand fallback for the custom payload just in case? No, instructions say run during user-triggered action
+                // Actually fallback is just returning success.
+                return { success: true, rich: true };
+            } else if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(payload.fallbackText);
+                return { success: true, rich: false };
+            }
+        } catch(e) {}
+
+        return { success: false, error: 'Clipboard writing failed' };
+    },
+
+    getActiveReference(range) {
+        if (window.ProductivitySafeDelete && window.ProductivitySafeDelete.selectedRef && window.ProductivitySafeDelete.selectedRef.isConnected) {
+            return window.ProductivitySafeDelete.selectedRef;
+        }
+        if (!range) return null;
+        if (range.startContainer === range.endContainer && range.startContainer.nodeType === 1) {
+            const container = range.startContainer;
+            if (range.startOffset + 1 === range.endOffset) {
+                const node = container.childNodes[range.startOffset];
+                if (node && node.nodeType === 1 && node.matches(PRODUCTIVITY_REFERENCE_SELECTOR)) {
+                    return node;
+                }
+            }
+        }
+        return null;
+    },
+
+    buildClipboardPayload(ref) {
+        const type = ref.getAttribute('data-paperuss-productivity');
+        const sourceId = ref.getAttribute('data-source-id');
+        const layout = ref.classList.contains('productivity-ref-inline')
+            ? 'compact'
+            : 'full-row';
+        const compactState = ref.getAttribute('data-productivity-compact-state') || 'collapsed';
+        let templateId = ref.getAttribute('data-productivity-template') || '';
+
+        // Normalize logical IDs
+        if (templateId.startsWith('pref-tpl-')) {
+            templateId = templateId.substring(9);
+        }
+
+        const clone = ref.cloneNode(true);
+        if (typeof window.dehydrateProductivityReference === 'function') {
+            window.dehydrateProductivityReference(clone);
+        }
+
+        // Generate HTML Marker
+        clone.setAttribute('data-paperuss-clipboard-kind', 'productivity-reference');
+        clone.setAttribute('data-paperuss-clipboard-version', '1');
+
+        // Strip wrapper div if it's there from generic clone, just get the outerHTML
+        const fallbackHtml = clone.outerHTML;
+
+        // Attempt a readable plain text version
+        const fallbackText = clone.innerText || clone.textContent || `[${type === 'calendar' ? 'Calendar Event' : 'Todo List'}: ${sourceId}]`;
+
+        return {
+            version: 1,
+            kind: "productivity-reference",
+            type,
+            sourceId,
+            templateId,
+            layout,
+            compactState,
+            fallbackHtml,
+            fallbackText
+        };
+    },
+
+    handleCopy(e) {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const ref = this.getActiveReference(sel.getRangeAt(0));
+        if (!ref) return;
+
+        e.preventDefault();
+        const payload = this.buildClipboardPayload(ref);
+
+        if (e.clipboardData) {
+            try { e.clipboardData.setData('text/plain', payload.fallbackText); } catch(err){}
+            try { e.clipboardData.setData('text/html', payload.fallbackHtml); } catch(err){}
+            try { e.clipboardData.setData('application/x-paperuss-productivity+json', JSON.stringify(payload)); } catch(err){}
+        }
+    },
+
+    handleCut(e) {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const ref = this.getActiveReference(sel.getRangeAt(0));
+        if (!ref) return;
+
+        e.preventDefault();
+        const payload = this.buildClipboardPayload(ref);
+
+        if (e.clipboardData) {
+            try { e.clipboardData.setData('text/plain', payload.fallbackText); } catch(err){}
+            try { e.clipboardData.setData('text/html', payload.fallbackHtml); } catch(err){}
+            try { e.clipboardData.setData('application/x-paperuss-productivity+json', JSON.stringify(payload)); } catch(err){}
+        }
+
+        if (window.ProductivitySafeDelete && window.ProductivitySafeDelete.removeReference) {
+            window.ProductivitySafeDelete.removeReference(ref, { captureHistory: true, sync: true, restoreCaret: true });
+        }
+    },
+
+    handlePaste(e) {
+        if (!e.clipboardData) return false;
+
+        let payload = null;
+        let jsonText = '';
+        try {
+            jsonText = e.clipboardData.getData('application/x-paperuss-productivity+json');
+        } catch(err) {}
+
+        if (jsonText) {
+            try {
+                payload = JSON.parse(jsonText);
+            } catch(err) {}
+        }
+
+        if (!payload) {
+            let htmlText = '';
+            try {
+                htmlText = e.clipboardData.getData('text/html');
+            } catch(err) {}
+            if (htmlText && htmlText.includes('data-paperuss-clipboard-kind="productivity-reference"')) {
+                const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+                const marked = doc.querySelectorAll('[data-paperuss-clipboard-kind="productivity-reference"]');
+                if (marked.length === 1) {
+                    const node = marked[0];
+                    if (node.querySelector('[data-paperuss-clipboard-kind]')) return false; // Nested marks rejected
+
+                    let templateId = node.getAttribute('data-productivity-template') || '';
+                    if (templateId.startsWith('pref-tpl-')) templateId = templateId.substring(9);
+
+                    payload = {
+                        version: parseInt(node.getAttribute('data-paperuss-clipboard-version') || '1', 10),
+                        kind: 'productivity-reference',
+                        type: node.getAttribute('data-paperuss-productivity'),
+                        sourceId: node.getAttribute('data-source-id'),
+                        templateId: templateId,
+                        layout: node.getAttribute('data-productivity-layout') || (node.classList.contains('productivity-ref-inline') ? 'compact' : 'full-row'),
+                        compactState: node.getAttribute('data-productivity-compact-state') || 'collapsed',
+                        fallbackHtml: node.outerHTML,
+                        fallbackText: node.innerText
+                    };
+                }
+            }
+        }
+
+        if (!payload) return false;
+
+        const valid = this.validatePayload(payload);
+        if (!valid || !window.ProductivityInsertion) return false;
+
+        e.preventDefault();
+
+        const placement = payload.layout === 'compact'
+            ? 'inline'
+            : payload.layout === 'full-row'
+              ? 'block'
+              : 'auto';
+
+        const inserted = window.ProductivityInsertion.insert(payload.type, payload.sourceId, {
+            placement,
+            layout: payload.layout,
+            compactState: payload.compactState,
+            templateId: payload.templateId,
+            fallbackHtml: payload.fallbackHtml,
+            fallbackText: payload.fallbackText,
+            allowUnavailableSource: true
+        });
+
+        if (!inserted) {
+            if(typeof window.toast === 'function') window.toast('Paste failed');
+        }
+        return inserted;
+    },
+
+    validatePayload(payload) {
+        if (!payload || typeof payload !== 'object') return false;
+        if (payload.version !== 1) return false;
+        if (payload.kind !== 'productivity-reference') return false;
+        if (payload.type !== 'calendar' && payload.type !== 'todo-list') return false;
+        if (!payload.sourceId || typeof payload.sourceId !== 'string') return false;
+        if (
+            payload.layout !== undefined &&
+            payload.layout !== 'compact' &&
+            payload.layout !== 'full-row'
+        ) return false;
+        if (
+            payload.compactState !== undefined &&
+            payload.compactState !== 'collapsed' &&
+            payload.compactState !== 'expanded'
+        ) return false;
+
+        const source = window.resolveProductivitySource(payload.type, payload.sourceId);
+        // Valid if exists and matches type. (If missing, we allow it but handle via missing-source behavior).
+        if (source && Array.isArray(source) && source.length > 0) {
+            // Source exists, type assumed to match given our dual-store system.
+        }
+
+        return true;
+    },
+
+    async toolbarCopy(ref) {
+        if (!ref || !ref.isConnected) return;
+        const payload = this.buildClipboardPayload(ref);
+        const res = await this.writeToolbarPayload(payload);
+        if (res.success) {
+            if(typeof window.toast === 'function') window.toast('Reference copied');
+        } else {
+            if(typeof window.toast === 'function') window.toast('Copy failed');
+        }
+    },
+
+    async toolbarCut(ref) {
+        if (!ref || !ref.isConnected) return false;
+
+        const payload = this.buildClipboardPayload(ref);
+        const result = await this.writeToolbarPayload(payload);
+
+        if (!result.success) {
+            if (typeof window.toast === 'function') window.toast('Cut failed');
+            return false;
+        }
+
+        const removed =
+            window.ProductivitySafeDelete &&
+            typeof window.ProductivitySafeDelete.removeReference === 'function'
+                ? window.ProductivitySafeDelete.removeReference(ref, {
+                    captureHistory: true,
+                    sync: true,
+                    restoreCaret: true
+                  })
+                : false;
+
+        if (!removed) {
+            if (typeof window.toast === 'function') window.toast('Cut failed');
+            return false;
+        }
+
+        if (typeof window.toast === 'function') window.toast('Reference cut');
+        return true;
+    }
+
+};
+
+
+window.ProductivityDeleteSourceModal = {
+  initialized: false,
+  modalRoot: null,
+  context: null,
+
+  init() {
+    if (this.initialized) return;
+
+    this.modalRoot = document.createElement('div');
+    this.modalRoot.className = 'productivity-style-modal-overlay productivity-delete-source-modal-overlay';
+    this.modalRoot.style.display = 'none';
+
+    this.modalRoot.innerHTML = `
+      <div class="productivity-style-modal productivity-delete-modal" role="dialog" aria-modal="true" aria-labelledby="prodDelModalTitle" aria-describedby="prodDelModalDesc" style="max-width:440px">
+        <div class="productivity-style-modal-header">
+          <h3 id="prodDelModalTitle" style="margin:0;font-size:16px;color:var(--fg)">Delete Source?</h3>
+          <button type="button" class="btn" id="prodDelModalClose" aria-label="Close" style="background:transparent;border:none;box-shadow:none;padding:4px;cursor:pointer"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <div class="productivity-style-modal-body" style="padding:18px 20px">
+          <div id="prodDelModalItemTitle" style="font-weight:600;font-size:14px;color:var(--fg);margin-bottom:8px"></div>
+          <p id="prodDelModalDesc" style="margin:0;font-size:13px;color:var(--fg-secondary);line-height:1.5">
+            Deleting the source affects every connected reference. This cannot be undone through the editor history.
+          </p>
+        </div>
+        <div class="productivity-style-modal-footer" style="padding:14px 20px">
+          <button type="button" class="btn" id="prodDelModalCancel">Cancel</button>
+          <button type="button" class="btn btn-danger" id="prodDelModalConfirm" style="background:var(--danger, #ef4444);border-color:var(--danger, #ef4444);color:#ffffff;font-weight:600">Delete Source</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(this.modalRoot);
+
+    document.getElementById('prodDelModalClose').onclick = () => this.close('close');
+    document.getElementById('prodDelModalCancel').onclick = () => this.close('cancel');
+    document.getElementById('prodDelModalConfirm').onclick = () => this.confirm();
+
+    this.modalRoot.addEventListener('mousedown', (e) => {
+      if (e.target === this.modalRoot) this.close('backdrop');
+    });
+
+    this.modalRoot.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        this.close('escape');
+        return;
+      }
+      if (e.key === 'Tab') {
+        const focusables = this.modalRoot.querySelectorAll('button:not([disabled])');
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    });
+
+    this.initialized = true;
+  },
+
+  open(ref, openerBtn = null) {
+    if (!ref || !ref.isConnected) return;
+    this.init();
+
+    const sourceType = ref.getAttribute('data-paperuss-productivity');
+    const sourceId = ref.getAttribute('data-source-id');
+
+    if (!sourceType || !sourceId) return;
+
+    let sourceTitle = 'Untitled Source';
+    if (typeof window.resolveProductivitySource === 'function') {
+      const src = window.resolveProductivitySource(sourceType, sourceId);
+      if (sourceType === 'calendar' && src && src.title) {
+        sourceTitle = src.title;
+      } else if (sourceType === 'todo-list' && Array.isArray(src) && src[0] && src[0].groupTitle) {
+        sourceTitle = src[0].groupTitle;
+      }
+    }
+
+    this.context = {
+      storedRef: ref,
+      sourceType,
+      sourceId,
+      sourceTitle,
+      openerBtn,
+      isSubmitting: false
+    };
+
+    const titleEl = document.getElementById('prodDelModalTitle');
+    const itemTitleEl = document.getElementById('prodDelModalItemTitle');
+    const confirmBtn = document.getElementById('prodDelModalConfirm');
+
+    if (titleEl) {
+      titleEl.textContent = sourceType === 'calendar' ? 'Delete Calendar Event?' : 'Delete Todo List?';
+    }
+    if (itemTitleEl) {
+      itemTitleEl.textContent = sourceTitle;
+    }
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+    }
+
+    if (window.lucide) window.lucide.createIcons({ root: this.modalRoot });
+
+    this.modalRoot.style.display = 'flex';
+
+    const cancelBtn = document.getElementById('prodDelModalCancel');
+    if (cancelBtn) cancelBtn.focus();
+  },
+
+  close(reason = 'close') {
+    if (!this.modalRoot) return;
+    this.modalRoot.style.display = 'none';
+
+    if (this.context && this.context.openerBtn && this.context.openerBtn.isConnected) {
+      try { this.context.openerBtn.focus(); } catch(e) {}
+    } else if (this.context && this.context.storedRef && this.context.storedRef.isConnected) {
+      try { this.context.storedRef.focus(); } catch(e) {}
+    }
+
+    this.context = null;
+  },
+
+  async confirm() {
+    if (!this.context || this.context.isSubmitting) return;
+
+    const { storedRef, sourceType, sourceId } = this.context;
+    const confirmBtn = document.getElementById('prodDelModalConfirm');
+
+    // Revalidate before deletion
+    if (!storedRef || !storedRef.isConnected ||
+        storedRef.getAttribute('data-source-id') !== sourceId ||
+        storedRef.getAttribute('data-paperuss-productivity') !== sourceType) {
+      if (typeof window.toast === 'function') window.toast('Reference is no longer connected');
+      this.close('invalid-context');
+      return;
+    }
+
+    this.context.isSubmitting = true;
+    if (confirmBtn) confirmBtn.disabled = true;
+
+    try {
+      if (sourceType === 'calendar') {
+        if (typeof window.deleteCalendarSource === 'function') {
+          await window.deleteCalendarSource(sourceId, true);
+        }
+      } else {
+        if (typeof window.deleteTodoListSource === 'function') {
+          await window.deleteTodoListSource(sourceId, true);
+        }
+      }
+
+      if (window.ProductivityFloatingUI) {
+        window.ProductivityFloatingUI.forceHide();
+        window.ProductivityFloatingUI.closeMoreMenu();
+      }
+
+      this.close('confirm');
+    } catch(err) {
+      console.error('Delete source failed:', err);
+      if (confirmBtn) confirmBtn.disabled = false;
+      this.context.isSubmitting = false;
+      if (typeof window.toast === 'function') window.toast('Failed to delete source');
+    }
+  }
 };

@@ -27,6 +27,19 @@ async function openTaskCreatorModal(options){
   let errorState = null;
 
   let isCreatingTasks = false;
+  let insertCompact = false;
+
+  if (intent === 'insert' && window.ProductivityInsertionContext) {
+    window.ProductivityInsertionContext.ensureEditorCaret();
+  }
+
+  function renderInsertLayoutToggle() {
+    if (intent !== 'insert') return '';
+    return `<label class="productivity-insert-layout-toggle">
+      <input type="checkbox" id="tmInsertCompactToggle" ${insertCompact ? 'checked' : ''}>
+      <span><strong>Compact Flow</strong><small>Insert at the saved caret inside text, lists, or tables.</small></span>
+    </label>`;
+  }
 
   async function performLoad() {
     isLoading = true;
@@ -66,6 +79,7 @@ async function openTaskCreatorModal(options){
         <div class="modal-item-list" id="tmTaskList" role="listbox" aria-multiselectable="true">
           ${renderTaskListRows('')}
         </div>
+        ${renderInsertLayoutToggle()}
         <div class="modal-actions">
           <button class="btn" id="tmCancel">Cancel</button>
           <button class="btn btn-primary" id="tmInsertSelected" ${selectedTaskIds.size===0||isLoading?'disabled':''}>Insert Selected Task(s)</button>
@@ -85,6 +99,7 @@ async function openTaskCreatorModal(options){
             <input id="tmDue" type="datetime-local" style="background:var(--subtle);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;color:var(--fg);flex:1;min-width:160px" title="Shared reminder for all tasks">
           </div>
         </div>
+        ${renderInsertLayoutToggle()}
         <div class="modal-actions">
           <button class="btn" id="tmCancel">Cancel</button>
           <button class="btn btn-primary" id="tmCreate">${intent === 'insert' ? 'Create & Insert' : 'Create List'}</button>
@@ -93,6 +108,13 @@ async function openTaskCreatorModal(options){
     </div></div>`;
 
     if(typeof refreshIcons === 'function') refreshIcons();
+
+    const compactToggle = document.getElementById('tmInsertCompactToggle');
+    if (compactToggle) {
+      compactToggle.onchange = () => {
+        insertCompact = compactToggle.checked;
+      };
+    }
 
     const close=()=>root.innerHTML='';
     const cancelBtn = document.getElementById('tmCancel');
@@ -183,7 +205,10 @@ async function openTaskCreatorModal(options){
           
           let insertCount = 0;
           groupMap.forEach((tasks, gid) => {
-            window.insertProductivityReference('todo-list', gid);
+            window.insertProductivityReference('todo-list', gid, {
+              placement: insertCompact ? 'inline' : 'block',
+              layout: insertCompact ? 'compact' : 'full-row'
+            });
             insertCount++;
           });
           
@@ -249,7 +274,10 @@ async function openTaskCreatorModal(options){
           
           addNotification({type:'task',title:`${lines.length} tasks created`,body:lines.slice(0,3).join(', ')+(lines.length>3?'…':''),icon:'check-square',activity:true});
                     if (intent === 'insert') {
-            window.insertProductivityReference('todo-list', groupId);
+            window.insertProductivityReference('todo-list', groupId, {
+              placement: insertCompact ? 'inline' : 'block',
+              layout: insertCompact ? 'compact' : 'full-row'
+            });
             toast(`Inserted ${lines.length} task(s) into note`);
           }
           isCreatingTasks = false;

@@ -32,7 +32,7 @@ window.HistoryManager = {
   capture: function(force = false) {
     if(this.isNavigating) return;
     clearTimeout(this.captureTimeout);
-    
+
     const state = this.getState();
     if(!state) return;
 
@@ -48,7 +48,7 @@ window.HistoryManager = {
     if(this.undoStack.length > this.maxStack) {
       this.undoStack.shift();
     }
-    
+
     // Once we capture a new state, the redo branch is dead
     if(!force) {
       this.redoStack = [];
@@ -65,10 +65,10 @@ window.HistoryManager = {
 
   undo: function() {
     if(this.undoStack.length <= 1) return; // Need at least the base state to pop back to
-    
+
     this.isNavigating = true;
     clearTimeout(this.captureTimeout);
-    
+
     // We capture right before undoing just in case the current working state wasn't captured yet,
     // so it can go to the redo stack. Wait, the redo stack gets the CURRENT state.
     const currentState = this.getState();
@@ -78,10 +78,10 @@ window.HistoryManager = {
       const poppedState = this.undoStack.pop();
       this.redoStack.push(poppedState);
     }
-    
+
     const prevState = this.undoStack[this.undoStack.length - 1];
     if(prevState) this.applyState(prevState);
-    
+
     this.isNavigating = false;
   },
 
@@ -93,9 +93,9 @@ window.HistoryManager = {
 
     const nextState = this.redoStack.pop();
     this.undoStack.push(nextState);
-    
+
     this.applyState(nextState);
-    
+
     this.isNavigating = false;
   },
 
@@ -103,11 +103,15 @@ window.HistoryManager = {
     const ed = document.getElementById('noteBody');
     if(!ed) return;
     ed.innerHTML = state.content;
-    
+
+    if (typeof window.hydrateProductivityReferences === 'function') {
+      window.hydrateProductivityReferences(ed);
+    }
+
     if(window.restoreEditorSelection && state.selection) {
       window.restoreEditorSelection(ed, state.selection);
     }
-    
+
     // Trigger any downstream recalculations / UI updates
     if(typeof window.normalizeEditorTables === 'function') window.normalizeEditorTables();
     if(typeof window.normalizeEditorImages === 'function') window.normalizeEditorImages();
