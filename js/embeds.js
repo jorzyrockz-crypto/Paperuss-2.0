@@ -370,9 +370,22 @@
     const widthPreset = esc(info.widthPreset || 'medium');
     const preferredHeight = parseInt(info.preferredHeight, 10) || 400;
 
+    let hostName = info.hostname || providerName;
+    try {
+      if (canonicalUrl) hostName = new URL(canonicalUrl).hostname.replace(/^www\./, '');
+    } catch (_) {}
+
     const title = info.title ? esc(info.title) : `${providerName} ${contentType}`;
     const desc = info.description ? `<p class="embed-fallback-desc">${esc(info.description)}</p>` : '';
-    const thumb = info.thumbnail ? `<img src="${esc(info.thumbnail)}" alt="${title}" class="embed-fallback-thumb" onerror="this.style.display='none'">` : '';
+    
+    // Check if thumbnail is a favicon vs real article/video hero image
+    const isFaviconUrl = info.thumbnail && info.thumbnail.includes('favicons?domain=');
+    const faviconUrl = isFaviconUrl ? info.thumbnail : `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostName)}&sz=64`;
+    
+    // Only render full hero banner if we have a REAL article/video hero image (NOT a favicon)
+    const heroThumb = (info.thumbnail && !isFaviconUrl) 
+      ? `<div class="embed-hero-wrap"><img src="${esc(info.thumbnail)}" alt="${title}" class="embed-fallback-thumb" onerror="this.parentElement.remove()"></div>` 
+      : '';
 
     // Canonical structure stored in HTML
     return `<div class="paperuss-embed embed-mode-${displayMode} embed-width-${widthPreset}" ` +
@@ -387,11 +400,14 @@
       `contenteditable="false">` +
       `<div class="embed-canonical-card">` +
       `<div class="embed-canonical-header">` +
+      `<div class="embed-provider-badge-wrap">` +
+      `<img src="${esc(faviconUrl)}" class="embed-favicon-icon" alt="" onerror="this.style.display='none'">` +
       `<span class="embed-provider-badge">${providerName}</span>` +
+      `</div>` +
       `<a href="${canonicalUrl}" class="embed-canonical-link" target="_blank" rel="noopener noreferrer">${canonicalUrl}</a>` +
       `</div>` +
+      `${heroThumb}` +
       `<div class="embed-canonical-body">` +
-      `${thumb}` +
       `<div class="embed-canonical-text">` +
       `<strong>${title}</strong>` +
       `${desc}` +
