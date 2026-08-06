@@ -28,26 +28,27 @@
     widgetEl.setAttribute('aria-label', 'Floating Media Player');
 
     widgetEl.innerHTML = `
-      <div class="media-widget-drag-handle" title="Drag to move player">
-        <i data-lucide="grip-vertical" class="w-4 h-4 text-muted"></i>
-      </div>
-      <div class="media-widget-info">
-        <div class="media-widget-badge" id="mediaWidgetBadge">🎵 Media</div>
-        <div class="media-widget-text">
-          <strong id="mediaWidgetTitle">Background Playback</strong>
-          <span id="mediaWidgetDesc">Playing in background</span>
+      <div class="media-widget-header">
+        <div class="media-widget-header-left">
+          <div class="media-widget-drag-handle" title="Drag to move player">
+            <i data-lucide="grip-vertical" class="w-3.5 h-3.5 text-muted"></i>
+          </div>
+          <div class="media-widget-badge" id="mediaWidgetBadge">SPOTIFY</div>
         </div>
-      </div>
-      <div class="media-widget-controls">
-        <button type="button" class="media-widget-btn" id="mediaWidgetExpand" title="Fullscreen Lightbox">
-          <i data-lucide="maximize-2" class="w-4 h-4"></i>
-        </button>
-        <button type="button" class="media-widget-btn" id="mediaWidgetReturn" title="Return to Note Card">
-          <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
-        </button>
-        <button type="button" class="media-widget-btn media-widget-btn-close" id="mediaWidgetClose" title="Stop & Close Player">
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
+        <div class="media-widget-controls">
+          <button type="button" class="media-widget-btn" id="mediaWidgetMinimize" title="Minimize / Expand Player">
+            <i data-lucide="minus" class="w-3.5 h-3.5"></i>
+          </button>
+          <button type="button" class="media-widget-btn" id="mediaWidgetExpand" title="Fullscreen Lightbox">
+            <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+          </button>
+          <button type="button" class="media-widget-btn" id="mediaWidgetReturn" title="Open Link">
+            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+          </button>
+          <button type="button" class="media-widget-btn media-widget-btn-close" id="mediaWidgetClose" title="Stop & Close Player">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
       </div>
       <div class="media-widget-iframe-container" id="mediaWidgetIframeContainer"></div>
     `;
@@ -128,6 +129,18 @@
   function setupButtonEvents() {
     if (!widgetEl) return;
 
+    const minBtn = widgetEl.querySelector('#mediaWidgetMinimize');
+    if (minBtn) {
+      minBtn.onclick = () => {
+        const isMin = widgetEl.classList.toggle('is-minimized');
+        const icon = minBtn.querySelector('[data-lucide]');
+        if (icon) {
+          icon.setAttribute('data-lucide', isMin ? 'chevron-up' : 'minus');
+          if (typeof global.lucide?.createIcons === 'function') global.lucide.createIcons();
+        }
+      };
+    }
+
     const closeBtn = widgetEl.querySelector('#mediaWidgetClose');
     if (closeBtn) {
       closeBtn.onclick = () => stopPlayback();
@@ -194,8 +207,8 @@
     if (iframe && container) {
       activeIframe = iframe;
       container.appendChild(iframe); // Migrates DOM node without unmounting or pausing audio!
-      iframe.style.height = '140px';
-      iframe.style.borderRadius = '12px';
+      iframe.style.height = '80px';
+      iframe.style.borderRadius = '10px';
     }
 
     const badge = widgetEl.querySelector('#mediaWidgetBadge');
@@ -205,12 +218,6 @@
       badge.style.color = brandColor;
       badge.style.border = `1px solid ${brandColor}40`;
     }
-
-    const titleEl = widgetEl.querySelector('#mediaWidgetTitle');
-    if (titleEl) titleEl.textContent = title;
-
-    const descEl = widgetEl.querySelector('#mediaWidgetDesc');
-    if (descEl) descEl.textContent = canonicalUrl || 'Continuous Background Playback';
 
     widgetEl.classList.remove('hidden');
     if (typeof global.toast === 'function') {
