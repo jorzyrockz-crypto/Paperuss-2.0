@@ -543,7 +543,7 @@
       case 'facebook':
         return {
           sandbox: 'allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox',
-          allow: 'autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share'
+          allow: 'autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share; background-play'
         };
       case 'youtube':
       case 'vimeo':
@@ -552,8 +552,8 @@
       case 'tiktok':
       case 'instagram':
         return {
-          sandbox: 'allow-scripts allow-same-origin allow-presentation allow-popups',
-          allow: 'autoplay; clipboard-write; encrypted-media; picture-in-picture'
+          sandbox: 'allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox allow-forms',
+          allow: 'autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share; background-play'
         };
       case 'google-maps':
         return {
@@ -563,7 +563,7 @@
       default:
         return {
           sandbox: 'allow-scripts allow-same-origin',
-          allow: ''
+          allow: 'autoplay; clipboard-write; encrypted-media; picture-in-picture; background-play'
         };
     }
   }
