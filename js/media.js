@@ -269,7 +269,7 @@ function insertRichLink(){
   const sel=window.getSelection();
   const selText=sel ? sel.toString().trim() : '';
   if(typeof window.openEmbedModal === 'function'){
-    window.openEmbedModal({ initialText: selText });
+    window.openEmbedModal({ initialText: selText, defaultMode: 'preview' });
     return;
   }
   if(typeof openLinkModal === 'function'){

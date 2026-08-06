@@ -298,8 +298,48 @@
       };
     }
 
-    // Unknown provider -> return null so caller falls back to normal normal link
-    return null;
+    // Email / mailto links
+    if (parsedUrl.protocol === 'mailto:') {
+      const email = parsedUrl.pathname || urlStr.replace(/^mailto:/i, '');
+      return {
+        provider: 'email',
+        providerName: 'Email',
+        contentType: 'link',
+        canonicalUrl: urlStr,
+        embedUrl: null,
+        preferredHeight: 100,
+        widthPreset: 'medium',
+        displayMode: 'inline',
+        title: email,
+        description: `Email: ${email}`,
+        thumbnail: null,
+        author: null
+      };
+    }
+
+    // General Web Link fallback -> return web provider info for Rich Link Cards & Previews
+    const platformInfo = global.LinkParser?.detectPlatform ? global.LinkParser.detectPlatform(host) : { key: null, name: null };
+    const providerName = platformInfo.name || host;
+    const favicon = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
+    let title = providerName;
+    if (path && path !== '/') {
+      const cleanPathName = decodeURIComponent(path.split('/').filter(Boolean).pop() || '');
+      if (cleanPathName) title = `${cleanPathName} - ${providerName}`;
+    }
+    return {
+      provider: platformInfo.key || 'web',
+      providerName: providerName,
+      contentType: 'link',
+      canonicalUrl: urlStr,
+      embedUrl: null,
+      preferredHeight: 140,
+      widthPreset: 'medium',
+      displayMode: 'preview',
+      title: title,
+      description: urlStr,
+      thumbnail: favicon,
+      author: null
+    };
   }
 
   /**
@@ -641,6 +681,7 @@
     const initialUrl = options.initialUrl || '';
     const initialText = options.initialText || (window.getSelection ? window.getSelection().toString().trim() : '');
     const targetEmbed = options.targetEmbed || null;
+    const defaultMode = options.defaultMode || options.initialMode || (initialText ? 'inline' : 'preview');
 
     root.innerHTML = `
       <div class="modal-overlay">
@@ -663,19 +704,19 @@
               <label>Display Mode</label>
               <div class="embed-mode-picker">
                 <label class="embed-mode-option">
-                  <input type="radio" name="embedMode" value="inline" ${initialText ? 'checked' : ''}>
+                  <input type="radio" name="embedMode" value="inline" ${defaultMode === 'inline' ? 'checked' : ''}>
                   <span>Inline Link</span>
                 </label>
                 <label class="embed-mode-option">
-                  <input type="radio" name="embedMode" value="compact">
+                  <input type="radio" name="embedMode" value="compact" ${defaultMode === 'compact' ? 'checked' : ''}>
                   <span>Compact Card</span>
                 </label>
                 <label class="embed-mode-option">
-                  <input type="radio" name="embedMode" value="preview">
+                  <input type="radio" name="embedMode" value="preview" ${defaultMode === 'preview' ? 'checked' : ''}>
                   <span>Rich Preview</span>
                 </label>
                 <label class="embed-mode-option">
-                  <input type="radio" name="embedMode" value="interactive" ${!initialText ? 'checked' : ''}>
+                  <input type="radio" name="embedMode" value="interactive" ${defaultMode === 'interactive' ? 'checked' : ''}>
                   <span>Interactive Embed</span>
                 </label>
               </div>
