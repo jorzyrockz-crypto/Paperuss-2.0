@@ -1863,34 +1863,49 @@ blockquote.note-callout.callout-info {
   -webkit-box-orient: vertical;
 }
 
-/* Styled Inline Link Chip with Favicon & Global Color Accent Highlight */
+/* Styled Inline Link Chip with Favicon & Global Color Accent Highlight (Guaranteed Single Row) */
+.note-editor a.paperuss-inline-link,
 a.paperuss-inline-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 7px;
-  border-radius: 6px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  border: 1px solid var(--accent-ring);
-  font-weight: 500;
-  font-size: 13px;
-  text-decoration: none;
-  transition: all 0.15s ease;
-  vertical-align: middle;
-  line-height: 1.3;
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 2px 8px !important;
+  border-radius: 6px !important;
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  border: 1px solid var(--accent-ring) !important;
+  font-weight: 500 !important;
+  font-size: 13px !important;
+  text-decoration: none !important;
+  white-space: nowrap !important;
+  vertical-align: middle !important;
+  line-height: 1.2 !important;
+  margin: 0 2px !important;
+  transition: all 0.15s ease !important;
 }
+.note-editor a.paperuss-inline-link:hover,
 a.paperuss-inline-link:hover {
-  background: var(--accent);
-  color: #ffffff;
-  border-color: var(--accent-emphasis);
-  text-decoration: none;
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border-color: var(--accent-emphasis) !important;
+  text-decoration: none !important;
 }
-a.paperuss-inline-link .inline-link-icon {
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  object-fit: contain;
-  flex-shrink: 0;
+.note-editor a.paperuss-inline-link img,
+.note-editor img.inline-link-icon,
+a.paperuss-inline-link img.inline-link-icon {
+  display: inline-block !important;
+  width: 14px !important;
+  height: 14px !important;
+  min-width: 14px !important;
+  min-height: 14px !important;
+  max-width: 14px !important;
+  max-height: 14px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 3px !important;
+  object-fit: contain !important;
+  flex-shrink: 0 !important;
+  vertical-align: middle !important;
 }
 
