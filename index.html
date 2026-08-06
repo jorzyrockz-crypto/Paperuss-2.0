@@ -171,6 +171,10 @@
           <i data-lucide="folder-open" class="w-4 h-4"></i>
           <span>Media Hub</span> <span class="count" id="countMedia">0</span>
         </button>
+        <button class="nav-btn" id="sidebarMusicBtn" onclick="if(typeof openMusicHubModal==='function')openMusicHubModal();else if(window.PaperussMediaWidget)PaperussMediaWidget.openMusicHubModal();" style="color:var(--accent)">
+          <i data-lucide="disc-3" class="w-4 h-4 text-emerald-400"></i>
+          <span>Music Player</span>
+        </button>
       </div>
 
       <div class="sidebar-footer">
@@ -540,7 +544,7 @@
             </div>
           </div>
           <div class="stats">
-            <button class="music-hub-pill-btn" id="musicHubBtn" title="Paperuss Dedicated Music Player Hub" aria-label="Paperuss Music Player">
+            <button class="music-hub-pill-btn" id="musicHubBtn" onclick="if(typeof openMusicHubModal==='function')openMusicHubModal();else if(window.PaperussMediaWidget)PaperussMediaWidget.openMusicHubModal();" title="Paperuss Dedicated Music Player Hub" aria-label="Paperuss Music Player">
               <i data-lucide="disc-3" class="w-3.5 h-3.5 text-emerald-400"></i>
               <span>Music Player</span>
               <span class="music-hub-dot hidden" id="musicHubDot"></span>

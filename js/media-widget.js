@@ -366,6 +366,15 @@
     };
   }
 
+  // Delegated global click listener for Music Player buttons
+  document.addEventListener('click', (e) => {
+    const musicBtn = e.target.closest('#musicHubBtn, #sidebarMusicBtn, [data-action="open-music-hub"]');
+    if (musicBtn) {
+      e.preventDefault();
+      openMusicHubModal();
+    }
+  });
+
   // Export module APIs
   global.PaperussMediaWidget = Object.freeze({
     dockActiveEmbed,
@@ -379,6 +388,8 @@
   });
 
   global.checkAndDockActiveEmbed = checkAndDockActiveEmbed;
+  global.openMusicHubModal = openMusicHubModal;
+  global.closeMusicHubModal = closeMusicHubModal;
 
   document.addEventListener('DOMContentLoaded', () => {
     initMediaWidget();
