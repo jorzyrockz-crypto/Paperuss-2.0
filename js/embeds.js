@@ -85,10 +85,16 @@
       }
     }
 
-    // 2. Normalize standard URL via LinkParser if available
     let urlStr = inputStr;
+    // Extract URL if input is a raw HTML <iframe> snippet
+    const iframeMatch = urlStr.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+    if (iframeMatch && iframeMatch[1]) {
+      urlStr = iframeMatch[1];
+    }
+
+    // 2. Normalize standard URL via LinkParser if available
     if (typeof global.LinkParser?.normalizeUrl === 'function') {
-      urlStr = global.LinkParser.normalizeUrl(inputStr);
+      urlStr = global.LinkParser.normalizeUrl(urlStr);
     }
     let parsedUrl;
     try {
@@ -120,6 +126,7 @@
           preferredHeight: 360,
           widthPreset: 'medium',
           displayMode: 'interactive',
+          brandColor: '#ff0000',
           title: null,
           description: null,
           thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
@@ -128,9 +135,9 @@
       }
     }
 
-    // Vimeo
+    // Vimeo: video
     if (host === 'vimeo.com' || host === 'player.vimeo.com') {
-      const vimeoMatch = path.match(/(?:video\/|)(\d+)/);
+      const vimeoMatch = path.match(/^\/(?:video\/)?(\d+)/);
       if (vimeoMatch && vimeoMatch[1]) {
         const videoId = vimeoMatch[1];
         return {
@@ -150,11 +157,11 @@
       }
     }
 
-    // Spotify: track, album, playlist, episode, show
+    // Spotify: track, album, playlist, episode, artist, show (including /embed/ URLs)
     if (host === 'spotify.com' || host === 'open.spotify.com') {
-      const spMatch = path.match(/^\/(track|album|playlist|episode|show)\/([a-zA-Z0-9]+)/);
+      const spMatch = path.match(/^\/(?:embed\/)?(track|album|playlist|episode|artist|show)\/([a-zA-Z0-9]+)/i);
       if (spMatch && spMatch[1] && spMatch[2]) {
-        const type = spMatch[1];
+        const type = spMatch[1].toLowerCase();
         const id = spMatch[2];
         return {
           provider: 'spotify',
@@ -162,13 +169,14 @@
           contentType: type,
           canonicalUrl: `https://open.spotify.com/${type}/${id}`,
           embedUrl: `https://open.spotify.com/embed/${type}/${id}?utm_source=generator`,
-          preferredHeight: type === 'track' ? 152 : 352,
+          preferredHeight: (type === 'track' || type === 'playlist') ? 152 : 352,
           widthPreset: 'medium',
           displayMode: 'interactive',
-          title: null,
-          description: null,
-          thumbnail: null,
-          author: null
+          brandColor: '#1ed760',
+          title: `Spotify ${type.charAt(0).toUpperCase() + type.slice(1)}`,
+          description: `https://open.spotify.com/${type}/${id}`,
+          thumbnail: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`,
+          author: 'Spotify'
         };
       }
     }

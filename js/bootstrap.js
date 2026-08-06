@@ -920,8 +920,12 @@ function isMarkdownText(text) {
 
 function isSingleStandaloneUrl(str) {
   if (!str || typeof str !== 'string') return false;
-  const trimmed = str.trim();
-  if (/\s/.test(trimmed)) return false;
+  let trimmed = str.trim();
+  const iframeMatch = trimmed.match(/^<iframe[^>]+src=["']([^"']+)["']/i);
+  if (iframeMatch && iframeMatch[1]) {
+    trimmed = iframeMatch[1];
+  }
+  if (/\s/.test(trimmed) && !iframeMatch) return false;
   if (window.LinkParser) {
     const res = window.LinkParser.parseAndValidateUrl(trimmed);
     return res.valid && (res.protocol === 'http:' || res.protocol === 'https:');
