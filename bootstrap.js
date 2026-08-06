@@ -829,6 +829,17 @@ function isMarkdownText(text) {
          /^\|.*\|$/m.test(str);
 }
 
+function isSingleStandaloneUrl(str) {
+  if (!str || typeof str !== 'string') return false;
+  const trimmed = str.trim();
+  if (/\s/.test(trimmed)) return false;
+  if (window.LinkParser) {
+    const res = window.LinkParser.parseAndValidateUrl(trimmed);
+    return res.valid && (res.protocol === 'http:' || res.protocol === 'https:');
+  }
+  return /^https?:\/\/[^\s]+$/i.test(trimmed);
+}
+
   // Paste images, spreadsheet tables, or clean formatted HTML from clipboard
   edEl.addEventListener('paste', e=>{
     if(!e.clipboardData) return;
@@ -840,6 +851,15 @@ function isMarkdownText(text) {
       }
     }
     const text = e.clipboardData.getData('text/plain');
+
+    // Single-Link Paste Interception: automatically open unified embed modal for single URLs
+    if (text && isSingleStandaloneUrl(text)) {
+      e.preventDefault();
+      if (typeof window.openEmbedModal === 'function') {
+        window.openEmbedModal({ initialUrl: text.trim() });
+      }
+      return;
+    }
     if(text && /\t/.test(text) && /\n/.test(text)){
       const tableHtml = tsvToPaperussTable(text);
       if(tableHtml){

@@ -780,8 +780,12 @@
       if (selectedMode === 'inline' || !info) {
         const normUrl = global.LinkParser ? global.LinkParser.normalizeUrl(val) : (val.startsWith('http') ? val : 'https://' + val);
         const displayLabel = txtVal || normUrl;
+        let host = '';
+        try { host = new URL(normUrl).hostname; } catch(_) {}
+        const faviconSrc = host ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32` : '';
+        const faviconHtml = faviconSrc ? `<img src="${esc(faviconSrc)}" class="inline-link-icon" alt="" onerror="this.style.display='none'">` : '';
         badgeEl.textContent = info ? `Detected Provider: ${info.providerName} (${info.contentType}) · Inline Link Mode` : 'Web / Email Link';
-        previewBox.innerHTML = `<div class="embed-preview-card" style="padding:12px;font-size:14px;">Inline Link: <a href="${esc(normUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline;">${esc(displayLabel)}</a></div>`;
+        previewBox.innerHTML = `<div class="embed-preview-card" style="padding:16px;font-size:14px;display:flex;align-items:center;gap:8px;">Inline Link Preview: <a href="${esc(normUrl)}" class="paperuss-inline-link" target="_blank" rel="noopener noreferrer">${faviconHtml}<span>${esc(displayLabel)}</span></a></div>`;
         return;
       }
 
@@ -823,27 +827,32 @@
         restoreEditorSelection();
 
         if (selectedMode === 'inline' || !currentDetectedInfo) {
-          // Insert standard inline <a> hyperlink
+          // Insert standard inline <a> hyperlink with favicon & accent highlight
           const parsed = global.LinkParser ? global.LinkParser.parseAndValidateUrl(val) : { valid: true, url: val.startsWith('http') ? val : 'https://' + val, isExternal: true };
           const finalUrl = parsed.url || val;
           const displayLabel = txtVal || finalUrl;
           const targetAttr = parsed.isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
-          
+          let host = '';
+          try { host = new URL(finalUrl).hostname; } catch(_) {}
+          const faviconSrc = host ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32` : '';
+          const faviconHtml = faviconSrc ? `<img src="${esc(faviconSrc)}" class="inline-link-icon" alt="" onerror="this.style.display='none'">` : '';
+
           const ed = document.getElementById('noteBody');
           const curSel = window.getSelection();
           if (curSel && curSel.rangeCount && !curSel.isCollapsed && ed && ed.contains(curSel.anchorNode)) {
             document.execCommand('createLink', false, finalUrl);
             const anchor = (curSel.anchorNode.nodeType === 3 ? curSel.anchorNode.parentElement : curSel.anchorNode).closest?.('a');
             if (anchor) {
-              if (displayLabel) anchor.textContent = displayLabel;
+              anchor.className = 'paperuss-inline-link';
+              anchor.innerHTML = `${faviconHtml}<span>${esc(displayLabel)}</span>`;
               if (parsed.isExternal) { anchor.target = '_blank'; anchor.rel = 'noopener noreferrer'; }
             }
           } else {
-            const linkHtml = `<a href="${esc(finalUrl)}"${targetAttr}>${esc(displayLabel)}</a>`;
+            const linkHtml = `<a href="${esc(finalUrl)}" class="paperuss-inline-link"${targetAttr}>${faviconHtml}<span>${esc(displayLabel)}</span></a>`;
             if (typeof global.insertHTMLAtCaret === 'function') {
-              global.insertHTMLAtCaret(linkHtml);
+              global.insertHTMLAtCaret(linkHtml + '&nbsp;');
             } else if (ed) {
-              ed.insertAdjacentHTML('beforeend', linkHtml);
+              ed.insertAdjacentHTML('beforeend', linkHtml + '&nbsp;');
             }
           }
           if (typeof global.handleBodyInput === 'function') global.handleBodyInput();
