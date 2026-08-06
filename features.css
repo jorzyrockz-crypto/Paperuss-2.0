@@ -1863,35 +1863,28 @@ blockquote.note-callout.callout-info {
   -webkit-box-orient: vertical;
 }
 
-/* Styled Inline Link Chip with Favicon & Global Color Accent Highlight */
+/* Styled Inline Hyperlinks with Global Color Accent Highlight */
+.note-editor a,
+#noteBody a,
 a.paperuss-inline-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-ring);
+  color: var(--accent);
   padding: 2px 7px;
   border-radius: 6px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  border: 1px solid var(--accent-ring);
   font-weight: 500;
-  font-size: 13px;
-  text-decoration: none;
+  text-decoration: underline;
   transition: all 0.15s ease;
-  vertical-align: middle;
-  line-height: 1.3;
+  display: inline;
+  vertical-align: baseline;
 }
+.note-editor a:hover,
+#noteBody a:hover,
 a.paperuss-inline-link:hover {
   background: var(--accent);
   color: #ffffff;
   border-color: var(--accent-emphasis);
-  text-decoration: none;
-}
-a.paperuss-inline-link .inline-link-icon {
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  object-fit: contain;
-  flex-shrink: 0;
+  text-decoration: underline;
 }
 
 /* ============ EMBED EDITOR OVERLAY TOOLBAR ============ */
