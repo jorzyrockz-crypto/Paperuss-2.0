@@ -259,29 +259,88 @@
     closeMusicHubModal();
   }
 
-  function scanVaultForMusicEmbeds() {
+  async function scanVaultForMusicEmbeds() {
     const vaultList = document.getElementById('musicHubVaultList');
     if (!vaultList) return;
 
-    const notes = global.notes || [];
-    const foundEmbeds = [];
+    const foundMap = new Map(); // Keyed by embedUrl to avoid duplicates!
 
-    notes.forEach(note => {
-      if (!note.content) return;
+    const processHtml = (htmlContent, sourceTitle) => {
+      if (!htmlContent || typeof htmlContent !== 'string') return;
       try {
         const parser = new DOMParser();
-        const doc = parser.parseFromString(note.content, 'text/html');
-        const embeds = doc.querySelectorAll('.paperuss-embed');
+        const doc = parser.parseFromString(htmlContent, 'text/html');
+        const embeds = doc.querySelectorAll('.paperuss-embed, [data-embed-url]');
         embeds.forEach(embed => {
-          const provider = embed.getAttribute('data-provider') || 'web';
-          const embedUrl = embed.getAttribute('data-embed-url') || '';
+          const provider = embed.getAttribute('data-provider') || 'media';
+          const embedUrl = embed.getAttribute('data-embed-url') || embed.querySelector('iframe')?.src || '';
           const title = embed.querySelector('strong')?.textContent || `${provider.toUpperCase()} Embed`;
-          if (embedUrl) {
-            foundEmbeds.push({ noteTitle: note.title || 'Untitled Note', provider, embedUrl, title });
+          if (embedUrl && !foundMap.has(embedUrl)) {
+            foundMap.set(embedUrl, { noteTitle: sourceTitle || 'Active Note', provider, embedUrl, title });
+          }
+        });
+
+        // Also check raw <iframe> tags in note HTML
+        const iframes = doc.querySelectorAll('iframe');
+        iframes.forEach(iframe => {
+          const src = iframe.src;
+          if (src && !foundMap.has(src)) {
+            let provider = 'media';
+            if (src.includes('spotify.com')) provider = 'spotify';
+            else if (src.includes('youtube.com') || src.includes('youtu.be')) provider = 'youtube';
+            else if (src.includes('soundcloud.com')) provider = 'soundcloud';
+            foundMap.set(src, { noteTitle: sourceTitle || 'Active Note', provider, embedUrl: src, title: `${provider.toUpperCase()} Embed` });
           }
         });
       } catch (_) {}
+    };
+
+    // 1. Scan current active note in editor
+    const activeEd = document.getElementById('noteBody');
+    const activeTitle = document.getElementById('noteTitle')?.value || 'Current Note';
+    if (activeEd) {
+      processHtml(activeEd.innerHTML, activeTitle);
+    }
+
+    // 2. Scan window.notes / window.state.notes
+    const memoryNotes = global.notes || global.state?.notes || [];
+    memoryNotes.forEach(n => {
+      processHtml(n.body || n.content || '', n.title || 'Untitled Note');
     });
+
+    // 3. Scan IndexedDB leaves if available
+    if (global.paperussLeaves && typeof global.paperussLeaves.leafGetAll === 'function') {
+      try {
+        const leaves = await global.paperussLeaves.leafGetAll();
+        leaves.forEach(leaf => {
+          processHtml(leaf.content || leaf.body || '', leaf.title || 'Note Leaf');
+        });
+      } catch (_) {}
+    }
+
+    // 4. Scan localStorage fallback
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('octonotes:') || key.startsWith('paperuss:'))) {
+          const val = localStorage.getItem(key);
+          if (val && (val.includes('<iframe') || val.includes('paperuss-embed'))) {
+            try {
+              const parsed = JSON.parse(val);
+              if (Array.isArray(parsed)) {
+                parsed.forEach(n => processHtml(n.content || n.body || '', n.title || 'Note'));
+              } else if (parsed && typeof parsed === 'object') {
+                processHtml(parsed.content || parsed.body || '', parsed.title || 'Note');
+              }
+            } catch (_) {
+              processHtml(val, 'Saved Note');
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    const foundEmbeds = Array.from(foundMap.values());
 
     if (foundEmbeds.length === 0) {
       vaultList.innerHTML = `
@@ -297,7 +356,7 @@
             <strong>${esc(item.title)}</strong>
             <span>${esc(item.noteTitle)} • ${esc(item.provider.toUpperCase())}</span>
           </div>
-          <button class="btn btn-sm btn-primary" onclick="PaperussMediaWidget.playPresetMusic('${esc(item.embedUrl)}', '${esc(item.provider)}')">
+          <button class="btn btn-sm btn-primary" data-action="play-vault-item" data-embed-url="${esc(item.embedUrl)}" data-provider="${esc(item.provider)}">
             <i data-lucide="play" class="w-3.5 h-3.5"></i> Play
           </button>
         </div>
@@ -381,6 +440,16 @@
       e.preventDefault();
       const url = presetCard.getAttribute('data-preset-url');
       if (url) playPresetMusic(url, 'Spotify Preset');
+      return;
+    }
+
+    // Play Vault Item
+    const vaultBtn = e.target.closest('[data-action="play-vault-item"]');
+    if (vaultBtn) {
+      e.preventDefault();
+      const url = vaultBtn.getAttribute('data-embed-url');
+      const provider = vaultBtn.getAttribute('data-provider') || 'Media';
+      if (url) playPresetMusic(url, provider);
       return;
     }
   });
