@@ -639,24 +639,33 @@
     if (!root) return;
 
     const initialUrl = options.initialUrl || '';
+    const initialText = options.initialText || (window.getSelection ? window.getSelection().toString().trim() : '');
     const targetEmbed = options.targetEmbed || null;
 
     root.innerHTML = `
       <div class="modal-overlay">
-        <div class="embed-modal-card" role="dialog" aria-label="Embed URL">
+        <div class="embed-modal-card" role="dialog" aria-label="Embed or Link URL">
           <div class="embed-modal-header">
-            <h3><i data-lucide="layout-template" class="w-5 h-5 mr-1 inline"></i> Embed URL or Facebook Iframe</h3>
+            <h3><i data-lucide="link" class="w-5 h-5 mr-1 inline"></i> Insert Link & Embed Tool</h3>
             <button type="button" class="changelog-close" id="embedModalClose" aria-label="Close"><i data-lucide="x"></i></button>
           </div>
           <div class="embed-modal-body">
             <div class="embed-modal-field">
-              <label for="embedUrlInput">Paste supported URL or Facebook Plugin iframe HTML</label>
-              <input type="text" id="embedUrlInput" class="link-modal-input" placeholder="e.g. YouTube, Spotify, Facebook URL or iframe..." value="${esc(initialUrl)}" autocomplete="off" spellcheck="false">
-              <div class="embed-modal-hint" id="embedProviderBadge">Supports: YouTube, Vimeo, Spotify, SoundCloud, TikTok, Instagram, Facebook, X, Google Maps</div>
+              <label for="embedUrlInput">Web Address, Email, or Embed URL</label>
+              <input type="text" id="embedUrlInput" class="link-modal-input" placeholder="e.g. https://example.com, github.com, YouTube or Spotify link..." value="${esc(initialUrl)}" autocomplete="off" spellcheck="false">
+              <div class="embed-modal-hint" id="embedProviderBadge">Supports web links, email, YouTube, Vimeo, Spotify, SoundCloud, TikTok, Instagram, Facebook, X, Google Maps</div>
+            </div>
+            <div class="embed-modal-field">
+              <label for="embedTextInput">Display Text (optional for Inline Link)</label>
+              <input type="text" id="embedTextInput" class="link-modal-input" placeholder="Text to display in note" value="${esc(initialText)}" autocomplete="off">
             </div>
             <div class="embed-modal-field">
               <label>Display Mode</label>
               <div class="embed-mode-picker">
+                <label class="embed-mode-option">
+                  <input type="radio" name="embedMode" value="inline" ${initialText ? 'checked' : ''}>
+                  <span>Inline Link</span>
+                </label>
                 <label class="embed-mode-option">
                   <input type="radio" name="embedMode" value="compact">
                   <span>Compact Card</span>
@@ -666,7 +675,7 @@
                   <span>Rich Preview</span>
                 </label>
                 <label class="embed-mode-option">
-                  <input type="radio" name="embedMode" value="interactive" checked>
+                  <input type="radio" name="embedMode" value="interactive" ${!initialText ? 'checked' : ''}>
                   <span>Interactive Embed</span>
                 </label>
               </div>
@@ -680,7 +689,7 @@
           </div>
           <div class="embed-modal-actions">
             <button type="button" class="btn" id="embedModalCancel">Cancel</button>
-            <button type="button" class="btn btn-primary" id="embedModalSubmit">Insert Embed</button>
+            <button type="button" class="btn btn-primary" id="embedModalSubmit">Insert Link / Embed</button>
           </div>
         </div>
       </div>
@@ -689,6 +698,7 @@
     if (typeof global.lucide?.createIcons === 'function') global.lucide.createIcons();
 
     const urlInput = document.getElementById('embedUrlInput');
+    const textInput = document.getElementById('embedTextInput');
     const badgeEl = document.getElementById('embedProviderBadge');
     const previewBox = document.getElementById('embedLivePreviewBox');
     const submitBtn = document.getElementById('embedModalSubmit');
@@ -699,21 +709,26 @@
 
     function updatePreview() {
       const val = urlInput.value.trim();
+      const txtVal = textInput.value.trim() || initialText || val;
       if (!val) {
-        badgeEl.textContent = 'Supports: YouTube, Vimeo, Spotify, SoundCloud, TikTok, Instagram, Facebook, X, Google Maps';
+        badgeEl.textContent = 'Supports web links, email, YouTube, Vimeo, Spotify, SoundCloud, TikTok, Instagram, Facebook, X, Google Maps';
         previewBox.innerHTML = '<div class="embed-preview-empty">Paste a URL above to preview</div>';
         currentDetectedInfo = null;
         return;
       }
       const info = detectEmbedProvider(val);
       currentDetectedInfo = info;
-      if (!info) {
-        badgeEl.textContent = 'Unknown provider: will insert as standard clickable link.';
-        previewBox.innerHTML = `<div class="embed-preview-card">Standard link: <a href="${esc(val)}" target="_blank" rel="noopener">${esc(val)}</a></div>`;
+      const selectedMode = document.querySelector('input[name="embedMode"]:checked')?.value || 'inline';
+
+      if (selectedMode === 'inline' || !info) {
+        const normUrl = global.LinkParser ? global.LinkParser.normalizeUrl(val) : (val.startsWith('http') ? val : 'https://' + val);
+        const displayLabel = txtVal || normUrl;
+        badgeEl.textContent = info ? `Detected Provider: ${info.providerName} (${info.contentType}) · Inline Link Mode` : 'Web / Email Link';
+        previewBox.innerHTML = `<div class="embed-preview-card" style="padding:12px;font-size:14px;">Inline Link: <a href="${esc(normUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline;">${esc(displayLabel)}</a></div>`;
         return;
       }
+
       badgeEl.textContent = `Detected Provider: ${info.providerName} (${info.contentType})`;
-      const selectedMode = document.querySelector('input[name="embedMode"]:checked')?.value || 'interactive';
       info.displayMode = selectedMode;
       const canonicalHtml = buildCanonicalEmbedHtml(info);
       previewBox.innerHTML = canonicalHtml;
@@ -722,6 +737,7 @@
     }
 
     urlInput.addEventListener('input', updatePreview);
+    textInput.addEventListener('input', updatePreview);
     document.querySelectorAll('input[name="embedMode"]').forEach(radio => {
       radio.addEventListener('change', updatePreview);
     });
@@ -739,14 +755,48 @@
       submitBtn.onclick = () => {
         const val = urlInput.value.trim();
         if (!val) {
-          if (typeof global.toast === 'function') global.toast('Please enter a URL');
+          if (typeof global.toast === 'function') global.toast('Please enter a URL or email address');
+          urlInput.focus();
           return;
         }
 
-        const selectedMode = document.querySelector('input[name="embedMode"]:checked')?.value || 'interactive';
+        const selectedMode = document.querySelector('input[name="embedMode"]:checked')?.value || 'inline';
+        const txtVal = textInput.value.trim() || initialText;
 
         restoreEditorSelection();
 
+        if (selectedMode === 'inline' || !currentDetectedInfo) {
+          // Insert standard inline <a> hyperlink
+          const parsed = global.LinkParser ? global.LinkParser.parseAndValidateUrl(val) : { valid: true, url: val.startsWith('http') ? val : 'https://' + val, isExternal: true };
+          const finalUrl = parsed.url || val;
+          const displayLabel = txtVal || finalUrl;
+          const targetAttr = parsed.isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
+          
+          const ed = document.getElementById('noteBody');
+          const curSel = window.getSelection();
+          if (curSel && curSel.rangeCount && !curSel.isCollapsed && ed && ed.contains(curSel.anchorNode)) {
+            document.execCommand('createLink', false, finalUrl);
+            const anchor = (curSel.anchorNode.nodeType === 3 ? curSel.anchorNode.parentElement : curSel.anchorNode).closest?.('a');
+            if (anchor) {
+              if (displayLabel) anchor.textContent = displayLabel;
+              if (parsed.isExternal) { anchor.target = '_blank'; anchor.rel = 'noopener noreferrer'; }
+            }
+          } else {
+            const linkHtml = `<a href="${esc(finalUrl)}"${targetAttr}>${esc(displayLabel)}</a>`;
+            if (typeof global.insertHTMLAtCaret === 'function') {
+              global.insertHTMLAtCaret(linkHtml);
+            } else if (ed) {
+              ed.insertAdjacentHTML('beforeend', linkHtml);
+            }
+          }
+          if (typeof global.handleBodyInput === 'function') global.handleBodyInput();
+          closeModal();
+          if (typeof global.toast === 'function') global.toast('Link inserted');
+          if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
+          return;
+        }
+
+        // Rich card / Interactive embed mode
         if (targetEmbed && currentDetectedInfo) {
           // Editing existing embed
           currentDetectedInfo.displayMode = selectedMode;
@@ -767,28 +817,19 @@
           }
           const noteBody = document.getElementById('noteBody');
           if (noteBody) hydrateEmbeds(noteBody);
-        } else {
-          // Unknown provider -> insert as normal clickable link
-          const linkHtml = `<a href="${esc(val)}" target="_blank" rel="noopener noreferrer">${esc(val)}</a>`;
-          if (typeof global.insertHTMLAtCaret === 'function') {
-            global.insertHTMLAtCaret(linkHtml);
-          } else {
-            const noteBody = document.getElementById('noteBody');
-            if (noteBody) noteBody.insertAdjacentHTML('beforeend', linkHtml);
-          }
         }
 
         closeModal();
-        if (typeof global.toast === 'function') global.toast(currentDetectedInfo ? `Inserted ${currentDetectedInfo.providerName} embed` : 'Inserted web link');
+        if (typeof global.toast === 'function') global.toast(`Inserted ${currentDetectedInfo.providerName} embed`);
         if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
       };
     }
 
-    // Run initial preview if URL was passed
-    if (initialUrl) {
+    // Run initial preview if URL or text was passed
+    if (initialUrl || initialText) {
       updatePreview();
     }
-    urlInput.focus();
+    setTimeout(() => urlInput.focus(), 50);
   }
 
   // Export module APIs
