@@ -387,7 +387,28 @@
       ? `<div class="embed-hero-wrap"><img src="${esc(info.thumbnail)}" alt="${title}" class="embed-fallback-thumb" onerror="this.parentElement.remove()"></div>` 
       : '';
 
-    // Canonical structure stored in HTML
+    // Compact Card / Bookmark Card Layout (Exact Flex-Row Single-Line Pattern)
+    if (displayMode === 'compact') {
+      return `<div class="bookmark-card paperuss-embed embed-mode-compact embed-width-${widthPreset}" ` +
+        `data-paperuss-embed="true" ` +
+        `data-provider="${provider}" ` +
+        `data-content-type="${contentType}" ` +
+        `data-canonical-url="${canonicalUrl}" ` +
+        `data-embed-url="${embedUrl}" ` +
+        `data-display-mode="compact" ` +
+        `data-width-preset="${widthPreset}" ` +
+        `data-preferred-height="${preferredHeight}" ` +
+        `contenteditable="false">` +
+        `<div class="bookmark-card-inner">` +
+        `<span class="bookmark-icon">` +
+        `<img src="${esc(faviconUrl)}" class="inline-link-icon" alt="" onerror="this.style.display='none'">` +
+        `</span>` +
+        `<a href="${canonicalUrl}" class="bookmark-link" target="_blank" rel="noopener noreferrer">${title}</a>` +
+        `</div>` +
+        `</div>`;
+    }
+
+    // Canonical Rich Preview / Interactive structure stored in HTML
     return `<div class="paperuss-embed embed-mode-${displayMode} embed-width-${widthPreset}" ` +
       `data-paperuss-embed="true" ` +
       `data-provider="${provider}" ` +
