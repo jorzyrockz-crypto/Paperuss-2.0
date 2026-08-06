@@ -214,8 +214,9 @@
         container.innerHTML = '';
         container.appendChild(iframe);
       }
-      iframe.style.height = '80px';
+      iframe.style.height = '152px';
       iframe.style.borderRadius = '10px';
+      iframe.setAttribute('scrolling', 'no');
     }
 
     const badge = widgetEl.querySelector('#mediaWidgetBadge');
@@ -256,17 +257,11 @@
     }
   }
 
-  // Open / Close Music Player Hub Modal
+  // Open / Close Music Player Hub Modal (Widget expands ONLY when user presses PLAY)
   function openMusicHubModal() {
     const overlay = document.getElementById('musicHubModalOverlay');
     if (!overlay) return;
     overlay.classList.remove('hidden');
-    
-    // If widget is minimized, toggle expansion when clicking bottom bar button
-    if (widgetEl && widgetEl.classList.contains('is-minimized')) {
-      toggleMinimizeWidget(false);
-    }
-
     scanVaultForMusicEmbeds();
   }
 
@@ -278,7 +273,6 @@
   function playPresetMusic(embedUrl, providerName = 'Spotify') {
     initMediaWidget();
     
-    // Ensure autoplay parameter is appended if missing
     let targetUrl = embedUrl;
     if (targetUrl && !targetUrl.includes('autoplay=1')) {
       targetUrl += (targetUrl.includes('?') ? '&' : '?') + 'autoplay=1';
@@ -296,7 +290,8 @@
     iframe.allow = 'autoplay; clipboard-write; encrypted-media; picture-in-picture; background-play';
     iframe.style.border = 'none';
     iframe.style.width = '100%';
-    iframe.style.height = '80px';
+    iframe.style.height = '152px';
+    iframe.setAttribute('scrolling', 'no');
     tempWrap.appendChild(iframe);
 
     dockActiveEmbed(tempWrap, iframe);

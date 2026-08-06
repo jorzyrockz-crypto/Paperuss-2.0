@@ -2337,14 +2337,15 @@ a.paperuss-inline-link:hover {
 }
 .media-widget-iframe-container {
   width: 100%;
-  height: 80px;
+  height: 152px;
   border-radius: 10px;
-  overflow: hidden;
+  overflow: hidden !important;
 }
 .media-widget-iframe-container iframe {
   width: 100% !important;
-  height: 80px !important;
+  height: 152px !important;
   border: none;
+  overflow: hidden !important;
 }
 .paperuss-media-widget.is-minimized {
   opacity: 0 !important;
