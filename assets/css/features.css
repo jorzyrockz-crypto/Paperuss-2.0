@@ -3702,9 +3702,13 @@ blockquote.note-callout.callout-info {
   transform: translateX(-50%);
   z-index: 20;
   display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap; /* Strictly 1 single row regardless of card width */
+  white-space: nowrap;
   align-items: center;
   gap: 4px;
   padding: 3px 6px;
+  max-width: max-content;
   background: var(--bg-secondary, #1e1e24);
   color: var(--fg, #ffffff);
   border: 1px solid var(--border, rgba(128,128,128,0.25));
@@ -3723,8 +3727,11 @@ blockquote.note-callout.callout-info {
 }
 .embed-tb-segment {
   display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 2px;
+  flex-shrink: 0; /* Prevents segments from breaking into vertical rows */
   background: var(--bg-tertiary, rgba(128,128,128,0.12));
   border-radius: 6px;
   padding: 2px;
