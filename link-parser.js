@@ -165,11 +165,88 @@
     };
   }
 
+  /**
+   * Resolves relative image paths against a source base URL to turn relative URLs
+   * into absolute HTTPS URLs, per Meta Open Graph image specification.
+   */
+  function resolveImageUrl(imgUrl, baseUrl) {
+    if (!imgUrl || typeof imgUrl !== 'string') return null;
+    const cleanImg = imgUrl.trim();
+    if (!cleanImg) return null;
+    if (/^https?:\/\//i.test(cleanImg) || cleanImg.startsWith('data:')) {
+      return cleanImg;
+    }
+    if (!baseUrl) return cleanImg;
+    try {
+      return new URL(cleanImg, baseUrl).href;
+    } catch (_) {
+      return cleanImg;
+    }
+  }
+
+  /**
+   * Extracts Meta Open Graph & Twitter Card tags in standard Meta Debugger priority order.
+   */
+  function extractMetaTags(docOrHtml, sourceUrl) {
+    if (!docOrHtml) return null;
+    let doc = docOrHtml;
+    if (typeof docOrHtml === 'string') {
+      try {
+        doc = new DOMParser().parseFromString(docOrHtml, 'text/html');
+      } catch (_) {
+        return null;
+      }
+    }
+
+    const getMeta = (props) => {
+      for (const p of props) {
+        const el = doc.querySelector(`meta[property="${p}"], meta[name="${p}"]`);
+        if (el && el.getAttribute('content')) {
+          const val = el.getAttribute('content').trim();
+          if (val) return val;
+        }
+      }
+      return null;
+    };
+
+    const title = getMeta(['og:title', 'twitter:title', 'title']) || doc.querySelector('title')?.textContent?.trim() || null;
+    const description = getMeta(['og:description', 'twitter:description', 'description']) || null;
+    const rawImage = getMeta(['og:image', 'og:image:src', 'twitter:image', 'twitter:image:src']) || 
+                     doc.querySelector('link[rel="image_src"]')?.getAttribute('href') || null;
+    const resolvedImage = rawImage ? resolveImageUrl(rawImage, sourceUrl) : null;
+    const canonicalUrl = getMeta(['og:url', 'twitter:url']) || doc.querySelector('link[rel="canonical"]')?.getAttribute('href') || sourceUrl || null;
+    const siteName = getMeta(['og:site_name', 'application-name']) || null;
+
+    return {
+      title,
+      description,
+      image: resolvedImage,
+      url: canonicalUrl,
+      siteName
+    };
+  }
+
+  const metaCache = new Map();
+
+  /**
+   * Clears metadata cache for a URL (Manual Rescrape / Scrape Again).
+   */
+  function scrapeAgain(url) {
+    if (!url) {
+      metaCache.clear();
+      return true;
+    }
+    return metaCache.delete(url);
+  }
+
   const LinkParser = Object.freeze({
     cleanTrailingPunctuation,
     normalizeUrl,
     detectPlatform,
     parseAndValidateUrl,
+    resolveImageUrl,
+    extractMetaTags,
+    scrapeAgain,
     ALLOWED_PROTOCOLS: Array.from(ALLOWED_PROTOCOLS)
   });
 

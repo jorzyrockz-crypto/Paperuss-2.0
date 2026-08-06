@@ -9,6 +9,18 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="application-name" content="PapeRuss 2.0 Stabilization">
 <meta name="apple-mobile-web-app-title" content="PapeRuss 2.0 Stabilization">
+<!-- Open Graph & Meta Sharing Debugger Tags -->
+<meta property="og:title" content="PapeRuss 2.0 - Fast Offline Notes, Embeds & Rich Links">
+<meta property="og:description" content="PapeRuss is a fast, offline-first notes, tasks, and media embed app with rich link cards.">
+<meta property="og:image" content="assets/icons/paperuss-512.png">
+<meta property="og:url" content="https://paperuss.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="PapeRuss 2.0">
+<!-- Twitter Card Meta Tags -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="PapeRuss 2.0 - Fast Offline Notes & Embeds">
+<meta name="twitter:description" content="PapeRuss is a fast, offline-first notes, tasks, and media embed app with rich link cards.">
+<meta name="twitter:image" content="assets/icons/paperuss-512.png">
 <title>PapeRuss 2.0 Stabilization · Offline Notes</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/paperuss-192.png">
@@ -24,10 +36,10 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" onerror="window.__fbLoadFailed=true"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js" onerror="window.__fbStorageLoadFailed=true"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js" onerror="window.__fbAnalyticsLoadFailed=true"></script>
-<link rel="stylesheet" href="assets/css/core.css">
-<link rel="stylesheet" href="assets/css/features.css">
-<link rel="stylesheet" href="assets/css/responsive.css">
-<link rel="stylesheet" href="assets/css/settings.css">
+<link rel="stylesheet" href="assets/css/core.css?v=2.0.1">
+<link rel="stylesheet" href="assets/css/features.css?v=2.0.1">
+<link rel="stylesheet" href="assets/css/responsive.css?v=2.0.1">
+<link rel="stylesheet" href="assets/css/settings.css?v=2.0.1">
 </head>
 <body>
 <!-- ============ AUTH LANDING PAGE (sign-in / guest mode) ============ -->
@@ -413,7 +425,7 @@
           <button class="tool-btn" data-cmd="code" title="Inline code">
             <i data-lucide="code" class="w-4 h-4"></i>
           </button>
-          <button class="tool-btn" data-cmd="createLink" title="Link">
+          <button class="tool-btn" data-cmd="createLink" title="Link & Embed Tool (Ctrl+K)" aria-label="Link & Embed Tool">
             <i data-lucide="link" class="w-4 h-4"></i>
           </button>
           <button class="tool-btn" data-cmd="divider" title="Insert divider">
@@ -444,12 +456,6 @@
           </button>
           <button class="tool-btn" data-media="video" title="Insert video">
             <i data-lucide="video" class="w-4 h-4"></i>
-          </button>
-          <button class="tool-btn" data-media="link" title="Rich link">
-            <i data-lucide="globe" class="w-4 h-4"></i>
-          </button>
-          <button class="tool-btn" id="embedToolBtn" data-cmd="embedTool" title="Embed URL" aria-label="Embed URL">
-            <i data-lucide="layout-template" class="w-4 h-4"></i>
           </button>
           <button class="tool-btn" data-media="file" title="Attach file">
             <i data-lucide="paperclip" class="w-4 h-4"></i>

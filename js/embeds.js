@@ -298,8 +298,48 @@
       };
     }
 
-    // Unknown provider -> return null so caller falls back to normal normal link
-    return null;
+    // Email / mailto links
+    if (parsedUrl.protocol === 'mailto:') {
+      const email = parsedUrl.pathname || urlStr.replace(/^mailto:/i, '');
+      return {
+        provider: 'email',
+        providerName: 'Email',
+        contentType: 'link',
+        canonicalUrl: urlStr,
+        embedUrl: null,
+        preferredHeight: 100,
+        widthPreset: 'medium',
+        displayMode: 'inline',
+        title: email,
+        description: `Email: ${email}`,
+        thumbnail: null,
+        author: null
+      };
+    }
+
+    // General Web Link fallback -> return web provider info for Rich Link Cards & Previews
+    const platformInfo = global.LinkParser?.detectPlatform ? global.LinkParser.detectPlatform(host) : { key: null, name: null };
+    const providerName = platformInfo.name || host;
+    const favicon = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
+    let title = providerName;
+    if (path && path !== '/') {
+      const cleanPathName = decodeURIComponent(path.split('/').filter(Boolean).pop() || '');
+      if (cleanPathName) title = `${cleanPathName} - ${providerName}`;
+    }
+    return {
+      provider: platformInfo.key || 'web',
+      providerName: providerName,
+      contentType: 'link',
+      canonicalUrl: urlStr,
+      embedUrl: null,
+      preferredHeight: 140,
+      widthPreset: 'medium',
+      displayMode: 'preview',
+      title: title,
+      description: urlStr,
+      thumbnail: favicon,
+      author: null
+    };
   }
 
   /**
@@ -330,9 +370,60 @@
     const widthPreset = esc(info.widthPreset || 'medium');
     const preferredHeight = parseInt(info.preferredHeight, 10) || 400;
 
+    let hostName = info.hostname || providerName;
+    try {
+      if (canonicalUrl) hostName = new URL(canonicalUrl).hostname.replace(/^www\./, '');
+    } catch (_) {}
+
     const title = info.title ? esc(info.title) : `${providerName} ${contentType}`;
-    const desc = info.description ? `<p class="embed-fallback-desc">${esc(info.description)}</p>` : '';
-    const thumb = info.thumbnail ? `<img src="${esc(info.thumbnail)}" alt="${title}" class="embed-fallback-thumb" onerror="this.style.display='none'">` : '';
+    const desc = info.description ? esc(info.description) : canonicalUrl;
+    
+    // Check if thumbnail is a favicon vs real article/video hero image
+    const isFaviconUrl = info.thumbnail && info.thumbnail.includes('favicons?domain=');
+    let resolvedHeroUrl = info.thumbnail;
+    if (resolvedHeroUrl && !isFaviconUrl && global.LinkParser?.resolveImageUrl) {
+      resolvedHeroUrl = global.LinkParser.resolveImageUrl(resolvedHeroUrl, canonicalUrl);
+    }
+    const faviconUrl = isFaviconUrl ? info.thumbnail : `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostName)}&sz=64`;
+    
+    // Render hero image or crisp glassmorphism placeholder banner matching user screenshot
+    let heroThumb = '';
+    if (resolvedHeroUrl && !isFaviconUrl) {
+      heroThumb = `<div class="embed-hero-wrap"><img src="${esc(resolvedHeroUrl)}" alt="${title}" class="embed-fallback-thumb" onerror="this.parentElement.className='embed-hero-wrap embed-hero-placeholder'; this.parentElement.innerHTML='<div class=&quot;embed-glass-hero-badge&quot;><img src=&quot;${faviconUrl}&quot; alt=&quot;${title}&quot; class=&quot;embed-placeholder-thumb&quot;></div>';"></div>`;
+    } else {
+      heroThumb = `<div class="embed-hero-wrap embed-hero-placeholder"><div class="embed-glass-hero-badge"><img src="${faviconUrl}" alt="${title}" class="embed-placeholder-thumb"></div></div>`;
+    }
+
+    // Render compact 1-row HERO ICON | LINK layout if displayMode is compact
+    let innerCardContent = '';
+    if (displayMode === 'compact') {
+      innerCardContent = `<div class="embed-compact-card">` +
+        `<div class="embed-compact-hero-icon">` +
+        `<img src="${faviconUrl}" alt="${title}" class="embed-favicon-icon" onerror="this.src='https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostName)}&sz=64'">` +
+        `</div>` +
+        `<span class="embed-compact-divider"></span>` +
+        `<div class="embed-compact-info">` +
+        `<strong class="embed-compact-title">${title}</strong>` +
+        `<a href="${canonicalUrl}" class="embed-compact-link" target="_blank" rel="noopener noreferrer">${canonicalUrl}</a>` +
+        `</div>` +
+        `</div>`;
+    } else {
+      innerCardContent = `<div class="embed-canonical-card">` +
+        `<div class="embed-canonical-header">` +
+        `<div class="embed-provider-badge-wrap">` +
+        `<span class="embed-provider-badge">${hostName}</span>` +
+        `</div>` +
+        `<a href="${canonicalUrl}" class="embed-canonical-link" target="_blank" rel="noopener noreferrer">${canonicalUrl}</a>` +
+        `</div>` +
+        `${heroThumb}` +
+        `<div class="embed-canonical-body">` +
+        `<div class="embed-canonical-text">` +
+        `<strong>${title}</strong>` +
+        `<p class="embed-fallback-desc">${desc}</p>` +
+        `</div>` +
+        `</div>` +
+        `</div>`;
+    }
 
     // Canonical structure stored in HTML
     return `<div class="paperuss-embed embed-mode-${displayMode} embed-width-${widthPreset}" ` +
@@ -345,19 +436,7 @@
       `data-width-preset="${widthPreset}" ` +
       `data-preferred-height="${preferredHeight}" ` +
       `contenteditable="false">` +
-      `<div class="embed-canonical-card">` +
-      `<div class="embed-canonical-header">` +
-      `<span class="embed-provider-badge">${providerName}</span>` +
-      `<a href="${canonicalUrl}" class="embed-canonical-link" target="_blank" rel="noopener noreferrer">${canonicalUrl}</a>` +
-      `</div>` +
-      `<div class="embed-canonical-body">` +
-      `${thumb}` +
-      `<div class="embed-canonical-text">` +
-      `<strong>${title}</strong>` +
-      `${desc}` +
-      `</div>` +
-      `</div>` +
-      `</div>` +
+      `${innerCardContent}` +
       `</div>`;
   }
 
@@ -528,9 +607,13 @@
           <option value="preview" ${displayMode === 'preview' ? 'selected' : ''}>Preview</option>
           <option value="interactive" ${displayMode === 'interactive' ? 'selected' : ''}>Interactive</option>
         </select>
-        <select class="embed-tb-select" data-action="width" title="Width" aria-label="Width Preset">
-          <option value="small" ${widthPreset === 'small' ? 'selected' : ''}>Small</option>
-          <option value="medium" ${widthPreset === 'medium' ? 'selected' : ''}>Medium</option>
+        <select class="embed-tb-select" data-action="width" title="Layout & Float Alignment" aria-label="Width Preset">
+          <option value="small" ${widthPreset === 'small' ? 'selected' : ''}>Small (Center)</option>
+          <option value="small-left" ${widthPreset === 'small-left' ? 'selected' : ''}>Small (Float Left)</option>
+          <option value="small-right" ${widthPreset === 'small-right' ? 'selected' : ''}>Small (Float Right)</option>
+          <option value="medium" ${widthPreset === 'medium' ? 'selected' : ''}>Medium (Center)</option>
+          <option value="medium-left" ${widthPreset === 'medium-left' ? 'selected' : ''}>Medium (Float Left)</option>
+          <option value="medium-right" ${widthPreset === 'medium-right' ? 'selected' : ''}>Medium (Float Right)</option>
           <option value="large" ${widthPreset === 'large' ? 'selected' : ''}>Large</option>
           <option value="full" ${widthPreset === 'full' ? 'selected' : ''}>Full Width</option>
         </select>
@@ -550,6 +633,10 @@
         </button>
       </div>
     `;
+
+    setTimeout(() => {
+      if (typeof global.lucide?.createIcons === 'function') global.lucide.createIcons();
+    }, 0);
 
     // Event listeners
     bar.addEventListener('click', (e) => {
@@ -639,34 +726,44 @@
     if (!root) return;
 
     const initialUrl = options.initialUrl || '';
+    const initialText = options.initialText || (window.getSelection ? window.getSelection().toString().trim() : '');
     const targetEmbed = options.targetEmbed || null;
+    const defaultMode = options.defaultMode || options.initialMode || (initialText ? 'inline' : 'preview');
 
     root.innerHTML = `
       <div class="modal-overlay">
-        <div class="embed-modal-card" role="dialog" aria-label="Embed URL">
+        <div class="embed-modal-card" role="dialog" aria-label="Embed or Link URL">
           <div class="embed-modal-header">
-            <h3><i data-lucide="layout-template" class="w-5 h-5 mr-1 inline"></i> Embed URL or Facebook Iframe</h3>
+            <h3><i data-lucide="link" class="w-5 h-5 mr-1 inline"></i> Insert Link & Embed Tool</h3>
             <button type="button" class="changelog-close" id="embedModalClose" aria-label="Close"><i data-lucide="x"></i></button>
           </div>
           <div class="embed-modal-body">
             <div class="embed-modal-field">
-              <label for="embedUrlInput">Paste supported URL or Facebook Plugin iframe HTML</label>
-              <input type="text" id="embedUrlInput" class="link-modal-input" placeholder="e.g. YouTube, Spotify, Facebook URL or iframe..." value="${esc(initialUrl)}" autocomplete="off" spellcheck="false">
-              <div class="embed-modal-hint" id="embedProviderBadge">Supports: YouTube, Vimeo, Spotify, SoundCloud, TikTok, Instagram, Facebook, X, Google Maps</div>
+              <label for="embedUrlInput">Web Address, Email, or Embed URL</label>
+              <input type="text" id="embedUrlInput" class="link-modal-input" placeholder="e.g. https://example.com, github.com, YouTube or Spotify link..." value="${esc(initialUrl)}" autocomplete="off" spellcheck="false">
+              <div class="embed-modal-hint" id="embedProviderBadge">Supports web links, email, YouTube, Vimeo, Spotify, SoundCloud, TikTok, Instagram, Facebook, X, Google Maps</div>
+            </div>
+            <div class="embed-modal-field">
+              <label for="embedTextInput">Display Text (optional for Inline Link)</label>
+              <input type="text" id="embedTextInput" class="link-modal-input" placeholder="Text to display in note" value="${esc(initialText)}" autocomplete="off">
             </div>
             <div class="embed-modal-field">
               <label>Display Mode</label>
               <div class="embed-mode-picker">
                 <label class="embed-mode-option">
-                  <input type="radio" name="embedMode" value="compact">
+                  <input type="radio" name="embedMode" value="inline" ${defaultMode === 'inline' ? 'checked' : ''}>
+                  <span>Inline Link</span>
+                </label>
+                <label class="embed-mode-option">
+                  <input type="radio" name="embedMode" value="compact" ${defaultMode === 'compact' ? 'checked' : ''}>
                   <span>Compact Card</span>
                 </label>
                 <label class="embed-mode-option">
-                  <input type="radio" name="embedMode" value="preview">
+                  <input type="radio" name="embedMode" value="preview" ${defaultMode === 'preview' ? 'checked' : ''}>
                   <span>Rich Preview</span>
                 </label>
                 <label class="embed-mode-option">
-                  <input type="radio" name="embedMode" value="interactive" checked>
+                  <input type="radio" name="embedMode" value="interactive" ${defaultMode === 'interactive' ? 'checked' : ''}>
                   <span>Interactive Embed</span>
                 </label>
               </div>
@@ -680,7 +777,7 @@
           </div>
           <div class="embed-modal-actions">
             <button type="button" class="btn" id="embedModalCancel">Cancel</button>
-            <button type="button" class="btn btn-primary" id="embedModalSubmit">Insert Embed</button>
+            <button type="button" class="btn btn-primary" id="embedModalSubmit">Insert Link / Embed</button>
           </div>
         </div>
       </div>
@@ -689,6 +786,7 @@
     if (typeof global.lucide?.createIcons === 'function') global.lucide.createIcons();
 
     const urlInput = document.getElementById('embedUrlInput');
+    const textInput = document.getElementById('embedTextInput');
     const badgeEl = document.getElementById('embedProviderBadge');
     const previewBox = document.getElementById('embedLivePreviewBox');
     const submitBtn = document.getElementById('embedModalSubmit');
@@ -699,21 +797,26 @@
 
     function updatePreview() {
       const val = urlInput.value.trim();
+      const txtVal = textInput.value.trim() || initialText || val;
       if (!val) {
-        badgeEl.textContent = 'Supports: YouTube, Vimeo, Spotify, SoundCloud, TikTok, Instagram, Facebook, X, Google Maps';
+        badgeEl.textContent = 'Supports web links, email, YouTube, Vimeo, Spotify, SoundCloud, TikTok, Instagram, Facebook, X, Google Maps';
         previewBox.innerHTML = '<div class="embed-preview-empty">Paste a URL above to preview</div>';
         currentDetectedInfo = null;
         return;
       }
       const info = detectEmbedProvider(val);
       currentDetectedInfo = info;
-      if (!info) {
-        badgeEl.textContent = 'Unknown provider: will insert as standard clickable link.';
-        previewBox.innerHTML = `<div class="embed-preview-card">Standard link: <a href="${esc(val)}" target="_blank" rel="noopener">${esc(val)}</a></div>`;
+      const selectedMode = document.querySelector('input[name="embedMode"]:checked')?.value || 'inline';
+
+      if (selectedMode === 'inline' || !info) {
+        const normUrl = global.LinkParser ? global.LinkParser.normalizeUrl(val) : (val.startsWith('http') ? val : 'https://' + val);
+        const displayLabel = txtVal || normUrl;
+        badgeEl.textContent = info ? `Detected Provider: ${info.providerName} (${info.contentType}) · Inline Link Mode` : 'Web / Email Link';
+        previewBox.innerHTML = `<div class="embed-preview-card" style="padding:16px;font-size:14px;display:flex;align-items:center;gap:8px;">Inline Link Preview: <a href="${esc(normUrl)}" class="paperuss-inline-link" target="_blank" rel="noopener noreferrer">${esc(displayLabel)}</a></div>`;
         return;
       }
+
       badgeEl.textContent = `Detected Provider: ${info.providerName} (${info.contentType})`;
-      const selectedMode = document.querySelector('input[name="embedMode"]:checked')?.value || 'interactive';
       info.displayMode = selectedMode;
       const canonicalHtml = buildCanonicalEmbedHtml(info);
       previewBox.innerHTML = canonicalHtml;
@@ -722,6 +825,7 @@
     }
 
     urlInput.addEventListener('input', updatePreview);
+    textInput.addEventListener('input', updatePreview);
     document.querySelectorAll('input[name="embedMode"]').forEach(radio => {
       radio.addEventListener('change', updatePreview);
     });
@@ -739,14 +843,49 @@
       submitBtn.onclick = () => {
         const val = urlInput.value.trim();
         if (!val) {
-          if (typeof global.toast === 'function') global.toast('Please enter a URL');
+          if (typeof global.toast === 'function') global.toast('Please enter a URL or email address');
+          urlInput.focus();
           return;
         }
 
-        const selectedMode = document.querySelector('input[name="embedMode"]:checked')?.value || 'interactive';
+        const selectedMode = document.querySelector('input[name="embedMode"]:checked')?.value || 'inline';
+        const txtVal = textInput.value.trim() || initialText;
 
         restoreEditorSelection();
 
+        if (selectedMode === 'inline' || !currentDetectedInfo) {
+          // Insert standard inline <a> hyperlink with global accent highlight
+          const parsed = global.LinkParser ? global.LinkParser.parseAndValidateUrl(val) : { valid: true, url: val.startsWith('http') ? val : 'https://' + val, isExternal: true };
+          const finalUrl = parsed.url || val;
+          const displayLabel = txtVal || finalUrl;
+          const targetAttr = parsed.isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
+
+          const ed = document.getElementById('noteBody');
+          const curSel = window.getSelection();
+          if (curSel && curSel.rangeCount && !curSel.isCollapsed && ed && ed.contains(curSel.anchorNode)) {
+            document.execCommand('createLink', false, finalUrl);
+            const anchor = (curSel.anchorNode.nodeType === 3 ? curSel.anchorNode.parentElement : curSel.anchorNode).closest?.('a');
+            if (anchor) {
+              anchor.className = 'paperuss-inline-link';
+              anchor.textContent = displayLabel;
+              if (parsed.isExternal) { anchor.target = '_blank'; anchor.rel = 'noopener noreferrer'; }
+            }
+          } else {
+            const linkHtml = `<a href="${esc(finalUrl)}" class="paperuss-inline-link"${targetAttr}>${esc(displayLabel)}</a>`;
+            if (typeof global.insertHTMLAtCaret === 'function') {
+              global.insertHTMLAtCaret(linkHtml + '&nbsp;');
+            } else if (ed) {
+              ed.insertAdjacentHTML('beforeend', linkHtml + '&nbsp;');
+            }
+          }
+          if (typeof global.handleBodyInput === 'function') global.handleBodyInput();
+          closeModal();
+          if (typeof global.toast === 'function') global.toast('Link inserted');
+          if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
+          return;
+        }
+
+        // Rich card / Interactive embed mode
         if (targetEmbed && currentDetectedInfo) {
           // Editing existing embed
           currentDetectedInfo.displayMode = selectedMode;
@@ -767,28 +906,19 @@
           }
           const noteBody = document.getElementById('noteBody');
           if (noteBody) hydrateEmbeds(noteBody);
-        } else {
-          // Unknown provider -> insert as normal clickable link
-          const linkHtml = `<a href="${esc(val)}" target="_blank" rel="noopener noreferrer">${esc(val)}</a>`;
-          if (typeof global.insertHTMLAtCaret === 'function') {
-            global.insertHTMLAtCaret(linkHtml);
-          } else {
-            const noteBody = document.getElementById('noteBody');
-            if (noteBody) noteBody.insertAdjacentHTML('beforeend', linkHtml);
-          }
         }
 
         closeModal();
-        if (typeof global.toast === 'function') global.toast(currentDetectedInfo ? `Inserted ${currentDetectedInfo.providerName} embed` : 'Inserted web link');
+        if (typeof global.toast === 'function') global.toast(`Inserted ${currentDetectedInfo.providerName} embed`);
         if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
       };
     }
 
-    // Run initial preview if URL was passed
-    if (initialUrl) {
+    // Run initial preview if URL or text was passed
+    if (initialUrl || initialText) {
       updatePreview();
     }
-    urlInput.focus();
+    setTimeout(() => urlInput.focus(), 50);
   }
 
   // Export module APIs

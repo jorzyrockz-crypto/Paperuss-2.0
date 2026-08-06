@@ -264,81 +264,18 @@ function fileIconSVG(type,name){
   return '<svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm11 11.5V4.664L11.336 3H4.5v-.5L4 3v11.25a.25.25 0 0 0 .25.25h8.5a.25.25 0 0 0 .25-.25Z"/></svg>';
 }
 
-/* Rich link cards */
+/* Rich link cards & embeds */
 function insertRichLink(){
+  const sel=window.getSelection();
+  const selText=sel ? sel.toString().trim() : '';
+  if(typeof window.openEmbedModal === 'function'){
+    window.openEmbedModal({ initialText: selText, defaultMode: 'preview' });
+    return;
+  }
   if(typeof openLinkModal === 'function'){
-    openLinkModal({
-      callback: (res, linkText) => {
-        if(!res || !res.valid || !res.isExternal) {
-          if(res && !res.isExternal) toast('Link cards require http:// or https:// URLs');
-          return;
-        }
-        let u;
-        try{ u=new URL(res.url); }catch(e){ toast('Invalid URL'); return; }
-        const host=u.hostname.replace(/^www\./,'');
-        const path=(u.pathname==='/'?'':u.pathname).replace(/\/$/,'');
-        const defaultTitle = res.platformName ? `${res.platformName} Link` : decodeURIComponent(path.split('/').pop()||host) || host;
-        const title = linkText || defaultTitle;
-        const favicon=`https://www.google.com/s2/favicons?domain=${host}&sz=64`;
-        if(res.isTemporaryImage){
-          // Insert as normal clickable link
-          const id='l_'+Date.now().toString(36);
-          insertHTMLAtCaret(`<a href="${esc(res.url)}" data-media-id="${id}" target="_blank" rel="noopener noreferrer">${esc(title)}</a>`);
-          toast('Link inserted');
-          return;
-        }
-
-        const id='l_'+Date.now().toString(36);
-        insertHTMLAtCaret(
-          `<a class="media-card link-card" contenteditable="false" data-media-id="${id}" data-media-kind="link" href="${esc(res.url)}" target="_blank" rel="noopener noreferrer">
-            <div class="mc-top">
-              <div class="mc-icon"><img src="${esc(favicon)}" alt="" loading="lazy" decoding="async" onerror="if(typeof setupBrokenImageElement==='function')setupBrokenImageElement(this);"></div>
-              <div class="mc-body">
-                <div class="mc-title">${esc(title)}</div>
-                <div class="mc-meta">${esc(host)}</div>
-              </div>
-            </div>
-          </a>`
-        );
-        toast('Link card added');
-      }
-    });
+    openLinkModal({ initialText: selText });
     return;
   }
-  const raw=prompt('Paste a URL to embed as a rich card:','https://');
-  if(!raw) return;
-  const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(raw) : null;
-  if(res && !res.valid){ toast(res.error || 'Invalid URL'); return; }
-  const url = res ? res.url : raw;
-  let u;
-  try{ u=new URL(url); }catch(e){ toast('Invalid URL'); return; }
-  if(!['http:','https:'].includes(u.protocol)){ toast('Only http:// and https:// links are supported'); return; }
-  const host=u.hostname.replace(/^www\./,'');
-  const path=(u.pathname==='/'?'':u.pathname).replace(/\/$/,'');
-  const title=prompt('Title (optional):', decodeURIComponent(path.split('/').pop()||host)) || host;
-  const desc=prompt('Description (optional):','') || '';
-  const favicon=`https://www.google.com/s2/favicons?domain=${host}&sz=64`;
-  if(res && res.isTemporaryImage) {
-    const id='l_'+Date.now().toString(36);
-    insertHTMLAtCaret(`<a href="${esc(url)}" data-media-id="${id}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>`);
-    toast('Link inserted');
-    return;
-  }
-
-  const id='l_'+Date.now().toString(36);
-  insertHTMLAtCaret(
-    `<a class="media-card link-card" contenteditable="false" data-media-id="${id}" data-media-kind="link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">
-      <div class="mc-top">
-        <div class="mc-icon"><img src="${esc(favicon)}" alt="" loading="lazy" decoding="async" onerror="if(typeof setupBrokenImageElement==='function')setupBrokenImageElement(this);"></div>
-        <div class="mc-body">
-          <div class="mc-title">${esc(title)}</div>
-          <div class="mc-meta">${esc(host)}</div>
-        </div>
-      </div>
-      ${desc?`<div class="mc-desc" style="margin-top:8px">${esc(desc)}</div>`:''}
-    </a>`
-  );
-  toast('Link card added');
 }
 
 /* Voice recording modal */
@@ -610,10 +547,10 @@ function setTheme(theme,trackChange=true){
    ============================================================ */
 function isPreviewImageElement(img){
   if(!img || !(img instanceof Element)) return false;
-  if(img.closest('.link-card, .media-card[data-media-kind="link"], .mc-icon, a[data-media-kind="link"], .mh-thumb, [data-mh-preview-image]')){
+  if(img.closest('.paperuss-embed, .embed-canonical-card, .embed-hero-wrap, .embed-provider-badge-wrap, .link-card, .media-card[data-media-kind="link"], .mc-icon, a[data-media-kind="link"], .mh-thumb, [data-mh-preview-image]')){
     return true;
   }
-  if(img.classList.contains('favicon') || img.classList.contains('v2-thumbnail') || img.classList.contains('domain-icon')){
+  if(img.classList.contains('favicon') || img.classList.contains('v2-thumbnail') || img.classList.contains('domain-icon') || img.classList.contains('embed-placeholder-thumb') || img.classList.contains('embed-favicon-icon') || img.classList.contains('embed-fallback-thumb') || img.classList.contains('inline-link-icon')){
     return true;
   }
   return false;
@@ -622,13 +559,9 @@ window.isPreviewImageElement = isPreviewImageElement;
 
 function repairMalformedLinkCards(container = document.getElementById('noteBody')){
   if(!container) return;
-  const malformedCards = container.querySelectorAll('.link-card .broken-media-card, a[data-media-kind="link"] .broken-media-card, .mc-icon .broken-media-card, .media-card[data-media-kind="link"] .broken-media-card');
+  const malformedCards = container.querySelectorAll('.paperuss-embed .broken-media-card, .link-card .broken-media-card, a[data-media-kind="link"] .broken-media-card, .mc-icon .broken-media-card, .media-card[data-media-kind="link"] .broken-media-card');
   malformedCards.forEach(bmc => {
-    const placeholder = document.createElement('span');
-    placeholder.className = 'domain-icon-placeholder';
-    placeholder.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:100%;height:100%;color:inherit;';
-    placeholder.innerHTML = '<i data-lucide="globe" class="w-4 h-4"></i>';
-    bmc.replaceWith(placeholder);
+    bmc.remove();
   });
   if(typeof refreshIcons === 'function') refreshIcons();
 }
