@@ -387,9 +387,10 @@
       ? `<div class="embed-hero-wrap"><img src="${esc(info.thumbnail)}" alt="${title}" class="embed-fallback-thumb" onerror="this.parentElement.remove()"></div>` 
       : '';
 
-    // Compact Card / Bookmark Card Layout (Exact Flex-Row Single-Line Pattern)
+    // Compact Card / Link Card Layout (Exact Flex-Row Single-Line Pattern)
     if (displayMode === 'compact') {
-      return `<div class="bookmark-card paperuss-embed embed-mode-compact embed-width-${widthPreset}" ` +
+      const displayHref = canonicalUrl || title;
+      return `<div class="link-card-component bookmark-card paperuss-embed embed-mode-compact embed-width-${widthPreset}" ` +
         `data-paperuss-embed="true" ` +
         `data-provider="${provider}" ` +
         `data-content-type="${contentType}" ` +
@@ -399,11 +400,11 @@
         `data-width-preset="${widthPreset}" ` +
         `data-preferred-height="${preferredHeight}" ` +
         `contenteditable="false">` +
-        `<div class="bookmark-card-inner">` +
-        `<span class="bookmark-icon">` +
+        `<div class="link-card-inner">` +
+        `<span class="link-card-icon">` +
         `<img src="${esc(faviconUrl)}" class="inline-link-icon" alt="" onerror="this.style.display='none'">` +
         `</span>` +
-        `<a href="${canonicalUrl}" class="bookmark-link" target="_blank" rel="noopener noreferrer">${title}</a>` +
+        `<a href="${canonicalUrl}" class="link-card-label" target="_blank" rel="noopener noreferrer">${esc(displayHref)}</a>` +
         `</div>` +
         `</div>`;
     }

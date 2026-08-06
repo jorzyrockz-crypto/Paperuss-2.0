@@ -1916,45 +1916,52 @@ a.paperuss-inline-link span.inline-link-text {
   vertical-align: middle !important;
 }
 
-/* Bookmark Card (Compact Flex Row Layout with Global Accent Border) */
+/* Link Card Component (Compact Flex Row Layout with Border-L-2 Accent) */
+.link-card-component,
 .bookmark-card,
 .paperuss-embed.embed-mode-compact {
   display: block !important;
-  margin: 10px 0 !important;
-  padding: 10px 14px !important;
-  border-left: 4px solid var(--accent) !important;
+  width: 100% !important;
+  margin: 8px 0 !important;
+  padding: 8px 12px !important;
+  border-left: 2px solid var(--accent) !important;
   background: var(--subtle) !important;
-  border-radius: 8px !important;
+  border-radius: 6px !important;
   border-top: 1px solid var(--border) !important;
   border-right: 1px solid var(--border) !important;
   border-bottom: 1px solid var(--border) !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
 }
+.link-card-inner,
 .bookmark-card-inner {
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
-  gap: 10px !important;
+  gap: 8px !important;
   width: 100% !important;
 }
+.link-card-icon,
 .bookmark-icon {
-  flex-shrink: 0 !important;
-  display: flex !important;
+  display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 18px !important;
-  height: 18px !important;
+  flex-shrink: 0 !important;
+  width: 16px !important;
+  height: 16px !important;
 }
+.link-card-icon img,
 .bookmark-icon img,
+.link-card-icon svg,
 .bookmark-icon svg {
   width: 16px !important;
   height: 16px !important;
   object-fit: contain !important;
   border-radius: 3px !important;
 }
+.link-card-label,
 .bookmark-link {
-  font-size: 13.5px !important;
-  font-weight: 500 !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
   color: var(--fg) !important;
   text-decoration: none !important;
   overflow: hidden !important;
@@ -1963,6 +1970,7 @@ a.paperuss-inline-link span.inline-link-text {
   flex: 1 !important;
   min-width: 0 !important;
 }
+.link-card-label:hover,
 .bookmark-link:hover {
   color: var(--accent) !important;
   text-decoration: underline !important;
