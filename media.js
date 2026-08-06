@@ -545,9 +545,26 @@ function setTheme(theme,trackChange=true){
 /* ============================================================
    REMOTE & EXPIRED IMAGE AUTO-CAPTURE AND RECOVERY
    ============================================================ */
+function isPreviewImageElement(img){
+  if(!img || !(img instanceof Element)) return false;
+  if(img.closest('.paperuss-embed, .embed-canonical-card, .embed-hero-wrap, .embed-provider-badge-wrap, .link-card, .media-card[data-media-kind="link"], .mc-icon, a[data-media-kind="link"], .mh-thumb, [data-mh-preview-image]')){
+    return true;
+  }
+  if(img.classList.contains('favicon') || img.classList.contains('v2-thumbnail') || img.classList.contains('domain-icon') || img.classList.contains('embed-placeholder-thumb') || img.classList.contains('embed-favicon-icon') || img.classList.contains('embed-fallback-thumb') || img.classList.contains('inline-link-icon')){
+    return true;
+  }
+  return false;
+}
+window.isPreviewImageElement = isPreviewImageElement;
+
 function setupBrokenImageElement(img){
   if(!img || img.dataset.brokenHandled) return;
   img.dataset.brokenHandled = 'true';
+
+  if(isPreviewImageElement(img)){
+    img.style.display = 'none';
+    return;
+  }
 
   const alt = img.getAttribute('alt') || img.getAttribute('title') || 'Image attachment';
   const wrapper = document.createElement('div');
