@@ -1,7 +1,16 @@
 {
-  "generatedAt": "2026-08-02T01:10:00.000Z",
+  "generatedAt": "2026-08-07T01:50:00.000Z",
   "source": "https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases",
   "releases": [
+    {
+      "tagName": "v2.1.0-music-hub",
+      "name": "PapeRuss 2.1 System Music Player Hub",
+      "title": "System Music Player Hub & Link Embed Enhancements",
+      "publishedAt": "2026-08-07T01:50:00.000Z",
+      "body": "### What's New in PapeRuss v2.1.0\n- **System Music Player Hub Modal**: Centralized Music Player accessible via bottom bar `[ 🎵 Music Player ]` pill button and sidebar navigation menu.\n- **Draggable Floating Background Media Player Widget**: Continuous, uninterrupted audio playback across note switches, tab navigation, and document editing.\n- **Vault Media Embed Scanner**: Scans active editor, memory store, IndexedDB leaves, and localStorage to populate saved music cards instantly.\n- **1-Click Starter Ambient Presets**: Pre-configured, verified Spotify study playlists (*Lofi Beats*, *Chill Acoustic*, *Synthwave Focus*).\n- **Quick Embed Paste Tool**: Instant playback tool supporting Spotify/YouTube URLs and raw `<iframe>` embed codes.\n- **Elevated Micro-Pill Toolbar**: 1-row glass floating toolbar with top-center positioning, 8px radius, tight card content hugging, and 100% setting persistence.\n- **Adaptive Light & Dark Mode**: Dynamic theme design tokens ensuring seamless visual adaptation in both Light and Dark modes.",
+      "url": "https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases",
+      "prerelease": false
+    },
     {
       "tagName": "v2.0.1-stabilization",
       "name": "PapeRuss 2.0 Stabilization",
