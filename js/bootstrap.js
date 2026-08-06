@@ -717,12 +717,8 @@ function parseMarkdownInline(text) {
     const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(url) : { valid: true, url: url, isExternal: true };
     const targetAttr = (res.isExternal || !res.url.startsWith('#')) ? ' target="_blank" rel="noopener noreferrer"' : '';
     const href = res.valid ? res.url : url;
-    let host = '';
-    try { host = new URL(href).hostname; } catch(_) {}
-    const faviconSrc = host ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32` : '';
-    const faviconHtml = faviconSrc ? `<img src="${esc(faviconSrc)}" class="inline-link-icon" alt="" onerror="this.style.display='none'">` : '';
     const renderedTitle = parseMarkdownInline(title);
-    linkSpans.push(`<a href="${esc(href)}" class="paperuss-inline-link"${targetAttr}>${faviconHtml}<span>${renderedTitle}</span></a>`);
+    linkSpans.push(`<a href="${esc(href)}"${targetAttr}>${renderedTitle}</a>`);
     return `\uE000L${idx}\uE000`;
   });
 

@@ -337,7 +337,7 @@
       displayMode: 'preview',
       title: title,
       description: urlStr,
-      thumbnail: null,
+      thumbnail: favicon,
       author: null
     };
   }
@@ -376,91 +376,45 @@
     } catch (_) {}
 
     const title = info.title ? esc(info.title) : `${providerName} ${contentType}`;
-    const desc = info.description ? `<p class="embed-fallback-desc">${esc(info.description)}</p>` : '';
+    const desc = info.description ? esc(info.description) : canonicalUrl;
     
     // Check if thumbnail is a favicon vs real article/video hero image
     const isFaviconUrl = info.thumbnail && info.thumbnail.includes('favicons?domain=');
     const faviconUrl = isFaviconUrl ? info.thumbnail : `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostName)}&sz=64`;
     
-    // Only render full hero banner if we have a REAL article/video hero image (NOT a favicon)
-    const heroThumb = (info.thumbnail && !isFaviconUrl) 
-      ? `<div class="embed-hero-wrap"><img src="${esc(info.thumbnail)}" alt="${title}" class="embed-fallback-thumb" onerror="this.parentElement.remove()"></div>` 
-      : '';
-
-    const descText = info.description ? String(info.description) : hostName;
-
-    // Mode 1: Compact Card Layout (Single tight row with left border-l-4 accent)
-    if (displayMode === 'compact') {
-      const displayHref = canonicalUrl || title;
-      return `<div class="paperuss-embed embed-mode-compact embed-width-${widthPreset}" ` +
-        `data-paperuss-embed="true" ` +
-        `data-provider="${provider}" ` +
-        `data-content-type="${contentType}" ` +
-        `data-canonical-url="${canonicalUrl}" ` +
-        `data-embed-url="${embedUrl}" ` +
-        `data-display-mode="compact" ` +
-        `data-width-preset="${widthPreset}" ` +
-        `data-preferred-height="${preferredHeight}" ` +
-        `contenteditable="false">` +
-        `<div class="compact-card-inner">` +
-        `<span class="compact-card-icon">` +
-        `<img src="${esc(faviconUrl)}" class="inline-link-icon" alt="" onerror="this.style.display='none'">` +
-        `</span>` +
-        `<a href="${canonicalUrl}" class="compact-card-label" target="_blank" rel="noopener noreferrer">${esc(displayHref)}</a>` +
-        `</div>` +
-        `</div>`;
+    // Render hero image or crisp placeholder banner matching user screenshot
+    let heroThumb = '';
+    if (info.thumbnail && !isFaviconUrl) {
+      heroThumb = `<div class="embed-hero-wrap"><img src="${esc(info.thumbnail)}" alt="${title}" class="embed-fallback-thumb" onerror="this.parentElement.className='embed-hero-wrap embed-hero-placeholder'; this.src='${faviconUrl}'; this.className='embed-placeholder-thumb';"></div>`;
+    } else {
+      heroThumb = `<div class="embed-hero-wrap embed-hero-placeholder"><img src="${faviconUrl}" alt="${title}" class="embed-placeholder-thumb"></div>`;
     }
 
-    // Mode 2: Rich Preview Layout (Bookmark flex row with avatar, title, description, & action badge)
-    if (displayMode === 'preview') {
-      return `<div class="paperuss-embed embed-mode-preview embed-width-${widthPreset}" ` +
-        `data-paperuss-embed="true" ` +
-        `data-provider="${provider}" ` +
-        `data-content-type="${contentType}" ` +
-        `data-canonical-url="${canonicalUrl}" ` +
-        `data-embed-url="${embedUrl}" ` +
-        `data-display-mode="preview" ` +
-        `data-width-preset="${widthPreset}" ` +
-        `data-preferred-height="${preferredHeight}" ` +
-        `contenteditable="false">` +
-        `<div class="rich-preview-inner">` +
-        `<div class="rich-preview-left">` +
-        `<span class="rich-preview-avatar">` +
-        `<img src="${esc(faviconUrl)}" class="inline-link-icon" alt="" onerror="this.style.display='none'">` +
-        `</span>` +
-        `<div class="rich-preview-text">` +
-        `<a href="${canonicalUrl}" class="rich-preview-title" target="_blank" rel="noopener noreferrer">${title}</a>` +
-        `<span class="rich-preview-desc">${esc(descText)}</span>` +
-        `</div>` +
-        `</div>` +
-        `<a href="${canonicalUrl}" class="rich-preview-action" target="_blank" rel="noopener noreferrer" title="Open external link">↗</a>` +
-        `</div>` +
-        `${heroThumb}` +
-        `</div>`;
-    }
-
-    // Mode 3: Interactive Embed Layout (Header bar with border-l-4 accent & frame body)
-    return `<div class="paperuss-embed embed-mode-interactive embed-width-${widthPreset}" ` +
+    // Canonical structure stored in HTML
+    return `<div class="paperuss-embed embed-mode-${displayMode} embed-width-${widthPreset}" ` +
       `data-paperuss-embed="true" ` +
       `data-provider="${provider}" ` +
       `data-content-type="${contentType}" ` +
       `data-canonical-url="${canonicalUrl}" ` +
       `data-embed-url="${embedUrl}" ` +
-      `data-display-mode="interactive" ` +
+      `data-display-mode="${displayMode}" ` +
       `data-width-preset="${widthPreset}" ` +
       `data-preferred-height="${preferredHeight}" ` +
       `contenteditable="false">` +
-      `<div class="interactive-embed-inner">` +
-      `<div class="interactive-embed-header">` +
-      `<div class="interactive-header-left">` +
-      `<span class="interactive-header-icon">` +
-      `<img src="${esc(faviconUrl)}" class="inline-link-icon" alt="" onerror="this.style.display='none'">` +
-      `</span>` +
-      `<span class="interactive-header-title">${title}</span>` +
+      `<div class="embed-canonical-card">` +
+      `<div class="embed-canonical-header">` +
+      `<div class="embed-provider-badge-wrap">` +
+      `<span class="embed-provider-badge">${hostName}</span>` +
       `</div>` +
-      `<a href="${canonicalUrl}" class="interactive-open-link" target="_blank" rel="noopener noreferrer">Open ↗</a>` +
+      `<a href="${canonicalUrl}" class="embed-canonical-link" target="_blank" rel="noopener noreferrer">${canonicalUrl}</a>` +
       `</div>` +
       `${heroThumb}` +
+      `<div class="embed-canonical-body">` +
+      `<div class="embed-canonical-text">` +
+      `<strong>${title}</strong>` +
+      `<p class="embed-fallback-desc">${desc}</p>` +
+      `</div>` +
+      `</div>` +
       `</div>` +
       `</div>`;
   }
@@ -654,6 +608,10 @@
         </button>
       </div>
     `;
+
+    setTimeout(() => {
+      if (typeof global.lucide?.createIcons === 'function') global.lucide.createIcons();
+    }, 0);
 
     // Event listeners
     bar.addEventListener('click', (e) => {
