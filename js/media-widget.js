@@ -311,6 +311,26 @@
     return String(str || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
   }
 
+  function handlePastePlay() {
+    const pasteInput = document.getElementById('musicHubPasteInput');
+    if (!pasteInput) return;
+    const val = pasteInput.value.trim();
+    if (!val) return;
+    let targetUrl = val;
+    // Check if raw iframe paste
+    const iframeMatch = val.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+    if (iframeMatch) targetUrl = iframeMatch[1];
+    
+    // If Spotify regular link, convert to embedUrl
+    if (global.LinkParser && global.LinkParser.parseUrl) {
+      const parsed = global.LinkParser.parseUrl(targetUrl);
+      if (parsed && parsed.embedUrl) targetUrl = parsed.embedUrl;
+    }
+
+    playPresetMusic(targetUrl, 'Media');
+    pasteInput.value = '';
+  }
+
   function setupHubEvents() {
     const hubBtn = document.getElementById('musicHubBtn');
     if (hubBtn) hubBtn.onclick = () => openMusicHubModal();
@@ -325,53 +345,51 @@
       };
     }
 
-    // Quick Paste Play Button inside Hub
     const pasteBtn = document.getElementById('musicHubPastePlayBtn');
-    const pasteInput = document.getElementById('musicHubPasteInput');
-    if (pasteBtn && pasteInput) {
-      pasteBtn.onclick = () => {
-        const val = pasteInput.value.trim();
-        if (!val) return;
-        let targetUrl = val;
-        // Check if raw iframe paste
-        const iframeMatch = val.match(/<iframe[^>]+src=["']([^"']+)["']/i);
-        if (iframeMatch) targetUrl = iframeMatch[1];
-        
-        // If Spotify regular link, convert to embedUrl
-        if (global.LinkParser && global.LinkParser.parseUrl) {
-          const parsed = global.LinkParser.parseUrl(targetUrl);
-          if (parsed && parsed.embedUrl) targetUrl = parsed.embedUrl;
-        }
-
-        playPresetMusic(targetUrl, 'Media');
-        pasteInput.value = '';
-      };
-    }
-
-    // Preset cards
-    document.querySelectorAll('.music-preset-card').forEach(btn => {
-      btn.onclick = () => {
-        const url = btn.getAttribute('data-preset-url');
-        if (url) playPresetMusic(url, 'Spotify Preset');
-      };
-    });
+    if (pasteBtn) pasteBtn.onclick = () => handlePastePlay();
   }
 
-  // Intercept leaf tab switches to dock active playing embeds automatically
-  const origFlush = global.flushActiveLeaf;
-  if (typeof origFlush === 'function') {
-    global.flushActiveLeaf = function (...args) {
-      checkAndDockActiveEmbed();
-      return origFlush.apply(this, args);
-    };
-  }
-
-  // Delegated global click listener for Music Player buttons
+  // Delegated global click listener for all Music Player buttons & modal actions
   document.addEventListener('click', (e) => {
+    // Open Hub
     const musicBtn = e.target.closest('#musicHubBtn, #sidebarMusicBtn, [data-action="open-music-hub"]');
     if (musicBtn) {
       e.preventDefault();
       openMusicHubModal();
+      return;
+    }
+
+    // Close Hub
+    const closeBtn = e.target.closest('#closeMusicHubBtn, [data-action="close-music-hub"]');
+    if (closeBtn) {
+      e.preventDefault();
+      closeMusicHubModal();
+      return;
+    }
+
+    // Quick Paste Play
+    const pasteBtn = e.target.closest('#musicHubPastePlayBtn');
+    if (pasteBtn) {
+      e.preventDefault();
+      handlePastePlay();
+      return;
+    }
+
+    // Ambient Preset Cards
+    const presetCard = e.target.closest('.music-preset-card');
+    if (presetCard) {
+      e.preventDefault();
+      const url = presetCard.getAttribute('data-preset-url');
+      if (url) playPresetMusic(url, 'Spotify Preset');
+      return;
+    }
+  });
+
+  // Support Enter key in Quick Paste input
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target && e.target.id === 'musicHubPasteInput') {
+      e.preventDefault();
+      handlePastePlay();
     }
   });
 
