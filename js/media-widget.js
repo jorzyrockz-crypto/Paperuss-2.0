@@ -1,229 +1,240 @@
 /**
  * js/media-widget.js
- * Persistent Draggable Floating Media Player Widget for PapeRuss 2.0.
- * Maintains continuous background audio/video playback (Spotify, YouTube, SoundCloud)
- * when switching notes, navigating leaf tabs, or viewing calendar/settings.
+ * Persistent Draggable Floating Background Media Player Widget for PapeRuss 2.0.
+ * Allows Spotify, YouTube, SoundCloud, and video embeds to continue playing uninterrupted
+ * when users switch notes, navigate tabs, or edit documents.
  */
 
-(function(global) {
+(function (global) {
   'use strict';
 
-  let activeEmbedIframe = null;
-  let activeMediaInfo = null;
-  let widgetContainer = null;
-  let isDocked = false;
+  let widgetEl = null;
+  let currentEmbedInfo = null;
+  let activeIframe = null;
+  let isDragging = false;
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
 
-  // Position memory
-  let widgetPosition = { left: null, top: null, right: 24, bottom: 24 };
-
-  function ensureWidgetContainer() {
-    if (widgetContainer && document.contains(widgetContainer)) return widgetContainer;
-
-    widgetContainer = document.createElement('div');
-    widgetContainer.id = 'paperussBottomMediaBar';
-    widgetContainer.className = 'paperuss-media-widget';
-    widgetContainer.setAttribute('contenteditable', 'false');
-    widgetContainer.style.display = 'none';
-
-    document.body.appendChild(widgetContainer);
-    initDragHandlers(widgetContainer);
-    return widgetContainer;
-  }
-
-  function initDragHandlers(el) {
-    let isDragging = false;
-    let startX = 0, startY = 0;
-    let initialLeft = 0, initialTop = 0;
-
-    function onPointerDown(e) {
-      const handle = e.target.closest('.media-widget-drag-handle, .media-widget-header');
-      if (!handle) return;
-
-      isDragging = true;
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
-      startX = clientX;
-      startY = clientY;
-
-      const rect = el.getBoundingClientRect();
-      initialLeft = rect.left;
-      initialTop = rect.top;
-
-      el.style.right = 'auto';
-      el.style.bottom = 'auto';
-      el.style.left = `${initialLeft}px`;
-      el.style.top = `${initialTop}px`;
-      el.classList.add('is-dragging');
-
-      document.addEventListener('mousemove', onPointerMove);
-      document.addEventListener('mouseup', onPointerUp);
-      document.addEventListener('touchmove', onPointerMove, { passive: false });
-      document.addEventListener('touchend', onPointerUp);
+  function initMediaWidget() {
+    if (document.getElementById('paperussBottomMediaBar')) {
+      widgetEl = document.getElementById('paperussBottomMediaBar');
+      return;
     }
 
-    function onPointerMove(e) {
+    widgetEl = document.createElement('div');
+    widgetEl.id = 'paperussBottomMediaBar';
+    widgetEl.className = 'paperuss-media-widget hidden';
+    widgetEl.setAttribute('role', 'region');
+    widgetEl.setAttribute('aria-label', 'Floating Media Player');
+
+    widgetEl.innerHTML = `
+      <div class="media-widget-drag-handle" title="Drag to move player">
+        <i data-lucide="grip-vertical" class="w-4 h-4 text-muted"></i>
+      </div>
+      <div class="media-widget-info">
+        <div class="media-widget-badge" id="mediaWidgetBadge">🎵 Media</div>
+        <div class="media-widget-text">
+          <strong id="mediaWidgetTitle">Background Playback</strong>
+          <span id="mediaWidgetDesc">Playing in background</span>
+        </div>
+      </div>
+      <div class="media-widget-controls">
+        <button type="button" class="media-widget-btn" id="mediaWidgetExpand" title="Fullscreen Lightbox">
+          <i data-lucide="maximize-2" class="w-4 h-4"></i>
+        </button>
+        <button type="button" class="media-widget-btn" id="mediaWidgetReturn" title="Return to Note Card">
+          <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+        </button>
+        <button type="button" class="media-widget-btn media-widget-btn-close" id="mediaWidgetClose" title="Stop & Close Player">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="media-widget-iframe-container" id="mediaWidgetIframeContainer"></div>
+    `;
+
+    document.body.appendChild(widgetEl);
+    setupDragEvents();
+    setupButtonEvents();
+
+    if (typeof global.lucide?.createIcons === 'function') {
+      global.lucide.createIcons();
+    }
+  }
+
+  function setupDragEvents() {
+    if (!widgetEl) return;
+    const handle = widgetEl.querySelector('.media-widget-drag-handle') || widgetEl;
+
+    const startDrag = (clientX, clientY) => {
+      isDragging = true;
+      const rect = widgetEl.getBoundingClientRect();
+      dragOffsetX = clientX - rect.left;
+      dragOffsetY = clientY - rect.top;
+      widgetEl.classList.add('is-dragging');
+    };
+
+    const moveDrag = (clientX, clientY) => {
       if (!isDragging) return;
-      if (e.cancelable) e.preventDefault();
+      let newLeft = clientX - dragOffsetX;
+      let newTop = clientY - dragOffsetY;
 
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
-      const dx = clientX - startX;
-      const dy = clientY - startY;
-
-      let newLeft = initialLeft + dx;
-      let newTop = initialTop + dy;
-
-      // Viewport edge collision safety
-      const maxLeft = window.innerWidth - el.offsetWidth - 12;
-      const maxTop = window.innerHeight - el.offsetHeight - 12;
-
+      // Viewport safety boundary check
+      const maxLeft = window.innerWidth - widgetEl.offsetWidth - 12;
+      const maxTop = window.innerHeight - widgetEl.offsetHeight - 12;
       newLeft = Math.max(12, Math.min(maxLeft, newLeft));
       newTop = Math.max(12, Math.min(maxTop, newTop));
 
-      el.style.left = `${newLeft}px`;
-      el.style.top = `${newTop}px`;
+      widgetEl.style.left = `${newLeft}px`;
+      widgetEl.style.top = `${newTop}px`;
+      widgetEl.style.bottom = 'auto';
+      widgetEl.style.right = 'auto';
+    };
 
-      widgetPosition.left = newLeft;
-      widgetPosition.top = newTop;
-    }
-
-    function onPointerUp() {
-      if (!isDragging) return;
-      isDragging = false;
-      el.classList.remove('is-dragging');
-
-      document.removeEventListener('mousemove', onPointerMove);
-      document.removeEventListener('mouseup', onPointerUp);
-      document.removeEventListener('touchmove', onPointerMove);
-      document.removeEventListener('touchend', onPointerUp);
-    }
-
-    el.addEventListener('mousedown', onPointerDown);
-    el.addEventListener('touchstart', onPointerDown, { passive: false });
-  }
-
-  /**
-   * Dock an active playing embed iframe into the floating widget.
-   */
-  function dockToFloatingWidget(embedEl) {
-    if (!embedEl) return;
-    const iframe = embedEl.querySelector('iframe');
-    if (!iframe) return;
-
-    const provider = embedEl.getAttribute('data-provider') || 'media';
-    const canonicalUrl = embedEl.getAttribute('data-canonical-url') || '';
-    const title = embedEl.querySelector('strong')?.textContent || `${provider.toUpperCase()} Background Play`;
-    const brandColor = embedEl.getAttribute('data-brand-color') || '#1ed760';
-
-    activeEmbedIframe = iframe;
-    activeMediaInfo = { provider, canonicalUrl, title, brandColor, parentEmbed: embedEl };
-
-    const widget = ensureWidgetContainer();
-    widget.setAttribute('data-provider', provider);
-    widget.style.setProperty('--brand-accent', brandColor);
-
-    // Apply stored drag position or default bottom-right
-    if (widgetPosition.left !== null && widgetPosition.top !== null) {
-      widget.style.right = 'auto';
-      widget.style.bottom = 'auto';
-      widget.style.left = `${widgetPosition.left}px`;
-      widget.style.top = `${widgetPosition.top}px`;
-    } else {
-      widget.style.left = 'auto';
-      widget.style.top = 'auto';
-      widget.style.right = '24px';
-      widget.style.bottom = '24px';
-    }
-
-    widget.innerHTML = `
-      <div class="media-widget-header">
-        <span class="media-widget-drag-handle" title="Drag to move widget">
-          <i data-lucide="grip-vertical" class="w-4 h-4"></i>
-        </span>
-        <span class="media-widget-badge">${provider.toUpperCase()}</span>
-        <span class="media-widget-title" title="${esc(title)}">${esc(title)}</span>
-        <div class="media-widget-actions">
-          <button type="button" class="media-widget-btn" id="mediaWidgetExpand" title="Fullscreen Lightbox">
-            <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
-          </button>
-          <a href="${esc(canonicalUrl)}" target="_blank" rel="noopener noreferrer" class="media-widget-btn" title="Open Source">
-            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
-          </a>
-          <button type="button" class="media-widget-btn media-widget-btn-danger" id="mediaWidgetClose" title="Close Background Player">
-            <i data-lucide="x" class="w-3.5 h-3.5"></i>
-          </button>
-        </div>
-      </div>
-      <div class="media-widget-body"></div>
-    `;
-
-    const bodyContainer = widget.querySelector('.media-widget-body');
-    // Move existing iframe without unmounting/reloading audio
-    bodyContainer.appendChild(iframe);
-
-    widget.style.display = 'flex';
-    isDocked = true;
-
-    if (typeof global.lucide?.createIcons === 'function') {
-      setTimeout(() => global.lucide.createIcons(), 0);
-    }
-
-    const closeBtn = widget.querySelector('#mediaWidgetClose');
-    if (closeBtn) closeBtn.onclick = () => closeFloatingWidget();
-
-    const expandBtn = widget.querySelector('#mediaWidgetExpand');
-    if (expandBtn) expandBtn.onclick = () => {
-      if (typeof global.EmbedTool?.openEmbedLightbox === 'function' && embedEl) {
-        global.EmbedTool.openEmbedLightbox(embedEl);
+    const stopDrag = () => {
+      if (isDragging) {
+        isDragging = false;
+        widgetEl.classList.remove('is-dragging');
       }
     };
+
+    // Mouse events
+    handle.addEventListener('mousedown', (e) => {
+      if (e.target.closest('button')) return;
+      startDrag(e.clientX, e.clientY);
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (isDragging) moveDrag(e.clientX, e.clientY);
+    });
+
+    document.addEventListener('mouseup', stopDrag);
+
+    // Touch events
+    handle.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1 && !e.target.closest('button')) {
+        startDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+      if (isDragging && e.touches.length === 1) {
+        moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: true });
+
+    document.addEventListener('touchend', stopDrag);
   }
 
-  function closeFloatingWidget() {
-    if (!widgetContainer) return;
-    widgetContainer.style.display = 'none';
-    widgetContainer.innerHTML = '';
-    isDocked = false;
-    activeEmbedIframe = null;
-    activeMediaInfo = null;
-  }
+  function setupButtonEvents() {
+    if (!widgetEl) return;
 
-  function esc(str) {
-    if (!str) return '';
-    return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
-  }
+    const closeBtn = widgetEl.querySelector('#mediaWidgetClose');
+    if (closeBtn) {
+      closeBtn.onclick = () => stopPlayback();
+    }
 
-  // Intercept Leaf / Note Tab switching to keep music playing in floating widget
-  function setupLeafSwitchListener() {
-    const originalSwitch = window.switchLeafTab;
-    if (typeof originalSwitch === 'function' && !window._mediaWidgetPatched) {
-      window._mediaWidgetPatched = true;
-      window.switchLeafTab = function(leafId) {
-        const activeEditor = document.getElementById('noteBody');
-        if (activeEditor) {
-          const playingEmbed = activeEditor.querySelector('.paperuss-embed[data-paperuss-embed="true"] iframe');
-          if (playingEmbed) {
-            const embedParent = playingEmbed.closest('.paperuss-embed');
-            if (embedParent) {
-              dockToFloatingWidget(embedParent);
-            }
-          }
+    const expandBtn = widgetEl.querySelector('#mediaWidgetExpand');
+    if (expandBtn) {
+      expandBtn.onclick = () => {
+        if (currentEmbedInfo && global.openEmbedLightbox) {
+          const tempDiv = document.createElement('div');
+          tempDiv.setAttribute('data-canonical-url', currentEmbedInfo.canonicalUrl || '');
+          tempDiv.setAttribute('data-embed-url', currentEmbedInfo.embedUrl || '');
+          global.openEmbedLightbox(tempDiv);
         }
-        return originalSwitch.apply(this, arguments);
+      };
+    }
+
+    const returnBtn = widgetEl.querySelector('#mediaWidgetReturn');
+    if (returnBtn) {
+      returnBtn.onclick = () => {
+        if (currentEmbedInfo && currentEmbedInfo.canonicalUrl) {
+          window.open(currentEmbedInfo.canonicalUrl, '_blank', 'noopener,noreferrer');
+        }
       };
     }
   }
 
-  document.addEventListener('DOMContentLoaded', setupLeafSwitchListener);
-  setTimeout(setupLeafSwitchListener, 1000);
+  /**
+   * Docks an active playing embed iframe into the persistent floating widget bar.
+   */
+  function dockActiveEmbed(embedElement) {
+    if (!embedElement) return;
+    initMediaWidget();
 
+    const provider = embedElement.getAttribute('data-provider') || 'web';
+    const canonicalUrl = embedElement.getAttribute('data-canonical-url') || '';
+    const embedUrl = embedElement.getAttribute('data-embed-url') || '';
+    const title = embedElement.querySelector('strong')?.textContent || `${provider.toUpperCase()} Player`;
+    const brandColor = embedElement.getAttribute('data-brand-color') || '#1ed760';
+
+    currentEmbedInfo = { provider, canonicalUrl, embedUrl, title, brandColor };
+
+    const iframe = embedElement.querySelector('iframe');
+    const container = widgetEl.querySelector('#mediaWidgetIframeContainer');
+    
+    if (iframe && container) {
+      activeIframe = iframe;
+      container.appendChild(iframe); // Migrates DOM node without unmounting or pausing audio!
+      iframe.style.height = '140px';
+      iframe.style.borderRadius = '12px';
+    }
+
+    const badge = widgetEl.querySelector('#mediaWidgetBadge');
+    if (badge) {
+      badge.textContent = provider.toUpperCase();
+      badge.style.background = `${brandColor}25`;
+      badge.style.color = brandColor;
+      badge.style.border = `1px solid ${brandColor}40`;
+    }
+
+    const titleEl = widgetEl.querySelector('#mediaWidgetTitle');
+    if (titleEl) titleEl.textContent = title;
+
+    const descEl = widgetEl.querySelector('#mediaWidgetDesc');
+    if (descEl) descEl.textContent = canonicalUrl || 'Continuous Background Playback';
+
+    widgetEl.classList.remove('hidden');
+    if (typeof global.toast === 'function') {
+      global.toast(`Background Play: ${provider.toUpperCase()}`);
+    }
+  }
+
+  function stopPlayback() {
+    if (widgetEl) {
+      widgetEl.classList.add('hidden');
+      const container = widgetEl.querySelector('#mediaWidgetIframeContainer');
+      if (container) container.innerHTML = '';
+    }
+    activeIframe = null;
+    currentEmbedInfo = null;
+  }
+
+  // Intercept leaf tab switches to dock active playing embeds automatically
+  const origFlush = global.flushActiveLeaf;
+  if (typeof origFlush === 'function') {
+    global.flushActiveLeaf = function (...args) {
+      const activeEd = document.getElementById('noteBody');
+      if (activeEd) {
+        const playingEmbed = activeEd.querySelector('.paperuss-embed[data-display-mode="interactive"] iframe');
+        if (playingEmbed) {
+          const parentCard = playingEmbed.closest('.paperuss-embed');
+          if (parentCard && !widgetEl?.contains(playingEmbed)) {
+            dockActiveEmbed(parentCard);
+          }
+        }
+      }
+      return origFlush.apply(this, args);
+    };
+  }
+
+  // Export module APIs
   global.PaperussMediaWidget = Object.freeze({
-    ensureWidgetContainer,
-    dockToFloatingWidget,
-    closeFloatingWidget,
-    isDocked: () => isDocked
+    dockActiveEmbed,
+    stopPlayback,
+    initMediaWidget
   });
+
+  document.addEventListener('DOMContentLoaded', initMediaWidget);
 
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : global));

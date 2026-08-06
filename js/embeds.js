@@ -683,7 +683,60 @@
   }
 
   /**
-   * Builds the transient Embed Management overlay toolbar.
+   * Helper to re-serialize canonical embed HTML on settings change for 100% setup persistence.
+   */
+  function updateEmbedSetup(embed, newAttrs = {}) {
+    if (!embed) return;
+    const provider = newAttrs.provider || embed.getAttribute('data-provider') || 'web';
+    const canonicalUrl = newAttrs.canonicalUrl || embed.getAttribute('data-canonical-url') || '';
+    const embedUrl = newAttrs.embedUrl || embed.getAttribute('data-embed-url') || '';
+    const contentType = newAttrs.contentType || embed.getAttribute('data-content-type') || 'embed';
+    const displayMode = newAttrs.displayMode || embed.getAttribute('data-display-mode') || 'interactive';
+    const widthPreset = newAttrs.widthPreset || embed.getAttribute('data-width-preset') || 'medium';
+    const aspectRatio = newAttrs.aspectRatio || embed.getAttribute('data-aspect-ratio') || '16-9';
+    const brandColor = newAttrs.brandColor || embed.getAttribute('data-brand-color') || '';
+    const preferredHeight = newAttrs.preferredHeight || embed.getAttribute('data-preferred-height') || '400';
+    
+    let title = newAttrs.title;
+    if (!title) {
+      title = embed.querySelector('.embed-canonical-text strong, .embed-compact-title')?.textContent || provider;
+    }
+    let description = newAttrs.description;
+    if (!description) {
+      description = embed.querySelector('.embed-fallback-desc')?.textContent || canonicalUrl;
+    }
+    const thumbnail = embed.querySelector('.embed-fallback-thumb, .embed-favicon-icon')?.src || null;
+
+    const info = {
+      provider,
+      providerName: embed.getAttribute('data-provider-name') || provider,
+      contentType,
+      canonicalUrl,
+      embedUrl,
+      displayMode,
+      widthPreset,
+      aspectRatio,
+      brandColor,
+      preferredHeight,
+      title,
+      description,
+      thumbnail
+    };
+
+    const newHtml = buildCanonicalEmbedHtml(info);
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = newHtml;
+    const newEmbed = tempDiv.firstElementChild;
+    if (newEmbed && embed.parentElement) {
+      embed.replaceWith(newEmbed);
+      hydrateEmbeds(newEmbed.parentElement);
+      if (typeof global.handleBodyInput === 'function') global.handleBodyInput();
+      if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
+    }
+  }
+
+  /**
+   * Builds the transient Embed Management micro-pill overlay toolbar with Lucide icons.
    */
   function buildEmbedEditorToolbar(embed) {
     const bar = document.createElement('div');
@@ -696,51 +749,47 @@
     const aspectRatio = embed.getAttribute('data-aspect-ratio') || '16-9';
 
     bar.innerHTML = `
-      <div class="embed-tb-segment" role="group" aria-label="Float Alignment">
-        <button type="button" class="embed-tb-icon-btn ${widthPreset === 'medium-left' || widthPreset === 'small-left' ? 'is-active' : ''}" data-action="set-align-left" title="Float Left">
+      <div class="embed-tb-segment">
+        <button type="button" class="embed-tb-btn ${widthPreset.includes('left') ? 'active' : ''}" data-action="set-width" data-val="${widthPreset.startsWith('small') ? 'small-left' : 'medium-left'}" title="Float Left">
           <i data-lucide="align-left" class="w-3.5 h-3.5"></i>
         </button>
-        <button type="button" class="embed-tb-icon-btn ${widthPreset === 'medium' || widthPreset === 'small' || widthPreset === 'large' ? 'is-active' : ''}" data-action="set-align-center" title="Center Alignment">
+        <button type="button" class="embed-tb-btn ${(!widthPreset.includes('left') && !widthPreset.includes('right')) ? 'active' : ''}" data-action="set-width" data-val="medium" title="Center Alignment">
           <i data-lucide="align-center" class="w-3.5 h-3.5"></i>
         </button>
-        <button type="button" class="embed-tb-icon-btn ${widthPreset === 'medium-right' || widthPreset === 'small-right' ? 'is-active' : ''}" data-action="set-align-right" title="Float Right">
+        <button type="button" class="embed-tb-btn ${widthPreset.includes('right') ? 'active' : ''}" data-action="set-width" data-val="${widthPreset.startsWith('small') ? 'small-right' : 'medium-right'}" title="Float Right">
           <i data-lucide="align-right" class="w-3.5 h-3.5"></i>
         </button>
       </div>
-
-      <span class="embed-tb-divider"></span>
-
-      <div class="embed-tb-segment" role="group" aria-label="Display Mode">
-        <button type="button" class="embed-tb-icon-btn ${displayMode === 'compact' ? 'is-active' : ''}" data-action="set-mode-compact" title="Compact Card">
+      <div class="embed-tb-segment">
+        <button type="button" class="embed-tb-btn ${displayMode === 'compact' ? 'active' : ''}" data-action="set-mode" data-val="compact" title="1-Row Compact Card">
           <i data-lucide="align-justify" class="w-3.5 h-3.5"></i>
         </button>
-        <button type="button" class="embed-tb-icon-btn ${displayMode === 'preview' ? 'is-active' : ''}" data-action="set-mode-preview" title="Rich Preview">
+        <button type="button" class="embed-tb-btn ${displayMode === 'preview' ? 'active' : ''}" data-action="set-mode" data-val="preview" title="Rich Preview Card">
           <i data-lucide="image" class="w-3.5 h-3.5"></i>
         </button>
-        <button type="button" class="embed-tb-icon-btn ${displayMode === 'interactive' ? 'is-active' : ''}" data-action="set-mode-interactive" title="Interactive Embed">
+        <button type="button" class="embed-tb-btn ${displayMode === 'interactive' ? 'active' : ''}" data-action="set-mode" data-val="interactive" title="Live Interactive Embed">
           <i data-lucide="tv" class="w-3.5 h-3.5"></i>
         </button>
       </div>
-
-      <span class="embed-tb-divider"></span>
-
-      <div class="embed-tb-group">
-        <select class="embed-tb-select" data-action="aspect" title="Aspect Ratio" aria-label="Aspect Ratio">
+      <div class="embed-tb-segment">
+        <select class="embed-tb-select" data-action="set-aspect" title="Aspect Ratio">
           <option value="16-9" ${aspectRatio === '16-9' ? 'selected' : ''}>16:9</option>
           <option value="4-3" ${aspectRatio === '4-3' ? 'selected' : ''}>4:3</option>
           <option value="1-1" ${aspectRatio === '1-1' ? 'selected' : ''}>1:1</option>
           <option value="9-16" ${aspectRatio === '9-16' ? 'selected' : ''}>9:16</option>
         </select>
-        <button type="button" class="embed-tb-icon-btn" data-action="expand" title="Fullscreen View">
+      </div>
+      <div class="embed-tb-segment">
+        <button type="button" class="embed-tb-btn" data-action="expand" title="Fullscreen Lightbox">
           <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
         </button>
-        <button type="button" class="embed-tb-icon-btn" data-action="copy" title="Copy Link">
+        <button type="button" class="embed-tb-btn" data-action="copy" title="Copy Link">
           <i data-lucide="copy" class="w-3.5 h-3.5"></i>
         </button>
-        <a href="${esc(canonicalUrl)}" target="_blank" rel="noopener noreferrer" class="embed-tb-icon-btn" title="Open Source">
+        <a href="${esc(canonicalUrl)}" target="_blank" rel="noopener noreferrer" class="embed-tb-btn" title="Open Source Link">
           <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
         </a>
-        <button type="button" class="embed-tb-icon-btn embed-tb-btn-danger" data-action="remove" title="Remove Embed">
+        <button type="button" class="embed-tb-btn embed-tb-btn-danger" data-action="remove" title="Remove Embed">
           <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
         </button>
       </div>
@@ -750,12 +799,14 @@
       if (typeof global.lucide?.createIcons === 'function') global.lucide.createIcons();
     }, 0);
 
-    // Event listeners
+    // Event listeners for micro-pill buttons
     bar.addEventListener('click', (e) => {
       e.stopPropagation();
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
       const act = btn.getAttribute('data-action');
+      const val = btn.getAttribute('data-val');
+
       if (act === 'remove') {
         embed.remove();
         if (typeof global.toast === 'function') global.toast('Embed removed');
@@ -767,56 +818,22 @@
         }
       } else if (act === 'expand') {
         openEmbedLightbox(embed);
-      } else if (act === 'set-align-left') {
-        embed.setAttribute('data-width-preset', 'medium-left');
-        embed.className = `paperuss-embed embed-mode-${embed.getAttribute('data-display-mode') || 'interactive'} embed-width-medium-left embed-aspect-${embed.getAttribute('data-aspect-ratio') || '16-9'}`;
-        if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
-      } else if (act === 'set-align-center') {
-        embed.setAttribute('data-width-preset', 'medium');
-        embed.className = `paperuss-embed embed-mode-${embed.getAttribute('data-display-mode') || 'interactive'} embed-width-medium embed-aspect-${embed.getAttribute('data-aspect-ratio') || '16-9'}`;
-        if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
-      } else if (act === 'set-align-right') {
-        embed.setAttribute('data-width-preset', 'medium-right');
-        embed.className = `paperuss-embed embed-mode-${embed.getAttribute('data-display-mode') || 'interactive'} embed-width-medium-right embed-aspect-${embed.getAttribute('data-aspect-ratio') || '16-9'}`;
-        if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
-      } else if (act === 'set-mode-compact' || act === 'set-mode-preview' || act === 'set-mode-interactive') {
-        const newMode = act.replace('set-mode-', '');
-        embed.setAttribute('data-display-mode', newMode);
-        embed._needsRehydration = true;
-        embed.removeAttribute('data-hydrated');
-        hydrateEmbeds(embed.parentElement || document.getElementById('noteBody'));
-        if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
+      } else if (act === 'set-mode') {
+        updateEmbedSetup(embed, { displayMode: val });
+      } else if (act === 'set-width') {
+        updateEmbedSetup(embed, { widthPreset: val });
+      } else if (act === 'edit-url') {
+        openEmbedModal({
+          initialUrl: canonicalUrl,
+          targetEmbed: embed
+        });
       }
     });
 
-    const modeSel = bar.querySelector('select[data-action="mode"]');
-    if (modeSel) {
-      modeSel.addEventListener('change', (e) => {
-        embed.setAttribute('data-display-mode', e.target.value);
-        embed._needsRehydration = true;
-        embed.removeAttribute('data-hydrated');
-        hydrateEmbeds(embed.parentElement || document.getElementById('noteBody'));
-        if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
-      });
-    }
-
-    const widthSel = bar.querySelector('select[data-action="width"]');
-    if (widthSel) {
-      widthSel.addEventListener('change', (e) => {
-        embed.setAttribute('data-width-preset', e.target.value);
-        embed._needsRehydration = true;
-        embed.removeAttribute('data-hydrated');
-        hydrateEmbeds(embed.parentElement || document.getElementById('noteBody'));
-        if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
-      });
-    }
-
-    const aspectSel = bar.querySelector('select[data-action="aspect"]');
+    const aspectSel = bar.querySelector('select[data-action="set-aspect"]');
     if (aspectSel) {
       aspectSel.addEventListener('change', (e) => {
-        embed.setAttribute('data-aspect-ratio', e.target.value);
-        embed.className = `paperuss-embed embed-mode-${embed.getAttribute('data-display-mode') || 'interactive'} embed-width-${embed.getAttribute('data-width-preset') || 'medium'} embed-aspect-${e.target.value}`;
-        if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
+        updateEmbedSetup(embed, { aspectRatio: e.target.value });
       });
     }
 
