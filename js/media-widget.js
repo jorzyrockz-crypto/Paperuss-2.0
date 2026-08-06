@@ -31,7 +31,7 @@
       <div class="media-widget-header">
         <div class="media-widget-header-left">
           <div class="media-widget-drag-handle" title="Drag to move player">
-            <i data-lucide="grip-vertical" class="w-3.5 h-3.5 text-muted"></i>
+            <i data-lucide="grip-vertical" class="w-4 h-4 text-emerald-400"></i>
           </div>
           <div class="media-widget-badge" id="mediaWidgetBadge">SPOTIFY</div>
         </div>
@@ -126,19 +126,23 @@
     document.addEventListener('touchend', stopDrag);
   }
 
+  function toggleMinimizeWidget(forceState) {
+    if (!widgetEl) return;
+    const shouldMin = forceState !== undefined ? forceState : !widgetEl.classList.contains('is-minimized');
+    widgetEl.classList.toggle('is-minimized', shouldMin);
+    const minBtn = widgetEl.querySelector('#mediaWidgetMinimize');
+    if (minBtn) {
+      minBtn.innerHTML = `<i data-lucide="${shouldMin ? 'chevron-up' : 'minus'}" class="w-3.5 h-3.5"></i>`;
+      if (typeof global.lucide?.createIcons === 'function') global.lucide.createIcons();
+    }
+  }
+
   function setupButtonEvents() {
     if (!widgetEl) return;
 
     const minBtn = widgetEl.querySelector('#mediaWidgetMinimize');
     if (minBtn) {
-      minBtn.onclick = () => {
-        const isMin = widgetEl.classList.toggle('is-minimized');
-        const icon = minBtn.querySelector('[data-lucide]');
-        if (icon) {
-          icon.setAttribute('data-lucide', isMin ? 'chevron-up' : 'minus');
-          if (typeof global.lucide?.createIcons === 'function') global.lucide.createIcons();
-        }
-      };
+      minBtn.onclick = () => toggleMinimizeWidget();
     }
 
     const closeBtn = widgetEl.querySelector('#mediaWidgetClose');
@@ -169,7 +173,7 @@
   }
 
   /**
-   * Scans noteBody for active playing media iframes and docks them into the floating widget.
+   * Scans noteBody for active playing media iframes and docks them into the persistent floating widget bar.
    */
   function checkAndDockActiveEmbed() {
     initMediaWidget();
@@ -195,7 +199,7 @@
 
     const provider = (embedElement && embedElement.getAttribute('data-provider')) || 'media';
     const canonicalUrl = (embedElement && embedElement.getAttribute('data-canonical-url')) || '';
-    const embedUrl = (embedElement && embedElement.getAttribute('data-embed-url')) || '';
+    let embedUrl = (embedElement && embedElement.getAttribute('data-embed-url')) || '';
     const title = (embedElement && embedElement.querySelector('strong')?.textContent) || `${provider.toUpperCase()} Player`;
     const brandColor = (embedElement && embedElement.getAttribute('data-brand-color')) || '#1ed760';
 
@@ -206,7 +210,10 @@
     
     if (iframe && container) {
       activeIframe = iframe;
-      container.appendChild(iframe); // Migrates DOM node without unmounting or pausing audio!
+      if (iframe.parentElement !== container) {
+        container.innerHTML = '';
+        container.appendChild(iframe);
+      }
       iframe.style.height = '80px';
       iframe.style.borderRadius = '10px';
     }
@@ -219,9 +226,33 @@
       badge.style.border = `1px solid ${brandColor}40`;
     }
 
-    widgetEl.classList.remove('hidden');
+    // INSTANT WIDGET EXPANSION & UN-MINIMIZE ON PLAYLIST PLAY
+    widgetEl.classList.remove('hidden', 'is-minimized');
+    widgetEl.style.opacity = '1';
+
+    // Show pulsing green status dot on bottom bar button
+    const dot = document.getElementById('musicHubDot');
+    if (dot) dot.classList.remove('hidden');
+
     if (typeof global.toast === 'function') {
       global.toast(`Background Play: ${provider.toUpperCase()}`);
+    }
+  }
+
+  function stopPlayback() {
+    if (!widgetEl) return;
+    const container = widgetEl.querySelector('#mediaWidgetIframeContainer');
+    if (container) container.innerHTML = '';
+    activeIframe = null;
+    currentEmbedInfo = null;
+    widgetEl.classList.add('hidden');
+    
+    // Hide pulsing green dot
+    const dot = document.getElementById('musicHubDot');
+    if (dot) dot.classList.add('hidden');
+
+    if (typeof global.toast === 'function') {
+      global.toast('Playback Stopped');
     }
   }
 
@@ -230,6 +261,12 @@
     const overlay = document.getElementById('musicHubModalOverlay');
     if (!overlay) return;
     overlay.classList.remove('hidden');
+    
+    // If widget is minimized, toggle expansion when clicking bottom bar button
+    if (widgetEl && widgetEl.classList.contains('is-minimized')) {
+      toggleMinimizeWidget(false);
+    }
+
     scanVaultForMusicEmbeds();
   }
 
@@ -240,15 +277,22 @@
 
   function playPresetMusic(embedUrl, providerName = 'Spotify') {
     initMediaWidget();
+    
+    // Ensure autoplay parameter is appended if missing
+    let targetUrl = embedUrl;
+    if (targetUrl && !targetUrl.includes('autoplay=1')) {
+      targetUrl += (targetUrl.includes('?') ? '&' : '?') + 'autoplay=1';
+    }
+
     const tempWrap = document.createElement('div');
     tempWrap.setAttribute('data-provider', providerName.toLowerCase());
-    tempWrap.setAttribute('data-canonical-url', embedUrl);
-    tempWrap.setAttribute('data-embed-url', embedUrl);
+    tempWrap.setAttribute('data-canonical-url', targetUrl);
+    tempWrap.setAttribute('data-embed-url', targetUrl);
     tempWrap.setAttribute('data-brand-color', '#1ed760');
     tempWrap.innerHTML = `<strong>${providerName} Stream</strong>`;
 
     const iframe = document.createElement('iframe');
-    iframe.src = embedUrl;
+    iframe.src = targetUrl;
     iframe.allow = 'autoplay; clipboard-write; encrypted-media; picture-in-picture; background-play';
     iframe.style.border = 'none';
     iframe.style.width = '100%';
