@@ -696,44 +696,51 @@
     const aspectRatio = embed.getAttribute('data-aspect-ratio') || '16-9';
 
     bar.innerHTML = `
-      <div class="embed-tb-group">
-        <button type="button" class="embed-tb-btn" data-action="edit-url" title="Edit URL">Edit URL</button>
-        <select class="embed-tb-select" data-action="mode" title="Display Mode" aria-label="Display Mode">
-          <option value="compact" ${displayMode === 'compact' ? 'selected' : ''}>Compact</option>
-          <option value="preview" ${displayMode === 'preview' ? 'selected' : ''}>Preview</option>
-          <option value="interactive" ${displayMode === 'interactive' ? 'selected' : ''}>Interactive</option>
-        </select>
-        <select class="embed-tb-select" data-action="width" title="Layout & Float Alignment" aria-label="Width Preset">
-          <option value="small" ${widthPreset === 'small' ? 'selected' : ''}>Small (Center)</option>
-          <option value="small-left" ${widthPreset === 'small-left' ? 'selected' : ''}>Small (Float Left)</option>
-          <option value="small-right" ${widthPreset === 'small-right' ? 'selected' : ''}>Small (Float Right)</option>
-          <option value="medium" ${widthPreset === 'medium' ? 'selected' : ''}>Medium (Center)</option>
-          <option value="medium-left" ${widthPreset === 'medium-left' ? 'selected' : ''}>Medium (Float Left)</option>
-          <option value="medium-right" ${widthPreset === 'medium-right' ? 'selected' : ''}>Medium (Float Right)</option>
-          <option value="large" ${widthPreset === 'large' ? 'selected' : ''}>Large</option>
-          <option value="full" ${widthPreset === 'full' ? 'selected' : ''}>Full Width</option>
-        </select>
-        <select class="embed-tb-select" data-action="aspect" title="Aspect Ratio" aria-label="Aspect Ratio">
-          <option value="16-9" ${aspectRatio === '16-9' ? 'selected' : ''}>16:9 (Wide)</option>
-          <option value="4-3" ${aspectRatio === '4-3' ? 'selected' : ''}>4:3 (Std)</option>
-          <option value="1-1" ${aspectRatio === '1-1' ? 'selected' : ''}>1:1 (Square)</option>
-          <option value="9-16" ${aspectRatio === '9-16' ? 'selected' : ''}>9:16 (Vertical)</option>
-        </select>
+      <div class="embed-tb-segment" role="group" aria-label="Float Alignment">
+        <button type="button" class="embed-tb-icon-btn ${widthPreset === 'medium-left' || widthPreset === 'small-left' ? 'is-active' : ''}" data-action="set-align-left" title="Float Left">
+          <i data-lucide="align-left" class="w-3.5 h-3.5"></i>
+        </button>
+        <button type="button" class="embed-tb-icon-btn ${widthPreset === 'medium' || widthPreset === 'small' || widthPreset === 'large' ? 'is-active' : ''}" data-action="set-align-center" title="Center Alignment">
+          <i data-lucide="align-center" class="w-3.5 h-3.5"></i>
+        </button>
+        <button type="button" class="embed-tb-icon-btn ${widthPreset === 'medium-right' || widthPreset === 'small-right' ? 'is-active' : ''}" data-action="set-align-right" title="Float Right">
+          <i data-lucide="align-right" class="w-3.5 h-3.5"></i>
+        </button>
       </div>
+
+      <span class="embed-tb-divider"></span>
+
+      <div class="embed-tb-segment" role="group" aria-label="Display Mode">
+        <button type="button" class="embed-tb-icon-btn ${displayMode === 'compact' ? 'is-active' : ''}" data-action="set-mode-compact" title="Compact Card">
+          <i data-lucide="align-justify" class="w-3.5 h-3.5"></i>
+        </button>
+        <button type="button" class="embed-tb-icon-btn ${displayMode === 'preview' ? 'is-active' : ''}" data-action="set-mode-preview" title="Rich Preview">
+          <i data-lucide="image" class="w-3.5 h-3.5"></i>
+        </button>
+        <button type="button" class="embed-tb-icon-btn ${displayMode === 'interactive' ? 'is-active' : ''}" data-action="set-mode-interactive" title="Interactive Embed">
+          <i data-lucide="tv" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+
+      <span class="embed-tb-divider"></span>
+
       <div class="embed-tb-group">
-        <button type="button" class="embed-tb-btn" data-action="expand" title="Fullscreen View">
+        <select class="embed-tb-select" data-action="aspect" title="Aspect Ratio" aria-label="Aspect Ratio">
+          <option value="16-9" ${aspectRatio === '16-9' ? 'selected' : ''}>16:9</option>
+          <option value="4-3" ${aspectRatio === '4-3' ? 'selected' : ''}>4:3</option>
+          <option value="1-1" ${aspectRatio === '1-1' ? 'selected' : ''}>1:1</option>
+          <option value="9-16" ${aspectRatio === '9-16' ? 'selected' : ''}>9:16</option>
+        </select>
+        <button type="button" class="embed-tb-icon-btn" data-action="expand" title="Fullscreen View">
           <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
         </button>
-        <button type="button" class="embed-tb-btn" data-action="refresh" title="Refresh Metadata">
-          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-        </button>
-        <button type="button" class="embed-tb-btn" data-action="copy" title="Copy Link">
+        <button type="button" class="embed-tb-icon-btn" data-action="copy" title="Copy Link">
           <i data-lucide="copy" class="w-3.5 h-3.5"></i>
         </button>
-        <a href="${esc(canonicalUrl)}" target="_blank" rel="noopener noreferrer" class="embed-tb-btn" title="Open Source">
+        <a href="${esc(canonicalUrl)}" target="_blank" rel="noopener noreferrer" class="embed-tb-icon-btn" title="Open Source">
           <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
         </a>
-        <button type="button" class="embed-tb-btn embed-tb-btn-danger" data-action="remove" title="Remove Embed">
+        <button type="button" class="embed-tb-icon-btn embed-tb-btn-danger" data-action="remove" title="Remove Embed">
           <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
         </button>
       </div>
@@ -758,18 +765,27 @@
           navigator.clipboard.writeText(canonicalUrl);
           if (typeof global.toast === 'function') global.toast('Link copied to clipboard');
         }
-      } else if (act === 'refresh') {
+      } else if (act === 'expand') {
+        openEmbedLightbox(embed);
+      } else if (act === 'set-align-left') {
+        embed.setAttribute('data-width-preset', 'medium-left');
+        embed.className = `paperuss-embed embed-mode-${embed.getAttribute('data-display-mode') || 'interactive'} embed-width-medium-left embed-aspect-${embed.getAttribute('data-aspect-ratio') || '16-9'}`;
+        if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
+      } else if (act === 'set-align-center') {
+        embed.setAttribute('data-width-preset', 'medium');
+        embed.className = `paperuss-embed embed-mode-${embed.getAttribute('data-display-mode') || 'interactive'} embed-width-medium embed-aspect-${embed.getAttribute('data-aspect-ratio') || '16-9'}`;
+        if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
+      } else if (act === 'set-align-right') {
+        embed.setAttribute('data-width-preset', 'medium-right');
+        embed.className = `paperuss-embed embed-mode-${embed.getAttribute('data-display-mode') || 'interactive'} embed-width-medium-right embed-aspect-${embed.getAttribute('data-aspect-ratio') || '16-9'}`;
+        if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
+      } else if (act === 'set-mode-compact' || act === 'set-mode-preview' || act === 'set-mode-interactive') {
+        const newMode = act.replace('set-mode-', '');
+        embed.setAttribute('data-display-mode', newMode);
         embed._needsRehydration = true;
         embed.removeAttribute('data-hydrated');
         hydrateEmbeds(embed.parentElement || document.getElementById('noteBody'));
-        if (typeof global.toast === 'function') global.toast('Embed refreshed');
-      } else if (act === 'expand') {
-        openEmbedLightbox(embed);
-      } else if (act === 'edit-url') {
-        openEmbedModal({
-          initialUrl: canonicalUrl,
-          targetEmbed: embed
-        });
+        if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
       }
     });
 
