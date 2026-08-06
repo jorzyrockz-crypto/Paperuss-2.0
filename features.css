@@ -1873,18 +1873,37 @@ a.paperuss-inline-link {
   padding: 2px 7px;
   border-radius: 6px;
   font-weight: 500;
-  text-decoration: underline;
+  text-decoration: none;
   transition: all 0.15s ease;
   display: inline;
   vertical-align: baseline;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
+
+/* Preserve inner code font, bold, italics, or custom formatting */
+.note-editor a *,
+#noteBody a * {
+  color: inherit;
+  font-family: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+}
+
+.note-editor a code,
+#noteBody a code {
+  background: transparent;
+  padding: 0;
+  font-family: var(--font-mono, monospace);
+}
+
 .note-editor a:hover,
 #noteBody a:hover,
 a.paperuss-inline-link:hover {
   background: var(--accent);
   color: #ffffff;
   border-color: var(--accent-emphasis);
-  text-decoration: underline;
+  text-decoration: none;
 }
 
 /* ============ EMBED EDITOR OVERLAY TOOLBAR ============ */
