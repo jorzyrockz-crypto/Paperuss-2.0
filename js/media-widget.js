@@ -214,7 +214,8 @@
         container.innerHTML = '';
         container.appendChild(iframe);
       }
-      iframe.style.height = '152px';
+      const targetHeight = embedUrl.includes('/playlist/') ? '352px' : '152px';
+      iframe.style.height = targetHeight;
       iframe.style.borderRadius = '10px';
       iframe.setAttribute('scrolling', 'no');
     }
@@ -290,7 +291,8 @@
     iframe.allow = 'autoplay; clipboard-write; encrypted-media; picture-in-picture; background-play';
     iframe.style.border = 'none';
     iframe.style.width = '100%';
-    iframe.style.height = '152px';
+    const targetHeight = targetUrl.includes('/playlist/') ? '352px' : '152px';
+    iframe.style.height = targetHeight;
     iframe.setAttribute('scrolling', 'no');
     tempWrap.appendChild(iframe);
 
