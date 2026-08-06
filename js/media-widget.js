@@ -225,14 +225,136 @@
     }
   }
 
-  function stopPlayback() {
-    if (widgetEl) {
-      widgetEl.classList.add('hidden');
-      const container = widgetEl.querySelector('#mediaWidgetIframeContainer');
-      if (container) container.innerHTML = '';
+  // Open / Close Music Player Hub Modal
+  function openMusicHubModal() {
+    const overlay = document.getElementById('musicHubModalOverlay');
+    if (!overlay) return;
+    overlay.classList.remove('hidden');
+    scanVaultForMusicEmbeds();
+  }
+
+  function closeMusicHubModal() {
+    const overlay = document.getElementById('musicHubModalOverlay');
+    if (overlay) overlay.classList.add('hidden');
+  }
+
+  function playPresetMusic(embedUrl, providerName = 'Spotify') {
+    initMediaWidget();
+    const tempWrap = document.createElement('div');
+    tempWrap.setAttribute('data-provider', providerName.toLowerCase());
+    tempWrap.setAttribute('data-canonical-url', embedUrl);
+    tempWrap.setAttribute('data-embed-url', embedUrl);
+    tempWrap.setAttribute('data-brand-color', '#1ed760');
+    tempWrap.innerHTML = `<strong>${providerName} Stream</strong>`;
+
+    const iframe = document.createElement('iframe');
+    iframe.src = embedUrl;
+    iframe.allow = 'autoplay; clipboard-write; encrypted-media; picture-in-picture; background-play';
+    iframe.style.border = 'none';
+    iframe.style.width = '100%';
+    iframe.style.height = '80px';
+    tempWrap.appendChild(iframe);
+
+    dockActiveEmbed(tempWrap, iframe);
+    closeMusicHubModal();
+  }
+
+  function scanVaultForMusicEmbeds() {
+    const vaultList = document.getElementById('musicHubVaultList');
+    if (!vaultList) return;
+
+    const notes = global.notes || [];
+    const foundEmbeds = [];
+
+    notes.forEach(note => {
+      if (!note.content) return;
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(note.content, 'text/html');
+        const embeds = doc.querySelectorAll('.paperuss-embed');
+        embeds.forEach(embed => {
+          const provider = embed.getAttribute('data-provider') || 'web';
+          const embedUrl = embed.getAttribute('data-embed-url') || '';
+          const title = embed.querySelector('strong')?.textContent || `${provider.toUpperCase()} Embed`;
+          if (embedUrl) {
+            foundEmbeds.push({ noteTitle: note.title || 'Untitled Note', provider, embedUrl, title });
+          }
+        });
+      } catch (_) {}
+    });
+
+    if (foundEmbeds.length === 0) {
+      vaultList.innerHTML = `
+        <div class="music-hub-empty">
+          <i data-lucide="music-4" class="w-6 h-6 text-muted"></i>
+          <span>No saved music embeds found in your notes yet.<br>Paste a Spotify or YouTube link into any note to save it here!</span>
+        </div>
+      `;
+    } else {
+      vaultList.innerHTML = foundEmbeds.map(item => `
+        <div class="vault-music-item">
+          <div class="vmi-info">
+            <strong>${esc(item.title)}</strong>
+            <span>${esc(item.noteTitle)} • ${esc(item.provider.toUpperCase())}</span>
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="PaperussMediaWidget.playPresetMusic('${esc(item.embedUrl)}', '${esc(item.provider)}')">
+            <i data-lucide="play" class="w-3.5 h-3.5"></i> Play
+          </button>
+        </div>
+      `).join('');
     }
-    activeIframe = null;
-    currentEmbedInfo = null;
+
+    if (typeof global.lucide?.createIcons === 'function') global.lucide.createIcons();
+  }
+
+  function esc(str) {
+    return String(str || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+  }
+
+  function setupHubEvents() {
+    const hubBtn = document.getElementById('musicHubBtn');
+    if (hubBtn) hubBtn.onclick = () => openMusicHubModal();
+
+    const closeBtn = document.getElementById('closeMusicHubBtn');
+    if (closeBtn) closeBtn.onclick = () => closeMusicHubModal();
+
+    const overlay = document.getElementById('musicHubModalOverlay');
+    if (overlay) {
+      overlay.onclick = (e) => {
+        if (e.target === overlay) closeMusicHubModal();
+      };
+    }
+
+    // Quick Paste Play Button inside Hub
+    const pasteBtn = document.getElementById('musicHubPastePlayBtn');
+    const pasteInput = document.getElementById('musicHubPasteInput');
+    if (pasteBtn && pasteInput) {
+      pasteBtn.onclick = () => {
+        const val = pasteInput.value.trim();
+        if (!val) return;
+        let targetUrl = val;
+        // Check if raw iframe paste
+        const iframeMatch = val.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+        if (iframeMatch) targetUrl = iframeMatch[1];
+        
+        // If Spotify regular link, convert to embedUrl
+        if (global.LinkParser && global.LinkParser.parseUrl) {
+          const parsed = global.LinkParser.parseUrl(targetUrl);
+          if (parsed && parsed.embedUrl) targetUrl = parsed.embedUrl;
+        }
+
+        playPresetMusic(targetUrl, 'Media');
+        pasteInput.value = '';
+      };
+    }
+
+    // Preset cards
+    document.querySelectorAll('.music-preset-card').forEach(btn => {
+      btn.onclick = () => {
+        const url = btn.getAttribute('data-preset-url');
+        if (url) playPresetMusic(url, 'Spotify Preset');
+      };
+    });
   }
 
   // Intercept leaf tab switches to dock active playing embeds automatically
@@ -249,11 +371,18 @@
     dockActiveEmbed,
     checkAndDockActiveEmbed,
     stopPlayback,
-    initMediaWidget
+    initMediaWidget,
+    openMusicHubModal,
+    closeMusicHubModal,
+    playPresetMusic,
+    scanVaultForMusicEmbeds
   });
 
   global.checkAndDockActiveEmbed = checkAndDockActiveEmbed;
 
-  document.addEventListener('DOMContentLoaded', initMediaWidget);
+  document.addEventListener('DOMContentLoaded', () => {
+    initMediaWidget();
+    setupHubEvents();
+  });
 
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : global));

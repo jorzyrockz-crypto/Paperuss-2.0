@@ -540,6 +540,11 @@
             </div>
           </div>
           <div class="stats">
+            <button class="music-hub-pill-btn" id="musicHubBtn" title="Paperuss Dedicated Music Player Hub" aria-label="Paperuss Music Player">
+              <i data-lucide="disc-3" class="w-3.5 h-3.5 text-emerald-400"></i>
+              <span>Music Player</span>
+              <span class="music-hub-dot hidden" id="musicHubDot"></span>
+            </button>
             <span id="wordCount">0 words</span>
             <span id="charCount">0 chars</span>
             <span id="updatedTime"></span>
@@ -1271,6 +1276,79 @@
 
 <!-- Glassmorphic 3-Dot Context Menu Popover -->
 <div class="leaf-context-menu hidden" id="leafContextMenu" role="menu" data-paperuss-ui="true"></div>
+
+<!-- Dedicated System Music Player Hub Modal -->
+<div class="music-hub-modal-overlay hidden" id="musicHubModalOverlay" data-paperuss-ui="true">
+  <div class="music-hub-modal" role="dialog" aria-label="System Music Player Hub">
+    <div class="music-hub-modal-header">
+      <div class="music-hub-header-title">
+        <i data-lucide="disc-3" class="w-5 h-5 text-emerald-400"></i>
+        <h3>Paperuss System Music Player</h3>
+      </div>
+      <button class="btn btn-icon" id="closeMusicHubBtn" title="Close Hub">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <div class="music-hub-modal-body">
+      <!-- Active Playing Music Banner -->
+      <div class="music-hub-active-banner hidden" id="musicHubActiveBanner">
+        <span class="music-hub-active-badge">NOW PLAYING</span>
+        <div class="music-hub-active-info">
+          <strong id="musicHubActiveTitle">Background Audio Track</strong>
+          <span id="musicHubActiveProvider">Continuous Playback</span>
+        </div>
+      </div>
+
+      <!-- Quick Paste Music Embed Tool -->
+      <div class="music-hub-section">
+        <h4><i data-lucide="link" class="w-4 h-4 text-accent"></i> Quick Paste Music Link or Embed Code</h4>
+        <div class="music-hub-paste-wrap">
+          <input type="text" id="musicHubPasteInput" placeholder="Paste Spotify / YouTube link or <iframe src='...'> code..." class="music-hub-input">
+          <button class="btn btn-primary" id="musicHubPastePlayBtn"><i data-lucide="play" class="w-4 h-4"></i> Play</button>
+        </div>
+      </div>
+
+      <!-- 1-Click Starter Ambient Presets -->
+      <div class="music-hub-section">
+        <h4><i data-lucide="sparkles" class="w-4 h-4 text-amber-400"></i> 1-Click Ambient Study Streams</h4>
+        <div class="music-hub-presets-grid">
+          <button class="music-preset-card" data-preset-url="https://open.spotify.com/embed/playlist/37i9dQZF1DWWQRvW4ExviG">
+            <span class="preset-icon">☕</span>
+            <div class="preset-text">
+              <strong>Spotify Lofi Study Beats</strong>
+              <span>Deep Focus & Chill Beats</span>
+            </div>
+          </button>
+          <button class="music-preset-card" data-preset-url="https://open.spotify.com/embed/playlist/37i9dQZF1DX8Ueb2CJP9m1">
+            <span class="preset-icon">🎸</span>
+            <div class="preset-text">
+              <strong>Chill Acoustic Streams</strong>
+              <span>Relaxing Unplugged Vibes</span>
+            </div>
+          </button>
+          <button class="music-preset-card" data-preset-url="https://open.spotify.com/embed/playlist/37i9dQZF1DWVjrTQlvqTHF">
+            <span class="preset-icon">🎧</span>
+            <div class="preset-text">
+              <strong>Synthwave Work Ambient</strong>
+              <span>Retrowave Focus Sounds</span>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Saved Vault Embed Scanner List -->
+      <div class="music-hub-section">
+        <h4><i data-lucide="library" class="w-4 h-4 text-purple-400"></i> Saved Music Cards in Your Notes</h4>
+        <div class="music-hub-vault-list" id="musicHubVaultList">
+          <div class="music-hub-empty">
+            <i data-lucide="music-4" class="w-6 h-6 text-muted"></i>
+            <span>No saved music embeds found in your notes yet.<br>Paste a Spotify or YouTube link into any note to save it here!</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script src="js/stabilization.js"></script>
 <script src="js/history.js"></script>
