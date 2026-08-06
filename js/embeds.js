@@ -380,12 +380,16 @@
     
     // Check if thumbnail is a favicon vs real article/video hero image
     const isFaviconUrl = info.thumbnail && info.thumbnail.includes('favicons?domain=');
+    let resolvedHeroUrl = info.thumbnail;
+    if (resolvedHeroUrl && !isFaviconUrl && global.LinkParser?.resolveImageUrl) {
+      resolvedHeroUrl = global.LinkParser.resolveImageUrl(resolvedHeroUrl, canonicalUrl);
+    }
     const faviconUrl = isFaviconUrl ? info.thumbnail : `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostName)}&sz=64`;
     
     // Render hero image or crisp placeholder banner matching user screenshot
     let heroThumb = '';
-    if (info.thumbnail && !isFaviconUrl) {
-      heroThumb = `<div class="embed-hero-wrap"><img src="${esc(info.thumbnail)}" alt="${title}" class="embed-fallback-thumb" onerror="this.parentElement.className='embed-hero-wrap embed-hero-placeholder'; this.src='${faviconUrl}'; this.className='embed-placeholder-thumb';"></div>`;
+    if (resolvedHeroUrl && !isFaviconUrl) {
+      heroThumb = `<div class="embed-hero-wrap"><img src="${esc(resolvedHeroUrl)}" alt="${title}" class="embed-fallback-thumb" onerror="this.parentElement.className='embed-hero-wrap embed-hero-placeholder'; this.src='${faviconUrl}'; this.className='embed-placeholder-thumb';"></div>`;
     } else {
       heroThumb = `<div class="embed-hero-wrap embed-hero-placeholder"><img src="${faviconUrl}" alt="${title}" class="embed-placeholder-thumb"></div>`;
     }
