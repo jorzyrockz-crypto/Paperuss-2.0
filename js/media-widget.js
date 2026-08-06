@@ -156,21 +156,39 @@
   }
 
   /**
+   * Scans noteBody for active playing media iframes and docks them into the floating widget.
+   */
+  function checkAndDockActiveEmbed() {
+    initMediaWidget();
+    const activeEd = document.getElementById('noteBody');
+    if (!activeEd) return;
+    const iframes = activeEd.querySelectorAll('iframe');
+    for (const iframe of iframes) {
+      if (widgetEl && widgetEl.contains(iframe)) continue;
+      const parentCard = iframe.closest('.paperuss-embed') || iframe.parentElement;
+      if (parentCard) {
+        dockActiveEmbed(parentCard, iframe);
+        break;
+      }
+    }
+  }
+
+  /**
    * Docks an active playing embed iframe into the persistent floating widget bar.
    */
-  function dockActiveEmbed(embedElement) {
-    if (!embedElement) return;
+  function dockActiveEmbed(embedElement, targetIframe) {
+    if (!embedElement && !targetIframe) return;
     initMediaWidget();
 
-    const provider = embedElement.getAttribute('data-provider') || 'web';
-    const canonicalUrl = embedElement.getAttribute('data-canonical-url') || '';
-    const embedUrl = embedElement.getAttribute('data-embed-url') || '';
-    const title = embedElement.querySelector('strong')?.textContent || `${provider.toUpperCase()} Player`;
-    const brandColor = embedElement.getAttribute('data-brand-color') || '#1ed760';
+    const provider = (embedElement && embedElement.getAttribute('data-provider')) || 'media';
+    const canonicalUrl = (embedElement && embedElement.getAttribute('data-canonical-url')) || '';
+    const embedUrl = (embedElement && embedElement.getAttribute('data-embed-url')) || '';
+    const title = (embedElement && embedElement.querySelector('strong')?.textContent) || `${provider.toUpperCase()} Player`;
+    const brandColor = (embedElement && embedElement.getAttribute('data-brand-color')) || '#1ed760';
 
     currentEmbedInfo = { provider, canonicalUrl, embedUrl, title, brandColor };
 
-    const iframe = embedElement.querySelector('iframe');
+    const iframe = targetIframe || (embedElement && embedElement.querySelector('iframe'));
     const container = widgetEl.querySelector('#mediaWidgetIframeContainer');
     
     if (iframe && container) {
@@ -214,16 +232,7 @@
   const origFlush = global.flushActiveLeaf;
   if (typeof origFlush === 'function') {
     global.flushActiveLeaf = function (...args) {
-      const activeEd = document.getElementById('noteBody');
-      if (activeEd) {
-        const playingEmbed = activeEd.querySelector('.paperuss-embed[data-display-mode="interactive"] iframe');
-        if (playingEmbed) {
-          const parentCard = playingEmbed.closest('.paperuss-embed');
-          if (parentCard && !widgetEl?.contains(playingEmbed)) {
-            dockActiveEmbed(parentCard);
-          }
-        }
-      }
+      checkAndDockActiveEmbed();
       return origFlush.apply(this, args);
     };
   }
@@ -231,9 +240,12 @@
   // Export module APIs
   global.PaperussMediaWidget = Object.freeze({
     dockActiveEmbed,
+    checkAndDockActiveEmbed,
     stopPlayback,
     initMediaWidget
   });
+
+  global.checkAndDockActiveEmbed = checkAndDockActiveEmbed;
 
   document.addEventListener('DOMContentLoaded', initMediaWidget);
 

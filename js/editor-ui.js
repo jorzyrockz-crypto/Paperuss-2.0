@@ -40,6 +40,11 @@ function applyFontStyle(fontStyle){
    linger on top of unrelated views.
    ============================================================ */
 function closeAllContextTools(){
+  // Auto-dock active playing media (Spotify, YouTube, SoundCloud) before switching notes/pages
+  if(typeof window.checkAndDockActiveEmbed === 'function') {
+    window.checkAndDockActiveEmbed();
+  }
+
   // Block gutter
   const gutter = document.getElementById('blockGutter');
   if(gutter) gutter.classList.remove('show','touch-dragging');
