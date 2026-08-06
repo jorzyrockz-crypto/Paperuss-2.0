@@ -298,6 +298,87 @@
       };
     }
 
+    // Spotify: track, album, playlist, episode, artist, show
+    if (host === 'spotify.com' || host === 'open.spotify.com') {
+      const spMatch = path.match(/^\/(track|album|playlist|episode|artist|show)\/([a-zA-Z0-9]+)/);
+      if (spMatch && spMatch[1] && spMatch[2]) {
+        const type = spMatch[1];
+        const id = spMatch[2];
+        return {
+          provider: 'spotify',
+          providerName: 'Spotify',
+          contentType: type,
+          canonicalUrl: `https://open.spotify.com/${type}/${id}`,
+          embedUrl: `https://open.spotify.com/embed/${type}/${id}?utm_source=generator`,
+          preferredHeight: type === 'track' ? 152 : 352,
+          widthPreset: 'medium',
+          displayMode: 'interactive',
+          brandColor: '#1ed760',
+          title: `Spotify ${type.charAt(0).toUpperCase() + type.slice(1)}`,
+          description: urlStr,
+          thumbnail: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`,
+          author: 'Spotify'
+        };
+      }
+    }
+
+    // Shopee: e-commerce product links
+    if (/shopee\.(com|ph|sg|id|tw|vn|co\.th|cl|com\.br)/.test(host)) {
+      return {
+        provider: 'shopee',
+        providerName: 'Shopee',
+        contentType: 'product',
+        canonicalUrl: urlStr,
+        embedUrl: null,
+        preferredHeight: 220,
+        widthPreset: 'medium',
+        displayMode: 'preview',
+        brandColor: '#ee4d2d',
+        title: `Shopee Product`,
+        description: urlStr,
+        thumbnail: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`,
+        author: 'Shopee Official Store'
+      };
+    }
+
+    // Temu: e-commerce product links
+    if (/temu\.(com|to)/.test(host)) {
+      return {
+        provider: 'temu',
+        providerName: 'Temu',
+        contentType: 'product',
+        canonicalUrl: urlStr,
+        embedUrl: null,
+        preferredHeight: 220,
+        widthPreset: 'medium',
+        displayMode: 'preview',
+        brandColor: '#fb7701',
+        title: `Temu Product & Deal`,
+        description: urlStr,
+        thumbnail: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`,
+        author: 'Temu Store'
+      };
+    }
+
+    // Lazada: e-commerce product links
+    if (/lazada\.(com|com\.ph|sg|co\.id|com\.my|vn|co\.th)/.test(host)) {
+      return {
+        provider: 'lazada',
+        providerName: 'Lazada',
+        contentType: 'product',
+        canonicalUrl: urlStr,
+        embedUrl: null,
+        preferredHeight: 220,
+        widthPreset: 'medium',
+        displayMode: 'preview',
+        brandColor: '#0f146d',
+        title: `Lazada Official Store`,
+        description: urlStr,
+        thumbnail: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`,
+        author: 'Lazada'
+      };
+    }
+
     // Email / mailto links
     if (parsedUrl.protocol === 'mailto:') {
       const email = parsedUrl.pathname || urlStr.replace(/^mailto:/i, '');
@@ -394,6 +475,9 @@
       heroThumb = `<div class="embed-hero-wrap embed-hero-placeholder"><div class="embed-glass-hero-badge"><img src="${faviconUrl}" alt="${title}" class="embed-placeholder-thumb"></div></div>`;
     }
 
+    const aspectRatio = esc(info.aspectRatio || '16-9');
+    const brandColor = esc(info.brandColor || '');
+
     // Render compact 1-row HERO ICON | LINK layout if displayMode is compact
     let innerCardContent = '';
     if (displayMode === 'compact') {
@@ -403,7 +487,7 @@
         `</div>` +
         `<span class="embed-compact-divider"></span>` +
         `<div class="embed-compact-info">` +
-        `<strong class="embed-compact-title">${title}</strong>` +
+        `<strong class="embed-compact-title" contenteditable="true" data-action="inline-edit-title" title="Click to edit title">${title}</strong>` +
         `<a href="${canonicalUrl}" class="embed-compact-link" target="_blank" rel="noopener noreferrer">${canonicalUrl}</a>` +
         `</div>` +
         `</div>`;
@@ -418,15 +502,15 @@
         `${heroThumb}` +
         `<div class="embed-canonical-body">` +
         `<div class="embed-canonical-text">` +
-        `<strong>${title}</strong>` +
-        `<p class="embed-fallback-desc">${desc}</p>` +
+        `<strong contenteditable="true" data-action="inline-edit-title" title="Click to edit title">${title}</strong>` +
+        `<p class="embed-fallback-desc" contenteditable="true" data-action="inline-edit-desc" title="Click to edit description">${desc}</p>` +
         `</div>` +
         `</div>` +
         `</div>`;
     }
 
     // Canonical structure stored in HTML
-    return `<div class="paperuss-embed embed-mode-${displayMode} embed-width-${widthPreset}" ` +
+    return `<div class="paperuss-embed embed-mode-${displayMode} embed-width-${widthPreset} embed-aspect-${aspectRatio}" ` +
       `data-paperuss-embed="true" ` +
       `data-provider="${provider}" ` +
       `data-content-type="${contentType}" ` +
@@ -434,7 +518,10 @@
       `data-embed-url="${embedUrl}" ` +
       `data-display-mode="${displayMode}" ` +
       `data-width-preset="${widthPreset}" ` +
+      `data-aspect-ratio="${aspectRatio}" ` +
+      `data-brand-color="${brandColor}" ` +
       `data-preferred-height="${preferredHeight}" ` +
+      `style="${brandColor ? '--brand-accent:' + brandColor + ';' : ''}" ` +
       `contenteditable="false">` +
       `${innerCardContent}` +
       `</div>`;
@@ -598,6 +685,7 @@
     const canonicalUrl = embed.getAttribute('data-canonical-url') || '';
     const displayMode = embed.getAttribute('data-display-mode') || 'interactive';
     const widthPreset = embed.getAttribute('data-width-preset') || 'medium';
+    const aspectRatio = embed.getAttribute('data-aspect-ratio') || '16-9';
 
     bar.innerHTML = `
       <div class="embed-tb-group">
@@ -617,8 +705,17 @@
           <option value="large" ${widthPreset === 'large' ? 'selected' : ''}>Large</option>
           <option value="full" ${widthPreset === 'full' ? 'selected' : ''}>Full Width</option>
         </select>
+        <select class="embed-tb-select" data-action="aspect" title="Aspect Ratio" aria-label="Aspect Ratio">
+          <option value="16-9" ${aspectRatio === '16-9' ? 'selected' : ''}>16:9 (Wide)</option>
+          <option value="4-3" ${aspectRatio === '4-3' ? 'selected' : ''}>4:3 (Std)</option>
+          <option value="1-1" ${aspectRatio === '1-1' ? 'selected' : ''}>1:1 (Square)</option>
+          <option value="9-16" ${aspectRatio === '9-16' ? 'selected' : ''}>9:16 (Vertical)</option>
+        </select>
       </div>
       <div class="embed-tb-group">
+        <button type="button" class="embed-tb-btn" data-action="expand" title="Fullscreen View">
+          <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+        </button>
         <button type="button" class="embed-tb-btn" data-action="refresh" title="Refresh Metadata">
           <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
         </button>
@@ -658,6 +755,8 @@
         embed.removeAttribute('data-hydrated');
         hydrateEmbeds(embed.parentElement || document.getElementById('noteBody'));
         if (typeof global.toast === 'function') global.toast('Embed refreshed');
+      } else if (act === 'expand') {
+        openEmbedLightbox(embed);
       } else if (act === 'edit-url') {
         openEmbedModal({
           initialUrl: canonicalUrl,
@@ -688,7 +787,50 @@
       });
     }
 
+    const aspectSel = bar.querySelector('select[data-action="aspect"]');
+    if (aspectSel) {
+      aspectSel.addEventListener('change', (e) => {
+        embed.setAttribute('data-aspect-ratio', e.target.value);
+        embed.className = `paperuss-embed embed-mode-${embed.getAttribute('data-display-mode') || 'interactive'} embed-width-${embed.getAttribute('data-width-preset') || 'medium'} embed-aspect-${e.target.value}`;
+        if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
+      });
+    }
+
     return bar;
+  }
+
+  function openEmbedLightbox(embed) {
+    const canonicalUrl = embed.getAttribute('data-canonical-url') || '';
+    const embedUrl = embed.getAttribute('data-embed-url') || '';
+    const title = embed.querySelector('strong')?.textContent || 'Fullscreen Embed View';
+    const heroImg = embed.querySelector('.embed-fallback-thumb')?.src || '';
+
+    const root = document.getElementById('modalRoot') || document.body;
+    const lightbox = document.createElement('div');
+    lightbox.className = 'embed-lightbox-overlay';
+    lightbox.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:10010;background:rgba(0,0,0,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;';
+    
+    let contentHtml = '';
+    if (embedUrl) {
+      contentHtml = `<iframe src="${esc(embedUrl)}" style="width:100%;max-width:960px;height:650px;border:none;border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,0.5);" allowfullscreen allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"></iframe>`;
+    } else if (heroImg) {
+      contentHtml = `<img src="${esc(heroImg)}" alt="${esc(title)}" style="max-width:90vw;max-height:80vh;object-fit:contain;border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,0.5);">`;
+    } else {
+      contentHtml = `<div style="color:#fff;font-size:18px;text-align:center;"><p style="font-weight:700;margin-bottom:12px;">${esc(title)}</p><a href="${esc(canonicalUrl)}" target="_blank" style="color:var(--accent);text-decoration:underline;">${esc(canonicalUrl)}</a></div>`;
+    }
+
+    lightbox.innerHTML = `
+      <div style="position:absolute;top:20px;right:20px;display:flex;gap:12px;">
+        <a href="${esc(canonicalUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="color:#fff;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);">Open Link ↗</a>
+        <button type="button" class="btn btn-sm" id="closeLightbox" style="color:#fff;background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);">✕ Close</button>
+      </div>
+      ${contentHtml}
+    `;
+
+    root.appendChild(lightbox);
+    const closeBtn = lightbox.querySelector('#closeLightbox');
+    if (closeBtn) closeBtn.onclick = () => lightbox.remove();
+    lightbox.onclick = (e) => { if (e.target === lightbox) lightbox.remove(); };
   }
 
   /**

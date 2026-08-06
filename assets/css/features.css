@@ -3935,3 +3935,53 @@ a.paperuss-inline-link:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Brand Theme Accent Tinting */
+.paperuss-embed[data-provider="spotify"] {
+  --brand-accent: #1ed760;
+  border-color: rgba(30, 215, 96, 0.4);
+}
+.paperuss-embed[data-provider="shopee"] {
+  --brand-accent: #ee4d2d;
+  border-color: rgba(238, 77, 45, 0.4);
+}
+.paperuss-embed[data-provider="temu"] {
+  --brand-accent: #fb7701;
+  border-color: rgba(251, 119, 1, 0.4);
+}
+.paperuss-embed[data-provider="lazada"] {
+  --brand-accent: #0f146d;
+  border-color: rgba(15, 20, 109, 0.4);
+}
+.paperuss-embed[data-brand-color] .embed-provider-badge {
+  background: rgba(var(--brand-accent), 0.15);
+  color: var(--brand-accent, var(--accent));
+  border: 1px solid rgba(var(--brand-accent), 0.3);
+}
+
+/* Aspect Ratio Controls for Media Embeds */
+.paperuss-embed.embed-aspect-16-9 .embed-hero-wrap,
+.paperuss-embed.embed-aspect-16-9 iframe {
+  aspect-ratio: 16 / 9;
+}
+.paperuss-embed.embed-aspect-4-3 .embed-hero-wrap,
+.paperuss-embed.embed-aspect-4-3 iframe {
+  aspect-ratio: 4 / 3;
+}
+.paperuss-embed.embed-aspect-1-1 .embed-hero-wrap,
+.paperuss-embed.embed-aspect-1-1 iframe {
+  aspect-ratio: 1 / 1;
+}
+.paperuss-embed.embed-aspect-9-16 .embed-hero-wrap,
+.paperuss-embed.embed-aspect-9-16 iframe {
+  aspect-ratio: 9 / 16;
+}
+
+/* Inline Editable Card Elements */
+.embed-canonical-text strong[contenteditable="true"]:focus,
+.embed-fallback-desc[contenteditable="true"]:focus,
+.embed-compact-title[contenteditable="true"]:focus {
+  outline: 1.5px dashed var(--accent);
+  border-radius: 4px;
+  background: var(--accent-soft);
+}
