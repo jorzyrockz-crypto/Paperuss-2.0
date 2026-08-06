@@ -1916,32 +1916,31 @@ a.paperuss-inline-link span.inline-link-text {
   vertical-align: middle !important;
 }
 
-/* Link Card Component (Compact Flex Row Layout with Border-L-2 Accent) */
-.link-card-component,
-.bookmark-card,
+/* ============ 1. COMPACT CARD STYLE (border-l-4 accent flex row) ============ */
 .paperuss-embed.embed-mode-compact {
-  display: block !important;
-  width: 100% !important;
-  margin: 8px 0 !important;
-  padding: 8px 12px !important;
-  border-left: 2px solid var(--accent) !important;
+  display: inline-flex !important;
+  max-width: 100% !important;
+  margin: 6px 0 !important;
+  border-left: 4px solid var(--accent) !important;
   background: var(--subtle) !important;
   border-radius: 6px !important;
   border-top: 1px solid var(--border) !important;
   border-right: 1px solid var(--border) !important;
   border-bottom: 1px solid var(--border) !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+  transition: background 0.15s ease !important;
 }
-.link-card-inner,
-.bookmark-card-inner {
-  display: flex !important;
-  flex-direction: row !important;
+.paperuss-embed.embed-mode-compact:hover {
+  background: var(--hover) !important;
+}
+.compact-card-inner {
+  display: inline-flex !important;
   align-items: center !important;
   gap: 8px !important;
-  width: 100% !important;
+  padding: 6px 10px !important;
+  max-width: 100% !important;
 }
-.link-card-icon,
-.bookmark-icon {
+.compact-card-icon {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -1949,30 +1948,171 @@ a.paperuss-inline-link span.inline-link-text {
   width: 16px !important;
   height: 16px !important;
 }
-.link-card-icon img,
-.bookmark-icon img,
-.link-card-icon svg,
-.bookmark-icon svg {
+.compact-card-icon img {
   width: 16px !important;
   height: 16px !important;
   object-fit: contain !important;
   border-radius: 3px !important;
 }
-.link-card-label,
-.bookmark-link {
-  font-size: 13px !important;
-  font-weight: 400 !important;
+.compact-card-label {
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
   color: var(--fg) !important;
   text-decoration: none !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
-  flex: 1 !important;
-  min-width: 0 !important;
 }
-.link-card-label:hover,
-.bookmark-link:hover {
+.compact-card-label:hover {
+  text-decoration: underline !important;
+}
+
+/* ============ 2. RICH PREVIEW STYLE (flex row with avatar & metadata stack) ============ */
+.paperuss-embed.embed-mode-preview {
+  display: block !important;
+  width: 100% !important;
+  margin: 12px 0 !important;
+  border-left: 4px solid var(--accent) !important;
+  background: var(--subtle) !important;
+  border-radius: 8px !important;
+  border-top: 1px solid var(--border) !important;
+  border-right: 1px solid var(--border) !important;
+  border-bottom: 1px solid var(--border) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+  transition: all 0.18s ease !important;
+}
+.paperuss-embed.embed-mode-preview:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1) !important;
+}
+.rich-preview-inner {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 12px 14px !important;
+  width: 100% !important;
+  gap: 12px !important;
+}
+.rich-preview-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  overflow: hidden !important;
+  flex: 1 !important;
+}
+.rich-preview-avatar {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 8px !important;
+  background: var(--accent-soft) !important;
   color: var(--accent) !important;
+}
+.rich-preview-avatar img {
+  width: 18px !important;
+  height: 18px !important;
+  object-fit: contain !important;
+}
+.rich-preview-text {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  gap: 2px !important;
+}
+.rich-preview-title {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--fg) !important;
+  text-decoration: none !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+.rich-preview-title:hover {
+  text-decoration: underline !important;
+}
+.rich-preview-desc {
+  font-size: 12px !important;
+  color: var(--fg-muted) !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+.rich-preview-action {
+  font-size: 14px !important;
+  color: var(--fg-muted) !important;
+  flex-shrink: 0 !important;
+  text-decoration: none !important;
+  transition: color 0.12s ease !important;
+}
+.rich-preview-action:hover {
+  color: var(--accent) !important;
+}
+
+/* ============ 3. INTERACTIVE EMBED STYLE (header bar + container) ============ */
+.paperuss-embed.embed-mode-interactive {
+  display: flex !important;
+  flex-direction: column !important;
+  border-radius: 12px !important;
+  border: 1px solid var(--border) !important;
+  background: var(--subtle) !important;
+  overflow: hidden !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06) !important;
+  margin: 14px 0 !important;
+  width: 100% !important;
+}
+.interactive-embed-inner {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+}
+.interactive-embed-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 10px 14px !important;
+  border-left: 4px solid var(--accent) !important;
+  background: var(--inset) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+.interactive-header-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  overflow: hidden !important;
+}
+.interactive-header-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 16px !important;
+  height: 16px !important;
+  flex-shrink: 0 !important;
+}
+.interactive-header-icon img {
+  width: 16px !important;
+  height: 16px !important;
+  object-fit: contain !important;
+}
+.interactive-header-title {
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  color: var(--fg) !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+.interactive-open-link {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--accent) !important;
+  text-decoration: none !important;
+  flex-shrink: 0 !important;
+}
+.interactive-open-link:hover {
   text-decoration: underline !important;
 }
 

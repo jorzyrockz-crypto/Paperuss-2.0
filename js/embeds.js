@@ -387,10 +387,12 @@
       ? `<div class="embed-hero-wrap"><img src="${esc(info.thumbnail)}" alt="${title}" class="embed-fallback-thumb" onerror="this.parentElement.remove()"></div>` 
       : '';
 
-    // Compact Card / Link Card Layout (Exact Flex-Row Single-Line Pattern)
+    const descText = info.description ? String(info.description) : hostName;
+
+    // Mode 1: Compact Card Layout (Single tight row with left border-l-4 accent)
     if (displayMode === 'compact') {
       const displayHref = canonicalUrl || title;
-      return `<div class="link-card-component bookmark-card paperuss-embed embed-mode-compact embed-width-${widthPreset}" ` +
+      return `<div class="paperuss-embed embed-mode-compact embed-width-${widthPreset}" ` +
         `data-paperuss-embed="true" ` +
         `data-provider="${provider}" ` +
         `data-content-type="${contentType}" ` +
@@ -400,41 +402,65 @@
         `data-width-preset="${widthPreset}" ` +
         `data-preferred-height="${preferredHeight}" ` +
         `contenteditable="false">` +
-        `<div class="link-card-inner">` +
-        `<span class="link-card-icon">` +
+        `<div class="compact-card-inner">` +
+        `<span class="compact-card-icon">` +
         `<img src="${esc(faviconUrl)}" class="inline-link-icon" alt="" onerror="this.style.display='none'">` +
         `</span>` +
-        `<a href="${canonicalUrl}" class="link-card-label" target="_blank" rel="noopener noreferrer">${esc(displayHref)}</a>` +
+        `<a href="${canonicalUrl}" class="compact-card-label" target="_blank" rel="noopener noreferrer">${esc(displayHref)}</a>` +
         `</div>` +
         `</div>`;
     }
 
-    // Canonical Rich Preview / Interactive structure stored in HTML
-    return `<div class="paperuss-embed embed-mode-${displayMode} embed-width-${widthPreset}" ` +
+    // Mode 2: Rich Preview Layout (Bookmark flex row with avatar, title, description, & action badge)
+    if (displayMode === 'preview') {
+      return `<div class="paperuss-embed embed-mode-preview embed-width-${widthPreset}" ` +
+        `data-paperuss-embed="true" ` +
+        `data-provider="${provider}" ` +
+        `data-content-type="${contentType}" ` +
+        `data-canonical-url="${canonicalUrl}" ` +
+        `data-embed-url="${embedUrl}" ` +
+        `data-display-mode="preview" ` +
+        `data-width-preset="${widthPreset}" ` +
+        `data-preferred-height="${preferredHeight}" ` +
+        `contenteditable="false">` +
+        `<div class="rich-preview-inner">` +
+        `<div class="rich-preview-left">` +
+        `<span class="rich-preview-avatar">` +
+        `<img src="${esc(faviconUrl)}" class="inline-link-icon" alt="" onerror="this.style.display='none'">` +
+        `</span>` +
+        `<div class="rich-preview-text">` +
+        `<a href="${canonicalUrl}" class="rich-preview-title" target="_blank" rel="noopener noreferrer">${title}</a>` +
+        `<span class="rich-preview-desc">${esc(descText)}</span>` +
+        `</div>` +
+        `</div>` +
+        `<a href="${canonicalUrl}" class="rich-preview-action" target="_blank" rel="noopener noreferrer" title="Open external link">↗</a>` +
+        `</div>` +
+        `${heroThumb}` +
+        `</div>`;
+    }
+
+    // Mode 3: Interactive Embed Layout (Header bar with border-l-4 accent & frame body)
+    return `<div class="paperuss-embed embed-mode-interactive embed-width-${widthPreset}" ` +
       `data-paperuss-embed="true" ` +
       `data-provider="${provider}" ` +
       `data-content-type="${contentType}" ` +
       `data-canonical-url="${canonicalUrl}" ` +
       `data-embed-url="${embedUrl}" ` +
-      `data-display-mode="${displayMode}" ` +
+      `data-display-mode="interactive" ` +
       `data-width-preset="${widthPreset}" ` +
       `data-preferred-height="${preferredHeight}" ` +
       `contenteditable="false">` +
-      `<div class="embed-canonical-card">` +
-      `<div class="embed-canonical-header">` +
-      `<div class="embed-provider-badge-wrap">` +
-      `<img src="${esc(faviconUrl)}" class="embed-favicon-icon" alt="" onerror="this.style.display='none'">` +
-      `<span class="embed-provider-badge">${providerName}</span>` +
+      `<div class="interactive-embed-inner">` +
+      `<div class="interactive-embed-header">` +
+      `<div class="interactive-header-left">` +
+      `<span class="interactive-header-icon">` +
+      `<img src="${esc(faviconUrl)}" class="inline-link-icon" alt="" onerror="this.style.display='none'">` +
+      `</span>` +
+      `<span class="interactive-header-title">${title}</span>` +
       `</div>` +
-      `<a href="${canonicalUrl}" class="embed-canonical-link" target="_blank" rel="noopener noreferrer">${canonicalUrl}</a>` +
+      `<a href="${canonicalUrl}" class="interactive-open-link" target="_blank" rel="noopener noreferrer">Open ↗</a>` +
       `</div>` +
       `${heroThumb}` +
-      `<div class="embed-canonical-body">` +
-      `<div class="embed-canonical-text">` +
-      `<strong>${title}</strong>` +
-      `${desc}` +
-      `</div>` +
-      `</div>` +
       `</div>` +
       `</div>`;
   }
