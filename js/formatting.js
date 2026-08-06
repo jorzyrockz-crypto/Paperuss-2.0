@@ -6,22 +6,15 @@ function focusEditor(){ bodyEl().focus(); }
 function applyCommand(cmd, val){
   focusEditor();
   if(window.HistoryManager) window.HistoryManager.capture(true);
-  if(cmd==='createLink'){
+  if(cmd==='createLink' || cmd==='embedTool'){
     const sel=window.getSelection();
     const selText=sel ? sel.toString().trim() : '';
     if(typeof window.openEmbedModal === 'function'){
-      window.openEmbedModal({ initialText: selText, defaultMode: 'inline' });
+      window.openEmbedModal({ initialText: selText });
       return;
     }
     if(typeof openLinkModal === 'function'){
       openLinkModal({ initialText: selText });
-      return;
-    }
-  } else if(cmd==='embedTool'){
-    const sel=window.getSelection();
-    const selText=sel ? sel.toString().trim() : '';
-    if(typeof window.openEmbedModal === 'function'){
-      window.openEmbedModal({ initialText: selText, defaultMode: 'interactive' });
       return;
     }
   } else if(cmd==='fontSize'){
