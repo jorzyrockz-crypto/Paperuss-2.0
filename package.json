@@ -9,6 +9,7 @@
     "build:cloudflare": "node tools/stage-worker-assets.cjs",
     "stage-assets": "node tools/stage-worker-assets.cjs",
     "generate-changelog": "node tools/generate-changelog.mjs",
+    "release": "node tools/release.mjs",
     "deploy:cloudflare": "node tools/stage-worker-assets.cjs && wrangler deploy"
   }
 }
