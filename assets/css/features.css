@@ -3879,13 +3879,59 @@ a.paperuss-inline-link:hover {
   clear: both;
 }
 
-/* Compact 1-Row Layout Reflow */
-.paperuss-embed.embed-mode-compact .embed-canonical-card {
-  flex-direction: row;
+/* Compact 1-Row HERO ICON | LINK Layout */
+.embed-compact-card {
+  display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
   padding: 10px 14px;
+  background: var(--subtle);
+  border-radius: 12px;
 }
-.paperuss-embed.embed-mode-compact .embed-hero-wrap {
-  display: none;
+.embed-compact-hero-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-ring);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.embed-compact-hero-icon .embed-favicon-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+.embed-compact-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.embed-compact-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.embed-compact-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+}
+.embed-compact-link {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: underline;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

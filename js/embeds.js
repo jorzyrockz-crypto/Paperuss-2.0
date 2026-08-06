@@ -394,6 +394,37 @@
       heroThumb = `<div class="embed-hero-wrap embed-hero-placeholder"><div class="embed-glass-hero-badge"><img src="${faviconUrl}" alt="${title}" class="embed-placeholder-thumb"></div></div>`;
     }
 
+    // Render compact 1-row HERO ICON | LINK layout if displayMode is compact
+    let innerCardContent = '';
+    if (displayMode === 'compact') {
+      innerCardContent = `<div class="embed-compact-card">` +
+        `<div class="embed-compact-hero-icon">` +
+        `<img src="${faviconUrl}" alt="${title}" class="embed-favicon-icon" onerror="this.src='https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostName)}&sz=64'">` +
+        `</div>` +
+        `<span class="embed-compact-divider"></span>` +
+        `<div class="embed-compact-info">` +
+        `<strong class="embed-compact-title">${title}</strong>` +
+        `<a href="${canonicalUrl}" class="embed-compact-link" target="_blank" rel="noopener noreferrer">${canonicalUrl}</a>` +
+        `</div>` +
+        `</div>`;
+    } else {
+      innerCardContent = `<div class="embed-canonical-card">` +
+        `<div class="embed-canonical-header">` +
+        `<div class="embed-provider-badge-wrap">` +
+        `<span class="embed-provider-badge">${hostName}</span>` +
+        `</div>` +
+        `<a href="${canonicalUrl}" class="embed-canonical-link" target="_blank" rel="noopener noreferrer">${canonicalUrl}</a>` +
+        `</div>` +
+        `${heroThumb}` +
+        `<div class="embed-canonical-body">` +
+        `<div class="embed-canonical-text">` +
+        `<strong>${title}</strong>` +
+        `<p class="embed-fallback-desc">${desc}</p>` +
+        `</div>` +
+        `</div>` +
+        `</div>`;
+    }
+
     // Canonical structure stored in HTML
     return `<div class="paperuss-embed embed-mode-${displayMode} embed-width-${widthPreset}" ` +
       `data-paperuss-embed="true" ` +
@@ -405,21 +436,7 @@
       `data-width-preset="${widthPreset}" ` +
       `data-preferred-height="${preferredHeight}" ` +
       `contenteditable="false">` +
-      `<div class="embed-canonical-card">` +
-      `<div class="embed-canonical-header">` +
-      `<div class="embed-provider-badge-wrap">` +
-      `<span class="embed-provider-badge">${hostName}</span>` +
-      `</div>` +
-      `<a href="${canonicalUrl}" class="embed-canonical-link" target="_blank" rel="noopener noreferrer">${canonicalUrl}</a>` +
-      `</div>` +
-      `${heroThumb}` +
-      `<div class="embed-canonical-body">` +
-      `<div class="embed-canonical-text">` +
-      `<strong>${title}</strong>` +
-      `<p class="embed-fallback-desc">${desc}</p>` +
-      `</div>` +
-      `</div>` +
-      `</div>` +
+      `${innerCardContent}` +
       `</div>`;
   }
 
