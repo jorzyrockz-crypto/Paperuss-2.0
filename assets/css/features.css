@@ -3816,66 +3816,15 @@ a.paperuss-inline-link:hover {
   text-decoration: none;
 }
 
-/* ============ EMBED EDITOR OVERLAY TOOLBAR ============ */
-.embed-editor-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: var(--canvas);
-  border-bottom: 1px solid var(--border);
-  gap: 8px;
-  user-select: none;
-  border-radius: 12px 12px 0 0;
+/* Ensure interactive mode hides canonical card cleanly with zero whitespace */
+.paperuss-embed.embed-mode-interactive .embed-canonical-card {
+  display: none !important;
 }
-.embed-tb-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.embed-tb-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 5px 10px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--fg);
-  background: var(--subtle);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  line-height: 1.2;
-}
-.embed-tb-btn:hover {
-  background: var(--hover);
-  border-color: var(--fg-muted);
-}
-.embed-tb-btn-danger {
-  color: var(--danger, #ef4444);
-  border-color: rgba(239, 68, 68, 0.25);
-}
-.embed-tb-btn-danger:hover {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: var(--danger, #ef4444);
-  color: var(--danger, #ef4444);
-}
-.embed-tb-select {
-  padding: 5px 8px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--fg);
-  background: var(--subtle);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  outline: none;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.embed-tb-select:hover {
-  border-color: var(--fg-muted);
+
+.embed-live-player-wrap {
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 /* Glassmorphism Mesh Gradient Hero Background */
