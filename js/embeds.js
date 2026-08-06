@@ -386,12 +386,12 @@
     }
     const faviconUrl = isFaviconUrl ? info.thumbnail : `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostName)}&sz=64`;
     
-    // Render hero image or crisp placeholder banner matching user screenshot
+    // Render hero image or crisp glassmorphism placeholder banner matching user screenshot
     let heroThumb = '';
     if (resolvedHeroUrl && !isFaviconUrl) {
-      heroThumb = `<div class="embed-hero-wrap"><img src="${esc(resolvedHeroUrl)}" alt="${title}" class="embed-fallback-thumb" onerror="this.parentElement.className='embed-hero-wrap embed-hero-placeholder'; this.src='${faviconUrl}'; this.className='embed-placeholder-thumb';"></div>`;
+      heroThumb = `<div class="embed-hero-wrap"><img src="${esc(resolvedHeroUrl)}" alt="${title}" class="embed-fallback-thumb" onerror="this.parentElement.className='embed-hero-wrap embed-hero-placeholder'; this.parentElement.innerHTML='<div class=&quot;embed-glass-hero-badge&quot;><img src=&quot;${faviconUrl}&quot; alt=&quot;${title}&quot; class=&quot;embed-placeholder-thumb&quot;></div>';"></div>`;
     } else {
-      heroThumb = `<div class="embed-hero-wrap embed-hero-placeholder"><img src="${faviconUrl}" alt="${title}" class="embed-placeholder-thumb"></div>`;
+      heroThumb = `<div class="embed-hero-wrap embed-hero-placeholder"><div class="embed-glass-hero-badge"><img src="${faviconUrl}" alt="${title}" class="embed-placeholder-thumb"></div></div>`;
     }
 
     // Canonical structure stored in HTML
@@ -590,9 +590,13 @@
           <option value="preview" ${displayMode === 'preview' ? 'selected' : ''}>Preview</option>
           <option value="interactive" ${displayMode === 'interactive' ? 'selected' : ''}>Interactive</option>
         </select>
-        <select class="embed-tb-select" data-action="width" title="Width" aria-label="Width Preset">
-          <option value="small" ${widthPreset === 'small' ? 'selected' : ''}>Small</option>
-          <option value="medium" ${widthPreset === 'medium' ? 'selected' : ''}>Medium</option>
+        <select class="embed-tb-select" data-action="width" title="Layout & Float Alignment" aria-label="Width Preset">
+          <option value="small" ${widthPreset === 'small' ? 'selected' : ''}>Small (Center)</option>
+          <option value="small-left" ${widthPreset === 'small-left' ? 'selected' : ''}>Small (Float Left)</option>
+          <option value="small-right" ${widthPreset === 'small-right' ? 'selected' : ''}>Small (Float Right)</option>
+          <option value="medium" ${widthPreset === 'medium' ? 'selected' : ''}>Medium (Center)</option>
+          <option value="medium-left" ${widthPreset === 'medium-left' ? 'selected' : ''}>Medium (Float Left)</option>
+          <option value="medium-right" ${widthPreset === 'medium-right' ? 'selected' : ''}>Medium (Float Right)</option>
           <option value="large" ${widthPreset === 'large' ? 'selected' : ''}>Large</option>
           <option value="full" ${widthPreset === 'full' ? 'selected' : ''}>Full Width</option>
         </select>

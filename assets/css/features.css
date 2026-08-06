@@ -3798,18 +3798,94 @@ a.paperuss-inline-link:hover {
   border-color: var(--fg-muted);
 }
 
-/* Hero Placeholder Styling */
+/* Glassmorphism Mesh Gradient Hero Background */
 .embed-hero-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--subtle), var(--inset));
-  height: 180px;
+  background: radial-gradient(circle at 30% 20%, var(--accent-soft), transparent 60%),
+              radial-gradient(circle at 70% 80%, rgba(139, 92, 246, 0.18), transparent 60%),
+              linear-gradient(135deg, var(--subtle), var(--inset));
+  height: 190px;
   border-radius: 10px;
+  position: relative;
+  overflow: hidden;
+}
+.embed-glass-hero-badge {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25), 0 0 24px var(--accent-ring);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.paperuss-embed:hover .embed-glass-hero-badge {
+  transform: scale(1.05);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35), 0 0 28px var(--accent-ring);
 }
 .embed-placeholder-thumb {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
-  opacity: 0.85;
+}
+
+[data-theme="light"] .embed-glass-hero-badge {
+  background: rgba(255, 255, 255, 0.68);
+  border-color: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 0 16px var(--accent-ring);
+}
+
+/* Width & Float Presets for Side-by-Side Object Reflow */
+.paperuss-embed.embed-width-small {
+  max-width: 320px;
+  margin: 14px auto;
+}
+.paperuss-embed.embed-width-small-left {
+  max-width: 320px;
+  float: left;
+  margin: 8px 18px 12px 0;
+}
+.paperuss-embed.embed-width-small-right {
+  max-width: 320px;
+  float: right;
+  margin: 8px 0 12px 18px;
+}
+.paperuss-embed.embed-width-medium {
+  max-width: 520px;
+  margin: 14px auto;
+}
+.paperuss-embed.embed-width-medium-left {
+  max-width: 420px;
+  float: left;
+  margin: 8px 18px 12px 0;
+}
+.paperuss-embed.embed-width-medium-right {
+  max-width: 420px;
+  float: right;
+  margin: 8px 0 12px 18px;
+}
+.paperuss-embed.embed-width-large {
+  max-width: 720px;
+  margin: 14px auto;
+}
+.paperuss-embed.embed-width-full {
+  width: 100%;
+  margin: 14px 0;
+  clear: both;
+}
+
+/* Compact 1-Row Layout Reflow */
+.paperuss-embed.embed-mode-compact .embed-canonical-card {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+}
+.paperuss-embed.embed-mode-compact .embed-hero-wrap {
+  display: none;
 }
