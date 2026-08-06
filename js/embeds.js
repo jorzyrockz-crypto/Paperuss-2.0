@@ -337,7 +337,7 @@
       displayMode: 'preview',
       title: title,
       description: urlStr,
-      thumbnail: favicon,
+      thumbnail: null,
       author: null
     };
   }

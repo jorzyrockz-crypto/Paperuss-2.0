@@ -1078,3 +1078,38 @@ function applyOutdent() {
   updateToolbarState();
 }
 
+/* Robust caret HTML insertion for modals and floating tools */
+function insertHTMLAtCaret(html) {
+  const ed = document.getElementById('noteBody');
+  if (!ed) return;
+  ed.focus();
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount) {
+    let range = sel.getRangeAt(0);
+    if (!ed.contains(range.commonAncestorContainer)) {
+      range = document.createRange();
+      range.selectNodeContents(ed);
+      range.collapse(false);
+    }
+    range.deleteContents();
+    const el = document.createElement('div');
+    el.innerHTML = html;
+    const frag = document.createDocumentFragment();
+    let node, lastNode;
+    while ((node = el.firstChild)) {
+      lastNode = frag.appendChild(node);
+    }
+    range.insertNode(frag);
+    if (lastNode) {
+      range = range.cloneRange();
+      range.setStartAfter(lastNode);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  } else {
+    document.execCommand('insertHTML', false, html);
+  }
+}
+window.insertHTMLAtCaret = insertHTMLAtCaret;
+

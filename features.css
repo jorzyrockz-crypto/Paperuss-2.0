@@ -1901,11 +1901,18 @@ a.paperuss-inline-link img.inline-link-icon {
   min-height: 14px !important;
   max-width: 14px !important;
   max-height: 14px !important;
-  margin: 0 !important;
+  margin: 0 2px 0 0 !important;
   padding: 0 !important;
   border-radius: 3px !important;
   object-fit: contain !important;
   flex-shrink: 0 !important;
+  vertical-align: middle !important;
+  float: none !important;
+}
+.note-editor a.paperuss-inline-link span,
+a.paperuss-inline-link span.inline-link-text {
+  display: inline !important;
+  white-space: nowrap !important;
   vertical-align: middle !important;
 }
 
