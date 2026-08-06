@@ -548,6 +548,24 @@ function bind(){
   function normalizeAIPasteHTML(doc){
     // 1. Strip AI UI buttons, copy controls, and header bars
     doc.querySelectorAll('button, svg, [aria-label*="Copy" i], [class*="copy-button" i], [class*="code-header" i]').forEach(el => el.remove());
+
+    // 1b. Clean raw CSS declarations prepended by AI engines (e.g. "a { text-decoration: none; ... }")
+    const cssHeaderRegex = /^\s*a\s*\{[^}]*\}\s*(?:tr\s*th[^}]*\}\s*)*/i;
+    const walker = doc.createTreeWalker(doc.body, 4); // SHOW_TEXT
+    let firstNode = walker.nextNode();
+    if (firstNode && cssHeaderRegex.test(firstNode.textContent)) {
+      firstNode.textContent = firstNode.textContent.replace(cssHeaderRegex, '');
+    }
+
+    // 1c. Parse unrendered inline markdown inside AI paragraph nodes
+    doc.querySelectorAll('p, li, span, td').forEach(node => {
+      const hasOnlyBRs = Array.from(node.children).every(c => c.tagName === 'BR');
+      if (hasOnlyBRs && (node.textContent.includes('**') || node.textContent.includes('['))) {
+        const raw = node.innerHTML;
+        const parsed = parseMarkdownInline(raw);
+        node.innerHTML = parsed;
+      }
+    });
     // 2. Remove dangerous or non-semantic tags
     doc.querySelectorAll('script, style, meta, link, iframe, object, embed, o\\:p').forEach(el => el.remove());
 
@@ -693,7 +711,8 @@ function parseMarkdownInline(text) {
   });
 
   const linkSpans = [];
-  str = str.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, title, url) => {
+  str = str.replace(/\[((?:\\[\[\]]|[^\]])+)\]?\(([^)]+)\)/g, (_, rawTitle, url) => {
+    const title = rawTitle.replace(/\\([\[\]])/g, '$1').replace(/^\[|\]$/g, '');
     const idx = linkSpans.length;
     const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(url) : { valid: true, url: url, isExternal: true };
     const targetAttr = (res.isExternal || !res.url.startsWith('#')) ? ' target="_blank" rel="noopener noreferrer"' : '';
