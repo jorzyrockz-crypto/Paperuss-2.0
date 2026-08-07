@@ -225,9 +225,10 @@ async function insertImageFile(file){
 
 async function insertVideoFile(file){
   if(!file || !file.type.startsWith('video/')){ toast('Not a video'); return; }
-  const id=await saveMediaBlob(file, file.name, 'video');
-  const url=await getMediaURL(id);
-  const ext=(file.name||'').split('.').pop().toUpperCase()||'VIDEO';
+  const id = (typeof mediaUid === 'function') ? mediaUid() : ('m_' + Date.now().toString(36));
+  const tempUrl = URL.createObjectURL(file);
+  const ext = (file.name||'').split('.').pop().toUpperCase() || 'VIDEO';
+
   insertHTMLAtCaret(
     `<div class="paperuss-card paperuss-card-video" contenteditable="false" draggable="true" data-media-id="${id}" data-media-kind="video" data-drop-block="1">
       <div class="card-header">
@@ -238,21 +239,29 @@ async function insertVideoFile(file){
         <span class="card-title-text">${esc(file.name)}</span>
       </div>
       <div class="card-body">
-        <video controls preload="metadata" data-media-id="${id}" data-media-kind="video" src="${url}"></video>
+        <video controls preload="metadata" data-media-id="${id}" data-media-kind="video" src="${tempUrl}"></video>
       </div>
       <div class="card-resize-handle" title="Drag to resize card"></div>
     </div>`
   );
   save();
   toast('Video added');
+
+  try {
+    const realId = await saveMediaBlob(file, file.name, 'video', id);
+    if(realId && realId !== id){
+      document.querySelectorAll(`[data-media-id="${id}"]`).forEach(el => el.setAttribute('data-media-id', realId));
+    }
+  } catch(err) { console.warn('PapeRuss: Video store fallback', err); }
   renderStorageStats();
 }
 
 async function insertAudioFile(file){
   if(!file || !file.type.startsWith('audio/')){ toast('Not an audio file'); return; }
-  const id=await saveMediaBlob(file, file.name, 'audio');
-  const url=await getMediaURL(id);
-  const ext=(file.name||'').split('.').pop().toUpperCase()||'AUDIO';
+  const id = (typeof mediaUid === 'function') ? mediaUid() : ('m_' + Date.now().toString(36));
+  const tempUrl = URL.createObjectURL(file);
+  const ext = (file.name||'').split('.').pop().toUpperCase() || 'AUDIO';
+
   insertHTMLAtCaret(
     `<div class="paperuss-card paperuss-card-audio" contenteditable="false" draggable="true" data-media-id="${id}" data-media-kind="audio" data-drop-block="1">
       <div class="card-header">
@@ -263,19 +272,27 @@ async function insertAudioFile(file){
         <span class="card-title-text">${esc(file.name)}</span>
       </div>
       <div class="card-body">
-        <audio controls preload="metadata" data-media-id="${id}" data-media-kind="audio" src="${url}"></audio>
+        <audio controls preload="metadata" data-media-id="${id}" data-media-kind="audio" src="${tempUrl}"></audio>
       </div>
       <div class="card-resize-handle" title="Drag to resize card"></div>
     </div>`
   );
   save();
   toast('Audio added');
+
+  try {
+    const realId = await saveMediaBlob(file, file.name, 'audio', id);
+    if(realId && realId !== id){
+      document.querySelectorAll(`[data-media-id="${id}"]`).forEach(el => el.setAttribute('data-media-id', realId));
+    }
+  } catch(err) { console.warn('PapeRuss: Audio store fallback', err); }
   renderStorageStats();
 }
 
 async function insertAudioBlob(blob, name='Voice recording'){
-  const id=await saveMediaBlob(blob, name, 'audio');
-  const url=await getMediaURL(id);
+  const id = (typeof mediaUid === 'function') ? mediaUid() : ('m_' + Date.now().toString(36));
+  const tempUrl = URL.createObjectURL(blob);
+
   insertHTMLAtCaret(
     `<div class="paperuss-card paperuss-card-audio" contenteditable="false" draggable="true" data-media-id="${id}" data-media-kind="audio" data-drop-block="1">
       <div class="card-header">
@@ -286,20 +303,29 @@ async function insertAudioBlob(blob, name='Voice recording'){
         <span class="card-title-text">${esc(name)}</span>
       </div>
       <div class="card-body">
-        <audio controls preload="metadata" data-media-id="${id}" data-media-kind="audio" src="${url}"></audio>
+        <audio controls preload="metadata" data-media-id="${id}" data-media-kind="audio" src="${tempUrl}"></audio>
       </div>
       <div class="card-resize-handle" title="Drag to resize card"></div>
     </div>`
   );
   save();
   toast('Recording added');
+
+  try {
+    const realId = await saveMediaBlob(blob, name, 'audio', id);
+    if(realId && realId !== id){
+      document.querySelectorAll(`[data-media-id="${id}"]`).forEach(el => el.setAttribute('data-media-id', realId));
+    }
+  } catch(err) { console.warn('PapeRuss: Recording store fallback', err); }
   renderStorageStats();
 }
+
 async function insertAttachmentFile(file){
   if(!file){ return; }
-  const id=await saveMediaBlob(file, file.name, 'file');
-  const iconSVG=fileIconSVG(file.type, file.name);
-  const ext=(file.name||'').split('.').pop().toUpperCase()||'FILE';
+  const id = (typeof mediaUid === 'function') ? mediaUid() : ('m_' + Date.now().toString(36));
+  const iconSVG = fileIconSVG(file.type, file.name);
+  const ext = (file.name||'').split('.').pop().toUpperCase() || 'FILE';
+
   insertHTMLAtCaret(
     `<div class="paperuss-card paperuss-card-file media-card" contenteditable="false" draggable="true" data-media-id="${id}" data-media-kind="file" data-drop-block="1">
       <div class="card-header">
@@ -318,6 +344,13 @@ async function insertAttachmentFile(file){
   );
   save();
   toast('File attached');
+
+  try {
+    const realId = await saveMediaBlob(file, file.name, 'file', id);
+    if(realId && realId !== id){
+      document.querySelectorAll(`[data-media-id="${id}"]`).forEach(el => el.setAttribute('data-media-id', realId));
+    }
+  } catch(err) { console.warn('PapeRuss: Attachment store fallback', err); }
   renderStorageStats();
 }
 
