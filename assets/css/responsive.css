@@ -234,13 +234,13 @@
   .editor-more-wrap{display:block!important}
   #editorMoreBtn{display:inline-flex!important}
   .editor-more-panel .compact-note-action{display:flex!important}
-  .note-editor{padding:20px 16px 90px}
-  .mobile-fab{display:inline-flex}
-  /* Phone gallery: single column, large thumbnails, comfortable touch spacing */
-  .mh-grid{grid-template-columns:1fr;gap:14px}
-  .mh-thumb{height:190px}
-  .mh-info{padding:14px}
-  .mh-card{border-radius:16px}
+  /* Mobile cards: stack full-width in single column */
+  .media-card, .paperuss-embed, .broken-media-card {
+    display: flex !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 8px 0 12px 0 !important;
+  }
 }
 
 /* ============ TABLET PORTRAIT — reuse the phone UI ============

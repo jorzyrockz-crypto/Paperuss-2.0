@@ -530,8 +530,9 @@
       `data-brand-color="${brandColor}" ` +
       `data-preferred-height="${preferredHeight}" ` +
       `style="${brandColor ? '--brand-accent:' + brandColor + ';' : ''}" ` +
-      `contenteditable="false">` +
+      `contenteditable="false" draggable="true">` +
       `${innerCardContent}` +
+      `<div class="card-resize-handle" title="Drag to resize card"></div>` +
       `</div>`;
   }
 
@@ -748,28 +749,56 @@
     const widthPreset = embed.getAttribute('data-width-preset') || 'medium';
     const aspectRatio = embed.getAttribute('data-aspect-ratio') || '16-9';
 
+    const sizeLabels = {
+      'small': 'S',
+      'medium': 'M',
+      'large': 'L',
+      'full': 'Full'
+    };
+    const activeSizeLabel = sizeLabels[widthPreset] || 'M';
+
+    const modeIcons = {
+      'compact': 'align-justify',
+      'preview': 'image',
+      'interactive': 'tv'
+    };
+    const activeModeIcon = modeIcons[displayMode] || 'tv';
+
     bar.innerHTML = `
-      <div class="embed-tb-segment">
-        <button type="button" class="embed-tb-btn ${widthPreset.includes('left') ? 'active' : ''}" data-action="set-width" data-val="${widthPreset.startsWith('small') ? 'small-left' : 'medium-left'}" title="Float Left">
-          <i data-lucide="align-left" class="w-3.5 h-3.5"></i>
+      <div class="embed-tb-segment" style="position:relative">
+        <button type="button" class="embed-tb-btn" data-action="toggle-size-menu" title="Card Size (${activeSizeLabel})">
+          <i data-lucide="scaling" class="w-4 h-4"></i>
         </button>
-        <button type="button" class="embed-tb-btn ${(!widthPreset.includes('left') && !widthPreset.includes('right')) ? 'active' : ''}" data-action="set-width" data-val="medium" title="Center Alignment">
-          <i data-lucide="align-center" class="w-3.5 h-3.5"></i>
-        </button>
-        <button type="button" class="embed-tb-btn ${widthPreset.includes('right') ? 'active' : ''}" data-action="set-width" data-val="${widthPreset.startsWith('small') ? 'small-right' : 'medium-right'}" title="Float Right">
-          <i data-lucide="align-right" class="w-3.5 h-3.5"></i>
-        </button>
+        <div class="embed-tb-dropdown embed-size-dropdown hidden" contenteditable="false">
+          <button type="button" class="embed-tb-dropdown-item ${widthPreset.startsWith('small') ? 'active' : ''}" data-action="set-width" data-val="small">
+            <span class="embed-sz-badge">S</span> Small (220px)
+          </button>
+          <button type="button" class="embed-tb-dropdown-item ${widthPreset.startsWith('medium') ? 'active' : ''}" data-action="set-width" data-val="medium">
+            <span class="embed-sz-badge">M</span> Medium (420px)
+          </button>
+          <button type="button" class="embed-tb-dropdown-item ${widthPreset.startsWith('large') ? 'active' : ''}" data-action="set-width" data-val="large">
+            <span class="embed-sz-badge">L</span> Large (680px)
+          </button>
+          <button type="button" class="embed-tb-dropdown-item ${widthPreset === 'full' ? 'active' : ''}" data-action="set-width" data-val="full">
+            <span class="embed-sz-badge">Full</span> Full Width (100%)
+          </button>
+        </div>
       </div>
-      <div class="embed-tb-segment">
-        <button type="button" class="embed-tb-btn ${displayMode === 'compact' ? 'active' : ''}" data-action="set-mode" data-val="compact" title="1-Row Compact Card">
-          <i data-lucide="align-justify" class="w-3.5 h-3.5"></i>
+      <div class="embed-tb-segment" style="position:relative">
+        <button type="button" class="embed-tb-btn" data-action="toggle-mode-menu" title="Display Mode">
+          <i data-lucide="${activeModeIcon}" class="w-4 h-4 embed-mode-icon"></i>
         </button>
-        <button type="button" class="embed-tb-btn ${displayMode === 'preview' ? 'active' : ''}" data-action="set-mode" data-val="preview" title="Rich Preview Card">
-          <i data-lucide="image" class="w-3.5 h-3.5"></i>
-        </button>
-        <button type="button" class="embed-tb-btn ${displayMode === 'interactive' ? 'active' : ''}" data-action="set-mode" data-val="interactive" title="Live Interactive Embed">
-          <i data-lucide="tv" class="w-3.5 h-3.5"></i>
-        </button>
+        <div class="embed-tb-dropdown embed-mode-dropdown hidden" contenteditable="false">
+          <button type="button" class="embed-tb-dropdown-item ${displayMode === 'compact' ? 'active' : ''}" data-action="set-mode" data-val="compact">
+            <i data-lucide="align-justify" class="w-4 h-4"></i> Compact Card (1-Row)
+          </button>
+          <button type="button" class="embed-tb-dropdown-item ${displayMode === 'preview' ? 'active' : ''}" data-action="set-mode" data-val="preview">
+            <i data-lucide="image" class="w-4 h-4"></i> Rich Preview Card
+          </button>
+          <button type="button" class="embed-tb-dropdown-item ${displayMode === 'interactive' ? 'active' : ''}" data-action="set-mode" data-val="interactive">
+            <i data-lucide="tv" class="w-4 h-4"></i> Live Interactive Embed
+          </button>
+        </div>
       </div>
       <div class="embed-tb-segment">
         <select class="embed-tb-select" data-action="set-aspect" title="Aspect Ratio">
@@ -779,19 +808,27 @@
           <option value="9-16" ${aspectRatio === '9-16' ? 'selected' : ''}>9:16</option>
         </select>
       </div>
-      <div class="embed-tb-segment">
+      <div class="embed-tb-segment" style="position:relative">
         <button type="button" class="embed-tb-btn" data-action="expand" title="Fullscreen Lightbox">
           <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
         </button>
-        <button type="button" class="embed-tb-btn" data-action="copy" title="Copy Link">
-          <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+        <button type="button" class="embed-tb-btn" data-action="toggle-more-menu" title="More Options">
+          <i data-lucide="more-vertical" class="w-3.5 h-3.5"></i>
         </button>
-        <a href="${esc(canonicalUrl)}" target="_blank" rel="noopener noreferrer" class="embed-tb-btn" title="Open Source Link">
-          <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
-        </a>
         <button type="button" class="embed-tb-btn embed-tb-btn-danger" data-action="remove" title="Remove Embed">
           <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
         </button>
+        <div class="embed-tb-dropdown embed-more-menu hidden" contenteditable="false">
+          <button type="button" class="embed-more-item" data-action="copy">
+            <i data-lucide="copy" class="w-4 h-4"></i> Copy Link
+          </button>
+          <a href="${esc(canonicalUrl)}" target="_blank" rel="noopener noreferrer" class="embed-more-item">
+            <i data-lucide="external-link" class="w-4 h-4"></i> Open Source Link
+          </a>
+          <button type="button" class="embed-more-item" data-action="edit-url">
+            <i data-lucide="edit-3" class="w-4 h-4"></i> Edit Source URL
+          </button>
+        </div>
       </div>
     `;
 
@@ -799,30 +836,60 @@
       if (typeof global.lucide?.createIcons === 'function') global.lucide.createIcons();
     }, 0);
 
+    const closeAllDropdownsExcept = (exceptMenu) => {
+      bar.querySelectorAll('.embed-tb-dropdown').forEach(m => {
+        if (m !== exceptMenu) m.classList.add('hidden');
+      });
+    };
+
     // Event listeners for micro-pill buttons
     bar.addEventListener('click', (e) => {
       e.stopPropagation();
-      const btn = e.target.closest('button[data-action]');
+      const btn = e.target.closest('button[data-action], a[data-action]');
       if (!btn) return;
       const act = btn.getAttribute('data-action');
       const val = btn.getAttribute('data-val');
 
-      if (act === 'remove') {
+      if (act === 'toggle-size-menu') {
+        const menu = bar.querySelector('.embed-size-dropdown');
+        closeAllDropdownsExcept(menu);
+        if (menu) menu.classList.toggle('hidden');
+      } else if (act === 'toggle-mode-menu') {
+        const menu = bar.querySelector('.embed-mode-dropdown');
+        closeAllDropdownsExcept(menu);
+        if (menu) menu.classList.toggle('hidden');
+      } else if (act === 'toggle-more-menu') {
+        const menu = bar.querySelector('.embed-more-menu');
+        closeAllDropdownsExcept(menu);
+        if (menu) menu.classList.toggle('hidden');
+      } else if (act === 'set-width') {
+        updateEmbedSetup(embed, { widthPreset: val });
+        bar.querySelectorAll('.embed-size-dropdown .embed-tb-dropdown-item').forEach(b => {
+          b.classList.toggle('active', b.getAttribute('data-val') === val);
+        });
+        const labelEl = bar.querySelector('[data-action="toggle-size-menu"] .embed-tb-label');
+        if (labelEl) labelEl.textContent = sizeLabels[val] || 'M';
+      } else if (act === 'set-mode') {
+        updateEmbedSetup(embed, { displayMode: val });
+        bar.querySelectorAll('.embed-mode-dropdown .embed-tb-dropdown-item').forEach(b => {
+          b.classList.toggle('active', b.getAttribute('data-val') === val);
+        });
+      } else if (act === 'remove') {
+        closeAllDropdownsExcept(null);
         embed.remove();
         if (typeof global.toast === 'function') global.toast('Embed removed');
         if (typeof global.flushActiveLeaf === 'function') global.flushActiveLeaf();
       } else if (act === 'copy') {
+        closeAllDropdownsExcept(null);
         if (navigator.clipboard && canonicalUrl) {
           navigator.clipboard.writeText(canonicalUrl);
           if (typeof global.toast === 'function') global.toast('Link copied to clipboard');
         }
       } else if (act === 'expand') {
+        closeAllDropdownsExcept(null);
         openEmbedLightbox(embed);
-      } else if (act === 'set-mode') {
-        updateEmbedSetup(embed, { displayMode: val });
-      } else if (act === 'set-width') {
-        updateEmbedSetup(embed, { widthPreset: val });
       } else if (act === 'edit-url') {
+        closeAllDropdownsExcept(null);
         openEmbedModal({
           initialUrl: canonicalUrl,
           targetEmbed: embed
@@ -830,12 +897,41 @@
       }
     });
 
+    const onOutsideClick = (e) => {
+      if (!bar.contains(e.target)) {
+        closeAllDropdownsExcept(null);
+      }
+    };
+    document.addEventListener('click', onOutsideClick);
+
     const aspectSel = bar.querySelector('select[data-action="set-aspect"]');
     if (aspectSel) {
       aspectSel.addEventListener('change', (e) => {
         updateEmbedSetup(embed, { aspectRatio: e.target.value });
       });
     }
+
+    // ── Touch Focus Guard ──────────────────────────────────────────────────
+    // Prevent the contenteditable editor from placing a text cursor/caret
+    // when the user taps on the card (not on a toolbar button/input/link).
+    // Using pointerdown covers both mouse and touch (pen/finger).
+    const isInteractiveTarget = (el) =>
+      el && el.closest('button, a, input, select, textarea, [contenteditable="true"]');
+
+    embed.addEventListener('pointerdown', (e) => {
+      if (!isInteractiveTarget(e.target)) {
+        // Prevent the editor from receiving focus and placing a caret
+        e.preventDefault();
+      }
+    });
+
+    // Belt-and-suspenders: also block touchstart default on iOS Safari
+    embed.addEventListener('touchstart', (e) => {
+      if (!isInteractiveTarget(e.target)) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+    // ── End Touch Focus Guard ──────────────────────────────────────────────
 
     return bar;
   }
@@ -1118,5 +1214,6 @@
   global.hydrateEmbeds = hydrateEmbeds;
   global.dehydrateEmbeds = dehydrateEmbeds;
   global.openEmbedModal = openEmbedModal;
+  global.updateEmbedSetup = updateEmbedSetup;
 
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : global));

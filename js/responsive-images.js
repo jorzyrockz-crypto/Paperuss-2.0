@@ -269,6 +269,7 @@ function selectImage(img){
   clearImageSelection(true);
   selectedImg=img;
   img.classList.add('img-selected');
+  attachImgTouchGuard(img); // prevent caret jump on touch
   if(deviceClass()==='phone') openImageSheet();
   else syncImageChrome();
 }
@@ -281,17 +282,143 @@ function clearImageSelection(skipSheet){
   if(!skipSheet) closeImageSheet();
 }
 
-/* Position the floating toolbar + corner handles around the selection. */
-function syncImageChrome(){
+/* ── Image Toolbar Dropdown Helpers (Unified Floating Toolbar Design System) ── */
+function closeAllItbDropdowns(exceptEl){
+  document.querySelectorAll('#imgToolbar .itb-dropdown').forEach(d=>{
+    if(d!==exceptEl) d.classList.add('hidden');
+  });
+}
+
+/* Wire up dropdown toggle buttons (called once on init) */
+function initImgToolbarDropdowns(){
+  const tb=document.getElementById('imgToolbar');
+  if(!tb||tb._itbInited) return;
+  tb._itbInited=true;
+
+  // Keep selection while clicking toolbar
+  tb.addEventListener('mousedown', e=>e.preventDefault());
+
+  // Size dropdown
+  const sizeToggle=document.getElementById('imgTbSizeToggle');
+  const sizeDrop=document.getElementById('imgTbSizeDrop');
+  if(sizeToggle && sizeDrop){
+    sizeToggle.addEventListener('click', e=>{
+      e.stopPropagation();
+      closeAllItbDropdowns(sizeDrop);
+      sizeDrop.classList.toggle('hidden');
+    });
+  }
+
+  // More ⋮ dropdown
+  const moreToggle=document.getElementById('imgTbMoreToggle');
+  const moreDrop=document.getElementById('imgTbMoreDrop');
+  if(moreToggle && moreDrop){
+    moreToggle.addEventListener('click', e=>{
+      e.stopPropagation();
+      closeAllItbDropdowns(moreDrop);
+      moreDrop.classList.toggle('hidden');
+    });
+  }
+
+  // Outside-click closes all dropdowns
+  document.addEventListener('click', e=>{
+    if(!tb.contains(e.target)) closeAllItbDropdowns(null);
+  });
+}
+
+/* Touch Focus Guard — prevent caret jump when tapping a selected image */
+function attachImgTouchGuard(img){
+  if(!img || img._itbTouchGuard) return;
+  img._itbTouchGuard=true;
+  const isInteractive=(el)=>el&&el.closest('button,a,input,select,textarea,[contenteditable="true"]');
+  img.addEventListener('pointerdown', e=>{ if(!isInteractive(e.target)) e.preventDefault(); });
+  img.addEventListener('touchstart', e=>{ if(!isInteractive(e.target)) e.preventDefault(); },{passive:false});
+}
+
+let hoveredImg = null;
+let hideToolbarTimer = null;
+
+function hasOpenItbDropdown() {
+  return !!document.querySelector('#imgToolbar .itb-dropdown:not(.hidden)');
+}
+
+function checkHideImageToolbar() {
+  const tb = document.getElementById('imgToolbar');
+  if (!tb) return;
+  if (selectedImg || hoveredImg || hasOpenItbDropdown() || tb._mouseOver) return;
+  tb.classList.remove('show');
+}
+
+/* Wire hover listeners on #imgToolbar itself */
+function initImgToolbarHoverGuard() {
+  const tb = document.getElementById('imgToolbar');
+  if (!tb || tb._hoverGuardInited) return;
+  tb._hoverGuardInited = true;
+
+  tb.addEventListener('mouseenter', () => {
+    tb._mouseOver = true;
+    if (hideToolbarTimer) clearTimeout(hideToolbarTimer);
+  });
+  tb.addEventListener('mouseleave', (e) => {
+    tb._mouseOver = false;
+    // If cursor moved directly back onto the hovered or selected image, don't hide
+    if (e.relatedTarget && (e.relatedTarget === hoveredImg || e.relatedTarget === selectedImg || e.relatedTarget.closest?.('img'))) {
+      return;
+    }
+    hideToolbarTimer = setTimeout(() => {
+      checkHideImageToolbar();
+    }, 150);
+  });
+}
+
+function handleImgHover(img) {
+  if (!img || deviceClass() === 'phone') return;
+  attachImgHoverGuard(img);
+  attachImgTouchGuard(img);
+  if (hoveredImg !== img) {
+    hoveredImg = img;
+    if (hideToolbarTimer) clearTimeout(hideToolbarTimer);
+    syncImageChrome(img);
+  }
+}
+
+/* Attach mouseenter/mouseleave listeners to image elements */
+function attachImgHoverGuard(img) {
+  if (!img || img._itbHoverGuard) return;
+  img._itbHoverGuard = true;
+
+  img.addEventListener('mouseenter', () => {
+    handleImgHover(img);
+  });
+
+  img.addEventListener('mouseleave', (e) => {
+    if (deviceClass() === 'phone') return;
+    const tb = document.getElementById('imgToolbar');
+    // If mouse moves directly onto the toolbar or any of its children, don't hide
+    if (tb && e.relatedTarget && (e.relatedTarget === tb || tb.contains(e.relatedTarget))) {
+      return;
+    }
+    hideToolbarTimer = setTimeout(() => {
+      if (hoveredImg === img) hoveredImg = null;
+      checkHideImageToolbar();
+    }, 150);
+  });
+}
+
+
+/* Position the floating toolbar + corner handles around the selection or hovered image. */
+function syncImageChrome(targetOverride){
   const tb=document.getElementById('imgToolbar');
   const handles=document.querySelectorAll('.img-handle');
   const dev=deviceClass();
-  if(!selectedImg || dev==='phone'){
-    tb?.classList.remove('show');
+  const target = targetOverride || selectedImg || hoveredImg;
+
+  if(!target || dev==='phone'){
+    if (!selectedImg && !hoveredImg) tb?.classList.remove('show');
     handles.forEach(h=>h.classList.remove('show'));
     return;
   }
-  const r=selectedImg.getBoundingClientRect();
+  const r=target.getBoundingClientRect();
   const edRect=bodyEl().getBoundingClientRect();
   // Hide chrome if the image is scrolled out of the editor viewport.
   if(r.bottom<edRect.top || r.top>edRect.bottom){
@@ -300,23 +427,34 @@ function syncImageChrome(){
     return;
   }
   if(tb){
+    initImgToolbarDropdowns();
+    initImgToolbarHoverGuard();
     tb.classList.add('show');
-    const tw=tb.offsetWidth||300;
-    let top=r.top-tb.offsetHeight-10;
-    if(top<edRect.top+6) top=r.bottom+10;            // flip below when clipped
+    const tw=tb.offsetWidth||200;
+    // Flush 0px gap above image (toolbar bottom edge touches image top edge)
+    let top=r.top-tb.offsetHeight;
+    if(top<edRect.top+6) top=r.bottom+6; // flip below when clipped at top
     tb.style.top=`${Math.round(top)}px`;
     tb.style.left=`${Math.round(Math.max(8,Math.min(r.left+r.width/2-tw/2,window.innerWidth-tw-8)))}px`;
+    // Sync size active state in dropdown
+    const curSize=target.getAttribute('data-img-size')||'large';
     tb.querySelectorAll('[data-imgsize]').forEach(b=>{
-      b.classList.toggle('active', b.dataset.imgsize===selectedImg.getAttribute('data-img-size'));
+      b.classList.toggle('active', b.dataset.imgsize===curSize);
     });
   }
-  const pts={nw:[r.left,r.top],ne:[r.right,r.top],sw:[r.left,r.bottom],se:[r.right,r.bottom]};
-  handles.forEach(h=>{
-    const [x,y]=pts[h.dataset.corner];
-    h.classList.add('show');
-    h.style.left=`${Math.round(x-7)}px`;
-    h.style.top=`${Math.round(y-7)}px`;
-  });
+
+  // Corner handles only show for explicitly selected image
+  if (selectedImg && target === selectedImg) {
+    const pts={nw:[r.left,r.top],ne:[r.right,r.top],sw:[r.left,r.bottom],se:[r.right,r.bottom]};
+    handles.forEach(h=>{
+      const [x,y]=pts[h.dataset.corner];
+      h.classList.add('show');
+      h.style.left=`${Math.round(x-7)}px`;
+      h.style.top=`${Math.round(y-7)}px`;
+    });
+  } else {
+    handles.forEach(h=>h.classList.remove('show'));
+  }
 }
 
 /* ---- Mobile bottom sheet ---- */

@@ -982,10 +982,10 @@ function initResponsiveImages(){
   let lastClickedImg=null; // for Shift-range selection
 
   ed.addEventListener('click', e=>{
-    const img=e.target.closest('img[data-media-id]');
+    const img=e.target.closest('img[data-media-id], .paperuss-card[data-media-id]');
     if(!img){
-      // Click outside image: clear both selections unless clicking our own chrome
-      if(!e.target.closest('.img-toolbar') && !e.target.closest('#imgBatchBar')){
+      // Click outside image/card: clear selections unless clicking toolbar or card chrome
+      if(!e.target.closest('.img-toolbar') && !e.target.closest('#imgBatchBar') && !e.target.closest('.paperuss-card') && !e.target.closest('.paperuss-embed')){
         clearImageSelection();
         clearMultiSelection();
       }

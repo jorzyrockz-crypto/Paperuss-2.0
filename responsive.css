@@ -257,4 +257,11 @@
   .hl-swatch{width:32px;height:32px}
   .sz-opt,.fs-opt{padding:10px 14px}
   .profile-menu-item,.block-menu-item,.icm-item{padding:11px 12px}
+  /* Mobile cards: stack full-width in single column */
+  .media-card, .paperuss-embed, .broken-media-card {
+    display: flex !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 8px 0 12px 0 !important;
+  }
 }

@@ -1890,27 +1890,104 @@ blockquote.note-callout.callout-info {
   margin-left: auto;
 }
 
-/* ============ UNIFIED EMBED & RICH LINK CARD STYLING ============ */
+/* Master Card Container Architecture (.paperuss-card / .paperuss-embed) */
+.paperuss-card,
 .paperuss-embed {
   position: relative; /* Anchor for top floating toolbar */
-  margin: 10px 0;
-  border-radius: 10px;
+  display: inline-flex;
+  flex-direction: column;
+  vertical-align: top;
+  margin: 8px 12px 12px 0;
+  max-width: 100%;
+  border-radius: var(--media-card-radius, 12px);
   overflow: visible; /* Allows top toolbar to float cleanly above card */
   background: var(--subtle);
   border: 1px solid var(--border);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
-  /* Prevent touch from placing a text caret into the editor */
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, outline 0.18s ease;
+  /* TouchGuard protections */
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   caret-color: transparent;
   touch-action: manipulation;
 }
+.paperuss-card.card-width-full,
+.paperuss-embed.embed-width-full {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  margin: 14px 0;
+  clear: both;
+}
+.paperuss-card:hover,
 .paperuss-embed:hover {
   border-color: var(--fg-muted);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
 }
+.paperuss-card.card-selected,
+.paperuss-embed.embed-selected {
+  outline: 2.5px solid var(--accent) !important;
+  box-shadow: 0 0 0 4px var(--accent-soft) !important;
+}
+
+/* Master Card Sub-Elements */
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px 4px;
+}
+.card-badge-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.card-type-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--fg-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.card-type-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.card-title-text {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-body {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 12px 10px;
+  gap: 6px;
+}
+.card-caption {
+  font-size: 12px;
+  color: var(--fg-muted);
+  padding: 4px 12px 8px;
+  border-top: 1px dashed var(--border);
+  outline: none;
+}
+.card-caption[contenteditable="true"]:focus {
+  color: var(--fg);
+}
+
+/* ============ UNIFIED EMBED & RICH LINK CARD STYLING ============ */
 .embed-canonical-card {
   display: flex;
   flex-direction: column;

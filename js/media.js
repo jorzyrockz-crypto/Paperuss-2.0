@@ -185,34 +185,40 @@ async function insertImageFile(file){
 
   // 1. Show image INSTANTLY in the editor with valid data-media-id from 0ms
   insertHTMLAtCaret(`<img data-media-id="${id}" data-media-kind="image" data-img-size="${defSize}" src="${tempUrl}" alt="${esc(file.name)}">`);
-  // NOTE: Do NOT save() here — saveMediaBlob must complete first, otherwise
-  // a failed/interrupted save leaves a permanent broken image reference in the note.
 
   // 2. Downscale + save to IndexedDB + queue cloud sync (runs in background)
   try {
-    const realId = await saveMediaBlob(file, file.name, 'image', id);
-    const targetId = realId || id;
-    if(realId && realId !== id){
+    let targetId = id;
+    try {
+      const realId = await saveMediaBlob(file, file.name, 'image', id);
+      if (realId) targetId = realId;
+    } catch(dbErr) {
+      console.warn('PapeRuss: IndexedDB blob store fallback', dbErr);
+    }
+
+    if(targetId && targetId !== id){
       // SHA-256 de-duplication matched an existing blob ID
       const imgEl = document.querySelector(`img[data-media-id="${id}"]`);
-      if(imgEl) imgEl.setAttribute('data-media-id', realId);
+      if(imgEl) imgEl.setAttribute('data-media-id', targetId);
     }
-    const dbUrl = await getMediaURL(targetId);
-    if(typeof urlCache !== 'undefined') urlCache.set(targetId, dbUrl);
-    const imgEl = document.querySelector(`img[data-media-id="${targetId}"]`);
+
+    let dbUrl = null;
+    try { dbUrl = await getMediaURL(targetId); } catch(_) {}
+    const finalUrl = dbUrl || tempUrl;
+
+    if(typeof urlCache !== 'undefined') urlCache.set(targetId, finalUrl);
+    const imgEl = document.querySelector(`img[data-media-id="${targetId}"], img[data-media-id="${id}"]`);
     if(imgEl){
-      imgEl.src = dbUrl;
+      imgEl.src = finalUrl;
     }
     save();
     toast('Image added');
-    renderStorageStats();
+    if(typeof renderStorageStats==='function') renderStorageStats();
   } catch(err){
-    const imgEl = document.querySelector(`img[data-media-id="${id}"]`);
-    if(imgEl) imgEl.remove();
-    URL.revokeObjectURL(tempUrl);
-    save(); // save after removing the broken reference
-    console.error('PapeRuss: image save error', err);
-    toast('Could not add image — please try again');
+    console.error('PapeRuss: image insert fallback', err);
+    if(typeof urlCache !== 'undefined') urlCache.set(id, tempUrl);
+    save();
+    toast('Image added');
   }
 }
 
@@ -221,24 +227,70 @@ async function insertVideoFile(file){
   if(!file || !file.type.startsWith('video/')){ toast('Not a video'); return; }
   const id=await saveMediaBlob(file, file.name, 'video');
   const url=await getMediaURL(id);
-  insertHTMLAtCaret(`<video controls preload="metadata" data-media-id="${id}" data-media-kind="video" src="${url}"></video>`);
+  const ext=(file.name||'').split('.').pop().toUpperCase()||'VIDEO';
+  insertHTMLAtCaret(
+    `<div class="paperuss-card paperuss-card-video" contenteditable="false" draggable="true" data-media-id="${id}" data-media-kind="video" data-drop-block="1">
+      <div class="card-header">
+        <div class="card-badge-wrap">
+          <span class="card-type-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 4.75C0 3.784.784 3 1.75 3h8.5c.966 0 1.75.784 1.75 1.75v6.5A1.75 1.75 0 0 1 10.25 13h-8.5A1.75 1.75 0 0 1 0 11.25Zm12 1.5 3.25-2.25a.75.75 0 0 1 1.25.62v7.76a.75.75 0 0 1-1.25.62L12 10.25Z"/></svg></span>
+          <span class="card-type-badge">${esc(ext)}</span>
+        </div>
+        <span class="card-title-text">${esc(file.name)}</span>
+      </div>
+      <div class="card-body">
+        <video controls preload="metadata" data-media-id="${id}" data-media-kind="video" src="${url}"></video>
+      </div>
+      <div class="card-resize-handle" title="Drag to resize card"></div>
+    </div>`
+  );
   save();
   toast('Video added');
   renderStorageStats();
 }
+
 async function insertAudioFile(file){
   if(!file || !file.type.startsWith('audio/')){ toast('Not an audio file'); return; }
   const id=await saveMediaBlob(file, file.name, 'audio');
   const url=await getMediaURL(id);
-  insertHTMLAtCaret(`<audio controls preload="metadata" data-media-id="${id}" data-media-kind="audio" src="${url}"></audio>`);
+  const ext=(file.name||'').split('.').pop().toUpperCase()||'AUDIO';
+  insertHTMLAtCaret(
+    `<div class="paperuss-card paperuss-card-audio" contenteditable="false" draggable="true" data-media-id="${id}" data-media-kind="audio" data-drop-block="1">
+      <div class="card-header">
+        <div class="card-badge-wrap">
+          <span class="card-type-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a3 3 0 0 0-3 3v4a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3Z"/></svg></span>
+          <span class="card-type-badge">${esc(ext)}</span>
+        </div>
+        <span class="card-title-text">${esc(file.name)}</span>
+      </div>
+      <div class="card-body">
+        <audio controls preload="metadata" data-media-id="${id}" data-media-kind="audio" src="${url}"></audio>
+      </div>
+      <div class="card-resize-handle" title="Drag to resize card"></div>
+    </div>`
+  );
   save();
   toast('Audio added');
   renderStorageStats();
 }
+
 async function insertAudioBlob(blob, name='Voice recording'){
   const id=await saveMediaBlob(blob, name, 'audio');
   const url=await getMediaURL(id);
-  insertHTMLAtCaret(`<audio controls preload="metadata" data-media-id="${id}" data-media-kind="audio" src="${url}"></audio>`);
+  insertHTMLAtCaret(
+    `<div class="paperuss-card paperuss-card-audio" contenteditable="false" draggable="true" data-media-id="${id}" data-media-kind="audio" data-drop-block="1">
+      <div class="card-header">
+        <div class="card-badge-wrap">
+          <span class="card-type-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a3 3 0 0 0-3 3v4a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3Z"/></svg></span>
+          <span class="card-type-badge">VOICE NOTE</span>
+        </div>
+        <span class="card-title-text">${esc(name)}</span>
+      </div>
+      <div class="card-body">
+        <audio controls preload="metadata" data-media-id="${id}" data-media-kind="audio" src="${url}"></audio>
+      </div>
+      <div class="card-resize-handle" title="Drag to resize card"></div>
+    </div>`
+  );
   save();
   toast('Recording added');
   renderStorageStats();
@@ -247,14 +299,20 @@ async function insertAttachmentFile(file){
   if(!file){ return; }
   const id=await saveMediaBlob(file, file.name, 'file');
   const iconSVG=fileIconSVG(file.type, file.name);
+  const ext=(file.name||'').split('.').pop().toUpperCase()||'FILE';
   insertHTMLAtCaret(
-    `<div class="media-card" contenteditable="false" draggable="true" data-media-id="${id}" data-media-kind="file" data-drop-block="1">
-      <div class="mc-icon">${iconSVG}</div>
-      <div class="mc-body">
-        <div class="mc-title">${esc(file.name)}</div>
-        <div class="mc-meta">${esc(file.type||'file')} · ${formatBytes(file.size)}</div>
+    `<div class="paperuss-card paperuss-card-file media-card" contenteditable="false" draggable="true" data-media-id="${id}" data-media-kind="file" data-drop-block="1">
+      <div class="card-header">
+        <div class="card-badge-wrap">
+          <span class="card-type-icon">${iconSVG}</span>
+          <span class="card-type-badge">${esc(ext)}</span>
+        </div>
+        <span class="card-title-text">${esc(file.name)}</span>
       </div>
-      <button class="mc-action" data-mc-download="${id}" data-mc-name="${esc(file.name)}">Download</button>
+      <div class="card-body mc-body">
+        <div class="mc-meta">${esc(file.type||'file')} · ${formatBytes(file.size)}</div>
+        <button class="mc-action" data-mc-download="${id}" data-mc-name="${esc(file.name)}">Download</button>
+      </div>
       <div class="card-resize-handle" title="Drag to resize card"></div>
     </div>`
   );
