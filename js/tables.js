@@ -1040,6 +1040,17 @@ function initResponsiveImages(){
     selectImage(img);
   });
 
+  ed.addEventListener('mouseover', e => {
+    const img = e.target.closest('img');
+    if (img) {
+      if (typeof handleImgHover === 'function') handleImgHover(img);
+      else {
+        if (typeof attachImgHoverGuard === 'function') attachImgHoverGuard(img);
+        if (typeof attachImgTouchGuard === 'function') attachImgTouchGuard(img);
+      }
+    }
+  }, { passive: true });
+
   // Long press: enters multi-select mode on mobile/tablet; opens context on desktop
   ed.addEventListener('touchstart', e=>{
     const img=e.target.closest('img[data-media-id]');
@@ -1066,9 +1077,12 @@ function initResponsiveImages(){
 
   /* ----- Floating toolbar ----- */
   if(tb){
-    tb.addEventListener('mousedown', e=>e.preventDefault()); // keep selection
     tb.addEventListener('click', e=>{
       const btn=e.target.closest('button'); if(!btn||!selectedImg) return;
+      // Skip dropdown-toggle buttons — handled by responsive-images.js
+      if(['imgTbSizeToggle','imgTbMoreToggle'].includes(btn.id)) return;
+      // Close all dropdowns after any action fires
+      if(typeof closeAllItbDropdowns==='function') closeAllItbDropdowns(null);
       if(btn.dataset.imgsize) return setImageSizeEx(selectedImg, btn.dataset.imgsize);
       if(btn.id==='imgTbCrop') return openCropModal(selectedImg);
       if(btn.id==='imgTbAlignLeft') return setImageAlign(selectedImg,'left');

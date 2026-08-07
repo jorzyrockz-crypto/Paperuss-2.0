@@ -51,15 +51,23 @@ function insertHTMLAtCaret(html){
   while(tmp.firstChild){ last=tmp.firstChild; frag.appendChild(last); }
   range.insertNode(frag);
 
-  // Move caret after the inserted block + add an empty paragraph so users can keep typing
-  const br=document.createElement('p'); br.innerHTML='<br>';
-  if(last && last.parentNode){ last.parentNode.insertBefore(br, last.nextSibling); }
-  try{
-    const r=document.createRange(); r.setStart(br,0); r.collapse(true);
-    sel.removeAllRanges(); sel.addRange(r);
-    savedEditorRange=r.cloneRange();
-  }catch(_){}
-  handleBodyInput();
+  // Insert an inline text spacer (\u200B ) after inserted card to preserve inline flow
+  if(last && last.parentNode){
+    const spacer = document.createTextNode('\u200B ');
+    last.parentNode.insertBefore(spacer, last.nextSibling);
+    try {
+      const r = document.createRange();
+      r.setStart(spacer, spacer.nodeValue.length);
+      r.collapse(true);
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(r);
+      }
+      savedEditorRange = r.cloneRange();
+    } catch (_) {}
+  }
+  if (typeof handleBodyInput === 'function') handleBodyInput();
+  if (typeof save === 'function') save();
 }
 
 
@@ -240,13 +248,14 @@ async function insertAttachmentFile(file){
   const id=await saveMediaBlob(file, file.name, 'file');
   const iconSVG=fileIconSVG(file.type, file.name);
   insertHTMLAtCaret(
-    `<div class="media-card" contenteditable="false" data-media-id="${id}" data-media-kind="file" data-drop-block="1">
+    `<div class="media-card" contenteditable="false" draggable="true" data-media-id="${id}" data-media-kind="file" data-drop-block="1">
       <div class="mc-icon">${iconSVG}</div>
       <div class="mc-body">
         <div class="mc-title">${esc(file.name)}</div>
         <div class="mc-meta">${esc(file.type||'file')} · ${formatBytes(file.size)}</div>
       </div>
       <button class="mc-action" data-mc-download="${id}" data-mc-name="${esc(file.name)}">Download</button>
+      <div class="card-resize-handle" title="Drag to resize card"></div>
     </div>`
   );
   save();
@@ -456,8 +465,54 @@ function currentAlignment(){
   return 'left';
 }
 function applyAlignment(dir){
+  // Check if a card has explicit click focus or active selection FIRST
+  let mediaBlock = document.querySelector('#noteBody .card-selected, #noteBody [data-card-selected="true"]');
+
+  const sel = window.getSelection();
+  if(!mediaBlock && sel && sel.anchorNode){
+    let node = sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode;
+    mediaBlock = node?.closest?.('.paperuss-embed, .media-card, .broken-media-card, [data-paperuss-embed="true"]');
+  }
+
+  if(mediaBlock){
+    if(!dir){
+      const currentFloat = mediaBlock.style.float || (mediaBlock.className.includes('left') ? 'left' : mediaBlock.className.includes('right') ? 'right' : 'none');
+      if(currentFloat === 'left') dir = 'center';
+      else if(currentFloat === 'none' && (mediaBlock.style.margin.includes('auto') || mediaBlock.className.includes('medium'))) dir = 'right';
+      else if(currentFloat === 'right') dir = 'full';
+      else dir = 'left';
+    }
+
+    if(dir === 'left'){
+      mediaBlock.style.float = 'left';
+      mediaBlock.style.margin = '8px 18px 12px 0';
+      mediaBlock.style.clear = 'none';
+      mediaBlock.setAttribute('data-card-align', 'left');
+    } else if(dir === 'right'){
+      mediaBlock.style.float = 'right';
+      mediaBlock.style.margin = '8px 0 12px 18px';
+      mediaBlock.style.clear = 'none';
+      mediaBlock.setAttribute('data-card-align', 'right');
+    } else if(dir === 'center'){
+      mediaBlock.style.float = 'none';
+      mediaBlock.style.margin = '14px auto';
+      mediaBlock.style.clear = 'both';
+      mediaBlock.setAttribute('data-card-align', 'center');
+    } else {
+      mediaBlock.style.float = 'none';
+      mediaBlock.style.margin = '12px 0';
+      mediaBlock.style.clear = 'both';
+      mediaBlock.setAttribute('data-card-align', 'full');
+    }
+
+    updateAlignmentButton();
+    if(typeof handleBodyInput === 'function') handleBodyInput();
+    if(typeof save === 'function') save();
+    if(typeof updateToolbarState === 'function') updateToolbarState();
+    return;
+  }
+
   focusEditor();
-  // If invoked without a direction, cycle to the next one.
   if(!dir){
     const cur=currentAlignment();
     const idx=ALIGN_ORDER.indexOf(cur);
@@ -465,18 +520,480 @@ function applyAlignment(dir){
   }
   document.execCommand(ALIGN_CMD[dir]||'justifyLeft', false, null);
   updateAlignmentButton();
-  handleBodyInput();
-  updateToolbarState();
+  if(typeof handleBodyInput === 'function') handleBodyInput();
+  if(typeof updateToolbarState === 'function') updateToolbarState();
 }
+
+// Click-to-focus card selection event delegation
+document.addEventListener('click', (e) => {
+  const noteBody = document.getElementById('noteBody');
+  if (!noteBody) return;
+  const card = e.target.closest('.paperuss-embed, .media-card, .broken-media-card, [data-paperuss-embed="true"]');
+  if (card && noteBody.contains(card)) {
+    noteBody.querySelectorAll('.card-selected, [data-card-selected="true"]').forEach(el => {
+      if (el !== card) {
+        el.classList.remove('card-selected');
+        el.removeAttribute('data-card-selected');
+      }
+    });
+    card.classList.add('card-selected');
+    card.setAttribute('data-card-selected', 'true');
+    updateAlignmentButton();
+  } else if (!e.target.closest('#formatBar, .embed-editor-toolbar, .overflow-dropdown')) {
+    noteBody.querySelectorAll('.card-selected, [data-card-selected="true"]').forEach(el => {
+      el.classList.remove('card-selected');
+      el.removeAttribute('data-card-selected');
+    });
+    updateAlignmentButton();
+  }
+});
+
+// Drag-and-drop side-by-side card positioning system
+let draggedCardElement = null;
+
+document.addEventListener('dragstart', (e) => {
+  const noteBody = document.getElementById('noteBody');
+  if (!noteBody) return;
+  const card = e.target.closest('.media-card, .paperuss-embed, .broken-media-card, [data-paperuss-embed="true"]');
+  if (card && noteBody.contains(card)) {
+    draggedCardElement = card;
+    card.classList.add('is-dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.setData('text/plain', '');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+  }
+});
+
+document.addEventListener('dragend', () => {
+  if (draggedCardElement) {
+    draggedCardElement.classList.remove('is-dragging');
+    draggedCardElement = null;
+  }
+  document.querySelectorAll('.drop-target-left, .drop-target-right').forEach(el => {
+    el.classList.remove('drop-target-left', 'drop-target-right');
+  });
+});
+
+document.addEventListener('dragover', (e) => {
+  if (!draggedCardElement) return;
+  const noteBody = document.getElementById('noteBody');
+  if (!noteBody) return;
+  const targetCard = e.target.closest('.media-card, .paperuss-embed, .broken-media-card, [data-paperuss-embed="true"]');
+  if (targetCard && noteBody.contains(targetCard) && targetCard !== draggedCardElement) {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+
+    const rect = targetCard.getBoundingClientRect();
+    const isRight = (e.clientX - rect.left) > (rect.width / 2);
+
+    document.querySelectorAll('.drop-target-left, .drop-target-right').forEach(el => {
+      if (el !== targetCard) el.classList.remove('drop-target-left', 'drop-target-right');
+    });
+
+    if (isRight) {
+      targetCard.classList.remove('drop-target-left');
+      targetCard.classList.add('drop-target-right');
+    } else {
+      targetCard.classList.remove('drop-target-right');
+      targetCard.classList.add('drop-target-left');
+    }
+  }
+});
+
+document.addEventListener('dragleave', (e) => {
+  if (!draggedCardElement) return;
+  const targetCard = e.target.closest('.media-card, .paperuss-embed, .broken-media-card, [data-paperuss-embed="true"]');
+  if (targetCard && !targetCard.contains(e.relatedTarget)) {
+    targetCard.classList.remove('drop-target-left', 'drop-target-right');
+  }
+});
+
+document.addEventListener('drop', (e) => {
+  if (!draggedCardElement) return;
+  const noteBody = document.getElementById('noteBody');
+  if (!noteBody) return;
+  const targetCard = e.target.closest('.media-card, .paperuss-embed, .broken-media-card, [data-paperuss-embed="true"]');
+  if (targetCard && noteBody.contains(targetCard) && targetCard !== draggedCardElement) {
+    e.preventDefault();
+    const rect = targetCard.getBoundingClientRect();
+    const isRight = (e.clientX - rect.left) > (rect.width / 2);
+
+    if (isRight) {
+      targetCard.after(draggedCardElement);
+    } else {
+      targetCard.before(draggedCardElement);
+    }
+
+    draggedCardElement.classList.remove('is-dragging');
+    document.querySelectorAll('.drop-target-left, .drop-target-right').forEach(el => {
+      el.classList.remove('drop-target-left', 'drop-target-right');
+    });
+
+    draggedCardElement = null;
+    if (typeof handleBodyInput === 'function') handleBodyInput();
+    if (typeof save === 'function') save();
+  }
+});
+
+// Interactive Magnetic Card Resizer logic
+let activeResizingCard = null;
+let resizeStartX = 0;
+let resizeStartWidth = 0;
+let resizeTooltipEl = null;
+
+document.addEventListener('mousedown', (e) => {
+  const handle = e.target.closest('.card-resize-handle');
+  if (!handle) return;
+  const card = handle.closest('.media-card, .paperuss-embed, .broken-media-card, [data-paperuss-embed="true"]');
+  if (!card) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  activeResizingCard = card;
+  resizeStartX = e.clientX;
+  resizeStartWidth = card.getBoundingClientRect().width;
+
+  handle.classList.add('is-resizing');
+
+  // Create floating resize tooltip
+  if (!resizeTooltipEl) {
+    resizeTooltipEl = document.createElement('div');
+    resizeTooltipEl.className = 'card-resize-tooltip';
+    document.body.appendChild(resizeTooltipEl);
+  }
+  updateResizeTooltip(e.clientX, e.clientY, resizeStartWidth, calculateSnapPreset(resizeStartWidth));
+});
+
+function calculateSnapPreset(width) {
+  if (width <= 290) return { preset: 'small', label: 'Small (220px)', snapWidth: 220 };
+  if (width > 290 && width <= 550) return { preset: 'medium', label: 'Medium (420px)', snapWidth: 420 };
+  if (width > 550 && width <= 760) return { preset: 'large', label: 'Large (680px)', snapWidth: 680 };
+  return { preset: 'full', label: 'Full Width (100%)', snapWidth: null };
+}
+
+function updateResizeTooltip(x, y, currentWidth, snapInfo) {
+  if (!resizeTooltipEl) return;
+  resizeTooltipEl.style.left = `${x}px`;
+  resizeTooltipEl.style.top = `${y}px`;
+  resizeTooltipEl.textContent = `${Math.round(currentWidth)}px · ${snapInfo.label}`;
+}
+
+document.addEventListener('mousemove', (e) => {
+  if (!activeResizingCard) return;
+
+  const dx = e.clientX - resizeStartX;
+  let newWidth = Math.max(160, resizeStartWidth + dx);
+  const snapInfo = calculateSnapPreset(newWidth);
+
+  // Magnetic Snapping feel when within 25px of target width
+  if (snapInfo.snapWidth && Math.abs(newWidth - snapInfo.snapWidth) < 25) {
+    newWidth = snapInfo.snapWidth;
+  }
+
+  if (snapInfo.preset === 'full') {
+    activeResizingCard.style.width = '100%';
+    activeResizingCard.style.maxWidth = '100%';
+  } else {
+    activeResizingCard.style.width = `${newWidth}px`;
+    activeResizingCard.style.maxWidth = `${newWidth}px`;
+  }
+
+  updateResizeTooltip(e.clientX, e.clientY, newWidth, snapInfo);
+});
+
+document.addEventListener('mouseup', () => {
+  if (!activeResizingCard) return;
+
+  const handle = activeResizingCard.querySelector('.card-resize-handle');
+  if (handle) handle.classList.remove('is-resizing');
+
+  const currentWidth = activeResizingCard.getBoundingClientRect().width;
+  const snapInfo = calculateSnapPreset(currentWidth);
+
+  // Clear temporary inline width & apply permanent preset class
+  activeResizingCard.style.width = '';
+  activeResizingCard.style.maxWidth = '';
+
+  if (activeResizingCard.classList.contains('paperuss-embed')) {
+    if (typeof window.updateEmbedSetup === 'function') {
+      window.updateEmbedSetup(activeResizingCard, { widthPreset: snapInfo.preset });
+    }
+  } else {
+    // Media card class update
+    activeResizingCard.classList.remove('embed-width-small', 'embed-width-medium', 'embed-width-large', 'embed-width-full');
+    activeResizingCard.classList.add(`embed-width-${snapInfo.preset}`);
+    activeResizingCard.setAttribute('data-width-preset', snapInfo.preset);
+  }
+
+  if (resizeTooltipEl) {
+    resizeTooltipEl.remove();
+    resizeTooltipEl = null;
+  }
+
+  activeResizingCard = null;
+  if (typeof handleBodyInput === 'function') handleBodyInput();
+  if (typeof save === 'function') save();
+});
+
+// Inline Caret Placement Beside Cards
+function ensureCardCaretAnchors() {
+  const noteBody = document.getElementById('noteBody');
+  if (!noteBody) return;
+  const cards = noteBody.querySelectorAll('.media-card, .paperuss-embed, .broken-media-card, [data-paperuss-embed="true"]');
+  cards.forEach(card => {
+    if (!card.previousSibling || (card.previousSibling.nodeType === 3 && !card.previousSibling.nodeValue.includes('\u200B'))) {
+      card.parentNode.insertBefore(document.createTextNode('\u200B'), card);
+    }
+    if (!card.nextSibling || (card.nextSibling.nodeType === 3 && !card.nextSibling.nodeValue.includes('\u200B'))) {
+      card.parentNode.insertBefore(document.createTextNode('\u200B'), card.nextSibling);
+    }
+  });
+}
+window.ensureCardCaretAnchors = ensureCardCaretAnchors;
+
+function placeCaretNextToCard(card, position = 'after') {
+  if (!card) return;
+  ensureCardCaretAnchors();
+  const sel = window.getSelection();
+  if (!sel) return;
+  const range = document.createRange();
+  const targetNode = position === 'after' ? card.nextSibling : card.previousSibling;
+  if (targetNode && targetNode.nodeType === 3) {
+    range.setStart(targetNode, targetNode.nodeValue.length);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+}
+window.placeCaretNextToCard = placeCaretNextToCard;
+
+// Keyboard Media Safeguard System: Protect cards from accidental removal via keyboard
+document.addEventListener('keydown', (e) => {
+  const noteBody = document.getElementById('noteBody');
+  if (!noteBody) return;
+
+  const isDeleteKey = e.key === 'Backspace' || e.key === 'Delete' || e.keyCode === 8 || e.keyCode === 46;
+
+  // Clear deletion warnings on non-delete keypress
+  if (!isDeleteKey) {
+    document.querySelectorAll('#noteBody [data-deletion-warning="true"]').forEach(el => {
+      el.removeAttribute('data-deletion-warning');
+      el.classList.remove('card-deletion-warning');
+    });
+  }
+
+  const selectedCard = document.querySelector('#noteBody .card-selected, #noteBody [data-card-selected="true"]');
+  if (selectedCard) {
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      selectedCard.classList.remove('card-selected', 'card-deletion-warning');
+      selectedCard.removeAttribute('data-card-selected');
+      selectedCard.removeAttribute('data-deletion-warning');
+      placeCaretNextToCard(selectedCard, 'after');
+      if (typeof updateAlignmentButton === 'function') updateAlignmentButton();
+      return;
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      selectedCard.classList.remove('card-selected', 'card-deletion-warning');
+      selectedCard.removeAttribute('data-card-selected');
+      selectedCard.removeAttribute('data-deletion-warning');
+      placeCaretNextToCard(selectedCard, 'before');
+      if (typeof updateAlignmentButton === 'function') updateAlignmentButton();
+      return;
+    } else if (isDeleteKey) {
+      const isWarned = selectedCard.getAttribute('data-deletion-warning') === 'true';
+      if (!isWarned) {
+        // Step 1: Arm deletion warning safeguard
+        e.preventDefault();
+        e.stopPropagation();
+        selectedCard.setAttribute('data-deletion-warning', 'true');
+        selectedCard.classList.add('card-deletion-warning');
+        return;
+      } else {
+        // Step 2: Second Backspace/Delete keypress confirms removal
+        e.preventDefault();
+        e.stopPropagation();
+        const nextTarget = selectedCard.nextSibling || selectedCard.previousSibling;
+        selectedCard.remove();
+        if (nextTarget && nextTarget.nodeType === 3) {
+          const sel = window.getSelection();
+          if (sel) {
+            const range = document.createRange();
+            range.setStart(nextTarget, 0);
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        }
+        if (typeof handleBodyInput === 'function') handleBodyInput();
+        if (typeof save === 'function') save();
+        if (typeof updateAlignmentButton === 'function') updateAlignmentButton();
+        return;
+      }
+    }
+  }
+
+  // Caret-adjacent card safeguard (when typing text right next to a card)
+  if (isDeleteKey) {
+    const sel = window.getSelection();
+    if (sel && sel.anchorNode) {
+      let targetCard = null;
+      if (e.key === 'Backspace') {
+        if (sel.anchorNode.nodeType === 3 && sel.anchorOffset === 0) {
+          const prev = sel.anchorNode.previousSibling;
+          if (prev && prev.nodeType === 1 && prev.matches('.media-card, .paperuss-embed, .link-card, .broken-media-card, [data-paperuss-embed="true"]')) {
+            targetCard = prev;
+          }
+        }
+      } else if (e.key === 'Delete') {
+        if (sel.anchorNode.nodeType === 3 && sel.anchorOffset === sel.anchorNode.nodeValue.length) {
+          const next = sel.anchorNode.nextSibling;
+          if (next && next.nodeType === 1 && next.matches('.media-card, .paperuss-embed, .link-card, .broken-media-card, [data-paperuss-embed="true"]')) {
+            targetCard = next;
+          }
+        }
+      }
+
+      if (targetCard) {
+        const isWarned = targetCard.getAttribute('data-deletion-warning') === 'true';
+        if (!isWarned) {
+          e.preventDefault();
+          e.stopPropagation();
+          document.querySelectorAll('#noteBody .card-selected').forEach(c => {
+            c.classList.remove('card-selected', 'card-deletion-warning');
+            c.removeAttribute('data-card-selected');
+            c.removeAttribute('data-deletion-warning');
+          });
+          targetCard.classList.add('card-selected', 'card-deletion-warning');
+          targetCard.setAttribute('data-card-selected', 'true');
+          targetCard.setAttribute('data-deletion-warning', 'true');
+          if (typeof updateAlignmentButton === 'function') updateAlignmentButton();
+          return;
+        }
+      }
+    }
+  }
+});
+
+// Between-card click caret positioning handler
+document.addEventListener('click', (e) => {
+  const noteBody = document.getElementById('noteBody');
+  if (!noteBody || !noteBody.contains(e.target)) return;
+
+  // Don't interfere if clicking inside interactive buttons, inputs, links or toolbars
+  if (e.target.closest('button, a, input, select, textarea, .card-resize-handle, .embed-editor-toolbar, .overflow-dropdown')) return;
+
+  const cards = Array.from(noteBody.querySelectorAll('.media-card, .paperuss-embed, .broken-media-card, [data-paperuss-embed="true"]'));
+  if (!cards.length) return;
+
+  const clickX = e.clientX;
+  const clickY = e.clientY;
+
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i];
+    const rect = card.getBoundingClientRect();
+
+    // Check if click Y aligns with the card row (within 16px vertical bounds)
+    if (clickY >= rect.top - 16 && clickY <= rect.bottom + 16) {
+      if (clickX < rect.left && (i === 0 || cards[i - 1].getBoundingClientRect().right <= rect.left)) {
+        placeCaretNextToCard(card, 'before');
+        break;
+      } else if (clickX > rect.right) {
+        const nextCard = cards[i + 1];
+        if (!nextCard || nextCard.getBoundingClientRect().top > rect.bottom) {
+          placeCaretNextToCard(card, 'after');
+          break;
+        } else if (clickX < nextCard.getBoundingClientRect().left) {
+          // Clicked in the horizontal gap BETWEEN card and nextCard!
+          placeCaretNextToCard(card, 'after');
+          break;
+        }
+      }
+    }
+  }
+});
+
 function updateAlignmentButton(){
   const btn=document.getElementById('alignBtn');
   if(!btn) return;
+  const sel=window.getSelection();
+  let mediaBlock=null;
+  if(sel && sel.anchorNode){
+    let node=sel.anchorNode.nodeType===3 ? sel.anchorNode.parentElement : sel.anchorNode;
+    mediaBlock=node?.closest?.('.paperuss-embed, .media-card, .broken-media-card, [data-paperuss-embed="true"]');
+  }
+  if (!mediaBlock) {
+    mediaBlock = document.querySelector('#noteBody .card-selected, #noteBody [data-card-selected="true"]');
+  }
+
+  const isMedia = !!mediaBlock;
+  btn.classList.toggle('media-target-active', isMedia);
+
   const cur=currentAlignment();
   btn.setAttribute('data-align', cur);
-  btn.title='Alignment: '+cur.charAt(0).toUpperCase()+cur.slice(1)+' (click to cycle)';
+
+  const ALIGN_LABEL = {
+    left: 'Float Left (Text wraps right)',
+    center: 'Center Block (No wrap)',
+    right: 'Float Right (Text wraps left)',
+    full: 'Full Width (Clear floats)',
+    justify: 'Full Width'
+  };
+
+  btn.title = (isMedia ? 'Card Alignment: ' : 'Text Alignment: ') + (ALIGN_LABEL[cur] || 'Left');
+
   const iconEl=btn.querySelector('i');
-  if(iconEl){ iconEl.setAttribute('data-lucide', ALIGN_ICON[cur]||'align-left'); refreshIcons(); }
+  if(iconEl){
+    iconEl.setAttribute('data-lucide', ALIGN_ICON[cur]||'align-left');
+    if (typeof refreshIcons === 'function') refreshIcons();
+  }
+
+  // Update active state in alignDropdown segment picker
+  document.querySelectorAll('#alignDropdown .align-seg-opt').forEach(opt => {
+    const val = opt.getAttribute('data-align-val');
+    opt.classList.toggle('active', val === cur || (val === 'full' && cur === 'justify'));
+  });
 }
+
+// Toggle alignment dropdown with position:fixed positioning so it never gets clipped by toolbar/editor overflow
+document.addEventListener('click', (e) => {
+  const alignBtn = e.target.closest('#alignBtn');
+  const dropdown = document.getElementById('alignDropdown');
+
+  if (alignBtn && dropdown) {
+    e.preventDefault();
+    e.stopPropagation();
+    const isHidden = dropdown.classList.contains('hidden');
+    if (isHidden) {
+      const rect = alignBtn.getBoundingClientRect();
+      dropdown.style.position = 'fixed';
+      dropdown.style.top = (rect.bottom + 6) + 'px';
+      dropdown.style.left = (rect.left + rect.width / 2) + 'px';
+      dropdown.style.transform = 'translateX(-50%)';
+      dropdown.style.zIndex = '100000';
+      dropdown.classList.remove('hidden');
+    } else {
+      dropdown.classList.add('hidden');
+    }
+    return;
+  }
+
+  const segOpt = e.target.closest('#alignDropdown .align-seg-opt');
+  if (segOpt) {
+    e.preventDefault();
+    e.stopPropagation();
+    const val = segOpt.getAttribute('data-align-val');
+    applyAlignment(val);
+    if (dropdown) dropdown.classList.add('hidden');
+    return;
+  }
+
+  if (dropdown && !e.target.closest('#alignPickerWrap') && !e.target.closest('#alignDropdown')) {
+    dropdown.classList.add('hidden');
+  }
+});
 
 function updateToolbarState(){
   const listCtx = typeof getListContext === 'function' ? getListContext() : (typeof _listContext === 'function' ? _listContext() : null);
@@ -531,6 +1048,9 @@ function updateToolbarState(){
    ============================================================ */
 function setTheme(theme,trackChange=true){
   document.documentElement.setAttribute('data-theme',theme);
+  document.documentElement.style.colorScheme = theme;
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  if(themeMeta) themeMeta.setAttribute('content', theme === 'dark' ? '#0b0e14' : '#ffffff');
   localStorage.setItem(THEME_KEY,theme);
   if(trackChange && typeof markPortableStateChanged==='function') markPortableStateChanged();
   if(typeof applyAccent==='function') applyAccent((typeof appSettings!=='undefined'&&appSettings.accent)||'blue');

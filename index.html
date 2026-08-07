@@ -36,10 +36,10 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" onerror="window.__fbLoadFailed=true"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js" onerror="window.__fbStorageLoadFailed=true"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js" onerror="window.__fbAnalyticsLoadFailed=true"></script>
-<link rel="stylesheet" href="assets/css/core.css?v=2.0.1">
-<link rel="stylesheet" href="assets/css/features.css?v=2.0.1">
-<link rel="stylesheet" href="assets/css/responsive.css?v=2.0.1">
-<link rel="stylesheet" href="assets/css/settings.css?v=2.0.1">
+<link rel="stylesheet" href="assets/css/core.css?v=2.3.5">
+<link rel="stylesheet" href="assets/css/features.css?v=2.3.5">
+<link rel="stylesheet" href="assets/css/responsive.css?v=2.3.5">
+<link rel="stylesheet" href="assets/css/settings.css?v=2.3.5">
 </head>
 <body>
 <!-- ============ AUTH LANDING PAGE (sign-in / guest mode) ============ -->
@@ -408,9 +408,25 @@
           <button class="tool-btn" data-cmd="indent" title="Increase indent">
             <i data-lucide="indent" class="w-4 h-4"></i>
           </button>
-          <button class="tool-btn" id="alignBtn" data-cmd="align" data-align="left" title="Alignment (click to cycle)">
-            <i data-lucide="align-left" class="w-4 h-4"></i>
-          </button>
+          <div class="align-picker-wrap" id="alignPickerWrap" style="position:relative;display:inline-flex">
+            <button type="button" class="tool-btn" id="alignBtn" title="Alignment Options">
+              <i data-lucide="align-left" class="w-4 h-4"></i>
+            </button>
+            <div id="alignDropdown" class="align-segment-dropdown hidden">
+              <button type="button" class="align-seg-opt" data-align-val="left" title="Float Left (Text wraps right)">
+                <i data-lucide="align-left" class="w-3.5 h-3.5"></i> Left
+              </button>
+              <button type="button" class="align-seg-opt" data-align-val="center" title="Center Block (No wrap)">
+                <i data-lucide="align-center" class="w-3.5 h-3.5"></i> Center
+              </button>
+              <button type="button" class="align-seg-opt" data-align-val="right" title="Float Right (Text wraps left)">
+                <i data-lucide="align-right" class="w-3.5 h-3.5"></i> Right
+              </button>
+              <button type="button" class="align-seg-opt" data-align-val="full" title="Full Width (Clear floats)">
+                <i data-lucide="align-justify" class="w-3.5 h-3.5"></i> Full
+              </button>
+            </div>
+          </div>
           <button class="tool-btn" data-cmd="formatBlock" data-val="blockquote" title="Quote">
             <i data-lucide="quote" class="w-4 h-4"></i>
           </button>
@@ -1101,26 +1117,79 @@
   <button id="ibbDeselect" title="Clear selection"><i data-lucide="x" class="w-4 h-4"></i></button>
 </div>
 <div class="img-toolbar" id="imgToolbar">
-  <button data-imgsize="small" title="Small (35%)">S</button>
-  <button data-imgsize="medium" title="Medium (55%)">M</button>
-  <button data-imgsize="large" title="Large (78%)">L</button>
-  <button data-imgsize="full" title="Full width (100%)">Full</button>
-  <span class="itb-sep"></span>
-  <button id="imgTbCrop" title="Crop Image"><i data-lucide="crop" class="w-4 h-4"></i></button>
-  <button id="imgTbAlignLeft" title="Align / Float Left"><i data-lucide="align-left" class="w-4 h-4"></i></button>
-  <button id="imgTbAlignCenter" title="Center Image"><i data-lucide="align-center" class="w-4 h-4"></i></button>
-  <button id="imgTbAlignRight" title="Align / Float Right"><i data-lucide="align-right" class="w-4 h-4"></i></button>
-  <span class="itb-sep"></span>
-  <button id="imgTbRotate" title="Rotate 90°"><i data-lucide="rotate-cw" class="w-4 h-4"></i></button>
-  <button id="imgTbFlip" title="Flip Horizontally"><i data-lucide="flip-horizontal" class="w-4 h-4"></i></button>
-  <button id="imgTbFlipV" title="Flip Vertically"><i data-lucide="flip-vertical" class="w-4 h-4"></i></button>
-  <button id="imgTbCaption" title="Add / Edit Caption"><i data-lucide="text" class="w-4 h-4"></i></button>
-  <button id="imgTbCover" title="Set as Notebook Cover"><i data-lucide="panel-top" class="w-4 h-4"></i></button>
-  <button id="imgTbReplace" title="Replace Image"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
-  <span class="itb-sep"></span>
-  <button id="imgTbView" title="Full screen preview"><i data-lucide="maximize" class="w-4 h-4"></i></button>
-  <button id="imgTbDownload" title="Download"><i data-lucide="download" class="w-4 h-4"></i></button>
-  <button id="imgTbDelete" class="danger" title="Delete"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+
+  <!-- Slot 1: Size dropdown -->
+  <div class="itb-segment" style="position:relative">
+    <button class="itb-btn" id="imgTbSizeToggle" title="Image Size">
+      <i data-lucide="scaling" class="w-4 h-4"></i>
+    </button>
+    <div class="itb-dropdown hidden" id="imgTbSizeDrop">
+      <button class="itb-drop-item" data-imgsize="small">
+        <span class="itb-sz-badge">S</span> Small (35%)
+      </button>
+      <button class="itb-drop-item" data-imgsize="medium">
+        <span class="itb-sz-badge">M</span> Medium (55%)
+      </button>
+      <button class="itb-drop-item" data-imgsize="large">
+        <span class="itb-sz-badge">L</span> Large (78%)
+      </button>
+      <button class="itb-drop-item" data-imgsize="full">
+        <span class="itb-sz-badge">⬛</span> Full Width
+      </button>
+    </div>
+  </div>
+
+  <!-- Slot 2: Crop (exposed directly) -->
+  <button class="itb-btn" id="imgTbCrop" title="Crop Image">
+    <i data-lucide="crop" class="w-4 h-4"></i>
+  </button>
+
+  <!-- Slot 3: Fullscreen / View -->
+  <button class="itb-btn" id="imgTbView" title="Full screen preview">
+    <i data-lucide="maximize" class="w-4 h-4"></i>
+  </button>
+
+  <!-- Slot 4: Set as Cover (exposed directly) -->
+  <button class="itb-btn" id="imgTbCover" title="Set as Notebook Cover">
+    <i data-lucide="panel-top" class="w-4 h-4"></i>
+  </button>
+
+  <!-- Slot 5: More ⋮ dropdown -->
+  <div class="itb-segment" style="position:relative">
+    <button class="itb-btn" id="imgTbMoreToggle" title="More options">
+      <i data-lucide="more-vertical" class="w-4 h-4"></i>
+    </button>
+    <div class="itb-dropdown hidden" id="imgTbMoreDrop">
+      <button class="itb-drop-item" id="imgTbCaption">
+        <i data-lucide="text" class="w-4 h-4"></i> Add Caption
+      </button>
+      <button class="itb-drop-item" id="imgTbRotate">
+        <i data-lucide="rotate-cw" class="w-4 h-4"></i> Rotate 90°
+      </button>
+      <button class="itb-drop-item" id="imgTbFlip">
+        <i data-lucide="flip-horizontal" class="w-4 h-4"></i> Flip Horizontal
+      </button>
+      <button class="itb-drop-item" id="imgTbFlipV">
+        <i data-lucide="flip-vertical" class="w-4 h-4"></i> Flip Vertical
+      </button>
+      <button class="itb-drop-item" id="imgTbReplace">
+        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Replace Image
+      </button>
+      <button class="itb-drop-item" id="imgTbDownload">
+        <i data-lucide="download" class="w-4 h-4"></i> Download
+      </button>
+      <!-- Hidden align buttons kept for tables.js dispatcher compatibility -->
+      <button class="itb-drop-item" id="imgTbAlignLeft" style="display:none">Float Left</button>
+      <button class="itb-drop-item" id="imgTbAlignCenter" style="display:none">Center</button>
+      <button class="itb-drop-item" id="imgTbAlignRight" style="display:none">Float Right</button>
+    </div>
+  </div>
+
+  <!-- Slot 6: Delete (danger, rightmost) -->
+  <button class="itb-btn danger" id="imgTbDelete" title="Delete Image">
+    <i data-lucide="trash-2" class="w-4 h-4"></i>
+  </button>
+
 </div>
 <div class="img-handle" data-corner="nw" id="imgHandleNW"></div>
 <div class="img-handle" data-corner="ne" id="imgHandleNE"></div>
