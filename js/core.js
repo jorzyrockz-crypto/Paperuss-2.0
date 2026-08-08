@@ -2277,7 +2277,8 @@ async function toggleLeafContextMenu(e, leafId) {
   let left = rect.right - 180;
   let top = rect.bottom + 4;
   if (left < 10) left = 10;
-  if (top + 230 > window.innerHeight) top = Math.max(10, rect.top - 230);
+  if (left + 220 > window.innerWidth) left = Math.max(10, window.innerWidth - 230);
+  if (top + 340 > window.innerHeight) top = Math.max(10, rect.top - 340);
 
   menu.style.left = `${Math.round(left)}px`;
   menu.style.top = `${Math.round(top)}px`;
@@ -2294,9 +2295,9 @@ window.closeLeafContextMenu = closeLeafContextMenu;
 
 async function setLeafColorAction(leafId, colorName) {
   if (!leafId || !window.paperussLeaves) return;
+  const n = getNote(state.currentId);
   let leafObj = await window.paperussLeaves.leafGet(leafId);
   if (!leafObj) {
-    const n = getNote(state.currentId);
     leafObj = {
       id: leafId,
       noteId: n ? n.id : '',
@@ -2310,9 +2311,24 @@ async function setLeafColorAction(leafId, colorName) {
     leafObj.color = colorName;
     leafObj.updatedAt = Date.now();
   }
+  if (!leafObj.noteId && n) leafObj.noteId = n.id;
   await window.paperussLeaves.leafPut(leafObj);
+  await window.paperussLeaves.leafQueuePut({
+    id: 'mut_col_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+    noteId: leafObj.noteId,
+    action: 'put',
+    data: Object.assign({}, leafObj),
+    timestamp: Date.now()
+  });
+
+  if (window.currentActiveLeaf && window.currentActiveLeaf.id === leafId) {
+    window.currentActiveLeaf.color = colorName;
+  }
+
   const contentEl = document.getElementById('leavesDrawerContent');
-  if (contentEl) renderLeavesList(contentEl);
+  if (contentEl && typeof renderLeavesList === 'function') renderLeavesList(contentEl);
+  if (typeof renderList === 'function') renderList();
+  if (typeof updateLeafTitleBar === 'function') updateLeafTitleBar();
   if (typeof toast === 'function') toast(`Leaf accent set to ${colorName}`);
 }
 window.setLeafColorAction = setLeafColorAction;
@@ -2375,6 +2391,15 @@ function updateLeafTitleBar() {
   const leafTitle = activeLeaf && activeLeaf.title ? activeLeaf.title : 'Main';
   if (toggleTitleEl) toggleTitleEl.textContent = leafTitle;
 
+  // Update color accent styling on FAB button & breadcrumb
+  const color = (activeLeaf && activeLeaf.color) ? activeLeaf.color : (activeLeaf && activeLeaf.isVirtual ? 'emerald' : 'slate');
+  const colorClasses = ['color-emerald', 'color-amber', 'color-blue', 'color-purple', 'color-rose', 'color-slate'];
+  
+  if (toggleBtn) {
+    colorClasses.forEach(c => toggleBtn.classList.remove(c));
+    toggleBtn.classList.add('color-' + color);
+  }
+
   // Update editor-leaf-context breadcrumb (only show when leaf is not the default "Main" virtual leaf
   // or whenever a note has actual leaves so the user can rename)
   const editorCtx = document.getElementById('editorLeafContext');
@@ -2382,7 +2407,11 @@ function updateLeafTitleBar() {
   const hasMultipleLeaves = n && Array.isArray(n.leafOrder) && n.leafOrder.length > 1;
   const isVirtual = !activeLeaf || activeLeaf.isVirtual;
   const showCtx = hasMultipleLeaves || (!isVirtual && leafTitle !== 'Main');
-  if (editorCtx) editorCtx.style.display = showCtx ? 'inline-flex' : 'none';
+  if (editorCtx) {
+    editorCtx.style.display = showCtx ? 'inline-flex' : 'none';
+    colorClasses.forEach(c => editorCtx.classList.remove(c));
+    editorCtx.classList.add('color-' + color);
+  }
   if (editorLeafName) editorLeafName.textContent = leafTitle;
 
   // Update note subtitle in floating panel
@@ -2547,7 +2576,7 @@ document.addEventListener('pointerdown', (e) => {
   if (menu && !menu.classList.contains('hidden') && !menu.contains(e.target) && !e.target.closest('.leaf-more-btn')) {
     closeLeafContextMenu();
   }
-  // Click outside the floating panel — close it (but not when clicking the toggle button itself)
+  // Click outside the floating panel — close it (but not when clicking the toggle button itself or context menu)
   const overlay = document.getElementById('leavesDrawerOverlay');
   const drawer = document.getElementById('leavesDrawer');
   const launcher = document.getElementById('leafToggleBtn');
@@ -2557,7 +2586,10 @@ document.addEventListener('pointerdown', (e) => {
     drawer &&
     !drawer.contains(e.target) &&
     launcher &&
-    !launcher.contains(e.target)
+    !launcher.contains(e.target) &&
+    menu &&
+    !menu.contains(e.target) &&
+    !e.target.closest('#leafContextMenu')
   ) {
     closeLeavesDrawer();
   }

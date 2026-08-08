@@ -711,6 +711,9 @@ async function renameLeafAction(leafId) {
   const newTitle = prompt('Rename leaf:', currentTitle);
   if (newTitle && newTitle.trim() !== '' && newTitle !== currentTitle) {
     await window.paperussLeafManager.renameLeaf(n.id, leafId, newTitle.trim());
+    if (window.currentActiveLeaf && window.currentActiveLeaf.id === leafId) {
+      window.currentActiveLeaf.title = newTitle.trim();
+    }
     renderList();
     const contentEl = document.getElementById('leavesDrawerContent');
     if (contentEl && typeof renderLeavesList === 'function') renderLeavesList(contentEl);
