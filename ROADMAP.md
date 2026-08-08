@@ -4,6 +4,31 @@ An overview of completed milestones, active feature branches in development, and
 
 ---
 
+## 🌿 Botanical Workspace Architecture (`Leaf ➔ Leaves ➔ Leafline ➔ Canopy`)
+
+PapeRuss 2.0 structures note workspaces using an organic botanical hierarchy:
+
+```
+                           CANOPY (v3.2.0)
+               Overarching Spatial Mind-Map & Canvas
+                                │
+                         LEAFline (UI)
+              Navigation Line & Tab-Strip Header
+                                │
+                          LEAVES (Store)
+                  Array of Sub-Note Tabs in Note
+                                │
+                          LEAF (Document)
+                   Single Rich-Text Sub-Note
+```
+
+- 🍃 **Leaf**: A single rich-text sub-note document or tab inside a Note workspace.
+- 🌿 **Leaves**: The collection array of sub-note tabs contained inside a Note workspace (`fix/leaf-implementation`).
+- 🌿 **Leafline**: The UI navigation bar (`.leafline-ui` in `js/leafline.js`) displaying the breadcrumb tree of headings and sub-note tabs at the top of the editor.
+- 🌳 **Canopy**: The top-level visual spatial mind-map graph (`v3.2.0`) where all Leaves and Leaflines branch together under an overarching workspace tree!
+
+---
+
 ## 🚀 Active Feature Branches (In Progress)
 
 | Branch Name | Feature Scope | Target Release |
@@ -46,7 +71,7 @@ An overview of completed milestones, active feature branches in development, and
 - **Real-Time Peer Editing**: Live multiplayer cursors and operational transformation (CRDT) conflict resolution.
 - **End-to-End Encrypted Vaults**: Client-side AES-256 encryption for private notes and offline attachments.
 
-### 🌿 v3.2.0 (Q2 2027) — Canopy Spatial Engine & Infinite Canvas View
+### 🌳 v3.2.0 (Q2 2027) — Canopy Spatial Engine & Infinite Canvas View
 - **Visual Canopy Graph**: Infinite 2D/3D spatial canvas displaying notes, sub-leaves, audio tracks, and cards as connected nodes under a visual canopy tree.
 - **Pan & Zoom Spatial Navigation**: 60fps vector canvas with mini-map overview, node clustering, and spatial search.
 - **Automatic Mind-Map Layout**: Automatically organizes linked leaves into hierarchical tree canopy structures.
