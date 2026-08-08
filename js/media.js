@@ -329,11 +329,15 @@ function buildSoundCardEditorToolbar(card) {
 
   const displayMode = card.getAttribute('data-display-mode') || 'preview';
   const widthPreset = card.getAttribute('data-width-preset') || 'medium';
+  const currentWrap = card.getAttribute('data-card-wrap') || 'none';
 
   const sizeLabels = { 'small': 'S', 'medium': 'M', 'large': 'L', 'full': '⬛' };
   const activeSizeLabel = sizeLabels[widthPreset] || 'M';
   const modeIcons = { 'compact': 'align-justify', 'preview': 'image' };
   const activeModeIcon = modeIcons[displayMode] || 'image';
+
+  const wrapIcons = { 'none': 'align-center', 'left': 'align-left', 'right': 'align-right', 'inline': 'align-justify' };
+  const activeWrapIcon = wrapIcons[currentWrap] || 'align-center';
 
   bar.innerHTML = `
     <div class="embed-tb-segment" style="position:relative">
@@ -352,6 +356,25 @@ function buildSoundCardEditorToolbar(card) {
         </button>
         <button type="button" class="embed-tb-dropdown-item ${widthPreset === 'full' ? 'active' : ''}" data-action="set-width" data-val="full">
           <span class="embed-sz-badge">⬛</span> Full Width (100%)
+        </button>
+      </div>
+    </div>
+    <div class="embed-tb-segment" style="position:relative">
+      <button type="button" class="embed-tb-btn" data-action="toggle-wrap-menu" title="Wrap Text Mode">
+        <i data-lucide="${activeWrapIcon}" class="w-4 h-4 embed-wrap-icon"></i>
+      </button>
+      <div class="embed-tb-dropdown embed-wrap-dropdown hidden" contenteditable="false" style="top:calc(100% + 4px);bottom:auto;">
+        <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'none' ? 'active' : ''}" data-action="set-wrap" data-val="none">
+          <i data-lucide="align-center" class="w-4 h-4"></i> Break Text (No Wrap)
+        </button>
+        <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'left' ? 'active' : ''}" data-action="set-wrap" data-val="left">
+          <i data-lucide="align-left" class="w-4 h-4"></i> Wrap Text Right (Float Left)
+        </button>
+        <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'right' ? 'active' : ''}" data-action="set-wrap" data-val="right">
+          <i data-lucide="align-right" class="w-4 h-4"></i> Wrap Text Left (Float Right)
+        </button>
+        <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'inline' ? 'active' : ''}" data-action="set-wrap" data-val="inline">
+          <i data-lucide="align-justify" class="w-4 h-4"></i> Inline with Text
         </button>
       </div>
     </div>
@@ -407,6 +430,21 @@ function buildSoundCardEditorToolbar(card) {
       const wasHidden = menu.classList.contains('hidden');
       closeAllDropdowns();
       if (wasHidden) menu.classList.remove('hidden');
+
+    } else if (act === 'toggle-wrap-menu') {
+      const menu = bar.querySelector('.embed-wrap-dropdown');
+      const wasHidden = menu.classList.contains('hidden');
+      closeAllDropdowns();
+      if (wasHidden) menu.classList.remove('hidden');
+
+    } else if (act === 'set-wrap') {
+      closeAllDropdowns();
+      card.setAttribute('data-card-wrap', val);
+      bar.querySelectorAll('.embed-wrap-dropdown .embed-tb-dropdown-item').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-val') === val);
+      });
+      if (typeof handleBodyInput === 'function') handleBodyInput();
+      if (typeof save === 'function') save();
 
     } else if (act === 'toggle-mode-menu') {
       const menu = bar.querySelector('.embed-mode-dropdown');
@@ -878,6 +916,7 @@ function buildAttachmentCardEditorToolbar(card) {
 
   const displayMode = card.getAttribute('data-display-mode') || 'preview';
   const widthPreset = card.getAttribute('data-width-preset') || 'medium';
+  const currentWrap = card.getAttribute('data-card-wrap') || 'none';
   const mediaId = card.getAttribute('data-media-id') || '';
   const title = card.querySelector('.card-title-text, .embed-compact-title, strong')?.textContent || 'Attachment';
 
@@ -885,6 +924,9 @@ function buildAttachmentCardEditorToolbar(card) {
   const activeSizeLabel = sizeLabels[widthPreset] || 'M';
   const modeIcons = { 'compact': 'align-justify', 'preview': 'image' };
   const activeModeIcon = modeIcons[displayMode] || 'image';
+
+  const wrapIcons = { 'none': 'align-center', 'left': 'align-left', 'right': 'align-right', 'inline': 'align-justify' };
+  const activeWrapIcon = wrapIcons[currentWrap] || 'align-center';
 
   bar.innerHTML = `
     <div class="embed-tb-segment">
@@ -908,6 +950,25 @@ function buildAttachmentCardEditorToolbar(card) {
         </button>
         <button type="button" class="embed-tb-dropdown-item ${widthPreset === 'full' ? 'active' : ''}" data-action="set-width" data-val="full">
           <span class="embed-sz-badge">Full</span> Full Width (100%)
+        </button>
+      </div>
+    </div>
+    <div class="embed-tb-segment" style="position:relative">
+      <button type="button" class="embed-tb-btn" data-action="toggle-wrap-menu" title="Wrap Text Mode">
+        <i data-lucide="${activeWrapIcon}" class="w-4 h-4 embed-wrap-icon"></i>
+      </button>
+      <div class="embed-tb-dropdown embed-wrap-dropdown hidden" contenteditable="false">
+        <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'none' ? 'active' : ''}" data-action="set-wrap" data-val="none">
+          <i data-lucide="align-center" class="w-4 h-4"></i> Break Text (No Wrap)
+        </button>
+        <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'left' ? 'active' : ''}" data-action="set-wrap" data-val="left">
+          <i data-lucide="align-left" class="w-4 h-4"></i> Wrap Text Right (Float Left)
+        </button>
+        <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'right' ? 'active' : ''}" data-action="set-wrap" data-val="right">
+          <i data-lucide="align-right" class="w-4 h-4"></i> Wrap Text Left (Float Right)
+        </button>
+        <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'inline' ? 'active' : ''}" data-action="set-wrap" data-val="inline">
+          <i data-lucide="align-justify" class="w-4 h-4"></i> Inline with Text
         </button>
       </div>
     </div>
@@ -960,6 +1021,21 @@ function buildAttachmentCardEditorToolbar(card) {
       const wasHidden = menu.classList.contains('hidden');
       closeAllDropdowns();
       if (wasHidden) menu.classList.remove('hidden');
+
+    } else if (act === 'toggle-wrap-menu') {
+      const menu = bar.querySelector('.embed-wrap-dropdown');
+      const wasHidden = menu.classList.contains('hidden');
+      closeAllDropdowns();
+      if (wasHidden) menu.classList.remove('hidden');
+
+    } else if (act === 'set-wrap') {
+      closeAllDropdowns();
+      card.setAttribute('data-card-wrap', val);
+      bar.querySelectorAll('.embed-wrap-dropdown .embed-tb-dropdown-item').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-val') === val);
+      });
+      if (typeof handleBodyInput === 'function') handleBodyInput();
+      if (typeof save === 'function') save();
 
     } else if (act === 'toggle-mode-menu') {
       const menu = bar.querySelector('.embed-mode-dropdown');
