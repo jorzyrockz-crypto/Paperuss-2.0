@@ -1239,6 +1239,11 @@ function isSingleStandaloneUrl(str) {
     if(e.key==='/' && !typing){ e.preventDefault(); document.getElementById('searchInput').focus(); }
     if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='n'){ e.preventDefault(); createNote(); }
     if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='s'){ e.preventDefault(); save(); toast('All notes saved'); }
+    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='p'){
+      e.preventDefault();
+      if(typeof openPrintModal === 'function') openPrintModal();
+      else if(typeof printCurrentNote === 'function') printCurrentNote();
+    }
     if(e.key==='Escape'){ document.getElementById('modalRoot').innerHTML=''; document.getElementById('searchInput').blur(); }
     if(e.key==='F11'){
       e.preventDefault();
