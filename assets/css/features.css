@@ -7056,3 +7056,45 @@ a.paperuss-inline-link:hover {
   cursor: pointer;
   background: transparent;
 }
+
+/* Full-Screen Frosted Overlay Backdrop for Branch Modal */
+.branch-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100000;
+  padding: 16px;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.branch-modal-backdrop.hidden {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.branch-modal-card {
+  background: var(--bg-primary, #ffffff);
+  color: var(--fg-primary, #0f172a);
+  border: 1px solid var(--border, rgba(0,0,0,0.12));
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  width: 100%;
+  max-width: 440px;
+  overflow: hidden;
+  animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="dark"] .branch-modal-card {
+  background: #0f172a;
+  color: #f1f5f9;
+  border-color: rgba(255,255,255,0.15);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.65);
+}

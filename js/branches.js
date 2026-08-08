@@ -343,7 +343,7 @@
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'branchModal';
-      modal.className = 'modal-backdrop hidden';
+      modal.className = 'branch-modal-backdrop hidden';
       
       let iconGridHtml = OUTLINE_ICONS.map(ic => `
         <button type="button" class="bm-icon-btn ${ic === 'folder' ? 'active' : ''}" data-icon="${ic}" title="${ic}">
@@ -356,7 +356,7 @@
       `).join('');
 
       modal.innerHTML = `
-        <div class="modal-card print-setup-modal" style="max-width:440px">
+        <div class="branch-modal-card">
           <div class="print-modal-header">
             <h3 style="margin:0;font-size:16px;font-weight:700" id="branchModalTitle">New Branch Category</h3>
             <button type="button" class="tool-btn" id="btnCloseBranchModal">✕</button>
