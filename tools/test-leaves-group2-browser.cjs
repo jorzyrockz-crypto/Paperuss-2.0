@@ -1,15 +1,16 @@
 /**
- * Group 2 Browser Verification: Editor State, Multi-Leaf Tabs & Drawer UI (Core API behavior without actual UI for now)
- * Runs inside Microsoft Edge headless via Chrome DevTools Protocol (CDP).
+ * Group 2 Browser Verification: Editor State, Multi-Leaf Tabs & Drawer UI
+ * Runs inside Microsoft Edge/Chrome headless via Chrome DevTools Protocol (CDP).
  */
 
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const cdp = require('./cdp-client.cjs');
 
-const EDGE_PATH = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-const PORT = 9300 + Math.floor(Math.random() * 100);
+const BROWSER_PATH = cdp.getBrowserPath();
+const PORT = 9322;
 const TEMP_PROFILE = fs.mkdtempSync(path.join(os.tmpdir(), 'paperuss-edge-group2-'));
 const TARGET_URL = 'file:///' + path.resolve(__dirname, '../index.html').replace(/\\/g, '/');
 
@@ -17,36 +18,16 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function sendCDP(ws, method, params = {}) {
-  const id = Math.floor(Math.random() * 1000000000);
-  return new Promise((resolve, reject) => {
-    const handler = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.id === id) {
-          ws.removeEventListener('message', handler);
-          if (msg.error) {
-            reject(new Error(msg.error.message));
-          } else {
-            resolve(msg.result);
-          }
-        }
-      } catch (e) {}
-    };
-    ws.addEventListener('message', handler);
-    ws.send(JSON.stringify({ id, method, params }));
-  });
-}
-
 async function runBrowserTests() {
-  console.log(`--- STARTING EDGE BROWSERS (PORT ${PORT}) FOR GROUP 2 LEAVES TESTS ---`);
-  if (!fs.existsSync(EDGE_PATH)) {
-    throw new Error('Microsoft Edge not found at: ' + EDGE_PATH);
+  console.log(`--- STARTING BROWSER (${BROWSER_PATH}) FOR GROUP 2 LEAVES TESTS ---`);
+  if (!fs.existsSync(BROWSER_PATH)) {
+    throw new Error('Browser not found at: ' + BROWSER_PATH);
   }
 
-  const edgeProc = spawn(EDGE_PATH, [
+  const browserProc = spawn(BROWSER_PATH, [
     '--headless=new',
     `--remote-debugging-port=${PORT}`,
+    '--remote-allow-origins=*',
     `--user-data-dir=${TEMP_PROFILE}`,
     '--no-first-run',
     '--no-default-browser-check',
@@ -58,81 +39,53 @@ async function runBrowserTests() {
   for (let i = 0; i < 40; i++) {
     await sleep(300);
     try {
-      const res = await fetch(`http://127.0.0.1:${PORT}/json/version`);
+      const res = await fetch(`http://127.0.0.1:${PORT}/json`);
       const data = await res.json();
-      if (data && data.webSocketDebuggerUrl) {
-        wsUrl = data.webSocketDebuggerUrl;
+      const pageTarget = Array.isArray(data) ? data.find(x => x.type === 'page' && x.webSocketDebuggerUrl) : null;
+      if (pageTarget) {
+        wsUrl = pageTarget.webSocketDebuggerUrl;
         break;
       }
     } catch (_) {}
   }
 
   if (!wsUrl) {
-    edgeProc.kill();
-    throw new Error(`Failed to connect to Edge debugging port ${PORT}`);
+    browserProc.kill();
+    throw new Error(`Failed to connect to browser debugging port ${PORT}`);
   }
 
-  const browserWs = new WebSocket(wsUrl);
-  await new Promise((resolve) => { browserWs.onopen = resolve; });
+  const client = await cdp.connect(wsUrl);
+  await client.send('Page.enable');
+  await client.send('Runtime.enable');
 
-  const targetRes = await sendCDP(browserWs, 'Target.createTarget', { url: 'about:blank' });
-  const targetId = targetRes.targetId;
-
-  const targetWsUrl = `ws://127.0.0.1:${PORT}/devtools/page/${targetId}`;
-  const pageWs = new WebSocket(targetWsUrl);
-  await new Promise((resolve) => { pageWs.onopen = resolve; });
-
-  await sendCDP(pageWs, 'Page.enable');
-  await sendCDP(pageWs, 'Runtime.enable');
-
-  pageWs.addEventListener('message', (e) => {
-    try {
-      const msg = JSON.parse(e.data);
-      if (msg.method === 'Runtime.consoleAPICalled') {
-        const text = (msg.params.args || []).map(a => a.value || a.description || '').join(' ');
-        if (text && !text.includes('lucide')) console.log('[BROWSER CONSOLE]', msg.params.type, text);
-      }
-    } catch (_) {}
+  client.onEvent((msg) => {
+    if (msg.method === 'Runtime.consoleAPICalled') {
+      const text = (msg.params.args || []).map(a => a.value || a.description || '').join(' ');
+      if (text && !text.includes('lucide')) console.log('[BROWSER CONSOLE]', msg.params.type, text);
+    } else if (msg.method === 'Runtime.exceptionThrown') {
+      console.log('[BROWSER EXCEPTION]', msg.params.exceptionDetails.text, msg.params.exceptionDetails.exception?.description || '');
+    }
   });
 
   const waitForPageLoad = () => new Promise((resolve) => {
-    let resolved = false;
-    const handler = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.method === 'Page.loadEventFired') {
-          if (!resolved) { resolved = true; pageWs.removeEventListener('message', handler); resolve(); }
-        }
-      } catch (_) {}
+    const handler = (msg) => {
+      if (msg.method === 'Page.loadEventFired') resolve();
     };
-    pageWs.addEventListener('message', handler);
-    // Poll readyState as fallback
-    const checkReady = async () => {
-      if (resolved) return;
-      try {
-        const res = await sendCDP(pageWs, 'Runtime.evaluate', { expression: 'document.readyState', returnByValue: true });
-        if (res && res.result && res.result.value === 'complete') {
-          if (!resolved) { resolved = true; pageWs.removeEventListener('message', handler); resolve(); }
-        } else { setTimeout(checkReady, 500); }
-      } catch (e) { setTimeout(checkReady, 500); }
-    };
-    setTimeout(checkReady, 500);
-    // Ultimate timeout 10s
-    setTimeout(() => { if (!resolved) { resolved = true; pageWs.removeEventListener('message', handler); resolve(); } }, 10000);
+    client.onEvent(handler);
   });
 
   const loadP1 = waitForPageLoad();
-  await sendCDP(pageWs, 'Page.navigate', { url: TARGET_URL });
+  await client.send('Page.navigate', { url: TARGET_URL });
   await loadP1;
 
   let ready = false;
   for (let i = 0; i < 30; i++) {
     await sleep(200);
-    const check = await sendCDP(pageWs, 'Runtime.evaluate', {
+    const check = await client.send('Runtime.evaluate', {
       expression: 'typeof window.paperussLeaves !== "undefined" && typeof window.paperussLeafManager !== "undefined"',
       returnByValue: true
     });
-    if (check.result && check.result.value === true) {
+    if (check && check.result && check.result.value === true) {
       ready = true;
       break;
     }
@@ -168,7 +121,7 @@ async function runBrowserTests() {
         
         // 1. Legacy Note remains unmigrated when opened
         window.renderEditor();
-        await wait(100); // wait for async renderEditor to complete
+        await wait(100);
         const activeNote = window.getNote(noteId);
         assert('Legacy Note remains unmigrated when opened', activeNote.leafOrder === undefined && activeNote.defaultLeafId === undefined);
         
@@ -188,25 +141,16 @@ async function runBrowserTests() {
         assert('New leaf is in leafOrder', updatedNote.leafOrder.includes(newLeafId));
         
         // Switch to the newly created leaf
-        console.error('TEST SCRIPT: Calling switchLeaf with noteId:', noteId, 'newLeafId:', newLeafId);
         await window.paperussLeafManager.switchLeaf(noteId, newLeafId);
         await wait(500);
         
-        // The new leaf is empty initially (or contains empty placeholder like <br>)
         const currentHtml = document.getElementById('noteBody').innerHTML;
-        const currentActiveLeafId = window.paperussLeaves.getNoteActiveLeafId(window.getNote(noteId));
-        console.error('TEST SCRIPT: After switchLeaf, currentActiveLeafId is:', currentActiveLeafId);
-        console.error('TEST SCRIPT: After switchLeaf, window.currentActiveLeaf is:', JSON.stringify(window.currentActiveLeaf));
-        if (! (currentHtml.trim() === '' || currentHtml.includes('<br>') || (!currentHtml.includes('Original Legacy Content') && !currentHtml.includes('Edited Virtual Content')))) {
-            console.error('Editor is NOT empty. currentHtml:', currentHtml);
-        }
         assert('Editor is empty when switching to new leaf', currentHtml.trim() === '' || currentHtml.includes('<br>') || (!currentHtml.includes('Original Legacy Content') && !currentHtml.includes('Edited Virtual Content')));
         
         // 3. Migration failure preserves note.content (mocking a failure)
         window.createNote();
         await wait(200);
         const noteFailId = window.paperussState.currentId;
-        console.error('noteFailId:', noteFailId);
         const noteFail = window.getNote(noteFailId);
         noteFail.content = 'Safe';
         window.editField('content', 'Safe');
@@ -221,7 +165,6 @@ async function runBrowserTests() {
         window.paperussLeaves.leafPut = originalLeafPut; // restore
         
         // 4. Active Leaf survives refresh locally
-        // Before reload, ensure we set active leaf
         window.paperussLeaves.setNoteActiveLeafId(noteId, newLeafId);
         
         // Persist noteId for suite 2
@@ -235,7 +178,7 @@ async function runBrowserTests() {
     })();
   `;
 
-  const res1 = await sendCDP(pageWs, 'Runtime.evaluate', {
+  const res1 = await client.send('Runtime.evaluate', {
     expression: testScript,
     awaitPromise: true,
     returnByValue: true
@@ -245,17 +188,17 @@ async function runBrowserTests() {
 
   console.log('\n--- TESTING BROWSER REFRESH FOR ACTIVE LEAF (Test 4) ---');
   const loadP2 = waitForPageLoad();
-  await sendCDP(pageWs, 'Page.reload');
+  await client.send('Page.reload');
   await loadP2;
 
   let ready2 = false;
   for (let i = 0; i < 30; i++) {
     await sleep(200);
-    const check = await sendCDP(pageWs, 'Runtime.evaluate', {
+    const check = await client.send('Runtime.evaluate', {
       expression: 'typeof window.paperussLeaves !== "undefined"',
       returnByValue: true
     });
-    if (check.result && check.result.value === true) { ready2 = true; break; }
+    if (check && check.result && check.result.value === true) { ready2 = true; break; }
   }
 
   const testScript2 = `
@@ -270,14 +213,12 @@ async function runBrowserTests() {
       try {
         const noteId = window.localStorage.getItem('test_note_id');
         
-        // We know we persisted noteId and set its active leaf ID to the second leaf
         const noteActiveLeaf = window.paperussLeaves.getNoteActiveLeafId({id: noteId});
         assert('Active Leaf survives refresh locally', noteActiveLeaf && noteActiveLeaf.startsWith('leaf_'));
         
         window.jumpToNote(noteId);
         await wait(100);
         
-        // We will test 5 & 6 by mocking the active leaf memory and directly invoking editField
         const mockLeafDefault = { id: window.paperussLeaves.getNoteDefaultLeafId(window.getNote(noteId)), isVirtual: false, content: 'Default Content' };
         window.currentActiveLeaf = mockLeafDefault;
         window.editField('content', 'Default Updated');
@@ -295,10 +236,9 @@ async function runBrowserTests() {
         await window.paperussLeaves.leafPut(rapidLeaf2);
         
         window.currentActiveLeaf = rapidLeaf1;
-        window.editField('content', 'State1 Edited'); // this queues a put for rapidLeaf1
+        window.editField('content', 'State1 Edited');
         
         await window.paperussLeafManager.switchLeaf(noteId, 'rapid_2');
-        // switchLeaf flushes the current leaf
         const fetchedRapid1 = await window.paperussLeaves.leafGet('rapid_1');
         assert('Rapid switching flushed the first leaf correctly', fetchedRapid1.content === 'State1 Edited');
         
@@ -312,10 +252,6 @@ async function runBrowserTests() {
         
         window.editField('content', 'Testing new note');
         await wait(100);
-        if (created.content !== 'Testing new note') {
-            console.error('created.content was:', created.content);
-            console.error('currentActiveLeaf was:', JSON.stringify(window.currentActiveLeaf));
-        }
         assert('Can edit newly created note', created.content === 'Testing new note');
 
         await window.paperussLeaves.deleteLeavesDB();
@@ -327,7 +263,7 @@ async function runBrowserTests() {
     })();
   `;
 
-  const res2 = await sendCDP(pageWs, 'Runtime.evaluate', {
+  const res2 = await client.send('Runtime.evaluate', {
     expression: testScript2,
     awaitPromise: true,
     returnByValue: true
@@ -336,7 +272,7 @@ async function runBrowserTests() {
   const suite2 = res2.result.value;
   suite2.tests.forEach((t) => console.log(`[${t.status}] ${t.name}${t.msg ? ' - ' + t.msg : ''}`));
 
-  try { pageWs.close(); browserWs.close(); edgeProc.kill(); fs.rmSync(TEMP_PROFILE, { recursive: true, force: true }); } catch (_) {}
+  try { client.close(); browserProc.kill(); fs.rmSync(TEMP_PROFILE, { recursive: true, force: true }); } catch (_) {}
 
   const totalPassed = suite1.passed + suite2.passed;
   const totalFailed = suite1.failed + suite2.failed;

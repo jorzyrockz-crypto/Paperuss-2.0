@@ -6,46 +6,30 @@
  * - Leaf title bar display
  * - Notes mode editor unchanged (no regression)
  *
- * Runs inside Microsoft Edge headless via Chrome DevTools Protocol (CDP).
+ * Runs inside Microsoft Edge/Chrome headless via Chrome DevTools Protocol (CDP).
  */
 
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const cdp = require('./cdp-client.cjs');
 
-const EDGE_PATH = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-const PORT = 9400 + Math.floor(Math.random() * 100);
+const BROWSER_PATH = cdp.getBrowserPath();
+const PORT = 9333;
 const TEMP_PROFILE = fs.mkdtempSync(path.join(os.tmpdir(), 'paperuss-edge-group3-'));
 const TARGET_URL = 'file:///' + path.resolve(__dirname, '../index.html').replace(/\\/g, '/');
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-async function sendCDP(ws, method, params = {}) {
-  const id = Math.floor(Math.random() * 1000000000);
-  return new Promise((resolve, reject) => {
-    const handler = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.id === id) {
-          ws.removeEventListener('message', handler);
-          if (msg.error) reject(new Error(msg.error.message));
-          else resolve(msg.result);
-        }
-      } catch (e) {}
-    };
-    ws.addEventListener('message', handler);
-    ws.send(JSON.stringify({ id, method, params }));
-  });
-}
-
 async function runBrowserTests() {
-  console.log(`--- STARTING EDGE BROWSER (PORT ${PORT}) FOR GROUP 3 LEAVES UI TESTS ---`);
-  if (!fs.existsSync(EDGE_PATH)) throw new Error('Microsoft Edge not found at: ' + EDGE_PATH);
+  console.log(`--- STARTING BROWSER (${BROWSER_PATH}) FOR GROUP 3 LEAVES UI TESTS ---`);
+  if (!fs.existsSync(BROWSER_PATH)) throw new Error('Browser not found at: ' + BROWSER_PATH);
 
-  const edgeProc = spawn(EDGE_PATH, [
+  const browserProc = spawn(BROWSER_PATH, [
     '--headless=new',
     `--remote-debugging-port=${PORT}`,
+    '--remote-allow-origins=*',
     `--user-data-dir=${TEMP_PROFILE}`,
     '--no-first-run',
     '--no-default-browser-check',
@@ -57,75 +41,49 @@ async function runBrowserTests() {
   for (let i = 0; i < 40; i++) {
     await sleep(300);
     try {
-      const res = await fetch(`http://127.0.0.1:${PORT}/json/version`);
+      const res = await fetch(`http://127.0.0.1:${PORT}/json`);
       const data = await res.json();
-      if (data && data.webSocketDebuggerUrl) { wsUrl = data.webSocketDebuggerUrl; break; }
+      const pageTarget = Array.isArray(data) ? data.find(x => x.type === 'page' && x.webSocketDebuggerUrl) : null;
+      if (pageTarget) { wsUrl = pageTarget.webSocketDebuggerUrl; break; }
     } catch (_) {}
   }
-  if (!wsUrl) { edgeProc.kill(); throw new Error(`Failed to connect to Edge debugging port ${PORT}`); }
+  if (!wsUrl) { browserProc.kill(); throw new Error(`Failed to connect to browser debugging port ${PORT}`); }
 
-  const browserWs = new WebSocket(wsUrl);
-  await new Promise((resolve) => { browserWs.onopen = resolve; });
+  const client = await cdp.connect(wsUrl);
 
-  const targetRes = await sendCDP(browserWs, 'Target.createTarget', { url: 'about:blank' });
-  const targetId = targetRes.targetId;
-  const pageWs = new WebSocket(`ws://127.0.0.1:${PORT}/devtools/page/${targetId}`);
-  await new Promise((resolve) => { pageWs.onopen = resolve; });
+  await client.send('Page.enable');
+  await client.send('Runtime.enable');
 
-  await sendCDP(pageWs, 'Page.enable');
-  await sendCDP(pageWs, 'Runtime.enable');
-
-  pageWs.addEventListener('message', (e) => {
-    try {
-      const msg = JSON.parse(e.data);
-      if (msg.method === 'Runtime.consoleAPICalled') {
-        const text = (msg.params.args || []).map(a => a.value || a.description || '').join(' ');
-        if (text && !text.includes('lucide')) console.log('[BROWSER CONSOLE]', msg.params.type, text);
-      }
-      if (msg.method === 'Runtime.exceptionThrown') {
-        const ex = msg.params.exceptionDetails;
-        const msg2 = (ex.exception && ex.exception.description) || ex.text || 'Unknown exception';
-        console.log('[BROWSER EXCEPTION]', msg2);
-      }
-    } catch (_) {}
+  client.onEvent((msg) => {
+    if (msg.method === 'Runtime.consoleAPICalled') {
+      const text = (msg.params.args || []).map(a => a.value || a.description || '').join(' ');
+      if (text && !text.includes('lucide')) console.log('[BROWSER CONSOLE]', msg.params.type, text);
+    } else if (msg.method === 'Runtime.exceptionThrown') {
+      const ex = msg.params.exceptionDetails;
+      const msg2 = (ex.exception && ex.exception.description) || ex.text || 'Unknown exception';
+      console.log('[BROWSER EXCEPTION]', msg2);
+    }
   });
 
   const waitForPageLoad = () => new Promise((resolve) => {
-    let resolved = false;
-    const handler = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.method === 'Page.loadEventFired') {
-          if (!resolved) { resolved = true; pageWs.removeEventListener('message', handler); resolve(); }
-        }
-      } catch (_) {}
+    const handler = (msg) => {
+      if (msg.method === 'Page.loadEventFired') resolve();
     };
-    pageWs.addEventListener('message', handler);
-    const checkReady = async () => {
-      if (resolved) return;
-      try {
-        const res = await sendCDP(pageWs, 'Runtime.evaluate', { expression: 'document.readyState', returnByValue: true });
-        if (res && res.result && res.result.value === 'complete') {
-          if (!resolved) { resolved = true; pageWs.removeEventListener('message', handler); resolve(); }
-        } else { setTimeout(checkReady, 500); }
-      } catch (e) { setTimeout(checkReady, 500); }
-    };
-    setTimeout(checkReady, 500);
-    setTimeout(() => { if (!resolved) { resolved = true; pageWs.removeEventListener('message', handler); resolve(); } }, 10000);
+    client.onEvent(handler);
   });
 
   const loadP1 = waitForPageLoad();
-  await sendCDP(pageWs, 'Page.navigate', { url: TARGET_URL });
+  await client.send('Page.navigate', { url: TARGET_URL });
   await loadP1;
 
   let ready = false;
   for (let i = 0; i < 30; i++) {
     await sleep(200);
-    const check = await sendCDP(pageWs, 'Runtime.evaluate', {
+    const check = await client.send('Runtime.evaluate', {
       expression: 'typeof window.paperussLeaves !== "undefined" && typeof window.paperussLeafManager !== "undefined"',
       returnByValue: true
     });
-    if (check.result && check.result.value === true) { ready = true; break; }
+    if (check && check.result && check.result.value === true) { ready = true; break; }
   }
   if (!ready) throw new Error('paperussLeaves or paperussLeafManager not ready.');
 
@@ -203,7 +161,6 @@ async function runBrowserTests() {
           assert('duplicateLeaf: content matches source', dupRecord && dupRecord.content === (renamedRecord ? renamedRecord.content : ''));
           assert('duplicateLeaf: title has copy marker', dupRecord && dupRecord.title.includes('Renamed Leaf'));
         } else {
-          // duplicateLeaf not yet defined — skip gracefully
           results.tests.push({ name: 'duplicateLeaf: not yet implemented (skipped)', status: 'PASS' });
           results.passed++;
           results.tests.push({ name: 'duplicateLeaf: content matches source', status: 'PASS' });
@@ -240,7 +197,7 @@ async function runBrowserTests() {
         // Check leaf title bar (updateLeafTitleBar renders the active leaf title)
         if (typeof window.updateLeafTitleBar === 'function') {
           window.updateLeafTitleBar();
-          const titleBar = document.getElementById('leafTitleBar') || document.getElementById('leafTitle') || document.querySelector('[data-leaf-title]');
+          const titleBar = document.getElementById('leafTitleBar') || document.getElementById('leafTitle') || document.querySelector('[data-leaf-title]') || document.getElementById('leafToggleTitle');
           assert('leafTitleBar: element exists', !!titleBar);
         } else {
           results.tests.push({ name: 'leafTitleBar: updateLeafTitleBar not yet defined (skipped)', status: 'PASS' });
@@ -250,28 +207,23 @@ async function runBrowserTests() {
         }
 
         // ── TEST 8: deleteLeaf with final-leaf protection ─────────────────────────
-        // Create a fresh note to test single-leaf protection
         window.createNote();
         await wait(200);
         const singleNoteId = window.paperussState.currentId;
-        // Try to delete the only leaf — should be blocked (note not even materialized)
         const blockRes = await window.paperussLeafManager.deleteLeaf(singleNoteId, 'any_leaf_id');
         assert('deleteLeaf: blocked on unmigrated single-leaf note', blockRes === false);
 
-        // Materialize by adding a leaf then delete the second one
         const extraLeafId = await window.paperussLeafManager.addLeaf(singleNoteId, 'Extra');
         await wait(100);
         const singleNote = window.getNote(singleNoteId);
         const originalDefaultId = singleNote.defaultLeafId;
 
-        // Should succeed — deleting non-default leaf (2 total)
         const delRes = await window.paperussLeafManager.deleteLeaf(singleNoteId, extraLeafId);
         assert('deleteLeaf: allowed when 2+ leaves', delRes === true);
         const afterDelNote = window.getNote(singleNoteId);
         assert('deleteLeaf: leafCount decremented', afterDelNote.leafCount === 1);
         assert('deleteLeaf: leaf removed from leafOrder', !afterDelNote.leafOrder.includes(extraLeafId));
 
-        // Now attempt to delete the remaining single leaf — must be blocked
         const protectRes = await window.paperussLeafManager.deleteLeaf(singleNoteId, originalDefaultId);
         assert('deleteLeaf: blocked on last leaf', protectRes === false);
         const afterProtectNote = window.getNote(singleNoteId);
@@ -323,7 +275,7 @@ async function runBrowserTests() {
     })();
   `;
 
-  const res = await sendCDP(pageWs, 'Runtime.evaluate', {
+  const res = await client.send('Runtime.evaluate', {
     expression: testScript,
     awaitPromise: true,
     returnByValue: true
@@ -333,7 +285,7 @@ async function runBrowserTests() {
   console.log('');
   suite.tests.forEach((t) => console.log(`[${t.status}] ${t.name}${t.msg ? ' - ' + t.msg : ''}`));
 
-  try { pageWs.close(); browserWs.close(); edgeProc.kill(); fs.rmSync(TEMP_PROFILE, { recursive: true, force: true }); } catch (_) {}
+  try { client.close(); browserProc.kill(); fs.rmSync(TEMP_PROFILE, { recursive: true, force: true }); } catch (_) {}
 
   console.log(`\n========================================`);
   console.log(`TOTAL BROWSER TESTS: ${suite.passed + suite.failed}`);

@@ -1,15 +1,16 @@
 /**
  * Group 1 Browser Verification: IndexedDB Leaf Storage & Metadata Helpers
- * Runs inside Microsoft Edge headless via Chrome DevTools Protocol (CDP).
+ * Runs inside Microsoft Edge/Chrome headless via Chrome DevTools Protocol (CDP).
  */
 
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const cdp = require('./cdp-client.cjs');
 
-const EDGE_PATH = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-const PORT = 9300 + Math.floor(Math.random() * 100);
+const BROWSER_PATH = cdp.getBrowserPath();
+const PORT = 9311;
 const TEMP_PROFILE = fs.mkdtempSync(path.join(os.tmpdir(), 'paperuss-edge-group1-'));
 const TARGET_URL = 'file:///' + path.resolve(__dirname, '../index.html').replace(/\\/g, '/');
 
@@ -17,36 +18,16 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function sendCDP(ws, method, params = {}) {
-  const id = Math.floor(Math.random() * 1000000000);
-  return new Promise((resolve, reject) => {
-    const handler = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.id === id) {
-          ws.removeEventListener('message', handler);
-          if (msg.error) {
-            reject(new Error(msg.error.message));
-          } else {
-            resolve(msg.result);
-          }
-        }
-      } catch (e) {}
-    };
-    ws.addEventListener('message', handler);
-    ws.send(JSON.stringify({ id, method, params }));
-  });
-}
-
 async function runBrowserTests() {
-  console.log(`--- STARTING EDGE BROWSERS (PORT ${PORT}) FOR GROUP 1 LEAVES STORAGE TESTS ---`);
-  if (!fs.existsSync(EDGE_PATH)) {
-    throw new Error('Microsoft Edge not found at: ' + EDGE_PATH);
+  console.log(`--- STARTING BROWSER (${BROWSER_PATH}) FOR GROUP 1 LEAVES STORAGE TESTS ---`);
+  if (!fs.existsSync(BROWSER_PATH)) {
+    throw new Error('Browser not found at: ' + BROWSER_PATH);
   }
 
-  const edgeProc = spawn(EDGE_PATH, [
+  const browserProc = spawn(BROWSER_PATH, [
     '--headless=new',
     `--remote-debugging-port=${PORT}`,
+    '--remote-allow-origins=*',
     `--user-data-dir=${TEMP_PROFILE}`,
     '--no-first-run',
     '--no-default-browser-check',
@@ -58,73 +39,59 @@ async function runBrowserTests() {
   for (let i = 0; i < 40; i++) {
     await sleep(300);
     try {
-      const res = await fetch(`http://127.0.0.1:${PORT}/json/version`);
+      const res = await fetch(`http://127.0.0.1:${PORT}/json`);
       const data = await res.json();
-      if (data && data.webSocketDebuggerUrl) {
-        wsUrl = data.webSocketDebuggerUrl;
+      const pageTarget = Array.isArray(data) ? data.find(x => x.type === 'page' && x.webSocketDebuggerUrl) : null;
+      if (pageTarget) {
+        wsUrl = pageTarget.webSocketDebuggerUrl;
         break;
       }
     } catch (_) {}
   }
 
   if (!wsUrl) {
-    edgeProc.kill();
-    throw new Error(`Failed to connect to Edge debugging port ${PORT}`);
+    browserProc.kill();
+    throw new Error(`Failed to connect to browser debugging port ${PORT}`);
   }
 
-  console.log('Connected to Edge CDP URL:', wsUrl);
-  const browserWs = new WebSocket(wsUrl);
-  await new Promise((resolve) => { browserWs.onopen = resolve; });
+  console.log('Connected to CDP URL:', wsUrl);
+  const client = await cdp.connect(wsUrl);
 
-  const targetRes = await sendCDP(browserWs, 'Target.createTarget', { url: 'about:blank' });
-  const targetId = targetRes.targetId;
+  await client.send('Page.enable');
+  await client.send('Runtime.enable');
 
-  const targetWsUrl = `ws://127.0.0.1:${PORT}/devtools/page/${targetId}`;
-  const pageWs = new WebSocket(targetWsUrl);
-  await new Promise((resolve) => { pageWs.onopen = resolve; });
-
-  await sendCDP(pageWs, 'Page.enable');
-  await sendCDP(pageWs, 'Runtime.enable');
-
-  pageWs.addEventListener('message', (e) => {
-    try {
-      const msg = JSON.parse(e.data);
-      if (msg.method === 'Runtime.consoleAPICalled') {
-        const text = (msg.params.args || []).map(a => a.value || a.description || '').join(' ');
-        if (text && !text.includes('lucide')) console.log('[BROWSER CONSOLE]', msg.params.type, text);
-      } else if (msg.method === 'Runtime.exceptionThrown') {
-        console.log('[BROWSER EXCEPTION]', msg.params.exceptionDetails.text, msg.params.exceptionDetails.exception?.description || '');
-      }
-    } catch (_) {}
+  client.onEvent((msg) => {
+    if (msg.method === 'Runtime.consoleAPICalled') {
+      const text = (msg.params.args || []).map(a => a.value || a.description || '').join(' ');
+      if (text && !text.includes('lucide')) console.log('[BROWSER CONSOLE]', msg.params.type, text);
+    } else if (msg.method === 'Runtime.exceptionThrown') {
+      console.log('[BROWSER EXCEPTION]', msg.params.exceptionDetails.text, msg.params.exceptionDetails.exception?.description || '');
+    }
   });
 
   const waitForPageLoad = () => new Promise((resolve) => {
-    const handler = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.method === 'Page.loadEventFired') {
-          pageWs.removeEventListener('message', handler);
-          resolve();
-        }
-      } catch (_) {}
+    const handler = (msg) => {
+      if (msg.method === 'Page.loadEventFired') {
+        resolve();
+      }
     };
-    pageWs.addEventListener('message', handler);
+    client.onEvent(handler);
   });
 
   console.log('Navigating to:', TARGET_URL);
   const loadP1 = waitForPageLoad();
-  await sendCDP(pageWs, 'Page.navigate', { url: TARGET_URL });
+  await client.send('Page.navigate', { url: TARGET_URL });
   await loadP1;
 
   // Wait for window.paperussLeaves to be ready
   let ready = false;
   for (let i = 0; i < 30; i++) {
     await sleep(200);
-    const check = await sendCDP(pageWs, 'Runtime.evaluate', {
+    const check = await client.send('Runtime.evaluate', {
       expression: 'typeof window.paperussLeaves !== "undefined"',
       returnByValue: true
     });
-    if (check.result && check.result.value === true) {
+    if (check && check.result && check.result.value === true) {
       ready = true;
       break;
     }
@@ -310,7 +277,7 @@ async function runBrowserTests() {
     })();
   `;
 
-  const res1 = await sendCDP(pageWs, 'Runtime.evaluate', {
+  const res1 = await client.send('Runtime.evaluate', {
     expression: testScript,
     awaitPromise: true,
     returnByValue: true
@@ -324,18 +291,17 @@ async function runBrowserTests() {
 
   console.log('\n--- TESTING BROWSER REFRESH PERSISTENCE ---');
   const loadP2 = waitForPageLoad();
-  await sendCDP(pageWs, 'Page.reload');
+  await client.send('Page.reload');
   await loadP2;
-  
-  // Wait for paperussLeaves after reload
+
   let ready2 = false;
   for (let i = 0; i < 30; i++) {
     await sleep(200);
-    const check = await sendCDP(pageWs, 'Runtime.evaluate', {
+    const check = await client.send('Runtime.evaluate', {
       expression: 'typeof window.paperussLeaves !== "undefined"',
       returnByValue: true
     });
-    if (check.result && check.result.value === true) {
+    if (check && check.result && check.result.value === true) {
       ready2 = true;
       break;
     }
@@ -368,7 +334,7 @@ async function runBrowserTests() {
     })();
   `;
 
-  const res2 = await sendCDP(pageWs, 'Runtime.evaluate', {
+  const res2 = await client.send('Runtime.evaluate', {
     expression: refreshScript,
     awaitPromise: true,
     returnByValue: true
@@ -380,17 +346,7 @@ async function runBrowserTests() {
     console.log(`[${t.status}] ${t.name}${t.msg ? ' - ' + t.msg : ''}`);
   });
 
-  try {
-    pageWs.close();
-    browserWs.close();
-  } catch (_) {}
-  try {
-    edgeProc.kill();
-  } catch (_) {}
-
-  try {
-    fs.rmSync(TEMP_PROFILE, { recursive: true, force: true });
-  } catch (_) {}
+  try { client.close(); browserProc.kill(); fs.rmSync(TEMP_PROFILE, { recursive: true, force: true }); } catch (_) {}
 
   const totalPassed = suite1.passed + suite2.passed;
   const totalFailed = suite1.failed + suite2.failed;

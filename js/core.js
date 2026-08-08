@@ -1032,13 +1032,15 @@ function restoreEditorSelection(editor,savedSelection){
   }catch(_){ /* A changed remote document has no safe equivalent selection. */ }
 }
 
-global.getCurrentOpenNote = function() {
+const _globalScope = typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this);
+_globalScope.getCurrentOpenNote = function() {
   if (typeof state === 'undefined' || !state.currentId) return null;
   const isSpecialPage = ['media', 'calendar', 'tasks', 'settings'].includes(state.filter);
   if (isSpecialPage) return null;
   const note = getNote(state.currentId);
   return (note && !note.deletedAt) ? note : null;
 };
+if (typeof window !== 'undefined') window.getCurrentOpenNote = _globalScope.getCurrentOpenNote;
 
 function renderEditor(){
   const empty=document.getElementById('editorEmpty');
