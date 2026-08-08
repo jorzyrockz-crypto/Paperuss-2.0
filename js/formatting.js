@@ -101,6 +101,10 @@ function applyCommand(cmd, val){
   updateToolbarState();
 }
 
+function getEditorElement(){
+  return typeof bodyEl === 'function' ? bodyEl() : (document.getElementById('noteContent') || document.getElementById('noteBody'));
+}
+
 /* ---- Robust font size via span wrapping ---- */
 function applyFontSize(size){
   const sel=window.getSelection();
@@ -122,7 +126,7 @@ function applyFontSize(size){
 
   // Expand selection to word boundaries if just inside text
   const range=sel.getRangeAt(0);
-  const ed=document.getElementById('noteBody');
+  const ed=getEditorElement();
 
   // Check if selection already wrapped in a font-size span — replace size on it
   let startNode=sel.anchorNode;
@@ -162,7 +166,7 @@ function applyHighlight(color){
 
   // "remove" = strip all marks from selection
   if(color==='remove'){
-    const ed=document.getElementById('noteBody');
+    const ed=getEditorElement();
     if(sel.isCollapsed){
       // Walk from cursor backwards to find and remove mark
       let n=sel.anchorNode;
@@ -250,7 +254,7 @@ function applyTextColor(color){
   document.execCommand('styleWithCSS', false, true);
   if(color === 'remove'){
     document.execCommand('foreColor', false, '#FEFEFE');
-    const ed = bodyEl();
+    const ed = getEditorElement();
     ed.querySelectorAll('span, font').forEach(el => {
       if(el.style.color === 'rgb(254, 254, 254)' || el.getAttribute('color') === '#FEFEFE' || el.style.color === '#fefefe'){
         el.style.color = '';
@@ -273,19 +277,16 @@ function applyTextColor(color){
 /* Helper: wrap current selection (or collapsed cursor) in a span with given styles */
 function wrapSelectionInSpan(styles){
   const sel=window.getSelection();
-  const ed=document.getElementById('noteBody');
-  if(!sel) return null;
+  const ed=getEditorElement();
+  if(!sel || !ed) return null;
 
   const span=document.createElement('span');
   Object.assign(span.style, styles);
 
   if(sel.isCollapsed){
-    // Insert at cursor position
     span.textContent='\u200B'; // zero-width space
     try{
-      const r=document.createRange();
-      r.setStart(ed, 0);
-      r.collapse(true);
+      const r=sel.getRangeAt(0);
       r.insertNode(span);
     }catch(e){ return null; }
     return span;
@@ -298,7 +299,6 @@ function wrapSelectionInSpan(styles){
   while(existing && existing!==ed){
     const hasAll=Object.keys(styles).every(k=>existing.style[k]===styles[k]);
     if(existing!==ed && existing.tagName==='SPAN' && hasAll){
-      // Toggle off — replace with text
       const t=document.createTextNode(existing.textContent);
       existing.replaceWith(t);
       return null;
@@ -317,7 +317,8 @@ function wrapSelectionInSpan(styles){
 
 /* Strip mark elements from within a range */
 function stripMarksInRange(range){
-  const ed=document.getElementById('noteBody');
+  const ed=getEditorElement();
+  if(!ed) return;
   const walker=document.createTreeWalker(ed, NodeFilter.SHOW_ELEMENT, {
     acceptNode(n){
       if(n.tagName==='MARK') return NodeFilter.FILTER_ACCEPT;

@@ -2,16 +2,38 @@
    SYSTEM FONT STYLING
    ============================================================ */
 function applyFontStyle(fontStyle){
-  const n=getNote(state.currentId);
-  if(n){
-    n.fontStyle = fontStyle;
-    n.updatedAt = Date.now();
-    save();
-  }
   const ed=bodyEl();
-  if(ed){
+  if(!ed) return;
+
+  const fontsMap={
+    'sans':'"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    'calibri':'Calibri, Carlito, Aptos, sans-serif',
+    'segoe':'"Segoe UI", -apple-system, sans-serif',
+    'serif':'Georgia, "Times New Roman", serif',
+    'mono':'Consolas, ui-monospace, SFMono-Regular, monospace',
+    'arial':'Arial, Helvetica, sans-serif',
+    'bookman':'"Bookman Old Style", Bookman, serif',
+    'oldenglish':'"Old English Text MT", "Cloister Black", serif',
+    'rounded':'"SF Pro Rounded", "Quicksand", system-ui, -apple-system, sans-serif'
+  };
+
+  const sel=window.getSelection();
+  const isTextHighlighted = sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode);
+
+  if (isTextHighlighted) {
+    // Apply inline font-family strictly to highlighted text selection
+    wrapSelectionInSpan({ fontFamily: fontsMap[fontStyle] || fontsMap.sans });
+  } else {
+    // No text highlighted: set default font style for whole note container
+    const n=getNote(state.currentId);
+    if(n){
+      n.fontStyle = fontStyle;
+      n.updatedAt = Date.now();
+      save();
+    }
     ed.setAttribute('data-fontstyle', fontStyle);
   }
+
   const fsLabel=document.getElementById('fontStyleLabel');
   const fsMap = {
     'sans': 'Sans',
@@ -29,22 +51,8 @@ function applyFontStyle(fontStyle){
     opt.classList.toggle('active', opt.dataset.fontstyle === fontStyle);
   });
 
-  // Also if text is selected inside the editor, wrap selection in font-family span
-  const sel=window.getSelection();
-  if(sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)){
-    const fontsMap={
-      'sans':'"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      'calibri':'Calibri, Carlito, Aptos, sans-serif',
-      'segoe':'"Segoe UI", -apple-system, sans-serif',
-      'serif':'Georgia, "Times New Roman", serif',
-      'mono':'Consolas, ui-monospace, SFMono-Regular, monospace',
-      'arial':'Arial, Helvetica, sans-serif',
-      'bookman':'"Bookman Old Style", Bookman, serif',
-      'oldenglish':'"Old English Text MT", "Cloister Black", serif',
-      'rounded':'"SF Pro Rounded", "Quicksand", system-ui, -apple-system, sans-serif'
-    };
-    wrapSelectionInSpan({fontFamily: fontsMap[fontStyle] || fontsMap.sans});
-  }
+  if (typeof handleBodyInput === 'function') handleBodyInput();
+  if (typeof updateToolbarState === 'function') updateToolbarState();
   toast(`Font set to ${fsMap[fontStyle] || 'Sans'}`);
 }
 window.applyFontStyle = applyFontStyle;
