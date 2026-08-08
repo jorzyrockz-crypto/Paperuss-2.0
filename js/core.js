@@ -1801,7 +1801,11 @@ window.paperussLeafManager = {
     const materialized = await this.materializeVirtualNote(n);
     if (!materialized) return false;
 
-    const leaf = await window.paperussLeaves.leafGet(leafId);
+    const targetId = (typeof leafId === 'string' && leafId.startsWith('virtual_main')) ? (n.defaultLeafId || leafId) : leafId;
+    let leaf = await window.paperussLeaves.leafGet(targetId);
+    if (!leaf && targetId === n.defaultLeafId) {
+      leaf = { id: targetId, noteId: n.id, title: 'Main', content: n.content || '', order: 0 };
+    }
     if (!leaf) return false;
     leaf.title = newTitle;
     leaf.updatedAt = Date.now();
@@ -1813,6 +1817,10 @@ window.paperussLeafManager = {
       data: Object.assign({}, leaf),
       timestamp: Date.now()
     });
+
+    if (window.currentActiveLeaf && (window.currentActiveLeaf.id === targetId || window.currentActiveLeaf.id === leafId)) {
+      window.currentActiveLeaf.title = newTitle;
+    }
 
     n.updatedAt = Date.now();
     persist();
@@ -1829,7 +1837,17 @@ window.paperussLeafManager = {
     const materialized = await this.materializeVirtualNote(n);
     if (!materialized) return null;
 
-    const leaf = await window.paperussLeaves.leafGet(leafId);
+    const targetId = (typeof leafId === 'string' && leafId.startsWith('virtual_main')) ? (n.defaultLeafId || leafId) : leafId;
+    let leaf = await window.paperussLeaves.leafGet(targetId);
+    if (!leaf && (targetId === n.defaultLeafId || (typeof leafId === 'string' && leafId.startsWith('virtual_main')))) {
+      leaf = {
+        id: targetId,
+        noteId: n.id,
+        title: 'Main',
+        content: n.content || '',
+        order: 0
+      };
+    }
     if (!leaf) return null;
 
     const newLeaf = {
@@ -1837,7 +1855,8 @@ window.paperussLeafManager = {
       noteId: n.id,
       title: (leaf.title || 'Leaf') + ' (Copy)',
       content: leaf.content || '',
-      order: n.leafCount || n.leafOrder.length,
+      color: leaf.color || 'slate',
+      order: n.leafCount || (n.leafOrder ? n.leafOrder.length : 1),
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
@@ -1851,6 +1870,7 @@ window.paperussLeafManager = {
       timestamp: Date.now()
     });
 
+    if (!Array.isArray(n.leafOrder)) n.leafOrder = [n.defaultLeafId];
     n.leafOrder.push(newLeaf.id);
     n.leafCount = n.leafOrder.length;
     n.updatedAt = Date.now();
@@ -1868,18 +1888,22 @@ window.paperussLeafManager = {
       console.error('Cannot delete the final leaf');
       return false;
     }
-    const idx = order.indexOf(leafId);
+    const targetId = (typeof leafId === 'string' && leafId.startsWith('virtual_main')) ? (n.defaultLeafId || order[0]) : leafId;
+    let idx = order.indexOf(targetId);
+    if (idx === -1) idx = order.indexOf(leafId);
     if (idx === -1) return false;
 
+    const actualLeafId = order[idx];
+
     const activeLeafId = window.paperussLeaves.getNoteActiveLeafId(n);
-    if (activeLeafId === leafId) {
+    if (activeLeafId === actualLeafId || activeLeafId === leafId) {
       const nextLeafId = order[idx + 1] || order[idx - 1];
       await this.switchLeaf(noteId, nextLeafId);
     }
 
     const defaultLeafId = window.paperussLeaves.getNoteDefaultLeafId(n);
-    if (defaultLeafId === leafId) {
-      const nextDefaultId = order.find(id => id !== leafId);
+    if (defaultLeafId === actualLeafId) {
+      const nextDefaultId = order.find(id => id !== actualLeafId);
       if (nextDefaultId) {
         n.defaultLeafId = nextDefaultId;
         const nextLeafObj = await window.paperussLeaves.leafGet(nextDefaultId);
@@ -1893,12 +1917,12 @@ window.paperussLeafManager = {
     n.leafCount = Math.max(1, n.leafOrder.length);
     n.updatedAt = Date.now();
 
-    await window.paperussLeaves.leafDel(leafId);
+    await window.paperussLeaves.leafDel(actualLeafId);
     await window.paperussLeaves.leafQueuePut({
       id: 'mut_del_' + Date.now(),
       noteId: n.id,
       action: 'delete',
-      data: { id: leafId, noteId: n.id },
+      data: { id: actualLeafId, noteId: n.id },
       timestamp: Date.now()
     });
 

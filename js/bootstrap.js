@@ -1562,8 +1562,18 @@ function isSingleStandaloneUrl(str) {
   initAuthAndSync();
   // Schedule event notifications for any existing notes that have them
   if(typeof rescheduleAllEventNotifications==='function') rescheduleAllEventNotifications();
-  state.currentId = filteredNotes()[0]?.id || null;
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetNoteId = urlParams.get('noteId');
+  const targetLeafId = urlParams.get('leafId');
+  if (targetNoteId && getNote(targetNoteId)) {
+    state.currentId = targetNoteId;
+  } else {
+    state.currentId = filteredNotes()[0]?.id || null;
+  }
   renderAll();
+  if (targetNoteId && targetLeafId && typeof switchLeafAction === 'function') {
+    setTimeout(() => { switchLeafAction(targetLeafId); }, 100);
+  }
   if (window.paperussLeaves && typeof window.paperussLeaves.repairContaminatedLeavesOnce === 'function') {
     window.paperussLeaves.repairContaminatedLeavesOnce().then((repaired) => {
       if (repaired > 0 && typeof renderEditor === 'function') renderEditor();

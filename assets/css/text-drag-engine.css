@@ -23,7 +23,7 @@ body.is-text-dragging * {
   will-change: left, top;
   user-select: none;
 
-  font-size: 20px;
+  font-size: 28px;
   line-height: 1;
   color: #fff;
 
@@ -70,6 +70,7 @@ body.is-text-dragging * {
   font-family: inherit;
   letter-spacing: 0.02em;
   line-height: 1;
+  font-size: 15px; /* base — JS shrinks further chars from this */
 
   /* Colour shifts from white-blue (close) → deep indigo (far) */
   color: color-mix(
@@ -133,28 +134,55 @@ body.is-text-dragging * {
 /* ── Drop-release burst animation ── */
 .text-drop-release-burst {
   display: inline;
-  border-radius: 3px;
-  animation: cometDropBurst 0.42s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  border-radius: 4px;
+  position: relative;
+  animation: cometDropBurst 0.72s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Ripple ring that expands outward from the dropped text */
+.text-drop-release-burst::after {
+  content: '';
+  position: absolute;
+  inset: -2px -4px;
+  border-radius: 6px;
+  border: 2px solid rgba(99, 102, 241, 0.7);
+  animation: cometDropRipple 0.72s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  pointer-events: none;
 }
 
 @keyframes cometDropBurst {
-  0% {
+  0%   {
     background: linear-gradient(135deg, #6366f1, #818cf8);
     color: #fff;
-    padding: 0 3px;
-    opacity: 1;
-    box-shadow: 0 0 0 3px rgba(99,102,241,0.4), 0 0 20px rgba(99,102,241,0.6);
-    text-shadow: 0 0 8px #a5b4fc;
+    padding: 1px 4px;
+    border-radius: 4px;
+    text-shadow: 0 0 10px #a5b4fc;
+    box-shadow: 0 0 0 2px rgba(99,102,241,0.5), 0 0 24px rgba(99,102,241,0.7);
   }
-  50% {
-    background: rgba(99, 102, 241, 0.18);
-    box-shadow: 0 0 0 6px rgba(99,102,241,0.1), 0 0 30px rgba(99,102,241,0.25);
+  35%  {
+    background: rgba(99, 102, 241, 0.22);
+    color: inherit;
+    padding: 1px 4px;
+    box-shadow: 0 0 0 4px rgba(99,102,241,0.15), 0 0 32px rgba(99,102,241,0.3);
+    text-shadow: 0 0 6px rgba(165,180,252,0.5);
+  }
+  70%  {
+    background: rgba(99, 102, 241, 0.06);
+    padding: 1px 4px;
+    box-shadow: 0 0 0 1px rgba(99,102,241,0.05);
+    text-shadow: none;
   }
   100% {
     background: transparent;
     padding: 0;
-    opacity: 1;
+    border-radius: 0;
     box-shadow: none;
     text-shadow: none;
   }
+}
+
+@keyframes cometDropRipple {
+  0%   { opacity: 1;   transform: scale(1);    border-color: rgba(99,102,241,0.7); }
+  60%  { opacity: 0.4; transform: scale(1.35); border-color: rgba(139,92,246,0.3); }
+  100% { opacity: 0;   transform: scale(1.7);  border-color: transparent; }
 }
