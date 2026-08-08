@@ -76,7 +76,18 @@
       return;
     }
     
+    let activeBranchName = 'All Notes';
+    if (window.BranchEngine) {
+      const bId = window.BranchEngine.getActiveBranchId();
+      const branches = window.BranchEngine.loadBranches();
+      const activeB = branches.find(b => b.id === bId || b.name === bId);
+      if (activeB) activeBranchName = activeB.name;
+    }
+
     let html = '<div class="leafline-container" style="padding:12px;overflow-y:auto;height:100%;">';
+    html += `<div class="leafline-branch-badge" style="padding:6px 8px;margin-bottom:8px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:6px;">
+      <span>🌿 ${activeBranchName}</span>
+    </div>`;
     headings.forEach((h, i) => {
       let indent = (h.level - 1) * 12;
       if (h.isTitle) indent = 0;

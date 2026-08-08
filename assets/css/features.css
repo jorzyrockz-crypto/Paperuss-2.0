@@ -6772,3 +6772,128 @@ a.paperuss-inline-link:hover {
     break-inside: avoid !important;
   }
 }
+
+/* ============================================================
+   SIDEBAR BRANCH TREE & CATEGORY STYLES
+   ============================================================ */
+.sidebar-branch-tree-wrapper {
+  padding: 12px 14px;
+  border-top: 1px solid var(--border, rgba(0,0,0,0.08));
+  margin-top: 8px;
+}
+
+.branch-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.branch-tree-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--fg-muted, #64748b);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+}
+
+.btn-new-branch-icon {
+  background: transparent;
+  border: none;
+  color: var(--fg-muted, #64748b);
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.btn-new-branch-icon:hover {
+  background: var(--hover, rgba(0,0,0,0.05));
+  color: var(--fg-primary, #0f172a);
+}
+
+.branch-tree-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.branch-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-secondary, #475569);
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.branch-item:hover {
+  background: var(--hover, rgba(0,0,0,0.05));
+  color: var(--fg-primary, #0f172a);
+}
+
+.branch-item.active {
+  background: var(--accent-light, rgba(99, 102, 241, 0.12));
+  color: var(--accent, #6366f1);
+  font-weight: 600;
+}
+
+.branch-item.drag-over {
+  background: var(--accent-ring, rgba(99, 102, 241, 0.25)) !important;
+  border: 1px dashed var(--accent, #6366f1);
+}
+
+.branch-color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  flex-shrink: 0;
+}
+
+.branch-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.branch-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-muted, #94a3b8);
+  background: var(--bg-secondary, rgba(0,0,0,0.05));
+  padding: 1px 6px;
+  border-radius: 99px;
+}
+
+.branch-opt-btn {
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: 0 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.branch-item:hover .branch-opt-btn {
+  opacity: 1;
+}
+
+.sub-branch-group {
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
