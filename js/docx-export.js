@@ -263,16 +263,21 @@
       const tr = rows[r];
       let cellsXml = '';
       const cells = tr.children || tr.childNodes || [];
+      let isHeaderRow = false;
+
       for (let c = 0; c < cells.length; c++) {
         const cell = cells[c];
         const cellTag = (cell.tagName || '').toUpperCase();
+        if (cellTag === 'TH') isHeaderRow = true;
         if (cellTag === 'TD' || cellTag === 'TH') {
           const contentXml = await convertChildrenToWml(cell, ctx);
           const pXml = contentXml.includes('<w:p>') ? contentXml : `<w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr>${contentXml}</w:p>`;
-          cellsXml += `<w:tc><w:tcPr><w:tcW w:w="2500" w:type="dxa"/></w:tcPr>${pXml}</w:tc>`;
+          const shdXml = cellTag === 'TH' ? '<w:shd w:val="clear" w:color="auto" w:fill="F1F5F9"/>' : '';
+          cellsXml += `<w:tc><w:tcPr><w:tcW w:w="2500" w:type="dxa"/>${shdXml}</w:tcPr>${pXml}</w:tc>`;
         }
       }
-      rowsXml += `<w:tr>${cellsXml}</w:tr>`;
+      const trPr = `<w:trPr><w:cantSplit/>${isHeaderRow ? '<w:tblHeader/>' : ''}</w:trPr>`;
+      rowsXml += `<w:tr>${trPr}${cellsXml}</w:tr>`;
     }
 
     const tblPr = `<w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="0" w:type="auto"/><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:left w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:right w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="EEEEEE"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="EEEEEE"/></w:tblBorders></w:tblPr>`;
@@ -398,7 +403,8 @@
     let rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n` +
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
       `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +
-      `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>`;
+      `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>` +
+      `<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable" Target="fontTable.xml"/>`;
 
     for (let i = 0; i < hyperlinks.length; i++) {
       const hl = hyperlinks[i];
@@ -422,7 +428,8 @@
       `<Default Extension="xml" ContentType="application/xml"/>` +
       `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>` +
       `<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>` +
-      `<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>`;
+      `<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>` +
+      `<Override PartName="/word/fontTable.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml"/>`;
 
     const exts = new Set(['png', 'jpeg', 'jpg', 'gif']);
     for (let i = 0; i < images.length; i++) {
@@ -435,6 +442,20 @@
     });
     xml += `</Types>`;
     return xml;
+  }
+
+  /**
+   * Build standard word/fontTable.xml for system font fallbacks.
+   */
+  function buildFontTableXml() {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n` +
+      `<w:fonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+      `<w:font w:name="Calibri"><w:family w:val="swiss"/><w:pitch w:val="variable"/></w:font>` +
+      `<w:font w:name="Segoe UI"><w:family w:val="swiss"/><w:pitch w:val="variable"/></w:font>` +
+      `<w:font w:name="Consolas"><w:family w:val="modern"/><w:pitch w:val="fixed"/></w:font>` +
+      `<w:font w:name="Georgia"><w:family w:val="roman"/><w:pitch w:val="variable"/></w:font>` +
+      `<w:font w:name="Arial"><w:family w:val="swiss"/><w:pitch w:val="variable"/></w:font>` +
+      `</w:fonts>`;
   }
 
   /**
@@ -482,7 +503,7 @@
     }
 
     const zip = new JSZipLib();
-    const relsCounter = { count: 2 }; // rId1=styles, rId2=numbering
+    const relsCounter = { count: 3 }; // rId1=styles, rId2=numbering, rId3=fontTable
     const hyperlinks = [];
     const images = [];
 
@@ -496,6 +517,22 @@
       const leafOrder = typeof global.getNoteLeafOrder === 'function'
         ? global.getNoteLeafOrder(note)
         : (note.leafOrder || ['virtual_main_' + note.id]);
+
+      // Add Hybrid Table of Contents section if note has multiple leaves
+      if (leafOrder.length > 1) {
+        bodyXml += `<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="1F497D"/></w:rPr><w:t xml:space="preserve">Table of Contents</w:t></w:r></w:p>`;
+        bodyXml += `<w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr><w:fldSimple w:instr="TOC \\o &quot;1-3&quot; \\h \\z \\u"/></w:p>`;
+        for (let j = 0; j < leafOrder.length; j++) {
+          const lId = leafOrder[j];
+          let lObj = null;
+          if (global.paperussLeaves && global.paperussLeaves.leafGet) {
+            lObj = await global.paperussLeaves.leafGet(lId);
+          }
+          const tStr = lObj ? (lObj.title || `Leaf ${j + 1}`) : `Leaf ${j + 1}`;
+          bodyXml += `<w:p><w:pPr><w:pStyle w:val="ListParagraph"/><w:ind w:left="360"/></w:pPr><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">${j + 1}. ${escXml(tStr)}</w:t></w:r></w:p>`;
+        }
+        bodyXml += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+      }
 
       let validLeafCount = 0;
       for (let i = 0; i < leafOrder.length; i++) {
@@ -545,8 +582,6 @@
         }
       }
       if (!activeLeaf) {
-        // Only fallback to note.content if the Note itself lacks modern Leaf structures (legacy Note).
-        // If it's a modern note but just has no active leaf, we don't artificially render 'main'.
         if (!note.leafOrder || note.leafOrder.length === 0 || note.leafOrder.includes('virtual_main_' + note.id)) {
           activeLeaf = { id: 'main', title: note.title || 'Main', content: note.content };
         }
@@ -580,6 +615,7 @@
     zip.file('word/document.xml', buildDocumentXml(bodyXml));
     zip.file('word/styles.xml', buildStylesXml());
     zip.file('word/numbering.xml', buildNumberingXml());
+    zip.file('word/fontTable.xml', buildFontTableXml());
     zip.file('word/_rels/document.xml.rels', buildDocumentRelsXml(hyperlinks, images));
 
     for (let i = 0; i < images.length; i++) {
