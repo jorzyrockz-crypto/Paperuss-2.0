@@ -154,6 +154,12 @@ function initBlockTools(){
   };
   const showGutterForBlock=block=>{
     if(!block || !block.isConnected) return;
+    // Suppress text editor block drag handle over cards (cards use their own floating toolbar & hero ghost drag)
+    const isCard = block.closest && block.closest('.media-card, .paperuss-embed, .paperuss-card-audio, .paperuss-card-file, .paperuss-card, .broken-media-card, [data-paperuss-embed="true"]');
+    if (isCard) {
+      hideGutter();
+      return;
+    }
     clearTimeout(gutterHideTimer);
     activeGutterBlock=block;
     gutter.classList.add('show');
