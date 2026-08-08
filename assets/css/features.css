@@ -78,6 +78,66 @@
 /* Clearfix so the editor flow is never broken by a floated image */
 .note-editor::after{content:"";display:table;clear:both}
 
+/* ============================================================
+   PAPERUSS UNIFIED CARD TEXT WRAP SYSTEM
+   ============================================================ */
+.note-editor [data-card-wrap="left"],
+.note-editor [data-card-align="left"],
+.note-editor [data-wrap-mode="left"] {
+  float: left !important;
+  margin: 2px 18px 6px 0 !important;
+  clear: left;
+  max-width: 48% !important;
+  shape-outside: margin-box;
+  shape-margin: 12px;
+  transition: float 0.2s ease, margin 0.2s ease, max-width 0.2s ease;
+}
+
+.note-editor [data-card-wrap="right"],
+.note-editor [data-card-align="right"],
+.note-editor [data-wrap-mode="right"] {
+  float: right !important;
+  margin: 2px 0 6px 18px !important;
+  clear: right;
+  max-width: 48% !important;
+  shape-outside: margin-box;
+  shape-margin: 12px;
+  transition: float 0.2s ease, margin 0.2s ease, max-width 0.2s ease;
+}
+
+.note-editor [data-card-wrap="none"],
+.note-editor [data-card-wrap="center"],
+.note-editor [data-card-align="center"],
+.note-editor [data-wrap-mode="none"] {
+  float: none !important;
+  margin: 14px auto !important;
+  clear: both !important;
+  display: block !important;
+  max-width: 100%;
+}
+
+.note-editor [data-card-wrap="inline"],
+.note-editor [data-wrap-mode="inline"] {
+  display: inline-block !important;
+  float: none !important;
+  vertical-align: middle !important;
+  margin: 2px 6px !important;
+  max-width: 100% !important;
+}
+
+@media (max-width: 640px) {
+  .note-editor [data-card-wrap="left"],
+  .note-editor [data-card-align="left"] {
+    margin: 2px 14px 6px 0 !important;
+    max-width: 65% !important;
+  }
+  .note-editor [data-card-wrap="right"],
+  .note-editor [data-card-align="right"] {
+    margin: 2px 0 6px 14px !important;
+    max-width: 65% !important;
+  }
+}
+
 /* --- Animated size transitions (≈200ms per spec) ---
      Applied on the element directly so they fire regardless of
      how the width is set (preset attr or inline style).           */

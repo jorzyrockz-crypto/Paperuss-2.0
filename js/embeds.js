@@ -736,11 +736,13 @@
       thumbnail
     };
 
+    const cardWrap = newAttrs.cardWrap || embed.getAttribute('data-card-wrap') || 'none';
     const newHtml = buildCanonicalEmbedHtml(info);
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = newHtml;
     const newEmbed = tempDiv.firstElementChild;
     if (newEmbed && embed.parentElement) {
+      newEmbed.setAttribute('data-card-wrap', cardWrap);
       embed.replaceWith(newEmbed);
       hydrateEmbeds(newEmbed.parentElement);
       if (typeof global.handleBodyInput === 'function') global.handleBodyInput();
@@ -760,6 +762,7 @@
     const displayMode = embed.getAttribute('data-display-mode') || 'interactive';
     const widthPreset = embed.getAttribute('data-width-preset') || 'medium';
     const aspectRatio = embed.getAttribute('data-aspect-ratio') || '16-9';
+    const currentWrap = embed.getAttribute('data-card-wrap') || 'none';
 
     const sizeLabels = {
       'small': 'S',
@@ -775,6 +778,14 @@
       'interactive': 'tv'
     };
     const activeModeIcon = modeIcons[displayMode] || 'tv';
+
+    const wrapIcons = {
+      'none': 'align-center',
+      'left': 'align-left',
+      'right': 'align-right',
+      'inline': 'align-justify'
+    };
+    const activeWrapIcon = wrapIcons[currentWrap] || 'align-center';
 
     bar.innerHTML = `
       <div class="embed-tb-segment">
@@ -798,6 +809,25 @@
           </button>
           <button type="button" class="embed-tb-dropdown-item ${widthPreset === 'full' ? 'active' : ''}" data-action="set-width" data-val="full">
             <span class="embed-sz-badge">Full</span> Full Width (100%)
+          </button>
+        </div>
+      </div>
+      <div class="embed-tb-segment" style="position:relative">
+        <button type="button" class="embed-tb-btn" data-action="toggle-wrap-menu" title="Wrap Text Mode">
+          <i data-lucide="${activeWrapIcon}" class="w-4 h-4 embed-wrap-icon"></i>
+        </button>
+        <div class="embed-tb-dropdown embed-wrap-dropdown hidden" contenteditable="false">
+          <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'none' ? 'active' : ''}" data-action="set-wrap" data-val="none">
+            <i data-lucide="align-center" class="w-4 h-4"></i> Break Text (No Wrap)
+          </button>
+          <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'left' ? 'active' : ''}" data-action="set-wrap" data-val="left">
+            <i data-lucide="align-left" class="w-4 h-4"></i> Wrap Text Right (Float Left)
+          </button>
+          <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'right' ? 'active' : ''}" data-action="set-wrap" data-val="right">
+            <i data-lucide="align-right" class="w-4 h-4"></i> Wrap Text Left (Float Right)
+          </button>
+          <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'inline' ? 'active' : ''}" data-action="set-wrap" data-val="inline">
+            <i data-lucide="align-justify" class="w-4 h-4"></i> Inline with Text
           </button>
         </div>
       </div>
@@ -874,10 +904,33 @@
         const menu = bar.querySelector('.embed-size-dropdown');
         closeAllDropdownsExcept(menu);
         if (menu) menu.classList.toggle('hidden');
+      } else if (act === 'toggle-wrap-menu') {
+        const menu = bar.querySelector('.embed-wrap-dropdown');
+        closeAllDropdownsExcept(menu);
+        if (menu) menu.classList.toggle('hidden');
       } else if (act === 'toggle-mode-menu') {
         const menu = bar.querySelector('.embed-mode-dropdown');
         closeAllDropdownsExcept(menu);
         if (menu) menu.classList.toggle('hidden');
+      } else if (act === 'toggle-more-menu') {
+        const menu = bar.querySelector('.embed-more-menu');
+        closeAllDropdownsExcept(menu);
+        if (menu) menu.classList.toggle('hidden');
+      } else if (act === 'set-width') {
+        updateEmbedSetup(embed, { widthPreset: val });
+        bar.querySelectorAll('.embed-size-dropdown .embed-tb-dropdown-item').forEach(b => {
+          b.classList.toggle('active', b.getAttribute('data-val') === val);
+        });
+        const labelEl = bar.querySelector('[data-action="toggle-size-menu"] .embed-tb-label');
+        if (labelEl) labelEl.textContent = sizeLabels[val] || 'M';
+      } else if (act === 'set-wrap') {
+        embed.setAttribute('data-card-wrap', val);
+        bar.querySelectorAll('.embed-wrap-dropdown .embed-tb-dropdown-item').forEach(b => {
+          b.classList.toggle('active', b.getAttribute('data-val') === val);
+        });
+        closeAllDropdownsExcept(null);
+        if (typeof handleBodyInput === 'function') handleBodyInput();
+        if (typeof save === 'function') save();
       } else if (act === 'toggle-more-menu') {
         const menu = bar.querySelector('.embed-more-menu');
         closeAllDropdownsExcept(menu);
