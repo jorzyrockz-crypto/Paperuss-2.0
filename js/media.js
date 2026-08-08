@@ -1602,18 +1602,18 @@ let autoScrollRAF = null;
 let autoScrollDir = 0;
 let autoScrollSpeed = 0;
 
-// Viewport Edge Auto-Scroll Engine
+// Viewport Edge Auto-Scroll Engine for Cards & Blocks
 function updateAutoScrollOnDrag(clientY) {
-  const scrollHost = document.getElementById('editorScroll') || document.documentElement;
+  const scrollHost = document.getElementById('editorScroll') || document.querySelector('.main-content-scroll') || document.querySelector('.editor-container');
   const viewportHeight = window.innerHeight;
-  const threshold = 65;
+  const threshold = 75;
 
   if (clientY < threshold) {
     autoScrollDir = -1;
-    autoScrollSpeed = Math.min(26, Math.max(4, (threshold - clientY) * 0.45));
+    autoScrollSpeed = Math.min(28, Math.max(5, (threshold - clientY) * 0.5));
   } else if (clientY > viewportHeight - threshold) {
     autoScrollDir = 1;
-    autoScrollSpeed = Math.min(26, Math.max(4, (clientY - (viewportHeight - threshold)) * 0.45));
+    autoScrollSpeed = Math.min(28, Math.max(5, (clientY - (viewportHeight - threshold)) * 0.5));
   } else {
     autoScrollDir = 0;
     if (autoScrollRAF) {
@@ -1626,7 +1626,10 @@ function updateAutoScrollOnDrag(clientY) {
   if (!autoScrollRAF) {
     const step = () => {
       if (autoScrollDir !== 0) {
-        scrollHost.scrollTop += autoScrollDir * autoScrollSpeed;
+        if (scrollHost && scrollHost.scrollHeight > scrollHost.clientHeight) {
+          scrollHost.scrollTop += autoScrollDir * autoScrollSpeed;
+        }
+        window.scrollBy(0, autoScrollDir * autoScrollSpeed);
         autoScrollRAF = requestAnimationFrame(step);
       } else {
         autoScrollRAF = null;
@@ -1643,6 +1646,8 @@ function stopAutoScrollOnDrag() {
     autoScrollRAF = null;
   }
 }
+window.updateAutoScrollOnDrag = updateAutoScrollOnDrag;
+window.stopAutoScrollOnDrag = stopAutoScrollOnDrag;
 
 // 4-Way Drop Detection with Hysteresis Anti-Shake Threshold (6px)
 function detect4WayDropTargetWithHysteresis(targetEl, clientX, clientY) {

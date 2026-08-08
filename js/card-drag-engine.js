@@ -83,6 +83,7 @@ function _resetCardDrag() {
   _cardPreparing = false;
   _clearCardHighlights();
   document.body.classList.remove('is-card-dragging');
+  if (typeof stopAutoScrollOnDrag === 'function') stopAutoScrollOnDrag();
 }
 
 function _spawnCardHeroGhost(cardEl, x, y) {
@@ -214,6 +215,10 @@ document.addEventListener('pointermove', (e) => {
 
   if (_cardDragging) {
     e.preventDefault();
+
+    if (typeof updateAutoScrollOnDrag === 'function') {
+      updateAutoScrollOnDrag(e.clientY);
+    }
 
     if (_cardHeroGhost) {
       _cardHeroGhost.style.left = `${e.clientX}px`;
