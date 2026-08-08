@@ -29,8 +29,9 @@ body.is-card-dragging * {
   pointer-events: none !important;
   z-index: 9999999 !important;
   transform: translate(-50%, -50%);
-  will-change: left, top, transform;
+  will-change: left, top, transform, filter, opacity;
   user-select: none;
+  overflow: hidden;
 
   display: inline-flex;
   align-items: center;
@@ -49,12 +50,49 @@ body.is-card-dragging * {
     0 0 20px rgba(99, 102, 241, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 
-  animation: heroGhostPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  /* Dual Animation: 3D Spring Pop-in + Ambient Floating Hovercraft Inertia */
+  animation:
+    heroGhostPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+    heroGhostFloat 2.4s ease-in-out 0.35s infinite alternate;
 }
 
 @keyframes heroGhostPop {
-  0%   { transform: translate(-50%, -50%) scale(0.75) rotate(-3deg); opacity: 0; }
-  100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
+  0%   { transform: translate(-50%, -50%) scale(0.7) rotate(-4deg); opacity: 0; filter: blur(4px); }
+  65%  { transform: translate(-50%, -50%) scale(1.05) rotate(1deg); opacity: 1; filter: blur(0px); }
+  100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; filter: blur(0px); }
+}
+
+@keyframes heroGhostFloat {
+  0%   { transform: translate(-50%, -50%) translateY(0px) rotate(0deg); }
+  50%  { transform: translate(-50%, -50%) translateY(-5px) rotate(1.2deg); }
+  100% { transform: translate(-50%, -50%) translateY(3px) rotate(-0.8deg); }
+}
+
+/* Glass Shimmer Sheen Sweep Across Badge on Spawn */
+.magic-card-hero-ghost::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  background: linear-gradient(110deg, transparent 20%, rgba(255, 255, 255, 0.45) 50%, transparent 80%);
+  transform: translateX(-100%);
+  animation: glassShimmer 0.75s ease-out 0.1s forwards;
+  pointer-events: none;
+}
+
+@keyframes glassShimmer {
+  0%   { transform: translateX(-100%); opacity: 1; }
+  100% { transform: translateX(100%);  opacity: 0; }
+}
+
+/* Exit Drop Snapping Blur Fade */
+.magic-card-hero-ghost.is-dropping {
+  animation: heroGhostSnapDrop 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+@keyframes heroGhostSnapDrop {
+  0%   { transform: translate(-50%, -50%) scale(1); opacity: 1; filter: blur(0px); }
+  100% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; filter: blur(8px); }
 }
 
 .card-ghost-hero-icon {
@@ -71,6 +109,12 @@ body.is-card-dragging * {
   color: var(--accent, #4f46e5);
   box-shadow: 0 0 10px rgba(99, 102, 241, 0.15);
   flex-shrink: 0;
+  animation: iconPulseAura 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes iconPulseAura {
+  0%   { transform: scale(1);   box-shadow: 0 0 8px rgba(99, 102, 241, 0.2); }
+  100% { transform: scale(1.08); box-shadow: 0 0 20px rgba(99, 102, 241, 0.55); }
 }
 
 .card-ghost-label-box {
@@ -106,6 +150,10 @@ body.is-card-dragging * {
     0 14px 40px rgba(0, 0, 0, 0.55),
     0 0 28px rgba(99, 102, 241, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+[data-theme="dark"] .magic-card-hero-ghost::after {
+  background: linear-gradient(110deg, transparent 20%, rgba(255, 255, 255, 0.25) 50%, transparent 80%);
 }
 
 [data-theme="dark"] .card-ghost-hero-icon {

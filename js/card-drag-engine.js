@@ -71,8 +71,12 @@ function _resetCardDrag() {
     _cardElement = null;
   }
   if (_cardHeroGhost) {
-    _cardHeroGhost.remove();
+    const ghost = _cardHeroGhost;
     _cardHeroGhost = null;
+    ghost.classList.add('is-dropping');
+    setTimeout(() => {
+      if (ghost && ghost.parentNode) ghost.remove();
+    }, 220);
   }
   _cardDragging  = false;
   _cardPreparing = false;
