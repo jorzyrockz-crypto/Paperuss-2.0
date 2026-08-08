@@ -1603,19 +1603,28 @@ function detect4WayDropTargetWithHysteresis(targetEl, clientX, clientY) {
 function detachCardFromGrid(card) {
   if (!card) return;
   const originRow = card.closest('.card-grid-row');
-  if (originRow) {
-    card.classList.remove('grid-col-2', 'grid-col-3', 'grid-col-4');
-    card.setAttribute('data-width-preset', 'full');
-    card.className = card.className.replace(/\bembed-width-\S+/g, 'embed-width-full');
+
+  // Strip all grid column classes and restore 100% full width preset
+  card.classList.remove('grid-col-2', 'grid-col-3', 'grid-col-4');
+  card.setAttribute('data-width-preset', 'full');
+  card.className = card.className.replace(/\bembed-width-\S+/g, 'embed-width-full');
+
+  // If card is still inside originRow, extract it out to standalone position in DOM
+  if (originRow && originRow.contains(card)) {
     originRow.parentNode.insertBefore(card, originRow);
-    const remainingCards = originRow.querySelectorAll('.paperuss-card, .paperuss-card-file, .paperuss-card-audio, .paperuss-card-video, .paperuss-embed, .media-card');
+  }
+
+  // Clean up originRow if empty or single remaining card
+  if (originRow && originRow.isConnected) {
+    const remainingCards = originRow.querySelectorAll('.paperuss-card, .paperuss-card-file, .paperuss-card-audio, .paperuss-card-video, .paperuss-embed, .media-card, img, table');
     if (remainingCards.length === 0) {
       originRow.remove();
     } else {
-      reflowCardGridRows(originRow.parentNode);
+      reflowCardGridRows(originRow.parentNode || document.getElementById('noteBody'));
     }
   }
 }
+window.detachCardFromGrid = detachCardFromGrid;
 
 // Handle 4-Way Drop Placement
 function handleDropAction(draggedEl, targetEl, mode) {

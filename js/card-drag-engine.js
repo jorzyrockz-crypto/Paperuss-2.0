@@ -23,6 +23,7 @@ let _cardDropTargetEl = null;
 let _cardDropMode     = null;
 
 const CARD_SELECTOR = '.media-card, .paperuss-embed, .paperuss-card-audio, .paperuss-card-file, .paperuss-card, .broken-media-card, [data-paperuss-embed="true"], img, .responsive-img-wrapper, .code-block-wrapper, pre.code-block, table, .table-wrapper, .callout-box, blockquote, .card-grid-row';
+const DROP_TARGET_SELECTOR = 'p, h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote, pre, hr, figure, table, .table-wrapper, .media-card, .paperuss-embed, .paperuss-card-audio, .paperuss-card-file, .paperuss-card, .card-grid-row, .callout-box, .code-block-wrapper, .responsive-img-wrapper';
 
 // ── Helpers ──────────────────────────────────────────────────
 function _getCardMetadata(cardEl) {
@@ -220,7 +221,7 @@ document.addEventListener('pointermove', (e) => {
     }
 
     const targetEl = document.elementFromPoint(e.clientX, e.clientY);
-    const targetBlock = targetEl && targetEl.closest ? targetEl.closest(CARD_SELECTOR) : null;
+    const targetBlock = targetEl && targetEl.closest ? targetEl.closest(DROP_TARGET_SELECTOR) : null;
     _updateDropHighlight(targetBlock, e.clientX, e.clientY);
   }
 }, true);
@@ -234,7 +235,7 @@ document.addEventListener('pointerup', (e) => {
   e.preventDefault();
 
   const targetEl = document.elementFromPoint(e.clientX, e.clientY);
-  const targetBlock = targetEl && targetEl.closest ? targetEl.closest(CARD_SELECTOR) : null;
+  const targetBlock = targetEl && targetEl.closest ? targetEl.closest(DROP_TARGET_SELECTOR) : null;
 
   if (_cardElement && targetBlock && targetBlock !== _cardElement && !_cardElement.contains(targetBlock)) {
     const mode = _cardDropMode || 'bottom';
