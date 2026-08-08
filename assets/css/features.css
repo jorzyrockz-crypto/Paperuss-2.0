@@ -757,7 +757,7 @@ img[data-media-id].img-selected,
 .fs-opt.active{background:var(--accent-soft);color:var(--accent)}
 
 .line-spacing-dropdown{
-  position:absolute;top:calc(100% + 6px);left:0;z-index:999;
+  position:fixed;top:calc(100% + 6px);left:0;z-index:100000 !important;
   background:var(--card);border:1px solid var(--border);
   border-radius:10px;padding:6px;box-shadow:var(--shadow-md);
   display:none;flex-direction:column;gap:2px;min-width:130px;

@@ -356,6 +356,7 @@ const DROPDOWN_TRIGGERS={
   tcDropdown:'tcBtn',
   szDropdown:'szBtn',
   fontStyleDropdown:'fontStyleBtn',
+  lineSpacingDropdown:'lineSpacingBtn',
   tableGridPicker:'tableBtn',
   templateDropdown:'templateBtn',
   paraStyleDropdown:'paraStyleBtn',
