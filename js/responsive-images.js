@@ -266,6 +266,7 @@ function setImageSize(img,size){
 }
 
 function selectImage(img){
+  if (!img || img.tagName !== 'IMG') return;
   clearImageSelection(true);
   selectedImg=img;
   img.classList.add('img-selected');
@@ -317,6 +318,19 @@ function initImgToolbarDropdowns(){
       e.stopPropagation();
       closeAllItbDropdowns(moreDrop);
       moreDrop.classList.toggle('hidden');
+    });
+  }
+
+  // Info button
+  const infoBtn = document.getElementById('imgTbInfo');
+  if (infoBtn) {
+    infoBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const target = selectedImg || hoveredImg;
+      const mediaId = target ? target.getAttribute('data-media-id') : null;
+      if (mediaId && typeof showMediaInfoModal === 'function') {
+        showMediaInfoModal(mediaId);
+      }
     });
   }
 
@@ -413,7 +427,7 @@ function syncImageChrome(targetOverride){
   const dev=deviceClass();
   const target = targetOverride || selectedImg || hoveredImg;
 
-  if(!target || dev==='phone'){
+  if(!target || target.tagName !== 'IMG' || dev==='phone'){
     if (!selectedImg && !hoveredImg) tb?.classList.remove('show');
     handles.forEach(h=>h.classList.remove('show'));
     return;
@@ -427,6 +441,69 @@ function syncImageChrome(targetOverride){
     return;
   }
   if(tb){
+    const currentMode = tb.dataset.tbKind || 'image';
+    if (currentMode !== 'image') {
+      tb.dataset.tbKind = 'image';
+      tb.innerHTML = `
+        <div class="itb-group">
+          <button type="button" class="itb-btn" data-itb-toggle="size" title="Image Size">
+            <i data-lucide="scaling" class="w-3.5 h-3.5"></i>
+            <span>Size</span>
+            <i data-lucide="chevron-down" class="w-3 h-3 opacity-60"></i>
+          </button>
+          <div class="itb-dropdown hidden" data-itb-menu="size">
+            <button type="button" class="itb-dd-item" data-imgsize="small">Small (35%)</button>
+            <button type="button" class="itb-dd-item" data-imgsize="medium">Medium (55%)</button>
+            <button type="button" class="itb-dd-item active" data-imgsize="large">Large (78%)</button>
+            <button type="button" class="itb-dd-item" data-imgsize="full">Full Width (100%)</button>
+          </div>
+        </div>
+        <div class="itb-divider"></div>
+        <button type="button" class="itb-btn" id="imgTbInfo" title="Asset Info & Specs">
+          <i data-lucide="info" class="w-3.5 h-3.5"></i>
+          <span>Info</span>
+        </button>
+        <div class="itb-divider"></div>
+        <button type="button" class="itb-btn" id="imgTbCrop" title="Crop / Transform Image">
+          <i data-lucide="crop" class="w-3.5 h-3.5"></i>
+          <span>Crop</span>
+        </button>
+        <div class="itb-divider"></div>
+        <div class="itb-group">
+          <button type="button" class="itb-btn" data-itb-toggle="more" title="More Options">
+            <i data-lucide="more-horizontal" class="w-3.5 h-3.5"></i>
+            <span>More</span>
+            <i data-lucide="chevron-down" class="w-3 h-3 opacity-60"></i>
+          </button>
+          <div class="itb-dropdown hidden" data-itb-menu="more">
+            <button type="button" class="itb-dd-item" id="imgTbCover">
+              <i data-lucide="layout-template" class="w-3.5 h-3.5"></i>
+              <span>Set as Notebook Cover</span>
+            </button>
+            <button type="button" class="itb-dd-item" id="imgTbReplace">
+              <i data-lucide="arrow-left-right" class="w-3.5 h-3.5"></i>
+              <span>Replace Image</span>
+            </button>
+            <button type="button" class="itb-dd-item" id="imgTbView">
+              <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+              <span>View Fullscreen</span>
+            </button>
+            <button type="button" class="itb-dd-item" id="imgTbDownload">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              <span>Download</span>
+            </button>
+          </div>
+        </div>
+        <div class="itb-divider"></div>
+        <button type="button" class="itb-btn itb-btn-danger" id="imgTbDelete" title="Delete Image">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+        </button>
+      `;
+      if (typeof lucide?.createIcons === 'function') {
+        try { lucide.createIcons(); } catch(_) {}
+      }
+    }
+
     initImgToolbarDropdowns();
     initImgToolbarHoverGuard();
     tb.classList.add('show');
@@ -437,7 +514,7 @@ function syncImageChrome(targetOverride){
     tb.style.top=`${Math.round(top)}px`;
     tb.style.left=`${Math.round(Math.max(8,Math.min(r.left+r.width/2-tw/2,window.innerWidth-tw-8)))}px`;
     // Sync size active state in dropdown
-    const curSize=target.getAttribute('data-img-size')||'large';
+    const curSize=target.getAttribute('data-img-size')||target.getAttribute('data-width-preset')||'large';
     tb.querySelectorAll('[data-imgsize]').forEach(b=>{
       b.classList.toggle('active', b.dataset.imgsize===curSize);
     });

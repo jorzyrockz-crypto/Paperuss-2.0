@@ -107,7 +107,7 @@
     const path = parsedUrl.pathname || '';
 
     // YouTube: watch, youtu.be, shorts, embed
-    if (host === 'youtube.com' || host === 'youtu.be' || host === 'm.youtube.com') {
+    if (host === 'youtube.com' || host === 'youtu.be' || host === 'm.youtube.com' || host === 'youtube-nocookie.com') {
       let videoId = null;
       if (host === 'youtu.be') {
         videoId = path.slice(1).split('/')[0];
@@ -496,8 +496,11 @@
         `<span class="embed-compact-divider"></span>` +
         `<div class="embed-compact-info">` +
         `<strong class="embed-compact-title" contenteditable="true" data-action="inline-edit-title" title="Click to edit title">${title}</strong>` +
-        `<a href="${canonicalUrl}" class="embed-compact-link" target="_blank" rel="noopener noreferrer">${canonicalUrl}</a>` +
+        `<span class="embed-compact-link">Web Embed · ${hostName}</span>` +
         `</div>` +
+        `<a href="${canonicalUrl}" target="_blank" rel="noopener noreferrer" class="mc-action-compact" title="Open Link" style="background:var(--accent-soft);color:var(--accent)">` +
+        `<i data-lucide="external-link" class="w-4 h-4"></i>` +
+        `</a>` +
         `</div>`;
     } else {
       innerCardContent = `<div class="embed-canonical-card">` +
@@ -587,6 +590,15 @@
       const canonicalCard = embed.querySelector('.embed-canonical-card');
       if (canonicalCard) {
         canonicalCard.style.display = '';
+      }
+    });
+
+    const soundCards = rootElement.querySelectorAll('.paperuss-card-audio');
+    soundCards.forEach(card => {
+      card.querySelector('.embed-editor-toolbar')?.remove();
+      const audio = card.querySelector('.audio-native-player');
+      if (audio) {
+        audio.removeAttribute('src');
       }
     });
   }
@@ -765,6 +777,11 @@
     const activeModeIcon = modeIcons[displayMode] || 'tv';
 
     bar.innerHTML = `
+      <div class="embed-tb-segment">
+        <button type="button" class="embed-tb-btn card-drag-handle" title="Drag card to move & snap" style="cursor:grab">
+          <i data-lucide="grip-vertical" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
       <div class="embed-tb-segment" style="position:relative">
         <button type="button" class="embed-tb-btn" data-action="toggle-size-menu" title="Card Size (${activeSizeLabel})">
           <i data-lucide="scaling" class="w-4 h-4"></i>
@@ -809,6 +826,9 @@
         </select>
       </div>
       <div class="embed-tb-segment" style="position:relative">
+        <button type="button" class="embed-tb-btn" data-action="open-media-info" title="Asset Info & Specs">
+          <i data-lucide="info" class="w-3.5 h-3.5"></i>
+        </button>
         <button type="button" class="embed-tb-btn" data-action="expand" title="Fullscreen Lightbox">
           <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
         </button>
@@ -884,6 +904,24 @@
         if (navigator.clipboard && canonicalUrl) {
           navigator.clipboard.writeText(canonicalUrl);
           if (typeof global.toast === 'function') global.toast('Link copied to clipboard');
+        }
+      } else if (act === 'open-media-info') {
+        closeAllDropdownsExcept(null);
+        const title = embed.querySelector('.embed-canonical-text strong, .embed-compact-title')?.textContent || provider;
+        const mediaId = embed.getAttribute('data-media-id') || canonicalUrl;
+        const embedInfo = {
+          id: mediaId,
+          name: title,
+          kind: 'link',
+          type: `${provider.toUpperCase()} Embed`,
+          url: canonicalUrl,
+          host: provider,
+          createdAt: Date.now()
+        };
+        if (typeof global.showMediaInfoModal === 'function') {
+          global.showMediaInfoModal(embedInfo);
+        } else if (typeof showMediaInfoModal === 'function') {
+          showMediaInfoModal(embedInfo);
         }
       } else if (act === 'expand') {
         closeAllDropdownsExcept(null);

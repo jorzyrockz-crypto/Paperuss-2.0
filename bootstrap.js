@@ -22,7 +22,31 @@ function selectFilter(filterName){
 function bind(){
   document.getElementById('newNoteBtn').onclick=()=>contextualNew();
 
-  document.getElementById('searchInput').addEventListener('input', e=>{ state.query=e.target.value; renderList(); });
+  let leafSearchTimer = null;
+  document.getElementById('searchInput').addEventListener('input', e => {
+    const q = e.target.value;
+    state.query = q;
+    renderList(); // render main note matches immediately
+    
+    clearTimeout(leafSearchTimer);
+    if (q && window.paperussLeaves) {
+      leafSearchTimer = setTimeout(async () => {
+        if (state.query !== q) return;
+        try {
+          const results = await window.paperussLeaves.leafGetAll();
+          if (state.query === q) {
+            state.leafSearchResults = results;
+            renderList();
+          }
+        } catch(err) {
+          console.error('Leaf search error', err);
+        }
+      }, 300);
+    } else {
+      state.leafSearchResults = null;
+      renderList();
+    }
+  });
 
   document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>selectFilter(b.dataset.filter));
 
@@ -35,7 +59,7 @@ function bind(){
     const card=e.target.closest('.note-card');
     if(card && card.dataset.id){
       if(typeof closeAllContextTools==='function') closeAllContextTools();
-      selectNote(card.dataset.id);
+      selectNote(card.dataset.id, card.dataset.leafId || null);
     }
   };
 
@@ -58,6 +82,10 @@ function bind(){
 
   const ed=bodyEl();
   ed.addEventListener('input', handleBodyInput);
+  ed.addEventListener('input', () => {
+    const ov = document.getElementById('overflowDropdown');
+    if(ov && ov.classList.contains('show')) ov.classList.remove('show');
+  });
   ed.addEventListener('keyup', updateToolbarState);
   ed.addEventListener('mouseup', updateToolbarState);
   ed.addEventListener('focus', updateToolbarState);
@@ -99,6 +127,22 @@ function bind(){
       }
     }
   });
+  ed.addEventListener('change', e=>{
+    if(e.target && e.target.matches && e.target.matches('input[type=checkbox]')){
+      if(e.target.checked) e.target.setAttribute('checked', '');
+      else e.target.removeAttribute('checked');
+      setTimeout(handleBodyInput, 0);
+    }
+  });
+  ed.addEventListener('keydown', e=>{
+    if(e.key === ' ' && e.target && e.target.matches && e.target.matches('input[type=checkbox]')){
+      setTimeout(()=>{
+        if(e.target.checked) e.target.setAttribute('checked', '');
+        else e.target.removeAttribute('checked');
+        handleBodyInput();
+      }, 0);
+    }
+  });
 
   // Intercept Undo / Redo / Link shortcuts
   ed.addEventListener('keydown', e => {
@@ -118,35 +162,51 @@ function bind(){
     }
   });
 
-  // Enter in a task item creates a new task line or converts empty item back to paragraph
-  ed.addEventListener('keydown', e=>{
-    if(e.key==='Enter' && !e.shiftKey){
-      const sel=window.getSelection();
-      if(sel && sel.anchorNode && ed.contains(sel.anchorNode)){
-        let node=sel.anchorNode;
-        if(node.nodeType===3) node=node.parentElement;
-        const li=node.closest&&node.closest('[data-task]');
-        if(li){
+  // Unified Word-like list keyboard handling for Enter, Tab, and Backspace inside lists
+  ed.addEventListener('keydown', e => {
+    const sel = window.getSelection();
+    if (!sel || !sel.anchorNode || !ed.contains(sel.anchorNode)) return;
+    const ctx = typeof window.getListContext === 'function' ? window.getListContext() : null;
+    if (!ctx || !ctx.li) return;
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      const textContent = Array.from(ctx.li.childNodes)
+        .filter(n => n.nodeType !== 1 || n.tagName !== 'INPUT')
+        .map(n => n.textContent).join('').trim();
+      if (textContent === '') {
+        e.preventDefault();
+        if (typeof window.exitEmptyListItem === 'function') window.exitEmptyListItem(ctx.li, ctx.list);
+      } else if (ctx.type === 'task') {
+        e.preventDefault();
+        if (typeof window.createNextTaskListItem === 'function') window.createNextTaskListItem(ctx.li);
+      }
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        if (typeof window.outdentListItem === 'function') window.outdentListItem(ctx.li);
+      } else {
+        if (typeof window.indentListItem === 'function') window.indentListItem(ctx.li);
+      }
+    } else if (e.key === 'Backspace' && !e.shiftKey && sel.isCollapsed) {
+      let atStart = false;
+      const range = sel.getRangeAt(0);
+      if (range.startOffset === 0) {
+        const firstNonCb = Array.from(ctx.li.childNodes).find(n => n.nodeType !== 1 || n.tagName !== 'INPUT');
+        if (!firstNonCb || sel.anchorNode === ctx.li || sel.anchorNode === firstNonCb) {
+          atStart = true;
+        }
+      }
+      if (atStart) {
+        const textContent = Array.from(ctx.li.childNodes)
+          .filter(n => n.nodeType !== 1 || n.tagName !== 'INPUT')
+          .map(n => n.textContent).join('').trim();
+        const parentLi = ctx.list.parentElement && ctx.list.parentElement.closest('li');
+        if (parentLi) {
           e.preventDefault();
-          const textContent = Array.from(li.childNodes).filter(n=>n.nodeType!==1||n.tagName!=='INPUT').map(n=>n.textContent).join('').trim();
-          if(textContent === '' && typeof toggleList === 'function'){
-            toggleList('task');
-          } else {
-            // Create a new sibling task item after the current one
-            const newLi=document.createElement('li');
-            newLi.setAttribute('data-task','1');
-            const cb=document.createElement('input');
-            cb.type='checkbox';
-            newLi.appendChild(cb);
-            newLi.appendChild(document.createTextNode(' '));
-            li.parentElement.insertBefore(newLi, li.nextSibling);
-            // Place cursor in the new task item
-            const r=document.createRange();
-            r.setStart(newLi, newLi.childNodes.length===2?2:1);
-            r.collapse(true);
-            sel.removeAllRanges(); sel.addRange(r);
-            setTimeout(handleBodyInput, 0);
-          }
+          if (typeof window.outdentListItem === 'function') window.outdentListItem(ctx.li);
+        } else if (textContent === '') {
+          e.preventDefault();
+          if (typeof window.exitEmptyListItem === 'function') window.exitEmptyListItem(ctx.li, ctx.list);
         }
       }
     }
@@ -363,6 +423,8 @@ function bind(){
   document.getElementById('morePinBtn').onclick=()=>{ closeEditorMore(); togglePin(); };
   document.getElementById('moreShareBtn').onclick=()=>{ closeEditorMore(); shareCurrentNote(); };
   document.getElementById('morePrintBtn').onclick=()=>{ closeEditorMore(); printCurrentNote(); };
+  const dupBtn = document.getElementById('moreDuplicateBtn');
+  if(dupBtn) dupBtn.onclick=()=>{ closeEditorMore(); duplicateNoteAction(); };
   document.getElementById('moreArchiveBtn').onclick=()=>{
     closeEditorMore();
     const n=getNote(state.currentId);
@@ -374,7 +436,6 @@ function bind(){
     if(!e.target.closest('#editorMoreWrap')) closeEditorMore();
   });
 
-  // Toolbar collapse / expand toggle
   const tcb=document.getElementById('toolbarCollapseBtn');
   if(tcb){
     tcb.onclick=e=>{
@@ -386,19 +447,28 @@ function bind(){
       if(tcb.querySelector('i'))
         tcb.querySelector('i').setAttribute('data-lucide', was?'chevron-up':'chevron-down');
       refreshIcons();
+      if(typeof window.recalculateToolbarOverflow === 'function') window.recalculateToolbarOverflow();
     };
   }
 
   document.getElementById('formatBar').onclick=e=>{
     const media=e.target.closest('[data-media]');
-    if(media){ e.preventDefault(); handleMediaAction(media.dataset.media); return; }
+    if(media){
+      e.preventDefault();
+      handleMediaAction(media.dataset.media);
+      if(typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
+      return;
+    }
     const b=e.target.closest('[data-cmd]'); if(!b) return;
     e.preventDefault();
     applyCommand(b.dataset.cmd, b.dataset.val);
+    if(typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
   };
   // Keep selection when clicking toolbar
   document.getElementById('formatBar').addEventListener('mousedown', e=>{
-    if(e.target.closest('[data-cmd],[data-media]')) e.preventDefault();
+    if(e.target.closest('[data-cmd],[data-media]')){
+      if(e.detail !== 0) e.preventDefault();
+    }
   });
 
   // Media file inputs
@@ -478,6 +548,24 @@ function bind(){
   function normalizeAIPasteHTML(doc){
     // 1. Strip AI UI buttons, copy controls, and header bars
     doc.querySelectorAll('button, svg, [aria-label*="Copy" i], [class*="copy-button" i], [class*="code-header" i]').forEach(el => el.remove());
+
+    // 1b. Clean raw CSS declarations prepended by AI engines (e.g. "a { text-decoration: none; ... }")
+    const cssHeaderRegex = /^\s*a\s*\{[^}]*\}\s*(?:tr\s*th[^}]*\}\s*)*/i;
+    const walker = doc.createTreeWalker(doc.body, 4); // SHOW_TEXT
+    let firstNode = walker.nextNode();
+    if (firstNode && cssHeaderRegex.test(firstNode.textContent)) {
+      firstNode.textContent = firstNode.textContent.replace(cssHeaderRegex, '');
+    }
+
+    // 1c. Parse unrendered inline markdown inside AI paragraph nodes
+    doc.querySelectorAll('p, li, span, td').forEach(node => {
+      const hasOnlyBRs = Array.from(node.children).every(c => c.tagName === 'BR');
+      if (hasOnlyBRs && (node.textContent.includes('**') || node.textContent.includes('['))) {
+        const raw = node.innerHTML;
+        const parsed = parseMarkdownInline(raw);
+        node.innerHTML = parsed;
+      }
+    });
     // 2. Remove dangerous or non-semantic tags
     doc.querySelectorAll('script, style, meta, link, iframe, object, embed, o\\:p').forEach(el => el.remove());
 
@@ -610,7 +698,7 @@ function parseMarkdownInline(text) {
   str = str.replace(/`([^`]+)`/g, (_, code) => {
     const idx = codeSpans.length;
     codeSpans.push(`<code>${esc(code)}</code>`);
-    return `__MD_CODE_${idx}__`;
+    return `\uE000C${idx}\uE000`;
   });
 
   const imageSpans = [];
@@ -619,18 +707,19 @@ function parseMarkdownInline(text) {
     const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(url) : { valid: true, url: url };
     const src = res.valid ? res.url : url;
     imageSpans.push(`<img src="${esc(src)}" alt="${esc(alt)}">`);
-    return `__MD_IMG_${idx}__`;
+    return `\uE000I${idx}\uE000`;
   });
 
   const linkSpans = [];
-  str = str.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, title, url) => {
+  str = str.replace(/\[((?:\\[\[\]]|[^\]])+)\]?\(([^)]+)\)/g, (_, rawTitle, url) => {
+    const title = rawTitle.replace(/\\([\[\]])/g, '$1').replace(/^\[|\]$/g, '');
     const idx = linkSpans.length;
     const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(url) : { valid: true, url: url, isExternal: true };
     const targetAttr = (res.isExternal || !res.url.startsWith('#')) ? ' target="_blank" rel="noopener noreferrer"' : '';
     const href = res.valid ? res.url : url;
     const renderedTitle = parseMarkdownInline(title);
     linkSpans.push(`<a href="${esc(href)}"${targetAttr}>${renderedTitle}</a>`);
-    return `__MD_LINK_${idx}__`;
+    return `\uE000L${idx}\uE000`;
   });
 
   str = esc(str);
@@ -644,9 +733,9 @@ function parseMarkdownInline(text) {
   str = str.replace(/~~([^~]+)~~/g, '<del>$1</del>');
   str = str.replace(/==([^=]+)==/g, '<mark>$1</mark>');
 
-  str = str.replace(/__MD_LINK_(\d+)__/g, (_, idx) => linkSpans[+idx] || '');
-  str = str.replace(/__MD_IMG_(\d+)__/g, (_, idx) => imageSpans[+idx] || '');
-  str = str.replace(/__MD_CODE_(\d+)__/g, (_, idx) => codeSpans[+idx] || '');
+  str = str.replace(/\uE000L(\d+)\uE000/g, (_, idx) => linkSpans[+idx] || '');
+  str = str.replace(/\uE000I(\d+)\uE000/g, (_, idx) => imageSpans[+idx] || '');
+  str = str.replace(/\uE000C(\d+)\uE000/g, (_, idx) => codeSpans[+idx] || '');
 
   return str;
 }
@@ -846,6 +935,9 @@ function isSingleStandaloneUrl(str) {
 
   // Paste images, spreadsheet tables, or clean formatted HTML from clipboard
   edEl.addEventListener('paste', e=>{
+    if (window.ProductivityClipboard && window.ProductivityClipboard.handlePaste(e)) {
+        return;
+    }
     if(!e.clipboardData) return;
     const items=e.clipboardData.items||[];
     for(const it of items){
@@ -920,7 +1012,17 @@ function isSingleStandaloneUrl(str) {
 
   document.getElementById('exportBtn').onclick=exportNotes;
   document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
-  document.getElementById('importFile').onchange=e=>{ if(e.target.files[0]) importNotes(e.target.files[0]); e.target.value=''; };
+  document.getElementById('importFile').onchange=e=>{
+    const f=e.target.files[0];
+    if(f){
+      if(typeof importSelectedFile==='function') {
+        importSelectedFile(f);
+      } else {
+        importNotes(f);
+      }
+    }
+    e.target.value='';
+  };
 
   // Profile utilities replace duplicate top-bar controls on every device.
   const profileImportBtn=document.getElementById('profileImportBtn');
@@ -935,6 +1037,16 @@ function isSingleStandaloneUrl(str) {
   if(profileExportBtn) profileExportBtn.onclick=()=>{
     closeProfilePanel();
     exportNotes();
+  };
+  const profileExportDocxActiveBtn=document.getElementById('profileExportDocxActiveBtn');
+  const profileExportDocxAllBtn=document.getElementById('profileExportDocxAllBtn');
+  if(profileExportDocxActiveBtn) profileExportDocxActiveBtn.onclick=()=>{
+    closeProfilePanel();
+    if(typeof window.exportDocx==='function') window.exportDocx('active');
+  };
+  if(profileExportDocxAllBtn) profileExportDocxAllBtn.onclick=()=>{
+    closeProfilePanel();
+    if(typeof window.exportDocx==='function') window.exportDocx('all');
   };
   if(profileThemeBtn) profileThemeBtn.onclick=()=>{
     const cur=document.documentElement.getAttribute('data-theme');
@@ -961,26 +1073,20 @@ function isSingleStandaloneUrl(str) {
   if(railBtn) railBtn.onclick=e=>{ e.stopPropagation(); toggleSidebarRail(); };
 
   // Note-list panel toggle / back button
-  document.getElementById('backBtn').onclick=()=>{
-    if(window.innerWidth<=640){
-      showMobileList();
-    } else {
+  const backBtnEl = document.getElementById('backBtn');
+  if(backBtnEl){
+    backBtnEl.onclick = () => {
       toggleNoteListPanel();
-    }
-  };
+    };
+  }
 
   // Note-list tablet panel toggle
   const listToggleBtn = document.getElementById('noteListToggle');
-  if(listToggleBtn) listToggleBtn.onclick = () => {
-    const listEl = document.getElementById('noteList');
-    if(listEl) {
-      if(window.innerWidth <= 900) {
-        listEl.classList.toggle('open');
-      } else {
-        listEl.classList.toggle('collapsed');
-      }
-    }
-  };
+  if(listToggleBtn){
+    listToggleBtn.onclick = () => {
+      toggleNoteListPanel();
+    };
+  }
 
   // Resizer logic
   const resizer = document.getElementById('noteListResizer');
@@ -1022,6 +1128,29 @@ function isSingleStandaloneUrl(str) {
     // Restore saved width
     const savedWidth = localStorage.getItem('octonotes:listWidth');
     if(savedWidth) document.documentElement.style.setProperty('--list-width', savedWidth);
+
+    // Restore collapsed state (desktop / landscape only)
+    const savedCollapsed = localStorage.getItem('octonotes:listCollapsed');
+    if(savedCollapsed === '1' && window.innerWidth > 900){
+      const listEl2 = document.getElementById('noteList');
+      const iconEl2 = document.getElementById('backBtnIcon');
+      const backBtn2 = document.getElementById('backBtn');
+      const toggleBtn2 = document.getElementById('noteListToggle');
+      if(listEl2) listEl2.classList.add('collapsed');
+      if(iconEl2) iconEl2.setAttribute('data-lucide', 'panel-left-open');
+      const collLabel = 'Show note list';
+      if(backBtn2){
+        backBtn2.title = collLabel;
+        backBtn2.setAttribute('aria-expanded', 'false');
+        backBtn2.setAttribute('aria-label', collLabel);
+      }
+      if(toggleBtn2){
+        toggleBtn2.title = collLabel;
+        toggleBtn2.setAttribute('aria-expanded', 'false');
+        toggleBtn2.setAttribute('aria-label', collLabel);
+      }
+      if(typeof refreshIcons === 'function') setTimeout(refreshIcons, 0);
+    }
   }
 
   // Mobile FAB
@@ -1118,6 +1247,7 @@ function isSingleStandaloneUrl(str) {
       refreshIcons();
     }
     toast(isDf ? 'Distraction-free mode on (F11 to exit)' : 'Distraction-free mode off');
+    if(typeof window.recalculateToolbarOverflow === 'function') setTimeout(window.recalculateToolbarOverflow, 150);
   }
 
   document.addEventListener('selectionchange', ()=>{
@@ -1173,8 +1303,9 @@ function isSingleStandaloneUrl(str) {
   if(tplDrop) tplDrop.onclick = e => {
     const opt = e.target.closest('[data-tpl]');
     if(!opt) return;
-    tplDrop.classList.remove('show');
+    if(typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
     if(typeof insertFinancialTemplate === 'function') insertFinancialTemplate(opt.dataset.tpl);
+    if(tplBtn) tplBtn.focus();
   };
 
   // Footer Tags dropdown
@@ -1183,16 +1314,30 @@ function isSingleStandaloneUrl(str) {
 
   // Overflow Menu dropdown
   const ovfBtn = document.getElementById('overflowBtn');
-  if(ovfBtn) ovfBtn.onclick = e => { e.stopPropagation(); toggleDropdown('overflowDropdown'); };
+  if(ovfBtn) {
+    ovfBtn.addEventListener('mousedown', e => {
+      if(e.detail !== 0) e.preventDefault();
+    });
+    ovfBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if(!ovfBtn.disabled && typeof toggleDropdown === 'function'){
+        toggleDropdown('overflowDropdown');
+      }
+    });
+  }
 
   // Responsive Toolbar Overflow
-  function initResponsiveToolbar() {
+  window.recalculateToolbarOverflow = function() {
     const scrollBar = document.getElementById('formatBar');
     const overflowDropdown = document.getElementById('overflowDropdown');
     const overflowPicker = document.getElementById('overflowPicker');
-    if(!scrollBar || !overflowDropdown || !overflowPicker) return;
+    const overflowBtn = document.getElementById('overflowBtn');
+    if(!scrollBar || !overflowDropdown || !overflowPicker || !overflowBtn) return;
     
-    // Tools that we can move (lower priority items, right-to-left)
+    while(overflowDropdown.children.length > 0) {
+      scrollBar.insertBefore(overflowDropdown.children[0], overflowPicker);
+    }
+
     const movableTools = Array.from(scrollBar.children).filter(el => 
       el.id !== 'overflowPicker' && 
       el.id !== 'toolbarCollapseBtn' &&
@@ -1200,45 +1345,48 @@ function isSingleStandaloneUrl(str) {
       !el.classList.contains('font-style-picker')
     ).reverse();
 
-    const resizeObserver = new ResizeObserver(() => {
-      // Allow DOM to update first
-      requestAnimationFrame(() => {
-        // Move items into overflow if toolbar is overflowing horizontally
-        if(scrollBar.scrollWidth > scrollBar.clientWidth + 2) { 
-          for(let el of movableTools) {
-            if (el.parentElement === scrollBar) {
-              overflowDropdown.insertBefore(el, overflowDropdown.firstChild);
-              overflowPicker.style.display = 'inline-flex';
-              if (scrollBar.scrollWidth <= scrollBar.clientWidth + 2) break;
-            }
-          }
-        } else {
-          // Try moving items back if there is space
-          let hasOverflow = overflowDropdown.children.length > 0;
-          if(hasOverflow) {
-            const items = Array.from(overflowDropdown.children);
-            for(let el of items) {
-              // Put it back right before the overflow picker
-              scrollBar.insertBefore(el, overflowPicker);
-              if (scrollBar.scrollWidth > scrollBar.clientWidth + 2) {
-                // It overflowed again! Move it back and stop
-                overflowDropdown.insertBefore(el, overflowDropdown.firstChild);
-                break;
-              }
-            }
-            if(overflowDropdown.children.length === 0) {
-              overflowPicker.style.display = 'none';
-            }
-          }
+    if(scrollBar.scrollWidth > scrollBar.clientWidth + 2) { 
+      for(let el of movableTools) {
+        if(el.parentElement === scrollBar) {
+          overflowDropdown.insertBefore(el, overflowDropdown.firstChild);
+          if(scrollBar.scrollWidth <= scrollBar.clientWidth + 2) break;
         }
+      }
+    }
+
+    const hasOverflow = overflowDropdown.children.length > 0;
+    if(hasOverflow) {
+      overflowPicker.style.display = 'inline-flex';
+      overflowBtn.disabled = false;
+    } else {
+      overflowPicker.style.display = 'none';
+      overflowBtn.disabled = true;
+      overflowBtn.setAttribute('aria-expanded', 'false');
+      overflowDropdown.classList.remove('show');
+    }
+  };
+
+  function initResponsiveToolbar() {
+    const scrollBar = document.getElementById('formatBar');
+    if(!scrollBar) return;
+    const resizeObserver = new ResizeObserver(() => {
+      requestAnimationFrame(() => {
+        if(typeof window.recalculateToolbarOverflow === 'function') window.recalculateToolbarOverflow();
       });
     });
-    
     resizeObserver.observe(scrollBar);
+    const editorScroll = document.getElementById('editorScroll');
+    if(editorScroll) resizeObserver.observe(editorScroll);
+    const mainArea = document.querySelector('.main-area');
+    if(mainArea) resizeObserver.observe(mainArea);
+    window.addEventListener('resize', () => requestAnimationFrame(window.recalculateToolbarOverflow));
+    window.addEventListener('orientationchange', () => setTimeout(window.recalculateToolbarOverflow, 150));
   }
   
-  // Wait a moment for DOM and styles to settle before measuring
-  setTimeout(initResponsiveToolbar, 100);
+  setTimeout(() => {
+    initResponsiveToolbar();
+    if(typeof window.recalculateToolbarOverflow === 'function') window.recalculateToolbarOverflow();
+  }, 100);
 
 
   /* ---------- NOTIFICATION BELL & PANEL ---------- */
@@ -1276,13 +1424,22 @@ function isSingleStandaloneUrl(str) {
   if(notifClear) notifClear.onclick=clearAllNotifs;
 
   // Close dropdowns when clicking outside
-  const closeAllDropdowns=()=>{
+  window.closeAllEditorDropdowns = () => {
     ['tcDropdown','paraStyleDropdown','hlDropdown','szDropdown','fontStyleDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown','overflowDropdown'].forEach(id=>{
       const el=document.getElementById(id);
-      if(el) el.classList.remove('show');
+      if(el && el.classList.contains('show')){
+        el.classList.remove('show');
+        el.style.position=''; el.style.top=''; el.style.left='';
+        el.style.right=''; el.style.zIndex=''; el.style.maxHeight=''; el.style.overflowY='';
+      }
+    });
+    ['tcBtn','paraStyleBtn','hlBtn','szBtn','fontStyleBtn','tableBtn','pageLayoutBtn','templateBtn','footerTagsBtn','overflowBtn'].forEach(id=>{
+      const btn=document.getElementById(id);
+      if(btn) btn.setAttribute('aria-expanded', 'false');
     });
     if(notifPanel) notifPanel.classList.remove('show');
   };
+  const closeAllDropdowns = window.closeAllEditorDropdowns;
   document.addEventListener('click', e=>{
     if(!e.target.closest('#tcPicker') && !e.target.closest('#paraStylePicker') && !e.target.closest('#hlPicker') && !e.target.closest('.sz-picker')
       && !e.target.closest('#fontStylePicker') && !e.target.closest('#tablePicker')
@@ -1314,6 +1471,55 @@ function isSingleStandaloneUrl(str) {
 
   // init Find in Note
   if(typeof initFindInNote === 'function') initFindInNote();
+
+  // Zen Mode / Scroll-to-Hide Title Row, keeping Formatting Toolbar pinned
+  const scrollEl = document.getElementById('editorScroll');
+  const editorContent = document.getElementById('editorContent');
+  const topbar = document.querySelector('.editor-topbar');
+
+  if (scrollEl && editorContent) {
+    let lastScrollTop = 0;
+    let ignoreUntil = 0;
+    scrollEl.addEventListener('scroll', () => {
+      const scrollTop = scrollEl.scrollTop;
+      const now = Date.now();
+
+      // Re-engage: Always show Title Row when at or near the absolute top
+      if (scrollTop <= 20) {
+        editorContent.classList.remove('hide-title-row');
+        if (topbar) topbar.classList.remove('hide-title-row', 'topbar-hidden');
+        lastScrollTop = scrollTop;
+        return;
+      }
+
+      // If we are currently ignoring scroll changes (during transition), just update baseline
+      if (now < ignoreUntil) {
+        lastScrollTop = scrollTop;
+        return;
+      }
+
+      // Hysteresis buffer (8px) to prevent scroll jitter
+      if (Math.abs(scrollTop - lastScrollTop) < 8) return;
+
+      // Scroll Down -> apply negative margin collapse to Title Row
+      if (scrollTop > lastScrollTop && scrollTop > 40) {
+        if (!editorContent.classList.contains('hide-title-row')) {
+          editorContent.classList.add('hide-title-row');
+          if (topbar) topbar.classList.add('hide-title-row', 'topbar-hidden');
+          ignoreUntil = now + 400; // ignore layout-shift induced scroll events during transition
+        }
+      } else if (scrollTop < lastScrollTop) {
+        // Scroll Up -> restore Title Row
+        if (editorContent.classList.contains('hide-title-row')) {
+          editorContent.classList.remove('hide-title-row');
+          if (topbar) topbar.classList.remove('hide-title-row', 'topbar-hidden');
+          ignoreUntil = now + 400;
+        }
+      }
+
+      lastScrollTop = scrollTop;
+    }, { passive: true });
+  }
 
   window.addEventListener('resize', ()=>{
     const width=window.innerWidth;
@@ -1358,6 +1564,11 @@ function isSingleStandaloneUrl(str) {
   if(typeof rescheduleAllEventNotifications==='function') rescheduleAllEventNotifications();
   state.currentId = filteredNotes()[0]?.id || null;
   renderAll();
+  if (window.paperussLeaves && typeof window.paperussLeaves.repairContaminatedLeavesOnce === 'function') {
+    window.paperussLeaves.repairContaminatedLeavesOnce().then((repaired) => {
+      if (repaired > 0 && typeof renderEditor === 'function') renderEditor();
+    }).catch(e => console.error('Leaf recovery check error:', e));
+  }
   updateNotifBar();
   updateNotifBadge();
   startReminderWatcher();
@@ -1377,4 +1588,8 @@ function isSingleStandaloneUrl(str) {
     });
   }
   if(typeof checkWhatsNewAutoPopup === 'function') setTimeout(checkWhatsNewAutoPopup, 1500);
+  document.querySelectorAll('[data-cmd="task"]').forEach(btn => {
+    btn.setAttribute('title', 'Checklist');
+    btn.setAttribute('aria-label', 'Checklist');
+  });
 })();

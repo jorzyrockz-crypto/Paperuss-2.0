@@ -21,9 +21,18 @@
   --success:#10b981; --success-emphasis:#059669; --danger:#ef4444; --attention:#f59e0b;
   --header-bg:#ffffff; --hover:#f1f5f9; --selection:rgba(59,130,246,0.2);
   --code-bg:#f1f5f9;
+  --accent-soft:rgba(37,99,235,.11); --accent-ring:rgba(37,99,235,.24);
 }
 
 :root {
+  /* Premium Hardware-Accelerated Animation Tokens */
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --duration-smooth: 250ms;
+
   /* Standardized Media Card Design Tokens */
   --media-card-radius: 12px;
   --media-card-padding: 14px 16px;
@@ -121,6 +130,8 @@ a:hover{text-decoration:underline}
 }
 .media-card:hover .card-resize-handle,
 .paperuss-embed:hover .card-resize-handle,
+.paperuss-card:hover .card-resize-handle,
+.paperuss-card-audio:hover .card-resize-handle,
 .card-selected .card-resize-handle,
 .card-resize-handle.is-resizing {
   opacity: 1;
@@ -408,7 +419,31 @@ svg{display:block;flex-shrink:0}
 .editor-content.trash-preview .note-editor img,
 .editor-content.trash-preview .note-editor table{pointer-events:none}
 
-.editor-topbar{display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid var(--border)}
+.editor-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--canvas);
+  position: relative;
+  z-index: 50;
+  margin-top: 0;
+  opacity: 1;
+  transition: margin-top 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s ease;
+  will-change: margin-top, opacity;
+}
+
+.editor-content.hide-title-row .editor-topbar,
+.editor-topbar.hide-title-row,
+.editor-topbar.topbar-hidden {
+  margin-top: -62px;
+  opacity: 0;
+  border-bottom-color: transparent;
+  pointer-events: none;
+}
 #noteTitle{
   flex:1;background:transparent;border:none;outline:none;
   font-size:22px;font-weight:700;color:var(--fg);letter-spacing:-.5px;
@@ -428,9 +463,12 @@ svg{display:block;flex-shrink:0}
 #tagInput{background:transparent;border:none;outline:none;font-size:12.5px;width:100px;color:var(--fg);caret-color:var(--fg);cursor:text}
 #tagInput::placeholder{color:var(--fg-muted)}
 
-/* Modern Flat Toolbar */
+/* Modern Flat Toolbar (Sticky) */
 .toolbar-collapse-toggle{display:none}
 .editor-toolbar{
+  position:sticky;
+  top:0;
+  z-index:40;
   display:flex;align-items:center;gap:6px;padding:8px 20px;
   border-bottom:1px solid var(--border);flex-shrink:0;
   flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
@@ -463,8 +501,10 @@ svg{display:block;flex-shrink:0}
   max-width:clamp(680px,72vw,1100px);width:100%;margin:0 auto;
   overscroll-behavior:contain;
   cursor:text;
-  caret-color:var(--fg);
+  cursor:text;
+  caret-color: var(--fg);
 }
+
 /* Explicit High-Contrast Caret & Cursor Visibility for Light & Dark Themes */
 [data-theme="light"] .note-editor,
 [data-theme="light"] #noteBody,
@@ -639,5 +679,162 @@ body.distraction-free .editor {
   body.distraction-free .note-editor > hr {
     max-width: 850px;
     margin-inline: auto;
+  }
+}
+
+/* ============ HARDWARE-ACCELERATED NATIVE ANIMATION SYSTEM ============ */
+
+/* 1. Tactile Micro-Interactions (Active Scale Effects) */
+.tool-btn,
+.btn-icon,
+.btn,
+.nav-btn,
+.tag-btn,
+.mode-btn,
+.sidebar-rail-toggle,
+.toolbar-collapse-toggle,
+.profile-avatar-btn,
+.editor-topbar .btn-icon,
+#backBtn,
+#noteListToggle,
+#sidebarRailToggle {
+  transition: transform var(--duration-fast) var(--ease-spring), background-color 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+  will-change: transform;
+}
+
+.tool-btn:active,
+.btn-icon:active,
+.btn:active,
+.nav-btn:active,
+.tag-btn:active,
+.mode-btn:active,
+.sidebar-rail-toggle:active,
+.toolbar-collapse-toggle:active,
+.profile-avatar-btn:active,
+.editor-topbar .btn-icon:active,
+#backBtn:active,
+#noteListToggle:active,
+#sidebarRailToggle:active {
+  transform: scale(0.97);
+}
+
+/* 2. Interactive Checkbox & Checklist Micro-Animations */
+.task-list li input[type="checkbox"],
+.note-body input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 17px;
+  height: 17px;
+  border: 1.5px solid var(--fg-muted);
+  border-radius: 4.5px;
+  background-color: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
+  vertical-align: text-bottom;
+  position: relative;
+  transition: transform var(--duration-fast) var(--ease-spring), background-color 0.15s ease, border-color 0.15s ease;
+  will-change: transform;
+}
+
+.task-list li input[type="checkbox"]:hover,
+.note-body input[type="checkbox"]:hover {
+  border-color: var(--accent);
+  transform: scale(1.08);
+}
+
+.task-list li input[type="checkbox"]:active,
+.note-body input[type="checkbox"]:active {
+  transform: scale(0.90);
+}
+
+.task-list li input[type="checkbox"]:checked,
+.note-body input[type="checkbox"]:checked {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  transform: scale(1.04);
+}
+
+.task-list li input[type="checkbox"]::after,
+.note-body input[type="checkbox"]::after {
+  content: "";
+  width: 5px;
+  height: 9px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+  opacity: 0;
+  transition: transform var(--duration-fast) var(--ease-spring), opacity 0.12s ease;
+  margin-top: -1px;
+}
+
+.task-list li input[type="checkbox"]:checked::after,
+.note-body input[type="checkbox"]:checked::after {
+  transform: rotate(45deg) scale(1);
+  opacity: 1;
+}
+
+/* Smooth Strikethrough & Checked Text Fade */
+.task-list li {
+  transition: opacity var(--duration-normal) var(--ease-out-expo);
+}
+
+.task-list li input[type="checkbox"]:checked ~ span,
+.task-list li input[type="checkbox"]:checked ~ p,
+.task-list li input[type="checkbox"]:checked + * {
+  opacity: 0.6;
+  text-decoration: line-through;
+  transition: opacity var(--duration-normal) var(--ease-out-expo), text-decoration 0.15s ease;
+}
+
+/* 3. Popover & Dropdown Native Entry Animations */
+.hl-dropdown,
+.tc-dropdown,
+.sz-dropdown,
+.font-style-dropdown,
+.table-grid-picker,
+.page-layout-dropdown,
+.footer-tags-dropdown,
+.template-dropdown,
+.para-style-dropdown,
+.overflow-dropdown,
+.profile-panel,
+.notif-panel,
+.editor-more-panel {
+  opacity: 0;
+  transform: scale(0.95) translateY(-4px);
+  transform-origin: top right;
+  pointer-events: none;
+  transition: opacity var(--duration-normal) var(--ease-out-expo), transform var(--duration-normal) var(--ease-out-expo);
+  will-change: opacity, transform;
+}
+
+.hl-dropdown.show,
+.tc-dropdown.show,
+.sz-dropdown.show,
+.font-style-dropdown.show,
+.table-grid-picker.show,
+.page-layout-dropdown.show,
+.footer-tags-dropdown.show,
+.template-dropdown.show,
+.para-style-dropdown.show,
+.overflow-dropdown.show,
+.profile-panel.show,
+.notif-panel.show,
+.editor-more-panel.show {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+}
+
+/* 4. Reduced Motion Preferences */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

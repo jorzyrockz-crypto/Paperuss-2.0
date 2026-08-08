@@ -16,15 +16,17 @@
     'A','ABBR','AUDIO','B','BLOCKQUOTE','BR','BUTTON','CAPTION','CODE','COL','COLGROUP',
     'DEL','DIV','EM','FIGCAPTION','FIGURE','H1','H2','H3','H4','H5','H6','HR','I','IMG',
     'INPUT','INS','KBD','LI','MARK','OL','P','PRE','S','SMALL','SOURCE','SPAN','STRIKE',
-    'STRONG','SUB','SUP','TABLE','TBODY','TD','TFOOT','TH','THEAD','TR','U','UL','VIDEO'
+    'STRONG','SUB','SUP','TABLE','TBODY','TD','TFOOT','TH','THEAD','TR','U','UL','VIDEO',
+    'SVG','PATH','POLYLINE','LINE','POLYGON','CIRCLE','RECT','G','USE','DEFS','SYMBOL'
   ]);
   const DROP_CONTENT_TAGS=new Set([
     'APPLET','BASE','EMBED','FORM','FRAME','FRAMESET','HEAD','IFRAME','LINK','META','NOSCRIPT',
-    'OBJECT','SCRIPT','STYLE','TEMPLATE','TITLE','SVG','MATH'
+    'OBJECT','SCRIPT','STYLE','TEMPLATE','TITLE','MATH'
   ]);
   const COMMON_ATTRS=new Set([
     'alt','aria-label','aria-hidden','aria-describedby','aria-labelledby','class','contenteditable',
-    'dir','download','draggable','height','hidden','lang','role','spellcheck','style','title','width'
+    'dir','download','draggable','height','hidden','lang','role','spellcheck','style','title','width',
+    'viewbox','fill','stroke','stroke-width','stroke-linecap','stroke-linejoin','points','x','y','x1','y1','x2','y2','cx','cy','r','rx','ry','d','data-lucide'
   ]);
   const TAG_ATTRS={
     A:new Set(['href','target','rel']),
@@ -77,7 +79,21 @@
     const probe=document.createElement('span');
     probe.setAttribute('style',value);
     const safe=[];
-    const ALLOWED = new Set(['color', 'background-color', 'margin-left']);
+    const ALLOWED = new Set([
+      'color', 'background', 'background-color', 'background-image', 'background-size', 'background-position', 'background-repeat',
+      'border', 'border-color', 'border-radius', 'border-width', 'border-style',
+      'border-top', 'border-bottom', 'border-left', 'border-right',
+      'border-top-color', 'border-bottom-color', 'border-left-color', 'border-right-color',
+      'border-top-style', 'border-bottom-style', 'border-left-style', 'border-right-style',
+      'border-top-width', 'border-bottom-width', 'border-left-width', 'border-right-width',
+      'margin', 'margin-left', 'margin-right', 'margin-top', 'margin-bottom',
+      'padding', 'padding-left', 'padding-right', 'padding-top', 'padding-bottom',
+      'font-size', 'font-weight', 'font-style', 'font-family', 'line-height',
+      'text-align', 'text-decoration', 'text-shadow', 'text-transform',
+      'width', 'height', 'min-width', 'max-width', 'min-height', 'max-height',
+      'display', 'align-items', 'justify-content', 'gap', 'flex', 'flex-direction', 'flex-shrink', 'flex-grow',
+      'box-shadow', 'filter', 'transform', 'opacity', 'white-space', 'overflow', 'text-overflow'
+    ]);
     for(let i=0;i<probe.style.length;i++){
       const prop=probe.style[i];
       if(!ALLOWED.has(prop)) continue;
@@ -270,7 +286,12 @@
       '#editorScroll',
       '.embed-editor-toolbar',
       '.embed-resize-handle',
-      '.embed-live-player-wrap'
+      '.embed-live-player-wrap',
+      '[data-media-sync-indicator]',
+      '.media-sync-indicator',
+      '.media-sync-overlay',
+      '.card-info-btn',
+      '.photo-info-overlay-wrap'
     ].join(',');
 
     clone.querySelectorAll(UI_SELECTOR).forEach(el => el.remove());

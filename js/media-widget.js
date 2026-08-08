@@ -33,7 +33,11 @@
           <div class="media-widget-drag-handle" title="Drag to move player">
             <i data-lucide="grip-vertical" class="w-4 h-4 text-emerald-400"></i>
           </div>
-          <div class="media-widget-badge" id="mediaWidgetBadge">SPOTIFY</div>
+          <div class="media-widget-badge-group">
+            <span class="media-widget-icon" id="mediaWidgetIcon"><i data-lucide="disc" class="w-3.5 h-3.5"></i></span>
+            <div class="media-widget-badge" id="mediaWidgetBadge">SPOTIFY</div>
+          </div>
+          <div class="media-widget-title-text" id="mediaWidgetTitle" title="Now Playing">Now Playing</div>
         </div>
         <div class="media-widget-controls">
           <button type="button" class="media-widget-btn" id="mediaWidgetMinimize" title="Minimize / Expand Player">
@@ -197,11 +201,31 @@
     if (!embedElement && !targetIframe) return;
     initMediaWidget();
 
-    const provider = (embedElement && embedElement.getAttribute('data-provider')) || 'media';
+    const providerIconMap = {
+      spotify: 'disc',
+      youtube: 'youtube',
+      soundcloud: 'radio',
+      audio: 'file-audio',
+      video: 'video',
+      vimeo: 'video',
+      tiktok: 'music'
+    };
+
+    const providerColorMap = {
+      spotify: '#1ed760',
+      youtube: '#ff0000',
+      soundcloud: '#ff5500',
+      audio: '#6366f1',
+      video: '#ec4899',
+      vimeo: '#1ab7ea',
+      tiktok: '#ff0050'
+    };
+
+    const provider = ((embedElement && embedElement.getAttribute('data-provider')) || 'media').toLowerCase();
     const canonicalUrl = (embedElement && embedElement.getAttribute('data-canonical-url')) || '';
     let embedUrl = (embedElement && embedElement.getAttribute('data-embed-url')) || '';
-    const title = (embedElement && embedElement.querySelector('strong')?.textContent) || `${provider.toUpperCase()} Player`;
-    const brandColor = (embedElement && embedElement.getAttribute('data-brand-color')) || '#1ed760';
+    const title = (embedElement && embedElement.querySelector('strong, .embed-canonical-text strong, .card-title-text, .embed-compact-title')?.textContent) || (targetIframe && (targetIframe.title || targetIframe.getAttribute('data-title'))) || `${provider.toUpperCase()} Player`;
+    const brandColor = providerColorMap[provider] || (embedElement && embedElement.getAttribute('data-brand-color')) || '#1ed760';
 
     currentEmbedInfo = { provider, canonicalUrl, embedUrl, title, brandColor };
 
@@ -214,7 +238,7 @@
         container.innerHTML = '';
         container.appendChild(iframe);
       }
-      const targetHeight = embedUrl.includes('/playlist/') ? '352px' : '152px';
+      const targetHeight = (embedUrl.includes('/playlist/') || embedUrl.includes('playlists') || embedUrl.includes('/sets/')) ? '352px' : '152px';
       iframe.style.height = targetHeight;
       iframe.style.borderRadius = '10px';
       iframe.setAttribute('scrolling', 'no');
@@ -228,6 +252,21 @@
       badge.style.border = `1px solid ${brandColor}40`;
     }
 
+    const titleEl = widgetEl.querySelector('#mediaWidgetTitle');
+    if (titleEl) {
+      titleEl.textContent = title;
+      titleEl.title = title;
+    }
+
+    const iconEl = widgetEl.querySelector('#mediaWidgetIcon');
+    if (iconEl) {
+      const iconName = providerIconMap[provider] || 'music';
+      iconEl.innerHTML = `<i data-lucide="${iconName}" class="w-3.5 h-3.5"></i>`;
+      iconEl.style.color = brandColor;
+    }
+
+    if (typeof global.lucide?.createIcons === 'function') global.lucide.createIcons();
+
     // INSTANT WIDGET EXPANSION & UN-MINIMIZE ON PLAYLIST PLAY
     widgetEl.classList.remove('hidden', 'is-minimized');
     widgetEl.style.opacity = '1';
@@ -237,7 +276,7 @@
     if (dot) dot.classList.remove('hidden');
 
     if (typeof global.toast === 'function') {
-      global.toast(`Background Play: ${provider.toUpperCase()}`);
+      global.toast(`Background Play: ${title}`);
     }
   }
 
@@ -333,6 +372,18 @@
             foundMap.set(src, { noteTitle: sourceTitle || 'Active Note', provider, embedUrl: src, title: `${provider.toUpperCase()} Embed` });
           }
         });
+
+        // Also check sound cards and audio elements in note HTML
+        const audioCards = doc.querySelectorAll('.paperuss-card-audio, audio, [data-media-kind="audio"]');
+        audioCards.forEach(card => {
+          const mediaId = card.getAttribute('data-media-id') || card.querySelector('.audio-native-player')?.getAttribute('data-media-id') || '';
+          const title = card.querySelector('strong, .card-title-text, .embed-compact-title')?.textContent || 'Voice Recording';
+          const src = card.getAttribute('src') || card.querySelector('.audio-native-player')?.getAttribute('src') || '';
+          const key = mediaId || src;
+          if (key && !foundMap.has(key)) {
+            foundMap.set(key, { noteTitle: sourceTitle || 'Active Note', provider: 'audio', embedUrl: src, title, mediaId });
+          }
+        });
       } catch (_) {}
     };
 
@@ -365,7 +416,7 @@
         const key = localStorage.key(i);
         if (key && (key.startsWith('octonotes:') || key.startsWith('paperuss:'))) {
           const val = localStorage.getItem(key);
-          if (val && (val.includes('<iframe') || val.includes('paperuss-embed'))) {
+          if (val && (val.includes('<iframe') || val.includes('paperuss-embed') || val.includes('paperuss-card-audio') || val.includes('data-media-kind="audio"'))) {
             try {
               const parsed = JSON.parse(val);
               if (Array.isArray(parsed)) {
@@ -381,13 +432,32 @@
       }
     } catch (_) {}
 
+    // 5. Query IndexedDB media store directly for recorded audio assets
+    if (typeof global.mediaAll === 'function') {
+      try {
+        const dbAssets = await global.mediaAll();
+        dbAssets.filter(r => r.kind === 'audio').forEach(r => {
+          if (!foundMap.has(r.id)) {
+            const refNote = (global.notes || []).find(n => (n.content || '').includes(r.id));
+            foundMap.set(r.id, {
+              noteTitle: refNote ? (refNote.title || 'Note') : 'Recorded Asset',
+              provider: 'audio',
+              embedUrl: '',
+              title: r.name || 'Voice recording',
+              mediaId: r.id
+            });
+          }
+        });
+      } catch (_) {}
+    }
+
     const foundEmbeds = Array.from(foundMap.values());
 
     if (foundEmbeds.length === 0) {
       vaultList.innerHTML = `
         <div class="music-hub-empty">
           <i data-lucide="music-4" class="w-6 h-6 text-muted"></i>
-          <span>No saved music embeds found in your notes yet.<br>Paste a Spotify or YouTube link into any note to save it here!</span>
+          <span>No saved music embeds or voice recordings found in your notes yet.<br>Record audio or paste a music link into any note to save it here!</span>
         </div>
       `;
     } else {
@@ -397,7 +467,7 @@
             <strong>${esc(item.title)}</strong>
             <span>${esc(item.noteTitle)} • ${esc(item.provider.toUpperCase())}</span>
           </div>
-          <button class="btn btn-sm btn-primary" data-action="play-vault-item" data-embed-url="${esc(item.embedUrl)}" data-provider="${esc(item.provider)}">
+          <button class="btn btn-sm btn-primary" data-action="play-vault-item" data-embed-url="${esc(item.embedUrl)}" data-media-id="${esc(item.mediaId || '')}" data-provider="${esc(item.provider)}" data-title="${esc(item.title)}">
             <i data-lucide="play" class="w-3.5 h-3.5"></i> Play
           </button>
         </div>
@@ -480,19 +550,82 @@
     if (presetCard) {
       e.preventDefault();
       const url = presetCard.getAttribute('data-preset-url');
-      if (url) playPresetMusic(url, 'Spotify Preset');
+      const provider = presetCard.getAttribute('data-preset-provider') || 'Spotify';
+      const title = presetCard.getAttribute('data-preset-title') || 'Ambient Stream';
+      if (url) playPresetMusic(url, provider, title);
       return;
     }
 
-    // Play Vault Item
-    const vaultBtn = e.target.closest('[data-action="play-vault-item"]');
-    if (vaultBtn) {
-      e.preventDefault();
-      const url = vaultBtn.getAttribute('data-embed-url');
-      const provider = vaultBtn.getAttribute('data-provider') || 'Media';
-      if (url) playPresetMusic(url, provider);
+  async function dockAudioMediaAsset(mediaId, directUrl, title = 'Voice Recording') {
+    initMediaWidget();
+    let url = directUrl;
+    if ((!url || url.startsWith('blob:') === false) && mediaId && typeof global.getMediaURL === 'function') {
+      url = await global.getMediaURL(mediaId);
+    }
+    if (!url) {
+      if (typeof global.toast === 'function') global.toast('Unable to load audio file');
       return;
     }
+
+    const container = widgetEl.querySelector('#mediaWidgetIframeContainer');
+    if (container) {
+      container.innerHTML = `
+        <div style="padding: 16px; display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(168,85,247,0.06) 100%); border-radius: 10px;">
+          <strong style="font-size: 14px; font-weight: 700; color: var(--fg); text-align: center; max-width: 90%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(title)}</strong>
+          <audio controls autoplay src="${esc(url)}" style="width: 100%; outline: none; border-radius: 8px; max-height: 40px;"></audio>
+        </div>
+      `;
+    }
+
+    const badge = widgetEl.querySelector('#mediaWidgetBadge');
+    if (badge) {
+      badge.textContent = 'AUDIO';
+      badge.style.background = 'rgba(99, 102, 241, 0.25)';
+      badge.style.color = '#6366f1';
+      badge.style.border = '1px solid rgba(99, 102, 241, 0.4)';
+    }
+
+    const titleEl = widgetEl.querySelector('#mediaWidgetTitle');
+    if (titleEl) {
+      titleEl.textContent = title;
+      titleEl.title = title;
+    }
+
+    const iconEl = widgetEl.querySelector('#mediaWidgetIcon');
+    if (iconEl) {
+      iconEl.innerHTML = `<i data-lucide="file-audio" class="w-3.5 h-3.5"></i>`;
+      iconEl.style.color = '#6366f1';
+    }
+
+    if (typeof global.lucide?.createIcons === 'function') global.lucide.createIcons();
+
+    widgetEl.classList.remove('hidden', 'is-minimized');
+    widgetEl.style.opacity = '1';
+
+    const dot = document.getElementById('musicHubDot');
+    if (dot) dot.classList.remove('hidden');
+
+    if (typeof global.toast === 'function') {
+      global.toast(`Playing: ${title}`);
+    }
+    closeMusicHubModal();
+  }
+
+  // Play Vault Item
+  const vaultBtn = e.target.closest('[data-action="play-vault-item"]');
+  if (vaultBtn) {
+    e.preventDefault();
+    const url = vaultBtn.getAttribute('data-embed-url');
+    const mediaId = vaultBtn.getAttribute('data-media-id');
+    const provider = vaultBtn.getAttribute('data-provider') || 'Media';
+    const title = vaultBtn.getAttribute('data-title') || 'Audio';
+    if (provider === 'audio' || mediaId) {
+      dockAudioMediaAsset(mediaId, url, title);
+    } else if (url) {
+      playPresetMusic(url, provider);
+    }
+    return;
+  }
   });
 
   // Support Enter key in Quick Paste input

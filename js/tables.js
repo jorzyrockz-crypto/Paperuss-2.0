@@ -982,9 +982,9 @@ function initResponsiveImages(){
   let lastClickedImg=null; // for Shift-range selection
 
   ed.addEventListener('click', e=>{
-    const img=e.target.closest('img[data-media-id], .paperuss-card[data-media-id]');
+    const img=e.target.closest('img[data-media-id]');
     if(!img){
-      // Click outside image/card: clear selections unless clicking toolbar or card chrome
+      // Click outside image: clear selections unless clicking toolbar or card chrome
       if(!e.target.closest('.img-toolbar') && !e.target.closest('#imgBatchBar') && !e.target.closest('.paperuss-card') && !e.target.closest('.paperuss-embed')){
         clearImageSelection();
         clearMultiSelection();
@@ -1080,10 +1080,45 @@ function initResponsiveImages(){
     tb.addEventListener('click', e=>{
       const btn=e.target.closest('button'); if(!btn||!selectedImg) return;
       // Skip dropdown-toggle buttons — handled by responsive-images.js
-      if(['imgTbSizeToggle','imgTbMoreToggle'].includes(btn.id)) return;
+      if(['imgTbSizeToggle','imgTbMoreToggle'].includes(btn.id) || btn.dataset.itbToggle) return;
       // Close all dropdowns after any action fires
       if(typeof closeAllItbDropdowns==='function') closeAllItbDropdowns(null);
-      if(btn.dataset.imgsize) return setImageSizeEx(selectedImg, btn.dataset.imgsize);
+
+      const isAudioCard = selectedImg.classList?.contains('paperuss-card-audio') || selectedImg.getAttribute?.('data-media-kind') === 'audio';
+
+      // Mode switching for Audio cards
+      if (btn.dataset.cardmode && isAudioCard) {
+        setSoundCardDisplayMode(selectedImg, btn.dataset.cardmode);
+        toast(`Mode switched to ${btn.dataset.cardmode}`);
+        return;
+      }
+
+      // Size switching
+      if (btn.dataset.imgsize) {
+        if (isAudioCard) {
+          setSoundCardWidthPreset(selectedImg, btn.dataset.imgsize);
+          toast(`Size updated to ${btn.dataset.imgsize}`);
+        } else {
+          setImageSizeEx(selectedImg, btn.dataset.imgsize);
+        }
+        return;
+      }
+
+      if(btn.getAttribute('data-action')==='audio-toggle-play'){
+        const audio = selectedImg.querySelector('.audio-native-player');
+        if (audio) {
+          if (audio.paused) audio.play().catch(_=>{});
+          else audio.pause();
+        }
+        return;
+      }
+
+      if(btn.getAttribute('data-action')==='audio-download'){
+        const id=selectedImg.getAttribute('data-media-id');
+        if (id) mediaGet(id).then(rec=>downloadMediaById(id, rec?rec.name:'recording.webm'));
+        return;
+      }
+
       if(btn.id==='imgTbCrop') return openCropModal(selectedImg);
       if(btn.id==='imgTbAlignLeft') return setImageAlign(selectedImg,'left');
       if(btn.id==='imgTbAlignCenter') return setImageAlign(selectedImg,'center');
@@ -1100,12 +1135,93 @@ function initResponsiveImages(){
         mediaGet(id).then(rec=>downloadMediaById(id, rec?rec.name:'image'));
         return;
       }
-      if(btn.id==='imgTbDelete'){
+      if(btn.id==='imgTbDelete' || btn.getAttribute('data-action')==='delete-card'){
         const img=selectedImg; clearImageSelection();
-        img.remove(); handleBodyInput(); toast('Image removed');
+        img.remove(); handleBodyInput(); toast('Card removed');
       }
     });
   }
+
+function setSoundCardDisplayMode(card, mode){
+  if (!card) return;
+  const id = card.getAttribute('data-media-id') || '';
+  const audio = card.querySelector('.audio-native-player');
+  const url = audio ? audio.getAttribute('src') : '';
+  const title = card.querySelector('.card-title-text, .embed-compact-title, strong')?.textContent || 'Voice recording';
+  const widthPreset = card.getAttribute('data-width-preset') || 'medium';
+
+  card.className = `paperuss-card paperuss-card-audio embed-mode-${mode} embed-width-${widthPreset} card-width-${widthPreset}`;
+  card.setAttribute('data-display-mode', mode);
+
+  let innerCardContent = '';
+  if (mode === 'compact') {
+    innerCardContent = `
+      <div class="embed-compact-card">
+        <div class="embed-compact-hero-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--accent)"><polygon points="6,4 20,12 6,20"/></svg>
+        </div>
+        <span class="embed-compact-divider"></span>
+        <div class="embed-compact-info">
+          <strong class="embed-compact-title" contenteditable="true" data-action="inline-edit-title" title="Click to edit title">${esc(title)}</strong>
+          <span class="embed-compact-link">audio · compact</span>
+        </div>
+        <button type="button" class="audio-hero-play-btn-large audio-compact-play-btn" data-action="audio-toggle-play" title="Play/Pause" style="width:36px;height:36px;min-width:36px;">
+          <svg class="audio-play-icon" width="16" height="16" viewBox="0 0 24 24" fill="var(--accent)"><polygon points="6,4 20,12 6,20"/></svg>
+          <svg class="audio-pause-icon hidden" width="16" height="16" viewBox="0 0 24 24" fill="var(--accent)"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        </button>
+      </div>`;
+  } else {
+    innerCardContent = `
+      <div class="embed-canonical-card">
+        <div class="embed-canonical-header">
+          <div class="embed-provider-badge-wrap">
+            <span class="card-type-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+            <span class="embed-provider-badge">AUDIO</span>
+          </div>
+          <span class="embed-canonical-link">AUDIO FILE</span>
+        </div>
+
+        <div class="embed-canonical-hero audio-hero-center">
+          <button type="button" class="audio-hero-play-btn-large" data-action="audio-toggle-play" title="Play/Pause">
+            <svg class="audio-play-icon" width="24" height="24" viewBox="0 0 24 24" fill="var(--accent)" stroke="none"><polygon points="6,4 20,12 6,20"/></svg>
+            <svg class="audio-pause-icon hidden" width="24" height="24" viewBox="0 0 24 24" fill="var(--accent)" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          </button>
+          <div class="m3-seeker-container">
+            <span class="audio-time-stamp audio-cur-time">0:00</span>
+            <div class="m3-seeker-track" data-action="audio-seek">
+              <div class="m3-seeker-fill" style="width: 0%"></div>
+              <div class="m3-seeker-thumb" style="left: 0%"></div>
+            </div>
+            <span class="audio-time-stamp audio-dur-time">0:00</span>
+          </div>
+        </div>
+
+        <div class="embed-canonical-body">
+          <div class="embed-canonical-text">
+            <strong contenteditable="true" data-action="inline-edit-title" title="Click to edit title">${esc(title)}</strong>
+            <p class="embed-fallback-desc" contenteditable="true" data-action="inline-edit-desc" title="Click to edit caption">Add audio notes, description, or transcript...</p>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  card.innerHTML = `${innerCardContent}<audio class="audio-native-player" preload="metadata" data-media-id="${id}" data-media-kind="audio" src="${url}"></audio><div class="card-resize-handle" title="Drag to resize card"></div>`;
+  // Rebuild embed-style top-floating toolbar (NOT image toolbar)
+  if (typeof hydrateSoundCards === 'function') hydrateSoundCards(card);
+  if (typeof handleBodyInput === 'function') handleBodyInput();
+  if (typeof save === 'function') save();
+}
+
+function setSoundCardWidthPreset(card, preset){
+  if (!card) return;
+  const currentMode = card.getAttribute('data-display-mode') || 'preview';
+  card.setAttribute('data-width-preset', preset);
+  card.className = `paperuss-card paperuss-card-audio embed-mode-${currentMode} embed-width-${preset} card-width-${preset}`;
+  // Rebuild embed-style top-floating toolbar (NOT image toolbar)
+  if (typeof hydrateSoundCards === 'function') hydrateSoundCards(card);
+  if (typeof handleBodyInput === 'function') handleBodyInput();
+  if (typeof save === 'function') save();
+}
 
   /* ----- Corner drag resize (tablet + desktop), ratio locked ----- */
   document.querySelectorAll('.img-handle').forEach(h=>{
