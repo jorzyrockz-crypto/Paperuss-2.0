@@ -380,7 +380,7 @@
       : [];
     note.pinned=!!note.pinned;
     note.archived=!!note.archived;
-    note.fontStyle=['sans','serif','mono','rounded'].includes(note.fontStyle)?note.fontStyle:'sans';
+    note.fontStyle=['sans','calibri','segoe','serif','mono','arial','rounded'].includes(note.fontStyle)?note.fontStyle:'sans';
     note.pageViewEnabled=note.pageViewEnabled===true;
     note.pageSize=['auto','a4','letter','legal'].includes(note.pageSize)?note.pageSize:'a4';
     note.pageOrientation=['portrait','landscape'].includes(note.pageOrientation)?note.pageOrientation:'portrait';

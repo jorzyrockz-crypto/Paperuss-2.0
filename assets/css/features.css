@@ -758,8 +758,11 @@ img[data-media-id].img-selected,
 
 /* System Font Styles classes applied to note-editor */
 .note-editor[data-fontstyle="sans"]{font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.note-editor[data-fontstyle="calibri"]{font-family:Calibri,Carlito,Aptos,sans-serif}
+.note-editor[data-fontstyle="segoe"]{font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,sans-serif}
 .note-editor[data-fontstyle="serif"]{font-family:Georgia,"Times New Roman",serif}
-.note-editor[data-fontstyle="mono"]{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.note-editor[data-fontstyle="mono"]{font-family:Consolas,ui-monospace,SFMono-Regular,Menlo,monospace}
+.note-editor[data-fontstyle="arial"]{font-family:Arial,Helvetica,sans-serif}
 .note-editor[data-fontstyle="rounded"]{font-family:"SF Pro Rounded","Quicksand",system-ui,-apple-system,sans-serif}
 
 /* ============ CALENDAR VIEW ============ */

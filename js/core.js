@@ -1185,7 +1185,7 @@ function renderEditor(){
       const fontStyle = n.fontStyle || 'sans';
       ed.setAttribute('data-fontstyle', fontStyle);
       const fsLabel = document.getElementById('fontStyleLabel');
-      const fsMap = {'sans':'Sans', 'serif':'Serif', 'mono':'Mono', 'rounded':'Rounded'};
+      const fsMap = {'sans':'Sans', 'calibri':'Calibri', 'segoe':'Segoe UI', 'serif':'Serif', 'mono':'Mono', 'arial':'Arial', 'rounded':'Rounded'};
       if(fsLabel) fsLabel.textContent = fsMap[fontStyle] || 'Sans';
       document.querySelectorAll('#fontStyleDropdown .fs-opt').forEach(opt=>{
         opt.classList.toggle('active', opt.dataset.fontstyle === fontStyle);

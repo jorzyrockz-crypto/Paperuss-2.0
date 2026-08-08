@@ -461,10 +461,11 @@
   /**
    * Build standard word/styles.xml string with Word outline levels.
    */
-  function buildStylesXml() {
+  function buildStylesXml(fontFamilyName) {
+    const fontName = fontFamilyName || 'Calibri';
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n` +
       `<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
-      `<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults>` +
+      `<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${escXml(fontName)}" w:hAnsi="${escXml(fontName)}"/><w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults>` +
       `<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>` +
       `<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:rPr><w:b/><w:sz w:val="56"/><w:color w:val="2B2B2B"/></w:rPr></w:style>` +
       `<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:pPr><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:sz w:val="36"/><w:color w:val="1F497D"/></w:rPr></w:style>` +
@@ -606,6 +607,17 @@
       bodyXml += await convertChildrenToWml(ast, ctx);
     }
 
+    const fontStyleMap = {
+      calibri: 'Calibri',
+      segoe: 'Segoe UI',
+      serif: 'Georgia',
+      mono: 'Consolas',
+      arial: 'Arial',
+      sans: 'Inter',
+      rounded: 'Calibri'
+    };
+    const targetFont = fontStyleMap[note.fontStyle] || 'Calibri';
+
     // Assemble package files
     zip.file('[Content_Types].xml', buildContentTypesXml(images));
     zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n` +
@@ -613,7 +625,7 @@
       `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>` +
       `</Relationships>`);
     zip.file('word/document.xml', buildDocumentXml(bodyXml));
-    zip.file('word/styles.xml', buildStylesXml());
+    zip.file('word/styles.xml', buildStylesXml(targetFont));
     zip.file('word/numbering.xml', buildNumberingXml());
     zip.file('word/fontTable.xml', buildFontTableXml());
     zip.file('word/_rels/document.xml.rels', buildDocumentRelsXml(hyperlinks, images));

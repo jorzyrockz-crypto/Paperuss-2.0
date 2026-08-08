@@ -13,7 +13,15 @@ function applyFontStyle(fontStyle){
     ed.setAttribute('data-fontstyle', fontStyle);
   }
   const fsLabel=document.getElementById('fontStyleLabel');
-  const fsMap={'sans':'Sans', 'serif':'Serif', 'mono':'Mono', 'rounded':'Rounded'};
+  const fsMap = {
+    'sans': 'Sans',
+    'calibri': 'Calibri',
+    'segoe': 'Segoe UI',
+    'serif': 'Serif',
+    'mono': 'Mono',
+    'arial': 'Arial',
+    'rounded': 'Rounded'
+  };
   if(fsLabel) fsLabel.textContent = fsMap[fontStyle] || 'Sans';
   document.querySelectorAll('#fontStyleDropdown .fs-opt').forEach(opt=>{
     opt.classList.toggle('active', opt.dataset.fontstyle === fontStyle);
@@ -24,13 +32,16 @@ function applyFontStyle(fontStyle){
   if(sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)){
     const fontsMap={
       'sans':'"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      'calibri':'Calibri, Carlito, Aptos, sans-serif',
+      'segoe':'"Segoe UI", -apple-system, sans-serif',
       'serif':'Georgia, "Times New Roman", serif',
-      'mono':'ui-monospace, SFMono-Regular, Menlo, monospace',
+      'mono':'Consolas, ui-monospace, SFMono-Regular, monospace',
+      'arial':'Arial, Helvetica, sans-serif',
       'rounded':'"SF Pro Rounded", "Quicksand", system-ui, -apple-system, sans-serif'
     };
-    wrapSelectionInSpan({fontFamily: fontsMap[fontStyle]});
+    wrapSelectionInSpan({fontFamily: fontsMap[fontStyle] || fontsMap.sans});
   }
-  toast(`Font set to ${fsMap[fontStyle]}`);
+  toast(`Font set to ${fsMap[fontStyle] || 'Sans'}`);
 }
 
 /* ============================================================
