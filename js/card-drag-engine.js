@@ -149,6 +149,38 @@ document.addEventListener('pointerdown', (e) => {
   } catch (_) {}
 }, true);
 
+// ── 1.5. dragstart CAPTURE — 100% kill native browser ghost ────
+document.addEventListener('dragstart', (e) => {
+  if (_cardDragging || _cardPreparing || (typeof _txtDragging !== 'undefined' && (_txtDragging || _txtPreparing))) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    return;
+  }
+
+  // Yield to block gutter handle drag (application/x-paperuss-drag)
+  if (e.dataTransfer && e.dataTransfer.types && e.dataTransfer.types.includes && e.dataTransfer.types.includes('application/x-paperuss-drag')) {
+    return;
+  }
+
+  const noteBody = document.getElementById('noteBody');
+  const targetEl = (e.target && e.target.nodeType === 3) ? e.target.parentElement : e.target;
+  if (noteBody && targetEl) {
+    const card = targetEl.closest ? targetEl.closest(CARD_SELECTOR) : null;
+    if (card && noteBody.contains(card)) {
+      if (e.dataTransfer) {
+        e.dataTransfer.setData('text/plain', '');
+        e.dataTransfer.effectAllowed = 'move';
+        const blankCanvas = document.createElement('canvas');
+        blankCanvas.width = 1;
+        blankCanvas.height = 1;
+        if (e.dataTransfer.setDragImage) {
+          e.dataTransfer.setDragImage(blankCanvas, 0, 0);
+        }
+      }
+    }
+  }
+}, true);
+
 // ── 2. pointermove CAPTURE ────────────────────────────────────
 document.addEventListener('pointermove', (e) => {
   if (!_cardPreparing && !_cardDragging) return;

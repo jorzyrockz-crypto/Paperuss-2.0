@@ -1673,6 +1673,12 @@ document.addEventListener('dragstart', (e) => {
     if (e.dataTransfer) {
       e.dataTransfer.setData('text/plain', '');
       e.dataTransfer.effectAllowed = 'move';
+      const blankCanvas = document.createElement('canvas');
+      blankCanvas.width = 1;
+      blankCanvas.height = 1;
+      if (e.dataTransfer.setDragImage) {
+        e.dataTransfer.setDragImage(blankCanvas, 0, 0);
+      }
     }
   }
 });
