@@ -336,8 +336,8 @@ function buildSoundCardEditorToolbar(card) {
   const modeIcons = { 'compact': 'align-justify', 'preview': 'image' };
   const activeModeIcon = modeIcons[displayMode] || 'image';
 
-  const wrapIcons = { 'none': 'align-center', 'left': 'align-left', 'right': 'align-right', 'inline': 'align-justify' };
-  const activeWrapIcon = wrapIcons[currentWrap] || 'align-center';
+  const wrapIcons = { 'none': 'rows-2', 'left': 'panel-left', 'right': 'panel-right', 'inline': 'move-horizontal' };
+  const activeWrapIcon = 'wrap-text';
 
   bar.innerHTML = `
     <div class="embed-tb-segment" style="position:relative">
@@ -365,16 +365,16 @@ function buildSoundCardEditorToolbar(card) {
       </button>
       <div class="embed-tb-dropdown embed-wrap-dropdown hidden" contenteditable="false" style="top:calc(100% + 4px);bottom:auto;">
         <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'none' ? 'active' : ''}" data-action="set-wrap" data-val="none">
-          <i data-lucide="align-center" class="w-4 h-4"></i> Break Text (No Wrap)
+          <i data-lucide="rows-2" class="w-4 h-4"></i> Break Text (No Wrap)
         </button>
         <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'left' ? 'active' : ''}" data-action="set-wrap" data-val="left">
-          <i data-lucide="align-left" class="w-4 h-4"></i> Wrap Text Right (Float Left)
+          <i data-lucide="panel-left" class="w-4 h-4"></i> Wrap Text Right (Float Left)
         </button>
         <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'right' ? 'active' : ''}" data-action="set-wrap" data-val="right">
-          <i data-lucide="align-right" class="w-4 h-4"></i> Wrap Text Left (Float Right)
+          <i data-lucide="panel-right" class="w-4 h-4"></i> Wrap Text Left (Float Right)
         </button>
         <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'inline' ? 'active' : ''}" data-action="set-wrap" data-val="inline">
-          <i data-lucide="align-justify" class="w-4 h-4"></i> Inline with Text
+          <i data-lucide="move-horizontal" class="w-4 h-4"></i> Inline with Text
         </button>
       </div>
     </div>
@@ -925,8 +925,8 @@ function buildAttachmentCardEditorToolbar(card) {
   const modeIcons = { 'compact': 'align-justify', 'preview': 'image' };
   const activeModeIcon = modeIcons[displayMode] || 'image';
 
-  const wrapIcons = { 'none': 'align-center', 'left': 'align-left', 'right': 'align-right', 'inline': 'align-justify' };
-  const activeWrapIcon = wrapIcons[currentWrap] || 'align-center';
+  const wrapIcons = { 'none': 'rows-2', 'left': 'panel-left', 'right': 'panel-right', 'inline': 'move-horizontal' };
+  const activeWrapIcon = 'wrap-text';
 
   bar.innerHTML = `
     <div class="embed-tb-segment">
@@ -959,16 +959,16 @@ function buildAttachmentCardEditorToolbar(card) {
       </button>
       <div class="embed-tb-dropdown embed-wrap-dropdown hidden" contenteditable="false">
         <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'none' ? 'active' : ''}" data-action="set-wrap" data-val="none">
-          <i data-lucide="align-center" class="w-4 h-4"></i> Break Text (No Wrap)
+          <i data-lucide="rows-2" class="w-4 h-4"></i> Break Text (No Wrap)
         </button>
         <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'left' ? 'active' : ''}" data-action="set-wrap" data-val="left">
-          <i data-lucide="align-left" class="w-4 h-4"></i> Wrap Text Right (Float Left)
+          <i data-lucide="panel-left" class="w-4 h-4"></i> Wrap Text Right (Float Left)
         </button>
         <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'right' ? 'active' : ''}" data-action="set-wrap" data-val="right">
-          <i data-lucide="align-right" class="w-4 h-4"></i> Wrap Text Left (Float Right)
+          <i data-lucide="panel-right" class="w-4 h-4"></i> Wrap Text Left (Float Right)
         </button>
         <button type="button" class="embed-tb-dropdown-item ${currentWrap === 'inline' ? 'active' : ''}" data-action="set-wrap" data-val="inline">
-          <i data-lucide="align-justify" class="w-4 h-4"></i> Inline with Text
+          <i data-lucide="move-horizontal" class="w-4 h-4"></i> Inline with Text
         </button>
       </div>
     </div>
