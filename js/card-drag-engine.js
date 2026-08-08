@@ -130,7 +130,8 @@ document.addEventListener('pointerdown', (e) => {
   const isDragHandle = targetEl.closest && targetEl.closest('.card-drag-handle, .file-card-header');
 
   // Interactive UI targets (toolbar buttons, dropdowns, inputs, links, media controls)
-  const INTERACTIVE = 'input, textarea, select, button, a, [contenteditable="true"], .embed-tb-btn, .embed-tb-dropdown, .embed-tb-select, .card-resize-handle, .audio-control-btn, .file-download-btn, .embed-action-btn';
+  // NOTE: Do NOT include [contenteditable="true"] here as #noteBody itself is contenteditable
+  const INTERACTIVE = 'input, textarea, select, button, a, .embed-tb-btn, .embed-tb-dropdown, .embed-tb-select, .embed-tb-dropdown-item, .card-resize-handle, .audio-control-btn, .file-download-btn, .embed-action-btn';
   const isInteractiveUI = targetEl.closest && targetEl.closest(INTERACTIVE);
 
   // Never capture drag if clicking interactive toolbar controls (unless clicking explicit drag handle)
@@ -143,6 +144,12 @@ document.addEventListener('pointerdown', (e) => {
   _cardStartX    = e.clientX;
   _cardStartY    = e.clientY;
   _cardPreparing = true;
+
+  try {
+    if (card.setPointerCapture && e.pointerId != null) {
+      card.setPointerCapture(e.pointerId);
+    }
+  } catch (_) {}
 }, true);
 
 // ── 1.5. dragstart CAPTURE — 100% kill native browser ghost ────
