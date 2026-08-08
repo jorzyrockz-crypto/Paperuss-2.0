@@ -81,18 +81,33 @@ function _spawnSwarmGhost(clientX, clientY) {
   _txtGhost = document.createElement('div');
   _txtGhost.className = 'magic-flying-text-ghost';
 
-  const snippet     = _txtText.length > 20 ? _txtText.substring(0, 20) + '…' : _txtText;
-  const totalChars  = snippet.length;
-  const charsHTML   = Array.from(snippet).map((ch, idx) => {
-    const safe       = ch === ' ' ? '&nbsp;' : ch.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // ── Orbit characters — max 8, non-space chars only for clean orbit ──
+  const orbitSource = Array.from(_txtText.replace(/\s+/g, '')).slice(0, 8);
+  const totalChars  = orbitSource.length || 1;
+
+  const charsHTML = orbitSource.map((ch, idx) => {
+    const safe       = ch.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const angle      = (idx / totalChars) * 360;
-    const radius     = 12 + (idx % 3) * 8;
-    const flyDelay   = (idx * 0.04).toFixed(2);
-    const flyDur     = (0.55 + (idx % 3) * 0.1).toFixed(2);
-    return `<span class="swarm-char" style="--angle:${angle}deg;--radius:${radius}px;--fly-delay:${flyDelay}s;--fly-dur:${flyDur}s;">${safe}</span>`;
+    // Alternate inner/outer radius for depth illusion
+    const radius     = idx % 2 === 0 ? 11 + (idx * 1.5) : 15 + (idx * 1.2);
+    const flyDelay   = (idx * 0.045).toFixed(2);
+    const flyDur     = (0.45 + (idx % 3) * 0.08).toFixed(2);
+    // Vary orbit speed slightly per character — feels organic not robotic
+    const orbitDur   = (2.4 + (idx % 4) * 0.35).toFixed(2);
+    return `<span class="swarm-char" style="--angle:${angle}deg;--radius:${radius}px;--fly-delay:${flyDelay}s;--fly-dur:${flyDur}s;--orbit-dur:${orbitDur}s;">${safe}</span>`;
   }).join('');
 
-  _txtGhost.innerHTML = `<span class="live-magnet-orb">✦</span><span class="live-char-stream">${charsHTML}</span>`;
+  // ── Pill label — first 18 chars of text ──
+  const snippetLabel = _txtText.length > 18 ? _txtText.substring(0, 18) + '…' : _txtText;
+  const wordCount    = _txtText.trim().split(/\s+/).filter(Boolean).length;
+  const wordLabel    = wordCount === 1 ? '1 word' : `${wordCount} words`;
+
+  _txtGhost.innerHTML = `
+    <span class="live-magnet-orb">✦</span>
+    <span class="live-char-stream">${charsHTML}</span>
+    <span class="ghost-snippet-label">${snippetLabel.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
+    <span class="ghost-word-count">${wordLabel}</span>
+  `;
   _txtGhost.style.left = `${clientX}px`;
   _txtGhost.style.top  = `${clientY}px`;
   document.body.appendChild(_txtGhost);

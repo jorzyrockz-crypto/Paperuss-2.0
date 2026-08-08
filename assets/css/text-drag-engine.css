@@ -1,5 +1,6 @@
 /* ============================================================
    PAPERUSS TEXT DRAG ENGINE  —  Visual Styles
+   Option A: Glassmorphic Pill Badge + Orbit Depth + Comet Tail
    ============================================================ */
 
 /* ── Body state during text drag ── */
@@ -13,70 +14,211 @@ body.is-text-dragging * {
   cursor: grabbing !important;
 }
 
-/* ── Swarm Ghost Container ── */
+/* ── Swarm Ghost — Glassmorphic Pill Container ── */
 .magic-flying-text-ghost {
   position: fixed;
   top: 0;
   left: 0;
   pointer-events: none !important;
   z-index: 9999999 !important;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  transform: translate(-50%, -60%);
   will-change: left, top;
   user-select: none;
+
+  /* Pill shape */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 8px;
+  border-radius: 999px;
+
+  /* Frosted glass */
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px) saturate(1.8);
+  -webkit-backdrop-filter: blur(18px) saturate(1.8);
+
+  /* Gradient border — blue → purple */
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
+  box-shadow:
+    0 0 0 1.5px rgba(99, 102, 241, 0.55),
+    0 8px 32px rgba(59, 130, 246, 0.35),
+    0 2px 8px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+
+  /* Spawn animation */
+  animation: pillSpawn 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes pillSpawn {
+  0%   { transform: translate(-50%, -60%) scale(0.3) rotate(-6deg); opacity: 0; }
+  60%  { transform: translate(-50%, -60%) scale(1.06) rotate(1.5deg); opacity: 1; }
+  100% { transform: translate(-50%, -60%) scale(1) rotate(0deg); opacity: 1; }
+}
+
+/* ── Comet Tail — streaks LEFT behind the pill ── */
+.magic-flying-text-ghost::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 60px;
+  height: 100%;
+  border-radius: 999px 0 0 999px;
+  background: linear-gradient(
+    to left,
+    rgba(99, 102, 241, 0.35) 0%,
+    rgba(59, 130, 246, 0.15) 40%,
+    transparent 100%
+  );
+  filter: blur(4px);
+  pointer-events: none;
+}
+
+/* ── Outer glow ring on pill ── */
+.magic-flying-text-ghost::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: 0 0 20px 4px rgba(99, 102, 241, 0.2);
+  pointer-events: none;
+  animation: pillGlowPulse 2s ease-in-out infinite;
+}
+
+@keyframes pillGlowPulse {
+  0%, 100% { box-shadow: 0 0 20px 4px rgba(99, 102, 241, 0.2); }
+  50%       { box-shadow: 0 0 32px 8px rgba(139, 92, 246, 0.3); }
 }
 
 /* ── Central orb ── */
 .live-magnet-orb {
-  font-size: 18px;
-  color: var(--accent, #3b82f6);
-  filter: drop-shadow(0 0 8px var(--accent, #3b82f6));
-  animation: orbPulse 1s ease-in-out infinite;
-  display: inline-block;
+  position: relative;
+  font-size: 17px;
+  color: #fff;
+  filter:
+    drop-shadow(0 0 6px var(--accent, #3b82f6))
+    drop-shadow(0 0 14px rgba(99, 102, 241, 0.8));
+  animation: orbPulse 1.4s ease-in-out infinite;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  z-index: 1;
 }
 
 @keyframes orbPulse {
-  0%, 100% { transform: scale(1);    opacity: 1;    }
-  50%       { transform: scale(1.25); opacity: 0.75; }
+  0%, 100% { transform: scale(1)    rotate(0deg);   filter: drop-shadow(0 0 6px #3b82f6) drop-shadow(0 0 14px rgba(99,102,241,0.8)); }
+  50%       { transform: scale(1.22) rotate(180deg); filter: drop-shadow(0 0 10px #818cf8) drop-shadow(0 0 22px rgba(139,92,246,0.9)); }
 }
 
-/* ── Swarm character orbit stream ── */
+/* ── Orbit field ── */
 .live-char-stream {
   position: relative;
   display: inline-block;
-  width: 0;
-  height: 0;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
 }
 
+/* ── Orbiting characters with depth ── */
 .swarm-char {
   position: absolute;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--accent, #3b82f6);
-  text-shadow: 0 0 6px var(--accent, #3b82f6);
+  top: 50%;
+  left: 50%;
+  font-size: 10px;
+  font-weight: 800;
   white-space: nowrap;
   pointer-events: none;
+  letter-spacing: 0.02em;
+
+  /* Depth: chars further back = more blue/indigo, closer = brighter white-blue */
+  color: var(--char-color, #93c5fd);
+  text-shadow:
+    0 0 4px var(--char-glow, rgba(59, 130, 246, 0.7)),
+    0 0 10px var(--char-glow, rgba(59, 130, 246, 0.4));
+
+  transform-origin: 0 0;
   animation:
-    swarmFlyIn  var(--fly-dur, 0.6s) cubic-bezier(0.34, 1.56, 0.64, 1) var(--fly-delay, 0s) both,
-    swarmOrbit  2.4s linear calc(var(--fly-delay, 0s) + var(--fly-dur, 0.6s)) infinite;
+    swarmFlyIn  var(--fly-dur, 0.55s) cubic-bezier(0.34, 1.56, 0.64, 1) var(--fly-delay, 0s) both,
+    swarmOrbit  var(--orbit-dur, 2.8s) linear calc(var(--fly-delay, 0s) + var(--fly-dur, 0.55s)) infinite;
+}
+
+/* Depth-based color — odd chars are "closer" (brighter) */
+.swarm-char:nth-child(odd) {
+  --char-color: #e0f2fe;
+  --char-glow: rgba(147, 197, 253, 0.8);
+  font-size: 11px;
+}
+
+.swarm-char:nth-child(even) {
+  --char-color: #6366f1;
+  --char-glow: rgba(99, 102, 241, 0.6);
+  font-size: 9.5px;
 }
 
 @keyframes swarmFlyIn {
   from {
-    transform: rotate(var(--angle, 0deg)) translateX(0) scale(0.2);
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--angle, 0deg))
+      translateX(0px)
+      scale(0.1);
     opacity: 0;
   }
   to {
-    transform: rotate(var(--angle, 0deg)) translateX(var(--radius, 16px)) scale(1);
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--angle, 0deg))
+      translateX(var(--radius, 14px))
+      scale(1);
     opacity: 1;
   }
 }
 
 @keyframes swarmOrbit {
-  from { transform: rotate(var(--angle, 0deg))          translateX(var(--radius, 16px)); }
-  to   { transform: rotate(calc(var(--angle, 0deg) + 360deg)) translateX(var(--radius, 16px)); }
+  from {
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--angle, 0deg))
+      translateX(var(--radius, 14px))
+      scale(1);
+  }
+  to {
+    transform:
+      translate(-50%, -50%)
+      rotate(calc(var(--angle, 0deg) + 360deg))
+      translateX(var(--radius, 14px))
+      scale(1);
+  }
+}
+
+/* ── Pill snippet label ── */
+.ghost-snippet-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  flex-shrink: 1;
+}
+
+.ghost-word-count {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(147, 197, 253, 0.7);
+  background: rgba(99, 102, 241, 0.25);
+  border-radius: 99px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 /* ── Drop-point caret marker (blinking vertical line) ── */
@@ -84,30 +226,61 @@ body.is-text-dragging * {
   position: absolute;
   width: 2px;
   min-height: 16px;
-  background: var(--accent, #3b82f6);
+  background: linear-gradient(to bottom, #6366f1, #3b82f6);
   border-radius: 2px;
   pointer-events: none;
   z-index: 9999998;
-  box-shadow: 0 0 6px var(--accent, #3b82f6);
+  box-shadow:
+    0 0 6px #6366f1,
+    0 0 16px rgba(99, 102, 241, 0.5);
   animation: textCaretBlink 0.65s ease-in-out infinite alternate;
   top: 0;
   left: 0;
   transform: translateX(-1px);
 }
 
+/* Small dot on top of caret */
+.text-drag-caret-marker::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  background: #818cf8;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #6366f1;
+}
+
 @keyframes textCaretBlink {
-  from { opacity: 0.3; box-shadow: 0 0 4px var(--accent, #3b82f6); }
-  to   { opacity: 1;   box-shadow: 0 0 12px var(--accent, #3b82f6); }
+  from { opacity: 0.35; box-shadow: 0 0 4px #6366f1; }
+  to   { opacity: 1;    box-shadow: 0 0 14px rgba(99, 102, 241, 0.8), 0 0 28px rgba(59, 130, 246, 0.4); }
 }
 
 /* ── Drop-release burst animation ── */
 .text-drop-release-burst {
   display: inline;
-  animation: textDropBurst 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  border-radius: 3px;
+  animation: textDropBurst 0.42s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
 @keyframes textDropBurst {
-  0%   { background: var(--accent, #3b82f6); color: #fff; border-radius: 3px; padding: 0 2px; opacity: 0.9; }
-  60%  { background: color-mix(in srgb, var(--accent, #3b82f6) 25%, transparent); }
-  100% { background: transparent; padding: 0; opacity: 1; }
+  0%   {
+    background: linear-gradient(135deg, #6366f1, #3b82f6);
+    color: #fff;
+    padding: 0 3px;
+    opacity: 1;
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.6);
+  }
+  55%  {
+    background: rgba(99, 102, 241, 0.2);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+  }
+  100% {
+    background: transparent;
+    padding: 0;
+    opacity: 1;
+    box-shadow: none;
+  }
 }
