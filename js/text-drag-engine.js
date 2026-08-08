@@ -33,6 +33,8 @@ let _cometTailEls   = [];      // individual char tail elements
 let _trailBuffer    = [];      // ring buffer of past {x,y} positions
 let _prevX          = 0;
 let _prevY          = 0;
+let _currClientX    = 0;       // active cursor X for auto-scroll + caret sync
+let _currClientY    = 0;       // active cursor Y for auto-scroll + caret sync
 let _rafId          = null;
 const TRAIL_MAX     = 16;      // how many past positions we remember
 const TAIL_CHARS    = 9;       // max characters in tail
@@ -57,6 +59,8 @@ function _resetTxt() {
   _txtText        = '';
   _txtHTML        = '';
   _txtCaptureEl   = null;
+  _currClientX    = 0;
+  _currClientY    = 0;
   _removeComet();
   _removeTxtCaret();
   document.body.classList.remove('is-text-dragging');
@@ -92,6 +96,8 @@ function _updateCaretMarker(clientX, clientY) {
 // ── Spawn comet ───────────────────────────────────────────────
 function _spawnComet(clientX, clientY) {
   _removeComet();
+  _currClientX = clientX;
+  _currClientY = clientY;
 
   // ── Star head orb ──
   _cometOrb = document.createElement('div');
@@ -139,9 +145,6 @@ function _cometRafLoop() {
   const spread   = Math.min(1 + speed * 0.35, 5.5);
 
   _cometTailEls.forEach((el, i) => {
-    // Each char samples a different point in the trail history
-    // i=0 → very recent past (just behind orb)
-    // i=last → oldest point (furthest back)
     const bufIdx  = Math.round((i + 1) * (TRAIL_MAX / (_cometTailEls.length + 1)) * spread);
     const clamped = Math.min(bufIdx, _trailBuffer.length - 1);
     const pos     = _trailBuffer[Math.max(0, _trailBuffer.length - 1 - clamped)];
@@ -157,12 +160,42 @@ function _cometRafLoop() {
     el.style.fontSize  = `${Math.max(10, 17 - i * 0.9)}px`;
   });
 
+  // ── Edge Auto-Scroll Engine ──────────────────────────────────
+  if (_currClientY > 0) {
+    const EDGE_THRESHOLD  = 75; // px from viewport top/bottom
+    const MAX_SCROLL_SPD  = 24; // max px per frame
+    const vh = window.innerHeight;
+    let scrollSpeed = 0;
+
+    if (_currClientY < EDGE_THRESHOLD) {
+      const intensity = (EDGE_THRESHOLD - Math.max(0, _currClientY)) / EDGE_THRESHOLD;
+      scrollSpeed = -Math.round(intensity * MAX_SCROLL_SPD);
+    } else if (_currClientY > vh - EDGE_THRESHOLD) {
+      const intensity = (Math.min(vh, _currClientY) - (vh - EDGE_THRESHOLD)) / EDGE_THRESHOLD;
+      scrollSpeed = Math.round(intensity * MAX_SCROLL_SPD);
+    }
+
+    if (scrollSpeed !== 0) {
+      const noteBody = document.getElementById('noteBody');
+      const scrollHost = noteBody ? (noteBody.closest('.note-editor-container, .editor-workspace, main') || noteBody) : null;
+
+      if (scrollHost && scrollHost.scrollHeight > scrollHost.clientHeight) {
+        scrollHost.scrollTop += scrollSpeed;
+      } else {
+        window.scrollBy(0, scrollSpeed);
+      }
+      _updateCaretMarker(_currClientX, _currClientY);
+    }
+  }
+
   _rafId = requestAnimationFrame(_cometRafLoop);
 }
 
 // ── Update orb position + trail buffer ────────────────────────
 function _updateComet(clientX, clientY) {
   if (!_cometOrb) return;
+  _currClientX = clientX;
+  _currClientY = clientY;
 
   _prevX = parseFloat(_cometOrb.style.left) || clientX;
   _prevY = parseFloat(_cometOrb.style.top)  || clientY;
