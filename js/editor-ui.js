@@ -20,6 +20,8 @@ function applyFontStyle(fontStyle){
     'serif': 'Serif',
     'mono': 'Mono',
     'arial': 'Arial',
+    'bookman': 'Bookman',
+    'oldenglish': 'Old English',
     'rounded': 'Rounded'
   };
   if(fsLabel) fsLabel.textContent = fsMap[fontStyle] || 'Sans';
@@ -37,6 +39,8 @@ function applyFontStyle(fontStyle){
       'serif':'Georgia, "Times New Roman", serif',
       'mono':'Consolas, ui-monospace, SFMono-Regular, monospace',
       'arial':'Arial, Helvetica, sans-serif',
+      'bookman':'"Bookman Old Style", Bookman, serif',
+      'oldenglish':'"Old English Text MT", "Cloister Black", serif',
       'rounded':'"SF Pro Rounded", "Quicksand", system-ui, -apple-system, sans-serif'
     };
     wrapSelectionInSpan({fontFamily: fontsMap[fontStyle] || fontsMap.sans});

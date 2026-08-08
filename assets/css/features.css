@@ -763,6 +763,8 @@ img[data-media-id].img-selected,
 .note-editor[data-fontstyle="serif"]{font-family:Georgia,"Times New Roman",serif}
 .note-editor[data-fontstyle="mono"]{font-family:Consolas,ui-monospace,SFMono-Regular,Menlo,monospace}
 .note-editor[data-fontstyle="arial"]{font-family:Arial,Helvetica,sans-serif}
+.note-editor[data-fontstyle="bookman"]{font-family:"Bookman Old Style",Bookman,"URW Bookman L",serif}
+.note-editor[data-fontstyle="oldenglish"]{font-family:"Old English Text MT","Cloister Black",UnifrakturMaguntia,serif}
 .note-editor[data-fontstyle="rounded"]{font-family:"SF Pro Rounded","Quicksand",system-ui,-apple-system,sans-serif}
 
 /* ============ CALENDAR VIEW ============ */

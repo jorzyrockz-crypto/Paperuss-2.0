@@ -455,6 +455,8 @@
       `<w:font w:name="Consolas"><w:family w:val="modern"/><w:pitch w:val="fixed"/></w:font>` +
       `<w:font w:name="Georgia"><w:family w:val="roman"/><w:pitch w:val="variable"/></w:font>` +
       `<w:font w:name="Arial"><w:family w:val="swiss"/><w:pitch w:val="variable"/></w:font>` +
+      `<w:font w:name="Bookman Old Style"><w:family w:val="roman"/><w:pitch w:val="variable"/></w:font>` +
+      `<w:font w:name="Old English Text MT"><w:family w:val="decorative"/><w:pitch w:val="variable"/></w:font>` +
       `</w:fonts>`;
   }
 
@@ -613,6 +615,8 @@
       serif: 'Georgia',
       mono: 'Consolas',
       arial: 'Arial',
+      bookman: 'Bookman Old Style',
+      oldenglish: 'Old English Text MT',
       sans: 'Inter',
       rounded: 'Calibri'
     };
