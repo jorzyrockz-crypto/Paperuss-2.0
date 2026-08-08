@@ -153,7 +153,15 @@
     if (tag === 'P' || tag === 'DIV') {
       const runsXml = await convertChildrenToWml(el, ctx);
       if (!runsXml.trim()) return '';
-      return `<w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr>${runsXml}</w:p>`;
+      const styleAttr = el.getAttribute ? el.getAttribute('style') || '' : '';
+      let spacingXml = '';
+      const lhMatch = styleAttr.match(/line-height:\s*([0-9.]+)/i);
+      if (lhMatch) {
+        const val = parseFloat(lhMatch[1]);
+        const wLine = Math.round(val * 240);
+        spacingXml = `<w:spacing w:line="${wLine}" w:lineRule="auto"/>`;
+      }
+      return `<w:p><w:pPr><w:pStyle w:val="Normal"/>${spacingXml}</w:pPr>${runsXml}</w:p>`;
     }
 
     // Unordered / Ordered List

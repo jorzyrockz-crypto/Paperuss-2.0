@@ -1210,6 +1210,16 @@ function isSingleStandaloneUrl(str) {
     applyFontStyle(opt.dataset.fontstyle);
   };
 
+  /* ---------- LINE SPACING PICKER ---------- */
+  const lsBtn=document.getElementById('lineSpacingBtn');
+  if(lsBtn) lsBtn.onclick=e=>{ e.stopPropagation(); toggleDropdown('lineSpacingDropdown'); };
+  const lsDrop=document.getElementById('lineSpacingDropdown');
+  if(lsDrop) lsDrop.onclick=e=>{
+    const opt=e.target.closest('[data-spacing]'); if(!opt) return;
+    lsDrop.classList.remove('show');
+    if(typeof applyLineSpacing === 'function') applyLineSpacing(opt.dataset.spacing);
+  };
+
   /* ---------- TABLE SIZE PICKER ---------- */
   const tblBtn=document.getElementById('tableBtn');
   if(tblBtn) tblBtn.onclick=e=>{ e.stopPropagation(); toggleDropdown('tableGridPicker'); };
@@ -1425,7 +1435,7 @@ function isSingleStandaloneUrl(str) {
 
   // Close dropdowns when clicking outside
   window.closeAllEditorDropdowns = () => {
-    ['tcDropdown','paraStyleDropdown','hlDropdown','szDropdown','fontStyleDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown','overflowDropdown'].forEach(id=>{
+    ['tcDropdown','paraStyleDropdown','hlDropdown','szDropdown','fontStyleDropdown','lineSpacingDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown','overflowDropdown'].forEach(id=>{
       const el=document.getElementById(id);
       if(el && el.classList.contains('show')){
         el.classList.remove('show');
@@ -1433,7 +1443,7 @@ function isSingleStandaloneUrl(str) {
         el.style.right=''; el.style.zIndex=''; el.style.maxHeight=''; el.style.overflowY='';
       }
     });
-    ['tcBtn','paraStyleBtn','hlBtn','szBtn','fontStyleBtn','tableBtn','pageLayoutBtn','templateBtn','footerTagsBtn','overflowBtn'].forEach(id=>{
+    ['tcBtn','paraStyleBtn','hlBtn','szBtn','fontStyleBtn','lineSpacingBtn','tableBtn','pageLayoutBtn','templateBtn','footerTagsBtn','overflowBtn'].forEach(id=>{
       const btn=document.getElementById(id);
       if(btn) btn.setAttribute('aria-expanded', 'false');
     });
@@ -1442,7 +1452,7 @@ function isSingleStandaloneUrl(str) {
   const closeAllDropdowns = window.closeAllEditorDropdowns;
   document.addEventListener('click', e=>{
     if(!e.target.closest('#tcPicker') && !e.target.closest('#paraStylePicker') && !e.target.closest('#hlPicker') && !e.target.closest('.sz-picker')
-      && !e.target.closest('#fontStylePicker') && !e.target.closest('#tablePicker')
+      && !e.target.closest('#fontStylePicker') && !e.target.closest('#lineSpacingPicker') && !e.target.closest('#tablePicker')
       && !e.target.closest('#pageLayoutPicker') && !e.target.closest('#templatePicker')
       && !e.target.closest('#footerTagsPicker') && !e.target.closest('#overflowPicker')
       && !e.target.closest('#notifBellWrap') && !e.target.closest('#notifPanel')){

@@ -449,6 +449,19 @@
               </button>
             </div>
           </div>
+          <div class="line-spacing-picker" id="lineSpacingPicker" style="position:relative;display:inline-flex">
+            <button type="button" class="tool-btn" id="lineSpacingBtn" title="Line Spacing" aria-label="Line Spacing" aria-haspopup="true" aria-expanded="false">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M21 6H3"/><path d="M21 12H9"/><path d="M21 18H7"/><path d="M3 12v6"/><path d="M6 15l-3 3-3-3"/></svg>
+            </button>
+            <div class="line-spacing-dropdown hidden" id="lineSpacingDropdown" role="menu">
+              <button type="button" class="ls-opt active" data-spacing="1.0">1.0 (Single)</button>
+              <button type="button" class="ls-opt" data-spacing="1.15">1.15 (Compact)</button>
+              <button type="button" class="ls-opt" data-spacing="1.5">1.5 (1.5 lines)</button>
+              <button type="button" class="ls-opt" data-spacing="2.0">2.0 (Double)</button>
+              <button type="button" class="ls-opt" data-spacing="2.5">2.5 (Relaxed)</button>
+              <button type="button" class="ls-opt" data-spacing="3.0">3.0 (Triple)</button>
+            </div>
+          </div>
           <button class="tool-btn" data-cmd="formatBlock" data-val="blockquote" title="Quote">
             <i data-lucide="quote" class="w-4 h-4"></i>
           </button>

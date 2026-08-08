@@ -47,6 +47,42 @@ function applyFontStyle(fontStyle){
   }
   toast(`Font set to ${fsMap[fontStyle] || 'Sans'}`);
 }
+window.applyFontStyle = applyFontStyle;
+
+function applyLineSpacing(spacing) {
+  const val = parseFloat(spacing) || 1.0;
+  const ed = typeof bodyEl === 'function' ? bodyEl() : document.getElementById('noteContent');
+  if (!ed) return;
+
+  const sel = window.getSelection();
+  let appliedToBlocks = false;
+
+  if (sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)) {
+    const range = sel.getRangeAt(0);
+    const blocks = ed.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, blockquote');
+    blocks.forEach(blk => {
+      if (sel.containsNode(blk, true)) {
+        blk.style.lineHeight = String(val);
+        appliedToBlocks = true;
+      }
+    });
+  }
+
+  if (!appliedToBlocks) {
+    ed.style.lineHeight = String(val);
+  }
+
+  const lsDrop = document.getElementById('lineSpacingDropdown');
+  if (lsDrop) {
+    lsDrop.querySelectorAll('.ls-opt').forEach(opt => {
+      opt.classList.toggle('active', opt.dataset.spacing === String(spacing));
+    });
+  }
+
+  if (typeof save === 'function') save();
+  if (typeof toast === 'function') toast(`Line spacing set to ${val}`);
+}
+window.applyLineSpacing = applyLineSpacing;
 
 /* ============================================================
    CLOSE ALL FLOATING EDITOR TOOLS
