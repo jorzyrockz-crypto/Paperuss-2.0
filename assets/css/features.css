@@ -1355,8 +1355,31 @@ img[data-media-id].img-selected,
 @media print{
   @page{size:auto;margin:16mm 17mm 19mm}
   body{background:#fff!important;color:#111827!important}
-  /* Completely hide all app wrapper containers to ensure zero duplicate rendering or blank sheets */
-  .app, #modalRoot, #toast-container, .sidebar-backdrop, .mobile-fab, .image-context-menu {
+  /* Completely hide all app wrapper containers, sheets, docks, toolbars & overlays */
+  .app,
+  #modalRoot,
+  #toast-container,
+  .sidebar-backdrop,
+  .mobile-fab,
+  .image-context-menu,
+  .tbl-tools,
+  .tbl-submenu,
+  .tbl-color-dropdown,
+  .tbl-sheet-backdrop,
+  .tbl-sheet,
+  .img-batch-bar,
+  .img-toolbar,
+  .img-handle,
+  .img-sheet-backdrop,
+  .img-sheet,
+  .img-fullscreen,
+  .notif-panel,
+  .profile-panel,
+  .floating-fab-dock,
+  .leaves-drawer-overlay,
+  .leaf-context-menu,
+  .music-hub-modal-overlay,
+  .leafline-ui {
     display: none !important;
   }
   #printSheet {
@@ -6246,46 +6269,171 @@ a.paperuss-inline-link:hover {
 
 /* Print Layout & Page Setup Margins Adaptability */
 @media print {
+  /* Reset Dark Mode & Theme Variables to ensure clean light PDF export */
+  html, body, #printSheet, #printSheet * {
+    color-scheme: light !important;
+  }
+  body, #printSheet {
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+  [data-theme="dark"] body,
+  [data-theme="dark"] #printSheet {
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+  [data-theme="dark"] #printSheet .ps-content,
+  [data-theme="dark"] #printSheet .ps-content * {
+    color: #1f2937 !important;
+  }
+  [data-theme="dark"] .callout,
+  [data-theme="dark"] .paperuss-embed,
+  [data-theme="dark"] .media-card,
+  [data-theme="dark"] .paperuss-card {
+    background: #f8fafc !important;
+    color: #0f172a !important;
+    border-color: #e2e8f0 !important;
+  }
+
   /* Enforce Background Colors & Graphics */
   .note-editor, #printSheet, .callout, .paperuss-embed, .paperuss-card, .ps-content table, .ps-content th, .ps-content td {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Flatten UI Elements (Remove Shadows) */
+  /* Flatten UI Elements & Remove Box Shadows */
   .paperuss-embed, .callout, .media-card, .paperuss-card, .ps-content .media-card {
     box-shadow: none !important;
     border: 1px solid #e2e8f0 !important;
   }
 
   /* Page Break & Orphan/Widow Management */
-  .paperuss-embed, .callout, img, table, ul > li, ol > li {
+  .paperuss-embed, .callout, img, video, iframe, table, ul > li, ol > li, .card-grid-row {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
   h1, h2, h3, h4, h5, h6 {
     page-break-after: avoid !important;
     break-after: avoid !important;
+    color: #111827 !important;
   }
   p {
     widows: 3 !important;
     orphans: 3 !important;
   }
 
-  /* Hide all Editor UI Overlays */
-  .leafline-ui, .resize-handle, .embed-tb-container, .table-controls, .checklist-controls, .embed-editor-toolbar, .card-resize-handle, .image-context-menu {
+  /* Completely Hide ALL App Wrappers, Editor UI Controls, Overlays & Drag Handles */
+  .app,
+  #modalRoot,
+  #toast-container,
+  .sidebar-backdrop,
+  .mobile-fab,
+  .image-context-menu,
+  .tbl-tools,
+  .tbl-submenu,
+  .tbl-color-dropdown,
+  .tbl-sheet-backdrop,
+  .tbl-sheet,
+  .img-batch-bar,
+  .img-toolbar,
+  .img-handle,
+  .img-sheet-backdrop,
+  .img-sheet,
+  .img-fullscreen,
+  .notif-panel,
+  .profile-panel,
+  .floating-fab-dock,
+  .floating-quick-insert-fab,
+  .leaf-toggle-fab,
+  .leaves-drawer-overlay,
+  .leaf-context-menu,
+  .music-hub-modal-overlay,
+  .leafline-ui,
+  .resize-handle,
+  .card-resize-handle,
+  .image-resize-handle,
+  .itb-container,
+  .itb-dropdown,
+  .embed-tb-container,
+  .embed-tb-segment,
+  .embed-tb-btn,
+  .embed-tb-dropdown,
+  .embed-wrap-dropdown,
+  .embed-mode-dropdown,
+  .embed-more-menu,
+  .embed-editor-toolbar,
+  .embed-context-panel,
+  .table-controls,
+  .table-controls-container,
+  .table-btn,
+  .mc-action,
+  .table-action-menu,
+  .checklist-controls,
+  .checklist-drag-handle,
+  .block-gutter,
+  .block-drop-indicator,
+  .block-hero-ghost,
+  .ghost-drag-avatar,
+  .paperuss-card-controls,
+  .card-header-actions,
+  .delete-card-btn,
+  .card-options-btn,
+  .broken-card-retry,
+  .broken-card-actions,
+  .ui-control,
+  .editor-only {
     display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
   }
 
+  /* Clean Callout Box Print Themes */
+  .callout, .callout-box {
+    background: #f8fafc !important;
+    border-left: 4px solid #3b82f6 !important;
+    padding: 10px 14px !important;
+    margin: 12px 0 !important;
+    border-radius: 6px !important;
+  }
+  .callout[data-callout="warning"] { background: #fefce8 !important; border-left-color: #eab308 !important; color: #713f12 !important; }
+  .callout[data-callout="info"] { background: #eff6ff !important; border-left-color: #3b82f6 !important; color: #1e40af !important; }
+  .callout[data-callout="danger"] { background: #fef2f2 !important; border-left-color: #ef4444 !important; color: #7f1d1d !important; }
+  .callout[data-callout="tip"] { background: #f0fdf4 !important; border-left-color: #22c55e !important; color: #14532d !important; }
+
+  /* Card Grid Columns */
   .card-grid-row {
     display: flex !important;
     flex-wrap: wrap !important;
+    gap: 12px !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
   .grid-cols-2 > * { width: 48% !important; flex: 0 0 48% !important; }
   .grid-cols-3 > * { width: 31% !important; flex: 0 0 31% !important; }
   .grid-cols-4 > * { width: 23% !important; flex: 0 0 23% !important; }
+
+  /* Floated Card Text Wrapping in Print */
+  #printSheet [data-card-align="left"],
+  #printSheet [data-card-wrap="left"],
+  #printSheet [data-wrap-mode="left"] {
+    float: left !important;
+    margin: 2px 14px 8px 0 !important;
+    max-width: 42% !important;
+  }
+  #printSheet [data-card-align="right"],
+  #printSheet [data-card-wrap="right"],
+  #printSheet [data-wrap-mode="right"] {
+    float: right !important;
+    margin: 2px 0 8px 14px !important;
+    max-width: 42% !important;
+  }
 }
 
 /* Outer card wrappers MUST allow floating toolbar overflow (top: -42px) */

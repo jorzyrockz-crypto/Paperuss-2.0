@@ -302,39 +302,52 @@ function fallbackReferenceMark(target,text){
   target.innerHTML=`<div style="display:grid;grid-template-columns:repeat(9,6px);border:2px solid #111827;width:58px;height:58px">${cells}</div>`;
 }
 
-function printCurrentNote(){
-  const note=activeNoteForAction();
-  if(!note) return;
-  const sheet=ensurePrintSheet();
+function preparePrintSheet(targetNote){
+  const note = targetNote || activeNoteForAction();
+  if(!note) return null;
+  const sheet = ensurePrintSheet();
 
   // Clean up transient editor HTML strings or duplicated headings
-  let currentHtml=bodyEl().innerHTML||note.content||'';
+  let currentHtml = (typeof bodyEl === 'function' && bodyEl() ? bodyEl().innerHTML : '') || note.content || '';
 
   // Build a temporary DOM block to sanitize/remove duplicated title header at the top of content
-  const temp=document.createElement('div');
-  temp.innerHTML=currentHtml;
+  const temp = document.createElement('div');
+  temp.innerHTML = currentHtml;
 
   // Find first child heading and check if it duplicates the note title
-  const firstEl=temp.firstElementChild;
+  const firstEl = temp.firstElementChild;
   if(firstEl && (firstEl.tagName==='H1' || firstEl.tagName==='H2' || firstEl.tagName==='H3')){
-    const hText=firstEl.textContent.trim().toLowerCase();
-    const nTitle=titleOf(note).trim().toLowerCase();
-    if(hText===nTitle || nTitle.startsWith(hText) || hText.startsWith(nTitle)){
+    const hText = firstEl.textContent.trim().toLowerCase();
+    const nTitle = titleOf(note).trim().toLowerCase();
+    if(hText === nTitle || nTitle.startsWith(hText) || hText.startsWith(nTitle)){
       firstEl.remove(); // Remove the duplicated top-level heading
     }
   }
 
-  // Remove any inline block-drag indicators or empty paragraphs
-  temp.querySelectorAll('.block-drop-indicator, .block-gutter').forEach(el=>el.remove());
-  
+  // Remove ALL transient editor UI elements, block handles, card controls, toolbars, docks, sheets, and drop indicators
+  temp.querySelectorAll(
+    '.block-drop-indicator, .block-gutter, .block-hero-ghost, .ghost-drag-avatar, ' +
+    '.leafline-ui, .resize-handle, .card-resize-handle, .image-resize-handle, .itb-container, .itb-dropdown, ' +
+    '.embed-tb-container, .embed-tb-segment, .embed-tb-btn, .embed-tb-dropdown, .embed-wrap-dropdown, .embed-mode-dropdown, .embed-more-menu, .embed-editor-toolbar, .embed-context-panel, ' +
+    '.table-controls, .table-controls-container, .table-btn, .mc-action, .table-action-menu, .tbl-tools, .tbl-submenu, .tbl-color-dropdown, .tbl-sheet, .tbl-sheet-backdrop, ' +
+    '.checklist-controls, .checklist-drag-handle, ' +
+    '.paperuss-card-controls, .card-header-actions, .delete-card-btn, .card-options-btn, ' +
+    '.image-context-menu, .img-sheet, .img-sheet-backdrop, .img-toolbar, .img-batch-bar, .img-handle, .img-fullscreen, ' +
+    '.floating-fab-dock, .floating-quick-insert-fab, .leaf-toggle-fab, .leaves-drawer-overlay, .leaf-context-menu, .music-hub-modal-overlay, .notif-panel, .profile-panel, ' +
+    '.broken-card-retry, .broken-card-actions, .ui-control, .editor-only'
+  ).forEach(el => el.remove());
+
+  // Strip contenteditable attributes to prevent selection outlines
+  temp.querySelectorAll('[contenteditable]').forEach(el => el.removeAttribute('contenteditable'));
+
   if (typeof window.dehydrateProductivityReferences === 'function') {
     window.dehydrateProductivityReferences(temp);
   }
 
-  const cleanHtml=temp.innerHTML;
-  const tags=(note.tags||[]).map(t=>`<span class="ps-tag">${esc(t)}</span>`).join('');
-  const printedAt=new Date().toLocaleString();
-  const reference=`paperuss://note/${note.id}?updated=${note.updatedAt}`;
+  const cleanHtml = temp.innerHTML;
+  const tags = (note.tags||[]).map(t=>`<span class="ps-tag">${esc(t)}</span>`).join('');
+  const printedAt = new Date().toLocaleString();
+  const reference = `paperuss://note/${note.id}?updated=${note.updatedAt}`;
 
   const size = note.pageSize || 'auto';
   let orient = note.pageOrientation || 'portrait';
@@ -374,16 +387,33 @@ function printCurrentNote(){
       <div id="printQr" aria-label="Note reference QR code"></div>
     </footer>`;
 
-  const qr=document.getElementById('printQr');
-  if(window.QRCode){
-    qr.innerHTML='';
-    new QRCode(qr,{text:reference,width:60,height:60,colorDark:'#111827',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
-  }else{
-    fallbackReferenceMark(qr,reference);
+  const qr = document.getElementById('printQr');
+  if(qr){
+    if(window.QRCode){
+      qr.innerHTML = '';
+      new QRCode(qr, {text:reference, width:60, height:60, colorDark:'#111827', colorLight:'#ffffff', correctLevel:QRCode.CorrectLevel.M});
+    }else{
+      fallbackReferenceMark(qr, reference);
+    }
   }
+  return sheet;
+}
+
+function printCurrentNote(){
+  const note = activeNoteForAction();
+  if(!note) return;
+  preparePrintSheet(note);
   // Let the QR renderer paint before opening the browser print/PDF dialog.
   setTimeout(()=>window.print(),120);
 }
+
+// Automatically sync printSheet whenever native browser print (Ctrl+P, Cmd+P, or browser menu) is triggered
+window.addEventListener('beforeprint', () => {
+  const note = typeof activeNoteForAction === 'function' ? activeNoteForAction() : null;
+  if(note) {
+    preparePrintSheet(note);
+  }
+});
 
 function createNote(){
   const n={ id:uid(), title:'', content:'', tags:[], pinned:false, archived:false, createdAt:Date.now(), updatedAt:Date.now(), fontStyle:appSettings.defaultFont||'sans' };
