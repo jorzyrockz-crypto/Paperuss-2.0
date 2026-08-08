@@ -175,7 +175,10 @@
       let cellsXml = '';
       for (const child of children) {
         const contentXml = await convertElementToWml(child, ctx);
-        const pXml = contentXml.includes('<w:p>') ? contentXml : `<w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr>${contentXml}</w:p>`;
+        let pXml = contentXml.includes('<w:p>') ? contentXml : `<w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr>${contentXml}</w:p>`;
+        if (!pXml.trim().endsWith('</w:p>')) {
+          pXml += `<w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr></w:p>`;
+        }
         cellsXml += `<w:tc><w:tcPr><w:tcW w:w="4500" w:type="dxa"/></w:tcPr>${pXml}</w:tc>`;
       }
       const tblPr = `<w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="0" w:type="auto"/><w:tblBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/><w:insideH w:val="none"/><w:insideV w:val="none"/></w:tblBorders></w:tblPr>`;
@@ -236,6 +239,9 @@
       else if (alignMode === 'right') jcXml = '<w:jc w:val="right"/>';
       else if (alignMode === 'justify') jcXml = '<w:jc w:val="both"/>';
 
+      if (runsXml.includes('<w:p>') || runsXml.includes('<w:tbl>')) {
+        return runsXml;
+      }
       return `<w:p><w:pPr><w:pStyle w:val="Normal"/>${spacingXml}${jcXml}</w:pPr>${runsXml}</w:p>`;
     }
 
@@ -393,9 +399,13 @@
             jcXml = `<w:jc w:val="${wmlAlign}"/>`;
           }
 
-          const pXml = contentXml.includes('<w:p>')
+          let pXml = contentXml.includes('<w:p>')
             ? contentXml
             : `<w:p><w:pPr><w:pStyle w:val="Normal"/>${jcXml}</w:pPr>${contentXml}</w:p>`;
+          
+          if (!pXml.trim().endsWith('</w:p>')) {
+            pXml += `<w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr></w:p>`;
+          }
           
           // Background shading
           let fillHex = cellTag === 'TH' ? 'F1F5F9' : '';
@@ -566,13 +576,17 @@
    * Build complete word/document.xml string from paragraphs XML.
    */
   function buildDocumentXml(bodyXml) {
+    let finalBodyXml = bodyXml.trim();
+    if (!finalBodyXml.endsWith('</w:p>')) {
+      finalBodyXml += `<w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr></w:p>`;
+    }
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n` +
       `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ` +
       `xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ` +
       `xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ` +
       `xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ` +
       `xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
-      `<w:body>${bodyXml}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>`;
+      `<w:body>${finalBodyXml}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>`;
   }
 
   /**
