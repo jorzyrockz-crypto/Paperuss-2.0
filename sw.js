@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'paperuss-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v192`;
+const CACHE_NAME = `${CACHE_PREFIX}v193`;
 const APP_SHELL = [
   './',
   './index.html',
@@ -7,6 +7,7 @@ const APP_SHELL = [
   './assets/css/core.css',
   './assets/css/features.css',
   './assets/css/text-drag-engine.css',
+  './assets/css/card-drag-engine.css',
   './assets/css/responsive.css',
   './assets/css/settings.css',
   './assets/icons/paperuss-logo.png',
@@ -29,6 +30,7 @@ const APP_SHELL = [
   './js/formatting.js',
   './js/text-drag-engine.js',
   './js/media.js',
+  './js/card-drag-engine.js',
   './js/data-transfer.js',
   './js/docx-import.js',
   './assets/vendor/jszip.min.js',

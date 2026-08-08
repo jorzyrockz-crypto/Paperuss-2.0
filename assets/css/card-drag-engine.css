@@ -1,0 +1,147 @@
+/* ============================================================
+   PAPERUSS CARD MORPHING DRAG ENGINE  —  Visual Styles
+   ============================================================ */
+
+/* ── Body State During Card Drag ── */
+body.is-card-dragging {
+  cursor: grabbing !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+body.is-card-dragging * {
+  cursor: grabbing !important;
+}
+
+/* Source card element being dragged */
+.is-dragging-card-source {
+  opacity: 0.35 !important;
+  transform: scale(0.98);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  filter: grayscale(0.2);
+}
+
+/* ── Hero Ghost Floating Badge ── */
+.magic-card-hero-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none !important;
+  z-index: 9999999 !important;
+  transform: translate(-50%, -50%);
+  will-change: left, top, transform;
+  user-select: none;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px 8px 12px;
+  border-radius: 14px;
+
+  /* Frosted Glass */
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(20px) saturate(1.8);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+
+  border: 1.5px solid rgba(99, 102, 241, 0.5);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.5),
+    0 0 24px rgba(99, 102, 241, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+
+  animation: heroGhostPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes heroGhostPop {
+  0%   { transform: translate(-50%, -50%) scale(0.7) rotate(-3deg); opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
+}
+
+.card-ghost-hero-icon {
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.25);
+  border: 1px solid rgba(165, 180, 252, 0.35);
+  color: #a5b4fc;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+}
+
+.card-ghost-label-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 180px;
+}
+
+.card-ghost-type-tag {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #818cf8;
+}
+
+.card-ghost-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── 4-Way Drop Highlight Lines ── */
+.drop-target-top {
+  position: relative;
+}
+.drop-target-top::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #6366f1, #3b82f6);
+  border-radius: 4px;
+  box-shadow: 0 0 12px #6366f1;
+  z-index: 1000;
+  animation: dropGlow 0.8s ease-in-out infinite alternate;
+}
+
+.drop-target-bottom {
+  position: relative;
+}
+.drop-target-bottom::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #6366f1, #3b82f6);
+  border-radius: 4px;
+  box-shadow: 0 0 12px #6366f1;
+  z-index: 1000;
+  animation: dropGlow 0.8s ease-in-out infinite alternate;
+}
+
+.drop-target-left {
+  position: relative;
+  box-shadow: -4px 0 16px -2px #6366f1, inset 4px 0 0 0 #6366f1 !important;
+}
+
+.drop-target-right {
+  position: relative;
+  box-shadow: 4px 0 16px -2px #6366f1, inset -4px 0 0 0 #6366f1 !important;
+}
+
+@keyframes dropGlow {
+  from { opacity: 0.6; box-shadow: 0 0 8px #6366f1; }
+  to   { opacity: 1;   box-shadow: 0 0 20px #6366f1, 0 0 35px rgba(99,102,241,0.6); }
+}
