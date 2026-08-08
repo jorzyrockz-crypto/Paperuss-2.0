@@ -7,21 +7,21 @@
 <meta name="theme-color" content="#0b0e14">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="application-name" content="PapeRuss 2.0 Stabilization">
-<meta name="apple-mobile-web-app-title" content="PapeRuss 2.0 Stabilization">
+<meta name="application-name" content="Paperuss 2.0">
+<meta name="apple-mobile-web-app-title" content="Paperuss 2.0">
 <!-- Open Graph & Meta Sharing Debugger Tags -->
-<meta property="og:title" content="PapeRuss 2.0 - Fast Offline Notes, Embeds & Rich Links">
-<meta property="og:description" content="PapeRuss is a fast, offline-first notes, tasks, and media embed app with rich link cards.">
+<meta property="og:title" content="Paperuss 2.0 - Fast Offline Notes, Embeds & Rich Links">
+<meta property="og:description" content="Paperuss is a fast, offline-first notes, tasks, and media embed app with rich link cards.">
 <meta property="og:image" content="assets/icons/paperuss-512.png">
 <meta property="og:url" content="https://paperuss.com/">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="PapeRuss 2.0">
+<meta property="og:site_name" content="Paperuss 2.0">
 <!-- Twitter Card Meta Tags -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="PapeRuss 2.0 - Fast Offline Notes & Embeds">
-<meta name="twitter:description" content="PapeRuss is a fast, offline-first notes, tasks, and media embed app with rich link cards.">
+<meta name="twitter:title" content="Paperuss 2.0 - Fast Offline Notes & Embeds">
+<meta name="twitter:description" content="Paperuss is a fast, offline-first notes, tasks, and media embed app with rich link cards.">
 <meta name="twitter:image" content="assets/icons/paperuss-512.png">
-<title>PapeRuss 2.0 Stabilization · Offline Notes</title>
+<title>Paperuss 2.0</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/paperuss-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/paperuss-512.png">
@@ -36,10 +36,10 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" onerror="window.__fbLoadFailed=true"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js" onerror="window.__fbStorageLoadFailed=true"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js" onerror="window.__fbAnalyticsLoadFailed=true"></script>
-<link rel="stylesheet" href="assets/css/core.css?v=2.3.7">
-<link rel="stylesheet" href="assets/css/features.css?v=2.3.7">
-<link rel="stylesheet" href="assets/css/responsive.css?v=2.3.7">
-<link rel="stylesheet" href="assets/css/settings.css?v=2.3.7">
+<link rel="stylesheet" href="assets/css/core.css?v=3.5.0">
+<link rel="stylesheet" href="assets/css/features.css?v=3.5.0">
+<link rel="stylesheet" href="assets/css/responsive.css?v=3.5.0">
+<link rel="stylesheet" href="assets/css/settings.css?v=3.5.0">
 </head>
 <body>
 <!-- ============ AUTH LANDING PAGE (sign-in / guest mode) ============ -->
@@ -913,11 +913,8 @@
         </div>
       </div>
 
-      <!-- Block drag gutter (hover on top-level blocks in noteBody) -->
-      <div class="block-gutter" id="blockGutter">
-        <button class="block-gutter-btn" id="blockAddButton" title="Insert block (/ menu)">
-          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-        </button>
+      <!-- Compact Block Drag Handle Gutter (hover on top-level blocks in noteBody) -->
+      <div class="block-gutter compact-drag-gutter" id="blockGutter">
         <div class="block-gutter-btn block-drag-handle" id="blockDragHandle" title="Drag to rearrange block" draggable="true">
           <i data-lucide="grip-vertical" class="w-3.5 h-3.5"></i>
         </div>
@@ -1139,6 +1136,11 @@
     </div>
   </div>
 
+  <!-- Slot 1.5: Info (i) Helper -->
+  <button class="itb-btn" id="imgTbInfo" data-action="open-media-info" title="Asset Specs & Media Hub Info">
+    <i data-lucide="info" class="w-4 h-4"></i>
+  </button>
+
   <!-- Slot 2: Crop (exposed directly) -->
   <button class="itb-btn" id="imgTbCrop" title="Crop Image">
     <i data-lucide="crop" class="w-4 h-4"></i>
@@ -1306,15 +1308,23 @@
   </div>
 </div>
 
-<!-- Floating Decoupled Leaf Toggle Button (FAB - Fixed position: fixed; top:16px; right:16px; z-index:60) -->
-<button class="leaf-toggle-fab leaves-launcher status-saved" id="leafToggleBtn" onclick="toggleLeavesPalette(event)" title="Leaves Palette (Click to open)" aria-expanded="false" aria-controls="leavesDrawer" data-paperuss-ui="true">
-  <svg class="leaf-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"></path>
-    <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"></path>
-  </svg>
-  <span class="leaf-badge-title" id="leafToggleTitle">Main</span>
-  <span class="leaf-status-dot" id="leafStatusDot" title="Saved"></span>
-</button>
+<!-- Floating Standalone Quick Insert Button (+) & Leaves Palette Button (FAB Dock) -->
+<div class="floating-fab-dock" id="floatingFabDock" data-paperuss-ui="true">
+  <button class="floating-quick-insert-fab" id="floatingQuickInsertBtn" onclick="triggerFloatingQuickInsert(event)" title="Quick Insert Block / Slash Menu (+)">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19"></line>
+      <line x1="5" y1="12" x2="19" y2="12"></line>
+    </svg>
+  </button>
+  <button class="leaf-toggle-fab leaves-launcher status-saved" id="leafToggleBtn" onclick="toggleLeavesPalette(event)" title="Leaves Palette (Click to open)" aria-expanded="false" aria-controls="leavesDrawer">
+    <svg class="leaf-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"></path>
+      <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"></path>
+    </svg>
+    <span class="leaf-badge-title" id="leafToggleTitle">Main</span>
+    <span class="leaf-status-dot" id="leafStatusDot" title="Saved"></span>
+  </button>
+</div>
 
 <div class="leaves-drawer-overlay hidden" id="leavesDrawerOverlay" data-paperuss-ui="true">
   <div class="leaves-drawer leaves-palette-widget leaves-popover leaves-sheet" id="leavesDrawer" role="dialog" aria-label="Leaves Palette">
@@ -1385,25 +1395,25 @@
       <div class="music-hub-section">
         <h4><i data-lucide="sparkles" class="w-4 h-4 text-amber-400"></i> 1-Click Ambient Study Streams</h4>
         <div class="music-hub-presets-grid">
-          <button class="music-preset-card" data-preset-url="https://open.spotify.com/embed/playlist/6zCID88oNjNv9zx6puDHKj?utm_source=generator&si=28499eb0bc754bae">
+          <button class="music-preset-card" data-preset-url="https://open.spotify.com/embed/playlist/6zCID88oNjNv9zx6puDHKj?utm_source=generator&si=28499eb0bc754bae" data-preset-provider="Spotify" data-preset-title="Spotify Lofi Study Beats">
             <div class="preset-icon-wrap"><i data-lucide="coffee" class="w-5 h-5 text-amber-400"></i></div>
             <div class="preset-text">
               <strong>Spotify Lofi Study Beats</strong>
               <span>Deep Focus & Chill Beats</span>
             </div>
           </button>
-          <button class="music-preset-card" data-preset-url="https://open.spotify.com/embed/playlist/37i9dQZF1DWY8U6Zq7nvbE?utm_source=generator&si=39cf236cda614691">
-            <div class="preset-icon-wrap"><i data-lucide="music-2" class="w-5 h-5 text-rose-400"></i></div>
+          <button class="music-preset-card" data-preset-url="https://www.youtube.com/embed/kzDoVYFeN9s?si=hjX_cfQQzuSYapfo&amp;start=10" data-preset-provider="YouTube" data-preset-title="Chill Acoustic Streams">
+            <div class="preset-icon-wrap"><i data-lucide="youtube" class="w-5 h-5 text-red-400"></i></div>
             <div class="preset-text">
               <strong>Chill Acoustic Streams</strong>
-              <span>Relaxing Unplugged Vibes</span>
+              <span>YouTube Live Unplugged Session</span>
             </div>
           </button>
-          <button class="music-preset-card" data-preset-url="https://open.spotify.com/embed/playlist/1YIe34rcmLjCYpY9wJoM2p?utm_source=generator&si=de8d2d28d4414691">
-            <div class="preset-icon-wrap"><i data-lucide="radio" class="w-5 h-5 text-indigo-400"></i></div>
+          <button class="music-preset-card" data-preset-url="https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/playlists/soundcloud%253Aplaylists%253A2040627711&amp;color=%23ff5500&amp;auto_play=true&amp;hide_related=false&amp;show_comments=true&amp;show_user=true&amp;show_reposts=false&amp;show_teaser=true" data-preset-provider="SoundCloud" data-preset-title="Synthwave Mix (sallow28)">
+            <div class="preset-icon-wrap"><i data-lucide="radio" class="w-5 h-5 text-amber-500"></i></div>
             <div class="preset-text">
               <strong>Synthwave Work Ambient</strong>
-              <span>Retrowave Focus Sounds</span>
+              <span>SoundCloud Synthwave Mix • sallow28</span>
             </div>
           </button>
         </div>

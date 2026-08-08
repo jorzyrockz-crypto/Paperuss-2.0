@@ -68,23 +68,76 @@ function toggleSidebarRail(){
     refreshIcons();
   }
   toast(collapsed?'Sidebar collapsed':'Sidebar expanded');
+  if(typeof window.recalculateToolbarOverflow === 'function') setTimeout(window.recalculateToolbarOverflow, 150);
 }
 
-function toggleNoteListPanel(){
-  const listEl=document.getElementById('noteList');
-  const iconEl=document.getElementById('backBtnIcon');
-  if(!listEl) return;
-  const isHidden=listEl.style.display==='none';
-  if(isHidden){
-    listEl.style.display='';
-    if(iconEl) iconEl.setAttribute('data-lucide', 'panel-left-close');
-    toast('Note list shown');
-  } else {
-    listEl.style.display='none';
-    if(iconEl) iconEl.setAttribute('data-lucide', 'panel-left-open');
-    toast('Note list hidden for wider editor');
+function toggleNoteListPanel(e){
+  if(e && e.preventDefault) e.preventDefault();
+  
+  // Back button should close Leaves drawer first if open
+  const leavesOverlay = document.getElementById('leavesDrawerOverlay');
+  if (leavesOverlay && leavesOverlay.classList.contains('show')) {
+    if (typeof window.closeLeavesDrawer === 'function') {
+      window.closeLeavesDrawer();
+      return;
+    }
   }
-  refreshIcons();
+
+  const listEl = document.getElementById('noteList');
+  const iconEl = document.getElementById('backBtnIcon');
+  if(!listEl) return;
+
+  // Clear any legacy inline display style so CSS rules control layout smoothly
+  if(listEl.style.display === 'none'){
+    listEl.style.display = '';
+  }
+
+  const w = window.innerWidth;
+  if(w <= 640){
+    showMobileList();
+    return;
+  }
+
+  let isCollapsed = false;
+  const isDrawer = window.getComputedStyle(listEl).position === 'fixed';
+
+  if(isDrawer){
+    // Tablet portrait drawer mode: toggle 'open'
+    const isOpen = listEl.classList.toggle('open');
+    isCollapsed = !isOpen;
+  } else {
+    // Desktop / Tablet landscape mode: toggle 'collapsed'
+    const collapsed = listEl.classList.toggle('collapsed');
+    isCollapsed = collapsed;
+    // Persist collapsed preference (desktop/landscape only)
+    try {
+      localStorage.setItem('octonotes:listCollapsed', collapsed ? '1' : '0');
+    } catch(_) {}
+  }
+
+  // Update backBtn icon
+  if(iconEl){
+    iconEl.setAttribute('data-lucide', isCollapsed ? 'panel-left-open' : 'panel-left-close');
+  }
+
+  // Update button titles / tooltips and aria-expanded
+  const label = isCollapsed ? 'Show note list' : 'Hide note list';
+  const backBtn = document.getElementById('backBtn');
+  if(backBtn){
+    backBtn.title = label;
+    backBtn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+    backBtn.setAttribute('aria-label', label);
+  }
+  const listToggleBtn = document.getElementById('noteListToggle');
+  if(listToggleBtn){
+    listToggleBtn.title = label;
+    listToggleBtn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+    listToggleBtn.setAttribute('aria-label', label);
+  }
+
+  toast(isCollapsed ? 'Note list hidden for wider editor' : 'Note list shown');
+  if(typeof refreshIcons === 'function') refreshIcons();
+  if(typeof window.recalculateToolbarOverflow === 'function') setTimeout(window.recalculateToolbarOverflow, 150);
 }
 
 function toggleSidebarMobile(){
@@ -93,6 +146,7 @@ function toggleSidebarMobile(){
   if(!sidebar || !backdrop) return;
   const isOpen=sidebar.classList.toggle('open');
   backdrop.classList.toggle('active', isOpen);
+  if(typeof window.recalculateToolbarOverflow === 'function') setTimeout(window.recalculateToolbarOverflow, 150);
 }
 
 function closeSidebarMobile(){
@@ -108,6 +162,7 @@ function closeSidebarMobile(){
 function showMobileEditor(){
   document.getElementById('editor').classList.add('mobile-show');
   document.getElementById('noteList').classList.add('mobile-hide');
+  document.getElementById('noteList').classList.remove('open'); // Close tablet portrait drawer on selection
 }
 
 function showMobileList(){
@@ -271,6 +326,10 @@ function printCurrentNote(){
 
   // Remove any inline block-drag indicators or empty paragraphs
   temp.querySelectorAll('.block-drop-indicator, .block-gutter').forEach(el=>el.remove());
+  
+  if (typeof window.dehydrateProductivityReferences === 'function') {
+    window.dehydrateProductivityReferences(temp);
+  }
 
   const cleanHtml=temp.innerHTML;
   const tags=(note.tags||[]).map(t=>`<span class="ps-tag">${esc(t)}</span>`).join('');
@@ -336,7 +395,7 @@ function createNote(){
   toast('New note created');
 }
 
-function selectNote(id){
+function selectNote(id, leafId = null){
   state.currentId=id;
   state.currentMediaId=null;
   // If we're in a non-note view (media/calendar/tasks) or the note isn't in the
@@ -348,6 +407,12 @@ function selectNote(id){
   }
   renderAll();
   showMobileEditor();
+
+  if (leafId && window.paperussLeafManager) {
+    setTimeout(() => {
+      window.paperussLeafManager.switchLeaf(id, leafId).catch(console.error);
+    }, 50);
+  }
 }
 
 const persist = debounce(()=>{
@@ -368,14 +433,53 @@ const _debouncedRenderListSidebar = debounce(()=>{
 function editField(field, value){
   const n=getNote(state.currentId); if(!n) return;
   if(n.deletedAt) return;
-  n[field]=value; n.updatedAt=Date.now();
+  if (field === 'content') {
+    const cleanValue = typeof window.cleanInternalEditorUI === 'function' ? window.cleanInternalEditorUI(value) : value;
+    value = typeof sanitizeNoteHTML === 'function' ? sanitizeNoteHTML(cleanValue) : cleanValue;
+  }
+  
+  if (field === 'content' && window.currentActiveLeaf) {
+    const leaf = window.currentActiveLeaf;
+    leaf.content = value;
+    leaf.updatedAt = Date.now();
+    
+    // If virtual or default leaf, mirror to Note
+    if (leaf.isVirtual || leaf.id === (window.paperussLeaves ? window.paperussLeaves.getNoteDefaultLeafId(n) : '')) {
+      n.content = value;
+      n.updatedAt = Date.now();
+      persist();
+    } else {
+      // Materialized non-default leaf: save only to IndexedDB!
+      n.updatedAt = Date.now(); // Note metadata updated, but NOT content
+      persist();
+      
+      // Async save leaf to IndexedDB
+      if (window.paperussLeaves) {
+        window.paperussLeaves.leafPut(leaf).then(() => {
+          window.paperussLeaves.leafQueuePut({
+            id: 'mut_' + Date.now() + '_' + Math.random().toString(36).substr(2,9),
+            noteId: n.id,
+            action: 'put',
+            data: Object.assign({}, leaf),
+            timestamp: Date.now()
+          });
+        });
+      }
+    }
+  } else {
+    n[field]=value; n.updatedAt=Date.now();
+    persist();
+  }
+
   const st=document.getElementById('saveStatus'); st.className='save-status saving';
   st.innerHTML='<span class="dot"></span><span>Saving…</span>';
-  persist();
-  // Title edits flush immediately (short, cheap update); content edits debounce.
+  
   if(field==='title'){ renderList(); renderSidebar(); }
   else { _debouncedRenderListSidebar(); }
-  if(field==='content') renderStats(n);
+  if(field==='content') {
+    renderStats(n);
+    if(typeof window.triggerLeaflineUpdate === 'function') window.triggerLeaflineUpdate();
+  }
 }
 
 function sanitizeForStorage(html){
@@ -435,8 +539,27 @@ function restoreNote(id,options={}){
 function permanentlyDeleteNote(id){
   const n=getNote(id); if(!n) return;
   const idx=notes.indexOf(n);
-  confirmDialog('Delete permanently?','"'+esc(titleOf(n))+'" will be permanently removed. This cannot be undone.','Delete permanently',()=>{
+  confirmDialog('Delete permanently?','"'+esc(titleOf(n))+'" will be permanently removed. This cannot be undone.','Delete permanently', async ()=>{
     notes.splice(idx,1);
+
+    if (window.paperussLeaves && window.paperussLeaves.isNoteMigratedToLeaves(n)) {
+      try {
+        const oldLeaves = await window.paperussLeaves.leafGetByNoteId(n.id);
+        for (const lf of oldLeaves) {
+          await window.paperussLeaves.leafDel(lf.id);
+          await window.paperussLeaves.leafQueuePut({
+            id: 'mut_del_' + Date.now() + '_' + Math.random().toString(36).substr(2,6),
+            noteId: n.id,
+            action: 'delete',
+            data: { id: lf.id },
+            timestamp: Date.now()
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to delete associated leaves', err);
+      }
+    }
+
     if(typeof recordCloudDeletion==='function') recordCloudDeletion('notes',id);
     if(state.currentId===id) state.currentId=filteredNotes()[0]?.id||null;
     save();
@@ -445,6 +568,70 @@ function permanentlyDeleteNote(id){
     toast('Note permanently deleted');
     setTimeout(gcOrphanMedia,500);
   });
+}
+
+async function duplicateNoteAction() {
+  const n = getNote(state.currentId);
+  if (!n) return;
+  toast('Duplicating note...');
+  
+  const newNoteId = uid();
+  const cleanNoteContent = typeof window.cleanInternalEditorUI === 'function' ? window.cleanInternalEditorUI(n.content || '') : (n.content || '');
+  const newNote = Object.assign({}, n, {
+    id: newNoteId,
+    title: n.title + ' (Copy)',
+    content: cleanNoteContent,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  });
+  
+  if (window.paperussLeaves && window.paperussLeaves.isNoteMigratedToLeaves(n)) {
+    try {
+      const oldLeaves = await window.paperussLeaves.leafGetByNoteId(n.id);
+      const idMap = {};
+      const newLeafOrder = [];
+      
+      for (const lf of oldLeaves) {
+        const newLeafId = 'leaf_' + Date.now() + '_' + Math.random().toString(36).substr(2,6);
+        idMap[lf.id] = newLeafId;
+        newLeafOrder.push(newLeafId);
+        
+        const cleanLeafContent = typeof window.cleanInternalEditorUI === 'function' ? window.cleanInternalEditorUI(lf.content || '') : (lf.content || '');
+        const newLeaf = Object.assign({}, lf, {
+          id: newLeafId,
+          noteId: newNoteId,
+          content: cleanLeafContent,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        });
+        
+        await window.paperussLeaves.leafPut(newLeaf);
+        await window.paperussLeaves.leafQueuePut({
+          id: 'mut_dup_' + Date.now() + '_' + Math.random().toString(36).substr(2,6),
+          noteId: newNoteId,
+          action: 'put',
+          data: Object.assign({}, newLeaf),
+          timestamp: Date.now()
+        });
+      }
+      
+      newNote.leafOrder = newLeafOrder;
+      newNote.defaultLeafId = idMap[n.defaultLeafId] || n.defaultLeafId || newLeafOrder[0];
+      
+      const oldActiveId = window.paperussLeaves.getNoteActiveLeafId(n);
+      if (oldActiveId && idMap[oldActiveId]) {
+        window.paperussLeaves.setNoteActiveLeafId(newNoteId, idMap[oldActiveId]);
+      }
+    } catch(err) {
+      console.error('duplicateNoteAction leaf copy error', err);
+    }
+  }
+  
+  notes.push(newNote);
+  save();
+  renderAll();
+  selectNote(newNoteId);
+  toast('Note duplicated');
 }
 
 function deleteNote(id){
@@ -477,3 +664,118 @@ function removeTag(tag){
   n.tags=(n.tags||[]).filter(t=>t!==tag); n.updatedAt=Date.now();
   save(); renderTags(n); renderList(); renderSidebar();
 }
+
+/* ============ LEAVES (GROUP 3) ACTIONS ============ */
+async function switchLeafAction(leafId) {
+  const n = getNote(state.currentId);
+  if (!n) return;
+  if (typeof window.flushActiveLeaf === 'function') {
+    await window.flushActiveLeaf();
+  }
+  if (window.paperussLeafManager && typeof window.paperussLeafManager.switchLeaf === 'function') {
+    await window.paperussLeafManager.switchLeaf(n.id, leafId);
+  } else if (window.paperussLeaves && typeof window.paperussLeaves.setNoteActiveLeafId === 'function') {
+    window.paperussLeaves.setNoteActiveLeafId(n, leafId);
+  }
+  if (typeof renderEditor === 'function') {
+    await renderEditor();
+  }
+  renderList();
+  if (window.updateLeafTitleBar) window.updateLeafTitleBar();
+  const contentEl = document.getElementById('leavesDrawerContent');
+  if (contentEl && typeof renderLeavesList === 'function') {
+    renderLeavesList(contentEl);
+  }
+}
+window.switchLeafAction = switchLeafAction;
+
+async function createNewLeafAction() {
+  const n = getNote(state.currentId);
+  if (!n) return;
+  const newLeafId = await window.paperussLeafManager.addLeaf(n.id, 'New Leaf');
+  if (newLeafId) {
+    await switchLeafAction(newLeafId);
+    toast('Created new leaf');
+  }
+}
+window.createNewLeafAction = createNewLeafAction;
+
+async function renameLeafAction(leafId) {
+  const n = getNote(state.currentId);
+  if (!n) return;
+  let currentTitle = 'Leaf';
+  if (window.paperussLeaves) {
+    const leafObj = await window.paperussLeaves.leafGet(leafId);
+    if (leafObj && leafObj.title) currentTitle = leafObj.title;
+  }
+  const newTitle = prompt('Rename leaf:', currentTitle);
+  if (newTitle && newTitle.trim() !== '' && newTitle !== currentTitle) {
+    await window.paperussLeafManager.renameLeaf(n.id, leafId, newTitle.trim());
+    renderList();
+    const contentEl = document.getElementById('leavesDrawerContent');
+    if (contentEl && typeof renderLeavesList === 'function') renderLeavesList(contentEl);
+    if (window.updateLeafTitleBar) window.updateLeafTitleBar();
+    toast('Renamed leaf');
+  }
+}
+window.renameLeafAction = renameLeafAction;
+
+async function duplicateLeafAction(leafId) {
+  const n = getNote(state.currentId);
+  if (!n) return;
+  const newId = await window.paperussLeafManager.duplicateLeaf(n.id, leafId);
+  if (newId) {
+    await switchLeafAction(newId);
+    toast('Duplicated leaf');
+  }
+}
+window.duplicateLeafAction = duplicateLeafAction;
+
+async function reorderLeafAction(leafId, direction) {
+  const n = getNote(state.currentId);
+  if (!n) return;
+  const res = await window.paperussLeafManager.reorderLeaf(n.id, leafId, direction);
+  if (res) {
+    renderList();
+    const contentEl = document.getElementById('leavesDrawerContent');
+    if (contentEl && typeof renderLeavesList === 'function') renderLeavesList(contentEl);
+    toast('Reordered leaves');
+  }
+}
+window.reorderLeafAction = reorderLeafAction;
+
+async function deleteLeafAction(leafId, skipConfirm = false) {
+  const n = getNote(state.currentId);
+  if (!n) return;
+  const order = window.paperussLeaves ? window.paperussLeaves.getNoteLeafOrder(n) : null;
+  const leaves = order && order.length > 0 ? order : [n.defaultLeafId || 'virtual_main_' + n.id];
+  if (leaves.length <= 1) {
+    toast('Cannot delete the final Leaf.');
+    return false;
+  }
+  const doDelete = async () => {
+    const res = await window.paperussLeafManager.deleteLeaf(n.id, leafId);
+    if (res) {
+      const activeLeafId = window.paperussLeaves ? window.paperussLeaves.getNoteActiveLeafId(n) : null;
+      if (activeLeafId) {
+        await switchLeafAction(activeLeafId);
+      } else {
+        renderList();
+        const contentEl = document.getElementById('leavesDrawerContent');
+        if (contentEl && typeof renderLeavesList === 'function') renderLeavesList(contentEl);
+      }
+      if (window.updateLeafTitleBar) window.updateLeafTitleBar();
+      toast('Deleted leaf');
+      return true;
+    }
+    return false;
+  };
+  if (skipConfirm || window._skipConfirm) {
+    await doDelete();
+  } else {
+    confirmDialog('Delete Leaf?', 'This Leaf will be permanently deleted.', 'Delete', async () => {
+      await doDelete();
+    });
+  }
+}
+window.deleteLeafAction = deleteLeafAction;

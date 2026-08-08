@@ -1,31 +1,29 @@
 <div align="center">
-  <img src="assets/icons/paperuss-192.png" width="96" height="96" alt="PapeRuss logo">
-  <h1>PapeRuss</h1>
-  <p>An offline-first workspace for notes, tasks, planning, and media.</p>
+  <img src="assets/icons/paperuss-192.png" width="96" height="96" alt="Paperuss 2.0 logo">
+  <h1>Paperuss 2.0</h1>
+  <p>An offline-first workspace for notes, tasks, planning, and rich media grid embeds.</p>
   <p>
-    <a href="https://my-paperuss-database-2.jorzyrockz.workers.dev/"><strong>Open PapeRuss</strong></a>
+    <a href="https://my-paperuss-database-2.jorzyrockz.workers.dev/"><strong>Open Paperuss 2.0</strong></a>
   </p>
 </div>
 
 ## About
 
-PapeRuss is a responsive Progressive Web App that combines rich-text notes, tasks, reminders, calendar planning, and media organization. It works locally as a guest and can synchronize a signed-in user's complete workspace through Firebase.
+**Paperuss 2.0** is a responsive Progressive Web App combining rich-text notes, tasks, reminders, calendar planning, and advanced media card organization. It works locally in offline guest mode and synchronizes a signed-in user's workspace via Firebase.
 
-The frontend is a lightweight static application built with HTML, CSS, and JavaScript. It is hosted by Cloudflare and uses Firebase as its managed backend.
+The frontend is a lightweight static application built with HTML5, Vanilla CSS, and JavaScript. It is deployed via Cloudflare Workers and uses Firebase as its backend.
 
 ## Features
 
-- Rich-text notes with formatting, tags, pinning, archiving, and search
-- Checklists, standalone tasks, due dates, reminders, and notifications
-- Calendar views and event metadata
-- Images, video, audio recordings, file attachments, and rich links
-- Responsive desktop, tablet, and phone interfaces
-- Offline support and installable PWA behavior
-- Guest mode with device-local storage
-- Google and email/password authentication
-- Cross-device synchronization for signed-in users
-- Portable settings, theme, calendar position, activity, and custom avatar
-- Deletion tracking to prevent removed records from returning during sync
+- **Rich-text notes**: Complete formatting, tags, pinning, archiving, inline search, and slash commands.
+- **Redesigned 3-Zone File Attachments**: Notion/Linear style tall glass cards with category badges, pastel hero banners, file size specs, and direct download buttons.
+- **Redesigned 16:9 Video Cards**: Cinema video hero player with compact single-row mode and master editor toolbar.
+- **Animated Audio Waveforms**: Real-time 20-bar glass equalizer pulse visualizer synchronized to voice memo playback.
+- **Universal Multi-Card Grid Reflow**: Auto-stretches cards to equal row heights and snaps 2, 3, or 4 columns side-by-side.
+- **Checklists & Tasks**: Standalone tasks, due dates, reminders, and browser notifications.
+- **Calendar & Planning**: Multi-view calendar grid with event metadata.
+- **Offline PWA Support**: Installable Web App Manifest with Service Worker app-shell caching.
+- **Firebase Sync & Security**: Owner-only Firestore rules, Storage buckets, Google and email/password authentication.
 
 ## Architecture
 

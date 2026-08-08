@@ -130,6 +130,8 @@ a:hover{text-decoration:underline}
 }
 .media-card:hover .card-resize-handle,
 .paperuss-embed:hover .card-resize-handle,
+.paperuss-card:hover .card-resize-handle,
+.paperuss-card-audio:hover .card-resize-handle,
 .card-selected .card-resize-handle,
 .card-resize-handle.is-resizing {
   opacity: 1;

@@ -88,6 +88,10 @@ async function saveMediaBlob(blob, name, kind, customId){
         }
       } catch(_){}
     }
+    let buffer = null;
+    if(processedBlob && typeof processedBlob.arrayBuffer === 'function'){
+      try{ buffer = await processedBlob.arrayBuffer(); }catch(_){}
+    }
     const now = Date.now();
     await mediaPut({
       id,
@@ -96,6 +100,7 @@ async function saveMediaBlob(blob, name, kind, customId){
       type: processedBlob.type || blob.type || '',
       size: processedBlob.size || 0,
       blob: processedBlob,
+      buffer: buffer,
       hash: hash || '',
       createdAt: now,
       updatedAt: now,
@@ -200,6 +205,14 @@ function addMediaSyncIndicator(el,record){
   }
 
   // ── Compact sync badge (cloud icon below media) ──
+  if (status.icon === 'hard-drive' || !isSignedIn) {
+    const existingBadge = el.classList.contains('media-card')
+      ? el.querySelector('[data-media-sync-indicator]')
+      : (el.nextElementSibling?.matches('[data-media-sync-indicator]') ? el.nextElementSibling : null);
+    if (existingBadge) existingBadge.remove();
+    return;
+  }
+
   let badge;
   if(el.classList.contains('media-card')){
     badge=el.querySelector('[data-media-sync-indicator]');
@@ -240,12 +253,21 @@ async function getMediaURL(id){
   }
 }
 async function _getMediaURLInner(id){
-  // 1. Check local IndexedDB first (0ms fast Blob URL)
   const rec = await mediaGet(id);
-  if(rec && rec.blob){
-    const url = URL.createObjectURL(rec.blob);
-    urlCache.set(id, url);
-    return url;
+  if(rec){
+    let b = rec.blob;
+    if(rec.buffer && rec.buffer instanceof ArrayBuffer){
+      b = new Blob([rec.buffer], { type: rec.type || 'audio/webm' });
+    } else if(b instanceof ArrayBuffer){
+      b = new Blob([b], { type: rec.type || 'audio/webm' });
+    } else if(b && typeof b === 'object' && !(b instanceof Blob)){
+      try { b = new Blob([b], { type: rec.type || 'audio/webm' }); } catch(_){}
+    }
+    if(b && (b instanceof Blob)){
+      const url = URL.createObjectURL(b);
+      urlCache.set(id, url);
+      return url;
+    }
   }
 
   // 2. Secondary Device Hybrid Fallback: check remote cloudUrl in manifest or local record
@@ -500,6 +522,13 @@ async function hydrateMediaInEditor(){
     el.removeAttribute('data-missing');
     if(el.tagName==='IMG' || el.tagName==='AUDIO' || el.tagName==='VIDEO'){
       el.src=url;
+      if(el.tagName==='AUDIO' || el.tagName==='VIDEO') try{ el.load(); }catch(_){}
+    } else if(el.classList.contains('paperuss-card-audio')){
+      const audioEl = el.querySelector('.audio-native-player');
+      if(audioEl){
+        audioEl.src=url;
+        try{ audioEl.load(); }catch(_){}
+      }
     } else if(el.classList.contains('media-card')){
       // Attach a click handler for download button
       el.dataset.blobUrl=url;
@@ -1193,6 +1222,10 @@ function renderEditor(){
       }
       if(typeof renderNotebookCover==='function') renderNotebookCover();
       if(typeof normalizeEditorImages==='function') normalizeEditorImages();
+      if(typeof hydrateSoundCards==='function') hydrateSoundCards(ed);
+      if(typeof hydrateAttachmentCards==='function') hydrateAttachmentCards(ed);
+      if(typeof hydrateVideoCards==='function') hydrateVideoCards(ed);
+      if(typeof hydrateGlobalBlockItems==='function') hydrateGlobalBlockItems(ed);
       if(typeof applyPageLayoutToEditor==='function') applyPageLayoutToEditor(n);
       if(typeof syncPageLayoutDropdown==='function') syncPageLayoutDropdown(n);
       restoreEditorSelection(ed,savedSelection);
@@ -1373,7 +1406,7 @@ async function renderMediaHubView(){
             ${refNote ? `
               <div class="mh-detail-row" style="align-items:center">
                 <span class="text-fg-muted font-medium">Attached in Note</span>
-                <button class="mh-note-link" data-jump-note="${esc(refNote.id)}">
+                <button class="mh-note-link" data-jump-note="${esc(refNote.id)}" data-jump-media="${esc(rec.id)}">
                   <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
                   <span>${esc(titleOf(refNote))}</span>
                   <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
@@ -1392,7 +1425,11 @@ async function renderMediaHubView(){
         detailEl.querySelector('#mhOpenLinkBtn')?.addEventListener('click',()=>openLinkInAppOrTab(url));
         detailEl.querySelector('#mhDownloadBtn')?.addEventListener('click',()=>downloadMediaById(rec.id,rec.name));
         detailEl.querySelector('#mhDeleteBtn')?.addEventListener('click',()=>confirmDeleteMediaAsset(rec.id,rec.name));
-        detailEl.querySelector('[data-jump-note]')?.addEventListener('click',event=>{ event.stopPropagation(); jumpToNote(event.currentTarget.dataset.jumpNote); });
+        detailEl.querySelector('[data-jump-note]')?.addEventListener('click',event=>{
+          event.stopPropagation();
+          const btn = event.currentTarget;
+          jumpToNote(btn.dataset.jumpNote, btn.dataset.jumpMedia);
+        });
       }
     } else {
       if(bodyEl) bodyEl.style.display='flex';
@@ -1424,7 +1461,7 @@ async function renderMediaHubView(){
                 <span>${timeAgo(r.createdAt)}</span>
               </div>
               ${refNote ? `
-                <div class="mh-note-link" data-jump-note="${esc(refNote.id)}" title="Jump to Note">
+                <div class="mh-note-link" data-jump-note="${esc(refNote.id)}" data-jump-media="${esc(r.id)}" title="Jump to Note">
                   <i data-lucide="file-text" class="w-3 h-3"></i>
                   <span>${esc(titleOf(refNote))}</span>
                 </div>
@@ -1448,18 +1485,138 @@ function closeMediaDetail(){
 }
 
 function selectMediaAsset(id){
-  state.currentMediaId=id;
-  renderMediaHubView();
-  renderList();
+  state.filter = 'media';
+  state.currentMediaId = id;
+  state.tag = null;
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === 'media'));
+  if (typeof renderAll === 'function') {
+    renderAll();
+  } else {
+    renderMediaHubView();
+  }
   showMobileEditor();
 }
 
-function jumpToNote(noteId){
+async function showMediaInfoModal(id) {
+  if (!id) return;
+  let rec = null;
+  if (typeof id === 'object' && id !== null) {
+    rec = {
+      id: id.id || id.canonicalUrl || 'embed-' + Date.now(),
+      name: id.name || id.title || id.provider || 'Web Embed',
+      kind: id.kind || 'link',
+      type: id.type || id.contentType || 'Web Embed',
+      url: id.url || id.canonicalUrl || '',
+      host: id.host || id.provider || '',
+      size: id.size || 0,
+      createdAt: id.createdAt || Date.now()
+    };
+  } else {
+    rec = await mediaGet(id);
+    if (!rec) {
+      rec = collectLinksFromNotes().find(l => l.id === id || l.url === id);
+    }
+  }
+  if (!rec) {
+    if (typeof toast === 'function') toast('Media info not available');
+    return;
+  }
+
+  let modal = document.getElementById('assetInfoModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'assetInfoModal';
+    modal.className = 'modal-overlay asset-info-modal-overlay';
+    document.body.appendChild(modal);
+  }
+
+  const url = rec.kind === 'link' ? rec.url : (await getMediaURL(rec.id));
+  let previewHtml = '';
+  if (rec.kind === 'image' && url) {
+    previewHtml = `<div class="asset-info-thumb-wrap"><img src="${esc(url)}" alt="${esc(rec.name)}"></div>`;
+  } else if (rec.kind === 'audio' && url) {
+    previewHtml = `<div class="asset-info-thumb-wrap" style="padding:16px"><audio controls src="${esc(url)}" style="width:100%"></audio></div>`;
+  } else {
+    previewHtml = `<div class="asset-info-thumb-wrap" style="padding:16px;text-align:center"><span class="badge" style="font-size:14px;font-weight:700">${esc(rec.kind || 'file')}</span></div>`;
+  }
+
+  modal.innerHTML = `
+    <div class="asset-info-dialog glass-panel">
+      <div class="asset-info-header">
+        <strong class="asset-info-title">${esc(rec.name)}</strong>
+        <button class="asset-info-close-btn" data-action="close-asset-info">&times;</button>
+      </div>
+      <div class="asset-info-body">
+        ${previewHtml}
+        <div class="asset-info-grid">
+          <div class="info-row">
+            <span class="info-label">Type / MIME</span>
+            <span class="info-val">${esc(rec.type || rec.kind)}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">${rec.kind === 'link' ? 'Domain' : 'File Size'}</span>
+            <span class="info-val">${rec.kind === 'link' ? esc(rec.host || rec.url) : formatBytes(rec.size)}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Created</span>
+            <span class="info-val">${new Date(rec.createdAt || Date.now()).toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
+      <div class="asset-info-footer">
+        ${rec.kind !== 'link' ? `<button class="btn btn-sm" id="infoModalDownloadBtn">Download</button>` : ''}
+        <button class="btn btn-sm btn-primary" id="infoModalFullHubBtn">Open Media Hub</button>
+      </div>
+    </div>
+  `;
+
+  modal.classList.add('show');
+  modal.style.display = 'flex';
+
+  modal.querySelector('[data-action="close-asset-info"]')?.addEventListener('click', () => {
+    modal.classList.remove('show');
+    modal.style.display = 'none';
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.classList.remove('show');
+      modal.style.display = 'none';
+    }
+  });
+
+  modal.querySelector('#infoModalDownloadBtn')?.addEventListener('click', () => {
+    downloadMediaById(rec.id, rec.name);
+  });
+
+  modal.querySelector('#infoModalFullHubBtn')?.addEventListener('click', () => {
+    modal.classList.remove('show');
+    modal.style.display = 'none';
+    selectMediaAsset(rec.id);
+  });
+}
+
+function jumpToNote(noteId, targetMediaId){
   state.filter='all';
   state.tag=null;
   state.currentMediaId=null;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.filter==='all'));
   selectNote(noteId);
+
+  if (targetMediaId) {
+    setTimeout(() => {
+      const ed = document.getElementById('noteBody');
+      if (!ed) return;
+      const targetCard = ed.querySelector(`[data-media-id="${targetMediaId}"], [data-mc-download="${targetMediaId}"]`) || ed.querySelector(`img[src*="${targetMediaId}"]`);
+      if (targetCard) {
+        targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetCard.classList.remove('card-spotlight-pulse');
+        void targetCard.offsetWidth;
+        targetCard.classList.add('card-spotlight-pulse');
+        setTimeout(() => targetCard.classList.remove('card-spotlight-pulse'), 2500);
+      }
+    }, 150);
+  }
 }
 
 function confirmDeleteMediaAsset(id, name){
@@ -2279,6 +2436,38 @@ function closeLeavesDrawer() {
   closeLeafContextMenu();
 }
 window.closeLeavesDrawer = closeLeavesDrawer;
+
+function triggerFloatingQuickInsert(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  const btn = document.getElementById('floatingQuickInsertBtn');
+  const menu = document.getElementById('blockCommandMenu') || document.getElementById('slashMenu');
+
+  if (menu) {
+    if (menu.classList.contains('show')) {
+      menu.classList.remove('show');
+      return;
+    }
+    const noteBody = document.getElementById('noteBody');
+    if (noteBody) noteBody.focus();
+
+    menu.classList.add('show');
+    const safe = 12;
+    const menuW = menu.offsetWidth || 230;
+    const menuH = Math.min(menu.offsetHeight || 380, window.innerHeight - safe * 2);
+    
+    const rect = btn ? btn.getBoundingClientRect() : null;
+    let top = rect ? (rect.top - menuH - 12) : (window.innerHeight - menuH - 70);
+    if (top < safe) top = safe;
+    let left = rect ? Math.max(safe, Math.min(rect.left - 160, window.innerWidth - menuW - safe)) : (window.innerWidth - menuW - 20);
+
+    menu.style.top = `${Math.round(top)}px`;
+    menu.style.left = `${Math.round(left)}px`;
+  }
+}
+window.triggerFloatingQuickInsert = triggerFloatingQuickInsert;
 
 function toggleLeavesPalette(e) {
   if (e) e.stopPropagation();

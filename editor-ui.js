@@ -40,6 +40,11 @@ function applyFontStyle(fontStyle){
    linger on top of unrelated views.
    ============================================================ */
 function closeAllContextTools(){
+  // Auto-dock active playing media (Spotify, YouTube, SoundCloud) before switching notes/pages
+  if(typeof window.checkAndDockActiveEmbed === 'function') {
+    window.checkAndDockActiveEmbed();
+  }
+
   // Block gutter
   const gutter = document.getElementById('blockGutter');
   if(gutter) gutter.classList.remove('show','touch-dragging');
@@ -72,7 +77,7 @@ function initBlockTools(){
   const slashMenu=document.getElementById('blockCommandMenu');
   if(!ed || !gutter) return;
 
-  const blockSelector='p, h1, h2, h3, h4, ul, ol, blockquote, pre, .media-card, div[data-media-id]';
+  const blockSelector='p, h1, h2, h3, h4, ul, ol, blockquote, pre, .card-grid-row, .paperuss-embed, .paperuss-card-file, .paperuss-card-audio, .paperuss-card, .media-card, div[data-media-id]';
   let gutterHideTimer=null;
   let isLastInputTouch=false;
 
@@ -82,7 +87,10 @@ function initBlockTools(){
   };
   const blockForNode=node=>{
     const element=node?.nodeType===Node.TEXT_NODE?node.parentElement:node;
-    const block=element?.closest?.(blockSelector);
+    if(!element) return null;
+    const row=element.closest('.card-grid-row');
+    if(row && ed.contains(row)) return row;
+    const block=element.closest(blockSelector);
     return block && ed.contains(block) && block!==ed ? block : null;
   };
   const showGutterForBlock=block=>{
@@ -533,11 +541,12 @@ function initBlockTools(){
 
   ed.addEventListener('dragstart', e=>{
     const mediaEl=e.target.closest('[data-media-id], .media-card, figure');
+    // If element is a Paperuss card, let js/media.js handle side-by-side grid snapping
+    if(mediaEl && mediaEl.matches('.paperuss-embed, .paperuss-card-file, .paperuss-card-audio, .paperuss-card')){
+      return;
+    }
     if(mediaEl && ed.contains(mediaEl)){
       activeDragBlock = mediaEl;
-      // Use a custom MIME type — NOT text/plain — so the browser does NOT
-      // insert a text string into the contenteditable on drop, which causes
-      // the element to appear duplicated.
       e.dataTransfer.clearData();
       e.dataTransfer.setData('application/x-paperuss-drag', 'media');
       e.dataTransfer.effectAllowed = 'move';
@@ -550,6 +559,9 @@ function initBlockTools(){
 
   ed.addEventListener('dragover', e=>{
     if(!activeDragBlock) return;
+    if(activeDragBlock.matches('.paperuss-embed, .paperuss-card-file, .paperuss-card-audio, .paperuss-card')){
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
@@ -582,6 +594,7 @@ function initBlockTools(){
       ind.remove();
       handleBodyInput();
       save();
+      if(typeof reflowCardGridRows === 'function') reflowCardGridRows();
       addNotification({type:'edit',title:'Block rearranged',body:'A media or content block was moved.',icon:'grip-vertical',activity:true});
     }
     cleanupDragState();
@@ -627,10 +640,10 @@ function initSlashMenuActions(){
     else if(cmd==='image'||cmd==='audio'||cmd==='video'||cmd==='link'||cmd==='file') handleMediaAction(cmd);
     else if(cmd==='calevent'){
       const today=new Date();
-      openCalendarEventCreator(today.getFullYear(), today.getMonth(), today.getDate());
+      openCalendarEventCreator(today.getFullYear(), today.getMonth(), today.getDate(), { intent: 'insert' });
     }
     else if(cmd==='newtask'){
-      openTaskCreatorModal();
+      openTaskCreatorModal({ intent: 'insert' });
     }
   };
 
@@ -742,11 +755,11 @@ function initImageContextMenu(){
   document.getElementById('icmInsertEvent').onclick=()=>{
     menu.classList.remove('show');
     const today=new Date();
-    openCalendarEventCreator(today.getFullYear(), today.getMonth(), today.getDate());
+    openCalendarEventCreator(today.getFullYear(), today.getMonth(), today.getDate(), { intent: 'insert' });
   };
   document.getElementById('icmInsertTask').onclick=()=>{
     menu.classList.remove('show');
-    openTaskCreatorModal();
+    openTaskCreatorModal({ intent: 'insert' });
   };
   document.getElementById('icmDelete').onclick=()=>{
     menu.classList.remove('show');
@@ -950,7 +963,7 @@ function initPageLayoutUI() {
   if(btnBreak) {
     btnBreak.onclick = (e) => {
       e.stopPropagation();
-      dropdown.classList.remove('show');
+      if(typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns(); else dropdown.classList.remove('show');
       const ed = document.getElementById('noteBody');
       ed.focus();
       const sel = window.getSelection();
@@ -963,7 +976,11 @@ function initPageLayoutUI() {
       // Move cursor after the page break
       const p = document.createElement('p');
       p.innerHTML = '<br>';
-      pb.parentNode.insertBefore(p, pb.nextSibling);
+      if(pb.nextSibling) {
+        pb.parentNode.insertBefore(p, pb.nextSibling);
+      } else {
+        pb.parentNode.appendChild(p);
+      }
       range.setStart(p, 0);
       range.collapse(true);
       sel.removeAllRanges();
@@ -995,6 +1012,7 @@ function initPageLayoutUI() {
     
     applyPageLayoutToEditor(note);
     syncPageLayoutDropdown(note);
+    if(typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns(); else dropdown.classList.remove('show');
   });
 }
 

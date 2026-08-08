@@ -77,7 +77,7 @@ function initBlockTools(){
   const slashMenu=document.getElementById('blockCommandMenu');
   if(!ed || !gutter) return;
 
-  const blockSelector='p, h1, h2, h3, h4, ul, ol, blockquote, pre, .media-card, div[data-media-id]';
+  const blockSelector='p, h1, h2, h3, h4, ul, ol, blockquote, pre, .card-grid-row, .paperuss-embed, .paperuss-card-file, .paperuss-card-audio, .paperuss-card, .media-card, div[data-media-id]';
   let gutterHideTimer=null;
   let isLastInputTouch=false;
 
@@ -87,7 +87,10 @@ function initBlockTools(){
   };
   const blockForNode=node=>{
     const element=node?.nodeType===Node.TEXT_NODE?node.parentElement:node;
-    const block=element?.closest?.(blockSelector);
+    if(!element) return null;
+    const row=element.closest('.card-grid-row');
+    if(row && ed.contains(row)) return row;
+    const block=element.closest(blockSelector);
     return block && ed.contains(block) && block!==ed ? block : null;
   };
   const showGutterForBlock=block=>{
@@ -538,11 +541,12 @@ function initBlockTools(){
 
   ed.addEventListener('dragstart', e=>{
     const mediaEl=e.target.closest('[data-media-id], .media-card, figure');
+    // If element is a Paperuss card, let js/media.js handle side-by-side grid snapping
+    if(mediaEl && mediaEl.matches('.paperuss-embed, .paperuss-card-file, .paperuss-card-audio, .paperuss-card')){
+      return;
+    }
     if(mediaEl && ed.contains(mediaEl)){
       activeDragBlock = mediaEl;
-      // Use a custom MIME type — NOT text/plain — so the browser does NOT
-      // insert a text string into the contenteditable on drop, which causes
-      // the element to appear duplicated.
       e.dataTransfer.clearData();
       e.dataTransfer.setData('application/x-paperuss-drag', 'media');
       e.dataTransfer.effectAllowed = 'move';
@@ -555,6 +559,9 @@ function initBlockTools(){
 
   ed.addEventListener('dragover', e=>{
     if(!activeDragBlock) return;
+    if(activeDragBlock.matches('.paperuss-embed, .paperuss-card-file, .paperuss-card-audio, .paperuss-card')){
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
@@ -587,6 +594,7 @@ function initBlockTools(){
       ind.remove();
       handleBodyInput();
       save();
+      if(typeof reflowCardGridRows === 'function') reflowCardGridRows();
       addNotification({type:'edit',title:'Block rearranged',body:'A media or content block was moved.',icon:'grip-vertical',activity:true});
     }
     cleanupDragState();
