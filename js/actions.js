@@ -302,24 +302,17 @@ function fallbackReferenceMark(target,text){
   target.innerHTML=`<div style="display:grid;grid-template-columns:repeat(9,6px);border:2px solid #111827;width:58px;height:58px">${cells}</div>`;
 }
 
-function preparePrintSheet(targetNote){
-  const note = targetNote || activeNoteForAction();
-  if(!note) return null;
-  const sheet = ensurePrintSheet();
-
-  // Clean up transient editor HTML strings or duplicated headings
-  let currentHtml = (typeof bodyEl === 'function' && bodyEl() ? bodyEl().innerHTML : '') || note.content || '';
-
-  // Build a temporary DOM block to sanitize/remove duplicated title header at the top of content
+function sanitizeContentForPrint(rawHtml, noteTitle) {
+  if (!rawHtml) return '';
   const temp = document.createElement('div');
-  temp.innerHTML = currentHtml;
+  temp.innerHTML = rawHtml;
 
   // Find first child heading and check if it duplicates the note title
   const firstEl = temp.firstElementChild;
-  if(firstEl && (firstEl.tagName==='H1' || firstEl.tagName==='H2' || firstEl.tagName==='H3')){
+  if (firstEl && (firstEl.tagName === 'H1' || firstEl.tagName === 'H2' || firstEl.tagName === 'H3')) {
     const hText = firstEl.textContent.trim().toLowerCase();
-    const nTitle = titleOf(note).trim().toLowerCase();
-    if(hText === nTitle || nTitle.startsWith(hText) || hText.startsWith(nTitle)){
+    const nTitle = (noteTitle || '').trim().toLowerCase();
+    if (hText === nTitle || nTitle.startsWith(hText) || hText.startsWith(nTitle)) {
       firstEl.remove(); // Remove the duplicated top-level heading
     }
   }
@@ -344,27 +337,79 @@ function preparePrintSheet(targetNote){
     window.dehydrateProductivityReferences(temp);
   }
 
-  const cleanHtml = temp.innerHTML;
-  const tags = (note.tags||[]).map(t=>`<span class="ps-tag">${esc(t)}</span>`).join('');
+  return temp.innerHTML;
+}
+
+async function preparePrintSheet(targetNote, options) {
+  const note = targetNote || activeNoteForAction();
+  if (!note) return null;
+  const sheet = ensurePrintSheet();
+
+  options = options || {};
+  const scope = options.scope || 'active';
+  const pageSize = options.pageSize || note.pageSize || 'auto';
+  const orientation = options.orientation || note.pageOrientation || 'portrait';
+  const margin = options.margin || note.pageMargins || 'normal';
+  const showHeader = options.showHeader !== false;
+  const showFooter = options.showFooter !== false;
+  const showPageNums = options.showPageNums !== false;
+
+  let cleanHtml = '';
+
+  if (scope === 'all' && window.paperussLeaves && window.paperussLeaves.leafGet) {
+    const leafOrder = (typeof window.getNoteLeafOrder === 'function')
+      ? window.getNoteLeafOrder(note)
+      : (note.leafOrder || ['virtual_main_' + note.id]);
+
+    const leafObjects = [];
+    for (let i = 0; i < leafOrder.length; i++) {
+      let lObj = await window.paperussLeaves.leafGet(leafOrder[i]);
+      if (!lObj && (leafOrder[i] === 'virtual_main_' + note.id || i === 0)) {
+        lObj = { id: leafOrder[i], title: 'Main', content: note.content };
+      }
+      if (lObj) leafObjects.push(lObj);
+    }
+
+    if (leafObjects.length > 1) {
+      cleanHtml += `<div class="ps-toc-box">
+        <h2 class="ps-toc-header">Table of Contents</h2>
+        <ol class="ps-toc-list">
+          ${leafObjects.map((l, idx) => `<li><span class="ps-toc-num">${idx + 1}.</span> <span class="ps-toc-title">${esc(l.title || `Leaf ${idx + 1}`)}</span></li>`).join('')}
+        </ol>
+      </div><div class="ps-leaf-break"></div>`;
+    }
+
+    for (let i = 0; i < leafObjects.length; i++) {
+      const l = leafObjects[i];
+      if (i > 0) cleanHtml += `<div class="ps-leaf-break"></div>`;
+      cleanHtml += `<h2 class="ps-leaf-title">${esc(l.title || `Leaf ${i + 1}`)}</h2>`;
+      cleanHtml += sanitizeContentForPrint(l.content || '', l.title);
+    }
+  } else {
+    // Single active leaf
+    let currentHtml = (typeof bodyEl === 'function' && bodyEl() ? bodyEl().innerHTML : '') || note.content || '';
+    cleanHtml = sanitizeContentForPrint(currentHtml, titleOf(note));
+  }
+
+  const tags = (note.tags || []).map(t => `<span class="ps-tag">${esc(t)}</span>`).join('');
   const printedAt = new Date().toLocaleString();
   const reference = `paperuss://note/${note.id}?updated=${note.updatedAt}`;
 
-  const size = note.pageSize || 'auto';
-  let orient = note.pageOrientation || 'portrait';
-  let margin = note.pageMargins || 'normal';
   let marginCss = '16mm 17mm 19mm'; // default auto margins
-  if(note.pageViewEnabled) {
-    if(margin === 'narrow') marginCss = '12mm';
-    else if(margin === 'wide') marginCss = '30mm';
-    else marginCss = '20mm';
-  }
-  
-  const pageCss = note.pageViewEnabled && size !== 'auto' 
-    ? `@page { size: ${size} ${orient}; margin: ${marginCss}; }`
+  if (margin === 'narrow') marginCss = '10mm';
+  else if (margin === 'wide') marginCss = '25mm';
+
+  let pageCss = pageSize !== 'auto'
+    ? `@page { size: ${pageSize} ${orientation}; margin: ${marginCss}; }`
     : `@page { size: auto; margin: ${marginCss}; }`;
 
-  sheet.innerHTML=`
+  if (showPageNums) {
+    pageCss += `\n@page { @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #64748b; font-family: sans-serif; } }`;
+  }
+
+  sheet.innerHTML = `
     <style>${pageCss}</style>
+    ${showHeader ? `
     <div class="ps-header">
       <div>
         <div class="ps-brand">PapeRuss</div>
@@ -375,42 +420,203 @@ function preparePrintSheet(targetNote){
         Last edited ${fullDate(note.updatedAt)}<br>
         Printed ${printedAt}
       </div>
-    </div>
+    </div>` : ''}
     <h1>${esc(titleOf(note))}</h1>
-    ${tags?`<div class="ps-tags">${tags}</div>`:''}
+    ${tags ? `<div class="ps-tags">${tags}</div>` : ''}
     <main class="ps-content">${cleanHtml}</main>
+    ${showFooter ? `
     <footer class="ps-footer">
       <div class="ps-footer-copy">
         PapeRuss offline note record<br>
         Reference ID: ${esc(note.id)}
       </div>
       <div id="printQr" aria-label="Note reference QR code"></div>
-    </footer>`;
+    </footer>` : ''}`;
 
   const qr = document.getElementById('printQr');
-  if(qr){
-    if(window.QRCode){
+  if (qr) {
+    if (window.QRCode) {
       qr.innerHTML = '';
-      new QRCode(qr, {text:reference, width:60, height:60, colorDark:'#111827', colorLight:'#ffffff', correctLevel:QRCode.CorrectLevel.M});
-    }else{
+      new QRCode(qr, { text: reference, width: 60, height: 60, colorDark: '#111827', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+    } else {
       fallbackReferenceMark(qr, reference);
     }
   }
   return sheet;
 }
 
-function printCurrentNote(){
+function openPrintModal() {
   const note = activeNoteForAction();
-  if(!note) return;
-  preparePrintSheet(note);
-  // Let the QR renderer paint before opening the browser print/PDF dialog.
-  setTimeout(()=>window.print(),120);
+  if (!note) {
+    if (typeof toast === 'function') toast('No active note available to print.');
+    return;
+  }
+
+  const root = document.getElementById('modalRoot');
+  if (!root) return;
+
+  const leafCount = (typeof window.paperussLeaves !== 'undefined' && window.paperussLeaves.getNoteLeafCount)
+    ? window.paperussLeaves.getNoteLeafCount(note)
+    : (note.leafOrder ? note.leafOrder.length : 1);
+
+  const activeLeafTitle = (window.currentActiveLeaf ? window.currentActiveLeaf.title : '') || 'Active Leaf';
+
+  let printScope = 'active'; // 'active' or 'all'
+  let pageSize = note.pageSize || 'auto';
+  let orientation = note.pageOrientation || 'portrait';
+  let margin = note.pageMargins || 'normal';
+  let showHeader = true;
+  let showFooter = true;
+  let showPageNums = true;
+
+  function renderModal() {
+    root.innerHTML = `
+      <div class="modal-overlay" id="printModalOverlay">
+        <div class="print-setup-modal" role="dialog" aria-label="Print & PDF Setup">
+          <div class="print-modal-header">
+            <div class="pm-header-title">
+              <i data-lucide="printer" class="w-5 h-5 text-indigo-500 inline mr-2"></i>
+              <h3 style="display:inline;font-size:16px;font-weight:700;">Print & PDF Export Setup</h3>
+            </div>
+            <button type="button" class="changelog-close" id="printModalClose" aria-label="Close"><i data-lucide="x"></i></button>
+          </div>
+
+          <div class="print-modal-body">
+            <!-- Print Scope (Single Leaf vs All Leaves) -->
+            <div class="pm-field-group">
+              <label class="pm-label">Print Scope</label>
+              <div class="pm-segmented-control">
+                <button type="button" class="pm-segment-btn ${printScope === 'active' ? 'active' : ''}" id="pmScopeActive">
+                  <i data-lucide="file-text" class="w-4 h-4 inline mr-1"></i>
+                  <span>Active Leaf only (${esc(activeLeafTitle)})</span>
+                </button>
+                <button type="button" class="pm-segment-btn ${printScope === 'all' ? 'active' : ''}" id="pmScopeAll">
+                  <i data-lucide="files" class="w-4 h-4 inline mr-1"></i>
+                  <span>All Leaves (${leafCount} total) + TOC</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Page Size & Orientation -->
+            <div class="pm-grid-2">
+              <div class="pm-field-group">
+                <label class="pm-label" for="pmPageSize">Paper Size</label>
+                <select id="pmPageSize" class="pm-select">
+                  <option value="auto" ${pageSize === 'auto' ? 'selected' : ''}>Auto / Default</option>
+                  <option value="A4" ${pageSize === 'A4' ? 'selected' : ''}>A4 (210 × 297 mm)</option>
+                  <option value="letter" ${pageSize === 'letter' ? 'selected' : ''}>US Letter (8.5 × 11 in)</option>
+                  <option value="legal" ${pageSize === 'legal' ? 'selected' : ''}>US Legal (8.5 × 14 in)</option>
+                </select>
+              </div>
+
+              <div class="pm-field-group">
+                <label class="pm-label" for="pmOrientation">Orientation</label>
+                <select id="pmOrientation" class="pm-select">
+                  <option value="portrait" ${orientation === 'portrait' ? 'selected' : ''}>Portrait</option>
+                  <option value="landscape" ${orientation === 'landscape' ? 'selected' : ''}>Landscape</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Page Margins -->
+            <div class="pm-field-group">
+              <label class="pm-label" for="pmMargins">Page Margins</label>
+              <select id="pmMargins" class="pm-select">
+                <option value="normal" ${margin === 'normal' ? 'selected' : ''}>Normal (16mm 17mm 19mm)</option>
+                <option value="narrow" ${margin === 'narrow' ? 'selected' : ''}>Narrow (10mm)</option>
+                <option value="wide" ${margin === 'wide' ? 'selected' : ''}>Wide (25mm)</option>
+              </select>
+            </div>
+
+            <!-- Content Toggles -->
+            <div class="pm-field-group">
+              <label class="pm-label">Document Elements</label>
+              <div class="pm-toggles-grid">
+                <label class="pm-checkbox-label">
+                  <input type="checkbox" id="pmShowHeader" ${showHeader ? 'checked' : ''}>
+                  <span>Header & Metadata (Created/Edited dates)</span>
+                </label>
+                <label class="pm-checkbox-label">
+                  <input type="checkbox" id="pmShowFooter" ${showFooter ? 'checked' : ''}>
+                  <span>Footer & QR Reference Code</span>
+                </label>
+                <label class="pm-checkbox-label">
+                  <input type="checkbox" id="pmShowPageNums" ${showPageNums ? 'checked' : ''}>
+                  <span>Page Numbers (Page X of Y)</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="print-modal-footer">
+            <button type="button" class="btn" id="printModalCancel">Cancel</button>
+            <button type="button" class="btn btn-primary" id="printModalSubmit">
+              <i data-lucide="printer" class="w-4 h-4 mr-1 inline"></i> Open Print / PDF Dialog
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      try { window.lucide.createIcons(); } catch (e) {}
+    }
+
+    // Attach Event Listeners
+    document.getElementById('printModalClose').onclick = closeModal;
+    document.getElementById('printModalCancel').onclick = closeModal;
+
+    const overlay = document.getElementById('printModalOverlay');
+    if (overlay) {
+      overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
+    }
+
+    document.getElementById('pmScopeActive').onclick = () => { printScope = 'active'; renderModal(); };
+    document.getElementById('pmScopeAll').onclick = () => { printScope = 'all'; renderModal(); };
+
+    document.getElementById('pmPageSize').onchange = (e) => { pageSize = e.target.value; };
+    document.getElementById('pmOrientation').onchange = (e) => { orientation = e.target.value; };
+    document.getElementById('pmMargins').onchange = (e) => { margin = e.target.value; };
+
+    document.getElementById('pmShowHeader').onchange = (e) => { showHeader = e.target.checked; };
+    document.getElementById('pmShowFooter').onchange = (e) => { showFooter = e.target.checked; };
+    document.getElementById('pmShowPageNums').onchange = (e) => { showPageNums = e.target.checked; };
+
+    document.getElementById('printModalSubmit').onclick = async () => {
+      closeModal();
+      await preparePrintSheet(note, {
+        scope: printScope,
+        pageSize,
+        orientation,
+        margin,
+        showHeader,
+        showFooter,
+        showPageNums
+      });
+      setTimeout(() => window.print(), 120);
+    };
+  }
+
+  function closeModal() {
+    root.innerHTML = '';
+  }
+
+  renderModal();
 }
+
+function printCurrentNote() {
+  openPrintModal();
+}
+
+// Export functions to global scope
+window.openPrintModal = openPrintModal;
+window.preparePrintSheet = preparePrintSheet;
+window.printCurrentNote = printCurrentNote;
 
 // Automatically sync printSheet whenever native browser print (Ctrl+P, Cmd+P, or browser menu) is triggered
 window.addEventListener('beforeprint', () => {
   const note = typeof activeNoteForAction === 'function' ? activeNoteForAction() : null;
-  if(note) {
+  if (note) {
     preparePrintSheet(note);
   }
 });
