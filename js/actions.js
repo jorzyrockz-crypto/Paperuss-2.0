@@ -784,12 +784,58 @@ async function deleteLeafAction(leafId, skipConfirm = false) {
     }
     return false;
   };
-  if (skipConfirm || window._skipConfirm) {
-    await doDelete();
+  if (!skipConfirm) {
+    confirmDialog('Delete Leaf?', 'This leaf and its content will be removed.', 'Delete Leaf', doDelete);
   } else {
-    confirmDialog('Delete Leaf?', 'This Leaf will be permanently deleted.', 'Delete', async () => {
-      await doDelete();
-    });
+    return await doDelete();
   }
 }
 window.deleteLeafAction = deleteLeafAction;
+
+async function mergeAllLeavesAction(noteId) {
+  const targetId = noteId || state.currentId;
+  const n = getNote(targetId);
+  if (!n || !window.paperussLeaves) return false;
+  const order = window.paperussLeaves.getNoteLeafOrder(n);
+  if (!order || order.length <= 1) {
+    if (typeof toast === 'function') toast('Note has only 1 leaf.');
+    return false;
+  }
+  confirmDialog('Merge all Leaves?', 'All sub-leaves will be combined into the main Leaf.', 'Merge Leaves', async () => {
+    try {
+      let combinedContent = '';
+      const leaves = await window.paperussLeaves.leafGetByNoteId(n.id);
+      const leafMap = {};
+      leaves.forEach(l => { leafMap[l.id] = l; });
+      for (let i = 0; i < order.length; i++) {
+        const lf = leafMap[order[i]];
+        if (!lf) continue;
+        const title = lf.title || `Leaf ${i + 1}`;
+        combinedContent += `<h2>${typeof esc === 'function' ? esc(title) : title}</h2>` + (lf.content || '') + '<hr>';
+      }
+      const defaultId = window.paperussLeaves.getNoteDefaultLeafId(n);
+      const mainLeaf = leafMap[defaultId] || leaves[0];
+      if (mainLeaf) {
+        mainLeaf.content = combinedContent;
+        mainLeaf.updatedAt = Date.now();
+        await window.paperussLeaves.leafPut(mainLeaf);
+      }
+      n.content = combinedContent;
+      n.leafOrder = [defaultId || mainLeaf.id];
+      n.leafCount = 1;
+      n.updatedAt = Date.now();
+      if (typeof save === 'function') save();
+      // Remove other leaves from IDB
+      for (const lf of leaves) {
+        if (lf.id !== (defaultId || mainLeaf.id)) {
+          await window.paperussLeaves.leafDel(lf.id);
+        }
+      }
+      if (typeof switchLeafAction === 'function') await switchLeafAction(defaultId || mainLeaf.id);
+      if (typeof toast === 'function') toast('Merged all leaves into main leaf');
+    } catch (e) {
+      console.error('mergeAllLeavesAction error:', e);
+    }
+  });
+}
+window.mergeAllLeavesAction = mergeAllLeavesAction;

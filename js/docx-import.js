@@ -210,20 +210,40 @@
         }
       }
 
+      // Check storage quota prior to processing large import
+      if (navigator.storage && typeof navigator.storage.estimate === 'function') {
+        try {
+          const est = await navigator.storage.estimate();
+          if (est.quota && est.usage && (est.usage / est.quota) > 0.9) {
+            if (typeof toast === 'function') toast('Storage Warning: Device storage is 90%+ full.');
+          }
+        } catch (_) {}
+      }
+
+      // Wrap tables in responsive scroll containers
+      body.querySelectorAll('table').forEach(table => {
+        if (!table.parentElement || !table.parentElement.classList.contains('table-responsive')) {
+          const wrap = document.createElement('div');
+          wrap.className = 'table-responsive';
+          table.parentNode.insertBefore(wrap, table);
+          wrap.appendChild(table);
+        }
+      });
+
       // Detect multi-leaf sections if doc has page breaks or section headings
-      const leafSections = [];
+      const rawLeafSections = [];
       let currentSection = { title: docTitle || 'Main', nodes: [] };
       const children = Array.from(body.childNodes);
 
       for (const child of children) {
         const isHeadingDivider = (child.tagName === 'H1' && !child.classList.contains('editor-title')) ||
-                                 (child.tagName === 'H2' && leafSections.length > 0);
+                                 (child.tagName === 'H2' && rawLeafSections.length > 0);
         const isPageBreak = (child.tagName === 'HR' && child.style && child.style.pageBreakBefore === 'always') ||
                             (child.tagName === 'P' && child.querySelector && child.querySelector('br[type="page"]'));
 
         if ((isHeadingDivider || isPageBreak) && currentSection.nodes.length > 0) {
-          leafSections.push(currentSection);
-          let newTitle = `Leaf ${leafSections.length + 1}`;
+          rawLeafSections.push(currentSection);
+          let newTitle = `Leaf ${rawLeafSections.length + 1}`;
           if (child.tagName === 'H1' || child.tagName === 'H2') {
             newTitle = (child.textContent || '').trim() || newTitle;
           }
@@ -233,7 +253,20 @@
         currentSection.nodes.push(child);
       }
       if (currentSection.nodes.length > 0) {
-        leafSections.push(currentSection);
+        rawLeafSections.push(currentSection);
+      }
+
+      // Filter leafSections: enforce 150+ char minimum threshold to prevent over-fragmentation
+      const leafSections = [];
+      for (let i = 0; i < rawLeafSections.length; i++) {
+        const sec = rawLeafSections[i];
+        const textLen = sec.nodes.map(n => n.textContent || '').join(' ').trim().length;
+        const hasMedia = sec.nodes.some(n => n.querySelector && (n.querySelector('img') || n.querySelector('table') || n.querySelector('iframe')));
+        if (i === 0 || textLen >= 150 || hasMedia) {
+          leafSections.push(sec);
+        } else if (leafSections.length > 0) {
+          sec.nodes.forEach(node => leafSections[leafSections.length - 1].nodes.push(node));
+        }
       }
 
       // If multi-leaf sections were found (2+): use section 1 for Main leaf content
