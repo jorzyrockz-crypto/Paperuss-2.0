@@ -153,11 +153,11 @@
       return `<w:p><w:pPr><w:pStyle w:val="Normal"/>${pBdr}${shd}</w:pPr>${runsXml}</w:p>`;
     }
 
-    // Paperuss Embed Card (print/PDF/DOCX static card fallback)
-    if (el.classList && el.classList.contains('paperuss-embed')) {
+    // Paperuss Embed Card or Generic Card Container (print/PDF/DOCX static card fallback)
+    if (el.classList && (el.classList.contains('paperuss-embed') || el.classList.contains('paperuss-card') || el.classList.contains('media-card') || el.classList.contains('paperuss-card-file') || el.classList.contains('paperuss-card-audio') || el.classList.contains('paperuss-card-video'))) {
       return await convertEmbedToWml(el, ctx);
     }
-    
+
     // Productivity Linked Compartments
     if (el.classList && el.classList.contains('productivity-ref')) {
       const children = Array.from(el.children || el.childNodes || []);
@@ -180,7 +180,19 @@
         const wLine = Math.round(val * 240);
         spacingXml = `<w:spacing w:line="${wLine}" w:lineRule="auto"/>`;
       }
-      return `<w:p><w:pPr><w:pStyle w:val="Normal"/>${spacingXml}</w:pPr>${runsXml}</w:p>`;
+      
+      let jcXml = '';
+      const alignAttr = el.getAttribute ? (el.getAttribute('data-card-align') || el.getAttribute('data-card-wrap') || el.getAttribute('data-wrap-mode')) : '';
+      let alignMode = (alignAttr || '').toLowerCase();
+      if (!alignMode) {
+        const alignMatch = styleAttr.match(/(?:text-align|float):\s*(left|center|right|justify)/i);
+        if (alignMatch) alignMode = alignMatch[1].toLowerCase();
+      }
+      if (alignMode === 'center') jcXml = '<w:jc w:val="center"/>';
+      else if (alignMode === 'right') jcXml = '<w:jc w:val="right"/>';
+      else if (alignMode === 'justify') jcXml = '<w:jc w:val="both"/>';
+
+      return `<w:p><w:pPr><w:pStyle w:val="Normal"/>${spacingXml}${jcXml}</w:pPr>${runsXml}</w:p>`;
     }
 
     // Unordered / Ordered List
@@ -463,10 +475,47 @@
     ctx.images.push({ id: rId, filename, data: imgData });
 
     const docPrId = imageIndex;
-    const cx = 5486400; // ~6 inches width in EMUs
-    const cy = 3657600; // ~4 inches height in EMUs
 
-    return `<w:p><w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:docPr id="${docPrId}" name="Image ${docPrId}" descr="PapeRuss Image"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:blipFill><a:blip r:embed="${rId}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+    // Inspect alignment / text wrapping attributes
+    const parent = img.parentElement;
+    const wrapAttr = (img.getAttribute ? (img.getAttribute('data-card-wrap') || img.getAttribute('data-wrap-mode') || img.getAttribute('data-card-align')) : '') ||
+                     ((parent && parent.getAttribute) ? (parent.getAttribute('data-card-wrap') || parent.getAttribute('data-wrap-mode') || parent.getAttribute('data-card-align')) : '');
+    const styleAttr = ((img.getAttribute ? img.getAttribute('style') || '' : '') + ';' + ((parent && parent.getAttribute) ? parent.getAttribute('style') || '' : '')).toLowerCase();
+
+    let wrapMode = (wrapAttr || '').toLowerCase();
+    if (!wrapMode) {
+      if (/float:\s*left/i.test(styleAttr)) wrapMode = 'left';
+      else if (/float:\s*right/i.test(styleAttr)) wrapMode = 'right';
+      else if (/text-align:\s*center/i.test(styleAttr) || /margin:\s*[^;]*auto/i.test(styleAttr)) wrapMode = 'center';
+      else wrapMode = 'none';
+    }
+
+    let jcVal = 'left';
+    if (wrapMode === 'center') jcVal = 'center';
+    else if (wrapMode === 'right') jcVal = 'right';
+    else if (wrapMode === 'left') jcVal = 'left';
+
+    // Estimate image width / height EMUs
+    let pxW = 500;
+    let pxH = 350;
+    const wMatch = styleAttr.match(/width:\s*([0-9.]+)(px|%)/i);
+    if (wMatch && wMatch[2] === 'px') pxW = Math.min(650, Math.max(40, parseFloat(wMatch[1])));
+    const hMatch = styleAttr.match(/height:\s*([0-9.]+)(px|%)/i);
+    if (hMatch && hMatch[2] === 'px') pxH = Math.min(800, Math.max(40, parseFloat(hMatch[1])));
+
+    const cx = Math.round(pxW * 9525);
+    const cy = Math.round(pxH * 9525);
+
+    const pPr = `<w:pPr><w:pStyle w:val="Normal"/><w:jc w:val="${jcVal}"/></w:pPr>`;
+    const graphicXml = `<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:blipFill><a:blip r:embed="${rId}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm></pic:spPr></pic:pic></a:graphicData></a:graphic>`;
+
+    if (wrapMode === 'left' || wrapMode === 'right') {
+      const anchorXml = `<wp:anchor distT="0" distB="0" distL="114300" distR="114300" simplePos="0" relativeHeight="251658240" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:align>${wrapMode}</wp:align></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:align>top</wp:align></wp:positionV><wp:extent cx="${cx}" cy="${cy}"/><wp:wrapSquare wrapText="bothSides"/><wp:docPr id="${docPrId}" name="Image ${docPrId}" descr="PapeRuss Wrapped Image"/>${graphicXml}</wp:anchor>`;
+      return `<w:p>${pPr}<w:r><w:drawing>${anchorXml}</w:drawing></w:r></w:p>`;
+    }
+
+    const inlineXml = `<wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${docPrId}" name="Image ${docPrId}" descr="PapeRuss Image"/>${graphicXml}</wp:inline>`;
+    return `<w:p>${pPr}<w:r><w:drawing>${inlineXml}</w:drawing></w:r></w:p>`;
   }
 
   /**
