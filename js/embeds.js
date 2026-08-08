@@ -931,6 +931,17 @@
         closeAllDropdownsExcept(null);
         if (typeof handleBodyInput === 'function') handleBodyInput();
         if (typeof save === 'function') save();
+      } else if (act === 'toggle-more-menu') {
+        const menu = bar.querySelector('.embed-more-menu');
+        closeAllDropdownsExcept(menu);
+        if (menu) menu.classList.toggle('hidden');
+      } else if (act === 'set-width') {
+        updateEmbedSetup(embed, { widthPreset: val });
+        bar.querySelectorAll('.embed-size-dropdown .embed-tb-dropdown-item').forEach(b => {
+          b.classList.toggle('active', b.getAttribute('data-val') === val);
+        });
+        const labelEl = bar.querySelector('[data-action="toggle-size-menu"] .embed-tb-label');
+        if (labelEl) labelEl.textContent = sizeLabels[val] || 'M';
       } else if (act === 'set-mode') {
         updateEmbedSetup(embed, { displayMode: val });
         bar.querySelectorAll('.embed-mode-dropdown .embed-tb-dropdown-item').forEach(b => {

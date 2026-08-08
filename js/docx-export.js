@@ -153,6 +153,50 @@
       return `<w:p><w:pPr><w:pStyle w:val="Normal"/>${pBdr}${shd}</w:pPr>${runsXml}</w:p>`;
     }
 
+    // Callout Alert Box
+    if (el.classList && (el.classList.contains('callout') || el.classList.contains('callout-box') || el.getAttribute('data-callout'))) {
+      const type = (el.getAttribute('data-callout') || 'tip').toLowerCase();
+      let hexFill = 'F0FDF4'; // tip (green)
+      let hexBdr = '22C55E';
+      if (type === 'warning') { hexFill = 'FEFCE8'; hexBdr = 'EAB308'; }
+      else if (type === 'info') { hexFill = 'EFF6FF'; hexBdr = '3B82F6'; }
+      else if (type === 'danger') { hexFill = 'FEF2F2'; hexBdr = 'EF4444'; }
+
+      const runsXml = await convertChildrenToWml(el, ctx);
+      const pBdr = `<w:pBdr><w:left w:val="single" w:sz="24" w:space="12" w:color="${hexBdr}"/></w:pBdr>`;
+      const shd = `<w:shd w:val="clear" w:color="auto" w:fill="${hexFill}"/>`;
+      const ind = `<w:ind w:left="360"/>`;
+      return `<w:p><w:pPr><w:pStyle w:val="Normal"/>${pBdr}${shd}${ind}</w:pPr>${runsXml}</w:p>`;
+    }
+
+    // Card Grid Row (2-column layout)
+    if (el.classList && el.classList.contains('card-grid-row')) {
+      const children = Array.from(el.children || []);
+      let cellsXml = '';
+      for (const child of children) {
+        const contentXml = await convertElementToWml(child, ctx);
+        const pXml = contentXml.includes('<w:p>') ? contentXml : `<w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr>${contentXml}</w:p>`;
+        cellsXml += `<w:tc><w:tcPr><w:tcW w:w="4500" w:type="dxa"/></w:tcPr>${pXml}</w:tc>`;
+      }
+      const tblPr = `<w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="0" w:type="auto"/><w:tblBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/><w:insideH w:val="none"/><w:insideV w:val="none"/></w:tblBorders></w:tblPr>`;
+      return `<w:tbl>${tblPr}<w:tr>${cellsXml}</w:tr></w:tbl>`;
+    }
+
+    // Horizontal Rule / Section Divider
+    if (tag === 'HR' || (el.classList && el.classList.contains('paperuss-divider'))) {
+      const pBdr = `<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="CBD5E1"/></w:pBdr>`;
+      return `<w:p><w:pPr><w:pStyle w:val="Normal"/>${pBdr}</w:pPr></w:p>`;
+    }
+
+    // Canvas element -> export as PNG data URL drawing snapshot
+    if (tag === 'CANVAS' && typeof el.toDataURL === 'function') {
+      try {
+        const dataUrl = el.toDataURL('image/png');
+        const img = document.createElement('img');
+        img.setAttribute('src', dataUrl);
+        return await convertImageToWml(img, ctx);
+      } catch (e) {}
+    }
     // Paperuss Embed Card or Generic Card Container (print/PDF/DOCX static card fallback)
     if (el.classList && (el.classList.contains('paperuss-embed') || el.classList.contains('paperuss-card') || el.classList.contains('media-card') || el.classList.contains('paperuss-card-file') || el.classList.contains('paperuss-card-audio') || el.classList.contains('paperuss-card-video'))) {
       return await convertEmbedToWml(el, ctx);
@@ -308,7 +352,8 @@
     let prefixRun = '';
     if (isTask) {
       const symbol = isChecked ? '☑ ' : '☐ ';
-      prefixRun = `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${symbol}</w:t></w:r>`;
+      const fldVal = isChecked ? '1' : '0';
+      prefixRun = `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${symbol}</w:t></w:r><w:fldSimple w:instr="FORMCHECKBOX ${fldVal}"/>`;
     }
     return `<w:p>${pPr}${prefixRun}${runsXml}</w:p>`;
   }
