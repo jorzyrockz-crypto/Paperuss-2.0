@@ -1,7 +1,16 @@
 {
-  "generatedAt": "2026-08-07T01:50:00.000Z",
+  "generatedAt": "2026-08-08T23:50:00.000Z",
   "source": "https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases",
   "releases": [
+    {
+      "tagName": "v2.2.0-leaves-drag-engine",
+      "name": "PapeRuss 2.2 Leaf Architecture & Warp Comet Engine",
+      "title": "Complete Leaf Architecture, Palette Controls & Text Drag Engine",
+      "publishedAt": "2026-08-08T23:50:00.000Z",
+      "body": "### What's New in PapeRuss v2.2.0\n- **Complete Leaf Architecture**: Multi-leaf document tab switching, IndexedDB storage (`paperuss_leaves_db`), offline queueing, cloud sync, and hybrid compatibility model.\n- **Floating Leaves Palette**: Floating launcher FAB badge with active leaf accent color tinting, draggable panel, and context menu options (Rename, Duplicate, Reorder, Accent Color, Copy Link, Delete).\n- **Warp Comet Text Drag Engine**: Velocity-tracked RAF particle trail, glassmorphic swarm ghost pill, real-time drop caret positioning, and smooth edge auto-scrolling.\n- **Deep Link Navigation**: Instant note and leaf opening via `?noteId=` and `?leafId=` URL parameters.\n- **Word (.docx) & JSON Data Portability**: Full multi-leaf Word document export and async backup import with automatic media and leaf remapping.",
+      "url": "https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases",
+      "prerelease": false
+    },
     {
       "tagName": "v2.1.0-music-hub",
       "name": "PapeRuss 2.1 System Music Player Hub",
