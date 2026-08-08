@@ -74,6 +74,9 @@
       if (ctx.bold) rPr += '<w:b/>';
       if (ctx.italic) rPr += '<w:i/>';
       if (ctx.underline) rPr += '<w:u w:val="single"/>';
+      if (ctx.strikethrough) rPr += '<w:strike/>';
+      if (ctx.highlight) rPr += '<w:highlight w:val="yellow"/>';
+      if (ctx.code) rPr += '<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:shd w:val="clear" w:color="auto" w:fill="F1F5F9"/>';
       return `<w:r>${rPr ? `<w:rPr>${rPr}</w:rPr>` : ''}<w:t xml:space="preserve">${escXml(txt)}</w:t></w:r>`;
     }
 
@@ -91,7 +94,6 @@
           styleId = 'Title';
           outlineLvl = null;
         } else if (ctx.allLeavesMode) {
-          // In allLeaves mode, Leaf Title is Heading1 (lvl 0), H1 inside content demoted to Heading2
           styleId = 'Heading2';
           outlineLvl = 1;
         } else {
@@ -114,6 +116,24 @@
       return `<w:p>${pPr}${runsXml}</w:p>`;
     }
 
+    // Blockquote
+    if (tag === 'BLOCKQUOTE') {
+      const runsXml = await convertChildrenToWml(el, { ...ctx, italic: true });
+      const pBdr = `<w:pBdr><w:left w:val="single" w:sz="18" w:space="12" w:color="6366F1"/></w:pBdr>`;
+      const ind = `<w:ind w:left="360"/>`;
+      return `<w:p><w:pPr><w:pStyle w:val="Normal"/>${pBdr}${ind}</w:pPr>${runsXml}</w:p>`;
+    }
+
+    // Preformatted Code Block
+    if (tag === 'PRE') {
+      const codeText = el.textContent || '';
+      const escCode = escXml(codeText).replace(/\r\n|\r|\n/g, '</w:t><w:br/><w:t xml:space="preserve">');
+      const pBdr = `<w:pBdr><w:top w:val="single" w:sz="4" w:space="4" w:color="E2E8F0"/><w:left w:val="single" w:sz="4" w:space="4" w:color="E2E8F0"/><w:bottom w:val="single" w:sz="4" w:space="4" w:color="E2E8F0"/><w:right w:val="single" w:sz="4" w:space="4" w:color="E2E8F0"/></w:pBdr>`;
+      const shd = `<w:shd w:val="clear" w:color="auto" w:fill="F8FAFC"/>`;
+      const rPr = `<w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="20"/><w:color w:val="334155"/></w:rPr>`;
+      return `<w:p><w:pPr><w:pStyle w:val="Normal"/>${pBdr}${shd}</w:pPr><w:r>${rPr}<w:t xml:space="preserve">${escCode}</w:t></w:r></w:p>`;
+    }
+
     // Paperuss Embed Card (print/PDF/DOCX static card fallback)
     if (el.classList && el.classList.contains('paperuss-embed')) {
       return await convertEmbedToWml(el, ctx);
@@ -124,12 +144,7 @@
       const children = Array.from(el.children || el.childNodes || []);
       const staticEl = children.find(c => c.classList && c.classList.contains('productivity-ref-static'));
       if (staticEl) {
-        // We simulate a block with border and subtle background in Word
-        let outXml = await convertChildrenToWml(staticEl, ctx);
-        // WordprocessingML does not support styling a div directly without block wrappers, 
-        // but convertChildrenToWml already wraps children in <w:p> if they are divs/ps.
-        // We can just return the children directly.
-        return outXml;
+        return await convertChildrenToWml(staticEl, ctx);
       }
       return '';
     }
@@ -150,7 +165,7 @@
       for (let i = 0; i < children.length; i++) {
         const child = children[i];
         if ((child.tagName || '').toUpperCase() === 'LI') {
-          outXml += await convertListItemToWml(child, ctx, listType, level);
+          outXml += await convertListItemToWml(child, { ...ctx, listLevel: level + 1 }, listType, Math.min(level, 8));
         }
       }
       return outXml;
@@ -188,7 +203,10 @@
       ...ctx,
       bold: ctx.bold || tag === 'B' || tag === 'STRONG',
       italic: ctx.italic || tag === 'I' || tag === 'EM',
-      underline: ctx.underline || tag === 'U'
+      underline: ctx.underline || tag === 'U',
+      strikethrough: ctx.strikethrough || tag === 'S' || tag === 'STRIKE' || tag === 'DEL',
+      highlight: ctx.highlight || tag === 'MARK',
+      code: ctx.code || tag === 'CODE'
     };
     return await convertChildrenToWml(el, nextCtx);
   }

@@ -10,10 +10,18 @@
     "p[style-name='Heading 5'] => h4:fresh",
     "p[style-name='Heading 6'] => h4:fresh",
     "p[style-name='Subtitle'] => p.editor-subtitle:fresh",
+    "p[style-name='Quote'] => blockquote:fresh",
+    "p[style-name='Intense Quote'] => blockquote:fresh",
+    "p[style-name='Code'] => pre > code:fresh",
     "r[style-name='Strong'] => strong",
     "r[style-name='Emphasis'] => em",
     "r[style-name='Underline'] => u",
+    "r[style-name='Strikethrough'] => del",
+    "r[style-name='CodeChar'] => code",
     "u => u",
+    "strike => del",
+    "s => del",
+    "del => del",
     "table => table:fresh"
   ];
 
