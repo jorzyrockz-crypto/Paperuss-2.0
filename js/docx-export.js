@@ -352,8 +352,7 @@
     let prefixRun = '';
     if (isTask) {
       const symbol = isChecked ? '☑ ' : '☐ ';
-      const fldVal = isChecked ? '1' : '0';
-      prefixRun = `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${symbol}</w:t></w:r><w:fldSimple w:instr="FORMCHECKBOX ${fldVal}"/>`;
+      prefixRun = `<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${symbol}</w:t></w:r>`;
     }
     return `<w:p>${pPr}${prefixRun}${runsXml}</w:p>`;
   }
@@ -555,11 +554,11 @@
     const graphicXml = `<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:blipFill><a:blip r:embed="${rId}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm></pic:spPr></pic:pic></a:graphicData></a:graphic>`;
 
     if (wrapMode === 'left' || wrapMode === 'right') {
-      const anchorXml = `<wp:anchor distT="0" distB="0" distL="114300" distR="114300" simplePos="0" relativeHeight="251658240" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:align>${wrapMode}</wp:align></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:align>top</wp:align></wp:positionV><wp:extent cx="${cx}" cy="${cy}"/><wp:wrapSquare wrapText="bothSides"/><wp:docPr id="${docPrId}" name="Image ${docPrId}" descr="PapeRuss Wrapped Image"/>${graphicXml}</wp:anchor>`;
+      const anchorXml = `<wp:anchor distT="0" distB="0" distL="114300" distR="114300" simplePos="0" relativeHeight="251658240" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:align>${wrapMode}</wp:align></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:align>top</wp:align></wp:positionV><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapSquare wrapText="bothSides"/><wp:docPr id="${docPrId}" name="Image ${docPrId}" descr="PapeRuss Wrapped Image"/><wp:cNvGraphicFramePr/>${graphicXml}</wp:anchor>`;
       return `<w:p>${pPr}<w:r><w:drawing>${anchorXml}</w:drawing></w:r></w:p>`;
     }
 
-    const inlineXml = `<wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${docPrId}" name="Image ${docPrId}" descr="PapeRuss Image"/>${graphicXml}</wp:inline>`;
+    const inlineXml = `<wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${docPrId}" name="Image ${docPrId}" descr="PapeRuss Image"/><wp:cNvGraphicFramePr/>${graphicXml}</wp:inline>`;
     return `<w:p>${pPr}<w:r><w:drawing>${inlineXml}</w:drawing></w:r></w:p>`;
   }
 
