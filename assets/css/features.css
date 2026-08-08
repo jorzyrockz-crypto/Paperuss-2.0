@@ -85,9 +85,10 @@
 .note-editor [data-card-align="left"],
 .note-editor [data-wrap-mode="left"] {
   float: left !important;
-  margin: 2px 18px 6px 0 !important;
-  clear: left;
-  max-width: 48% !important;
+  margin: 2px 18px 8px 0 !important;
+  clear: none !important;
+  max-width: 42% !important;
+  box-sizing: border-box !important;
   shape-outside: margin-box;
   shape-margin: 12px;
   transition: float 0.2s ease, margin 0.2s ease, max-width 0.2s ease;
@@ -97,9 +98,10 @@
 .note-editor [data-card-align="right"],
 .note-editor [data-wrap-mode="right"] {
   float: right !important;
-  margin: 2px 0 6px 18px !important;
-  clear: right;
-  max-width: 48% !important;
+  margin: 2px 0 8px 18px !important;
+  clear: none !important;
+  max-width: 42% !important;
+  box-sizing: border-box !important;
   shape-outside: margin-box;
   shape-margin: 12px;
   transition: float 0.2s ease, margin 0.2s ease, max-width 0.2s ease;
@@ -113,7 +115,7 @@
   margin: 14px auto !important;
   clear: both !important;
   display: block !important;
-  max-width: 100%;
+  max-width: 100% !important;
 }
 
 .note-editor [data-card-wrap="inline"],
@@ -125,16 +127,30 @@
   max-width: 100% !important;
 }
 
+/* Ensure headings & text blocks wrap cleanly next to floated cards without BFC clipping */
+.note-editor h1,
+.note-editor h2,
+.note-editor h3,
+.note-editor h4,
+.note-editor h5,
+.note-editor h6,
+.note-editor p,
+.note-editor ul,
+.note-editor ol,
+.note-editor blockquote {
+  overflow: visible !important;
+}
+
 @media (max-width: 640px) {
   .note-editor [data-card-wrap="left"],
   .note-editor [data-card-align="left"] {
-    margin: 2px 14px 6px 0 !important;
-    max-width: 65% !important;
+    margin: 2px 12px 6px 0 !important;
+    max-width: 55% !important;
   }
   .note-editor [data-card-wrap="right"],
   .note-editor [data-card-align="right"] {
-    margin: 2px 0 6px 14px !important;
-    max-width: 65% !important;
+    margin: 2px 0 6px 12px !important;
+    max-width: 55% !important;
   }
 }
 
