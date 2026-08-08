@@ -622,13 +622,26 @@ window.addEventListener('beforeprint', () => {
 });
 
 function createNote(){
-  const n={ id:uid(), title:'', content:'', tags:[], pinned:false, archived:false, createdAt:Date.now(), updatedAt:Date.now(), fontStyle:appSettings.defaultFont||'sans' };
+  let initialCategory = '';
+  let initialBranchId = '';
+  if (window.BranchEngine) {
+    const activeBId = window.BranchEngine.getActiveBranchId();
+    if (activeBId && activeBId !== 'all') {
+      const branches = window.BranchEngine.loadBranches();
+      const activeB = branches.find(b => b.id === activeBId || b.name === activeBId);
+      if (activeB) {
+        initialCategory = activeB.name;
+        initialBranchId = activeB.id;
+      }
+    }
+  }
+  const n={ id:uid(), title:'', content:'', category: initialCategory, branchId: initialBranchId, tags:[], pinned:false, archived:false, createdAt:Date.now(), updatedAt:Date.now(), fontStyle:appSettings.defaultFont||'sans' };
   notes.unshift(n);
   state.currentId=n.id;
   save(); renderAll();
   showMobileEditor();
   setTimeout(()=>document.getElementById('noteTitle').focus(),50);
-  toast('New note created');
+  toast(initialCategory ? `New note created in "${initialCategory}"` : 'New note created');
 }
 
 function selectNote(id, leafId = null){
