@@ -1293,9 +1293,7 @@ img[data-media-id].img-selected,
   justify-content:center;color:var(--fg-secondary);cursor:pointer;
   transition:all .12s ease;background:transparent;touch-action:none;
 }
-.block-gutter-btn:hover,.block-gutter-btn:active{background:var(--hover);color:var(--fg)}
-.block-drag-handle{cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none}
-.block-drag-handle:active{cursor:grabbing}
+.block-drag-handle, #blockDragHandle, .compact-drag-gutter, #blockGutter { display: none !important; visibility: hidden !important; pointer-events: none !important; }
 
 /* Pen / Touch Drag active feedback */
 .block-gutter.touch-dragging{
@@ -6248,15 +6246,46 @@ a.paperuss-inline-link:hover {
 
 /* Print Layout & Page Setup Margins Adaptability */
 @media print {
+  /* Enforce Background Colors & Graphics */
+  .note-editor, #printSheet, .callout, .paperuss-embed, .paperuss-card, .ps-content table, .ps-content th, .ps-content td {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Flatten UI Elements (Remove Shadows) */
+  .paperuss-embed, .callout, .media-card, .paperuss-card, .ps-content .media-card {
+    box-shadow: none !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+
+  /* Page Break & Orphan/Widow Management */
+  .paperuss-embed, .callout, img, table, ul > li, ol > li {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+  p {
+    widows: 3 !important;
+    orphans: 3 !important;
+  }
+
+  /* Hide all Editor UI Overlays */
+  .leafline-ui, .resize-handle, .embed-tb-container, .table-controls, .checklist-controls, .embed-editor-toolbar, .card-resize-handle, .image-context-menu {
+    display: none !important;
+  }
+
   .card-grid-row {
     display: flex !important;
     flex-wrap: wrap !important;
     page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
   .grid-cols-2 > * { width: 48% !important; flex: 0 0 48% !important; }
   .grid-cols-3 > * { width: 31% !important; flex: 0 0 31% !important; }
   .grid-cols-4 > * { width: 23% !important; flex: 0 0 23% !important; }
-  .embed-editor-toolbar, .card-resize-handle { display: none !important; }
 }
 
 /* Outer card wrappers MUST allow floating toolbar overflow (top: -42px) */
