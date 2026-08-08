@@ -27,8 +27,8 @@ PapeRuss 2.0 structures note workspaces using an organic botanical hierarchy:
                           LEAF (Document)
                    Single Rich-Text Sub-Note
                                 │
-                              VEINS
-              Internal Headings, Anchors & Links
+                            VEINS (v3.0.0)
+              Inter-Leaf Links & Real-Time Co-Editing
                                 │
                               TWIG
                        Inline Tag / Label
@@ -40,7 +40,7 @@ PapeRuss 2.0 structures note workspaces using an organic botanical hierarchy:
 - 🌿 **Leafline**: The UI navigation bar (`.leafline-ui` in `js/leafline.js`) displaying the breadcrumb tree of headings and sub-note tabs at the top of the editor.
 - 🍃 **Leaves**: The collection array of sub-note tabs contained inside a Note workspace (`fix/leaf-implementation`).
 - 🍃 **Leaf**: A single rich-text sub-note document or tab inside a Note workspace.
-- 🩺 **Veins**: The internal structural **Headings (`h1`–`h6`), TOC Anchors & Cross-Block Links** that transport structure throughout a single Leaf.
+- 🩺 **Veins** (`v3.0.0`): The **Inter-Leaf Vascular Network & Real-Time Multi-User Collaboration Engine**. Enables inline `@Leaf` shortcuts/live embeds inside other leaves, 1-click peer sharing, and real-time live co-editing on a single shared Leaf across users!
 - 🌱 **Twig**: An **Inline Tag / Label** attached to specific notes or content blocks.
 
 ---
@@ -62,9 +62,9 @@ PapeRuss 2.0 structures note workspaces using an organic botanical hierarchy:
  
    v2.4.0              v2.5.0              v2.6.0              v3.0.0              v3.2.0
  ┌─────────┐         ┌─────────┐         ┌─────────┐         ┌─────────┐         ┌───────────┐
- │ Smart   │   ───►  │ PDF &   │   ───►  │ Data &  │   ───►  │ Cloud & │   ───►  │  CANOPY   │
- │ Date/   │         │ Print   │         │ Table   │         │ Team    │         │  SPATIAL  │
- │ Time NLP│         │ Suite   │         │ Formula │         │ Workspace│         │ CANVAS    │
+ │ Smart   │   ───►  │ PDF &   │   ───►  │ Data &  │   ───►  │ VEINS & │   ───►  │  CANOPY   │
+ │ Date/   │         │ Print   │         │ Table   │         │ Collaborative│     │  SPATIAL  │
+ │ Time NLP│         │ Suite   │         │ Formula │         │ Leaves Vault │     │  CANVAS   │
  └─────────┘         └─────────┘         └─────────┘         └─────────┘         └───────────┘
    Q3 2026             Q3 2026             Q4 2026             Q1 2027             Q2 2027
 ```
@@ -83,8 +83,9 @@ PapeRuss 2.0 structures note workspaces using an organic botanical hierarchy:
 - **Excel-Style Formulas**: Extended formula functions (`SUM`, `AVERAGE`, `COUNT`, `MIN`, `MAX`, `IF`).
 - **Interactive Chart Engine**: 1-click conversion of table data into dynamic Bar, Line, and Pie charts.
 
-### 🔹 v3.0.0 (Q1 2027) — Multi-User Collaboration & Encrypted Vault
-- **Real-Time Peer Editing**: Live multiplayer cursors and operational transformation (CRDT) conflict resolution.
+### 🩸 v3.0.0 (Q1 2027) — Veins: Inter-Leaf Network & Multi-User Co-Editing
+- **Inter-Leaf Shortcuts & Live Embedding**: Insert `@Leaf` shortcuts and live transcluded leaf previews inside another Leaf document.
+- **Real-Time Peer Sharing & Live Co-Editing**: Share individual Leaves directly with other users via secure links, allowing multiple users to edit and comment on a single Leaf simultaneously.
 - **End-to-End Encrypted Vaults**: Client-side AES-256 encryption for private notes and offline attachments.
 
 ### 🌳 v3.2.0 (Q2 2027) — Canopy Spatial Engine & Infinite Canvas View
