@@ -4,7 +4,7 @@ An overview of completed milestones, active feature branches in development, and
 
 ---
 
-## 🌿 Botanical Workspace Architecture (`Leaf ➔ Leaves ➔ Leafline ➔ Canopy`)
+## 🌿 Botanical Workspace Architecture (`Branch ➔ Stem ➔ Leafline ➔ Leaves ➔ Leaf ➔ Twig`)
 
 PapeRuss 2.0 structures note workspaces using an organic botanical hierarchy:
 
@@ -12,7 +12,13 @@ PapeRuss 2.0 structures note workspaces using an organic botanical hierarchy:
                            CANOPY (v3.2.0)
                Overarching Spatial Mind-Map & Canvas
                                 │
-                         LEAFline (UI)
+                             BRANCH
+                    Category / Notebook Group
+                                │
+                              STEM
+                       Main Note Container
+                                │
+                          LEAFline (UI)
               Navigation Line & Tab-Strip Header
                                 │
                           LEAVES (Store)
@@ -20,12 +26,18 @@ PapeRuss 2.0 structures note workspaces using an organic botanical hierarchy:
                                 │
                           LEAF (Document)
                    Single Rich-Text Sub-Note
+                                │
+                              TWIG
+                       Inline Tag / Label
 ```
 
-- 🍃 **Leaf**: A single rich-text sub-note document or tab inside a Note workspace.
-- 🌿 **Leaves**: The collection array of sub-note tabs contained inside a Note workspace (`fix/leaf-implementation`).
+- 🌳 **Canopy**: The top-level visual spatial mind-map graph (`v3.2.0`) where all Branches, Leaves, and Leaflines connect under an overarching workspace tree.
+- 🌿 **Branch**: A **Category / Notebook Group** that organizes related Note Stems and Leaves into workspace branches.
+- 🪵 **Stem**: A **Main Note Container** holding the Leafline navigation bar and individual Leaves.
 - 🌿 **Leafline**: The UI navigation bar (`.leafline-ui` in `js/leafline.js`) displaying the breadcrumb tree of headings and sub-note tabs at the top of the editor.
-- 🌳 **Canopy**: The top-level visual spatial mind-map graph (`v3.2.0`) where all Leaves and Leaflines branch together under an overarching workspace tree!
+- 🍃 **Leaves**: The collection array of sub-note tabs contained inside a Note workspace (`fix/leaf-implementation`).
+- 🍃 **Leaf**: A single rich-text sub-note document or tab inside a Note workspace.
+- 🌱 **Twig**: An **Inline Tag / Label** attached to specific notes or content blocks.
 
 ---
 
