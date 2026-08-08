@@ -17,11 +17,18 @@
     "r[style-name='Emphasis'] => em",
     "r[style-name='Underline'] => u",
     "r[style-name='Strikethrough'] => del",
+    "r[style-name='Superscript'] => sup",
+    "r[style-name='Subscript'] => sub",
+    "r[style-name='Highlight'] => mark",
+    "r[style-name='Highlight Yellow'] => mark",
     "r[style-name='CodeChar'] => code",
     "u => u",
     "strike => del",
     "s => del",
     "del => del",
+    "sup => sup",
+    "sub => sub",
+    "mark => mark",
     "table => table:fresh"
   ];
 
@@ -238,8 +245,8 @@
       for (const child of children) {
         const isHeadingDivider = (child.tagName === 'H1' && !child.classList.contains('editor-title')) ||
                                  (child.tagName === 'H2' && rawLeafSections.length > 0);
-        const isPageBreak = (child.tagName === 'HR' && child.style && child.style.pageBreakBefore === 'always') ||
-                            (child.tagName === 'P' && child.querySelector && child.querySelector('br[type="page"]'));
+        const isPageBreak = (child.tagName === 'HR' && child.style && (child.style.pageBreakBefore === 'always' || child.style.pageBreakAfter === 'always')) ||
+                            (child.querySelector && (child.querySelector('br[type="page"]') || child.querySelector('hr[style*="page-break"]')));
 
         if ((isHeadingDivider || isPageBreak) && currentSection.nodes.length > 0) {
           rawLeafSections.push(currentSection);

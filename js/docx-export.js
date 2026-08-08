@@ -76,7 +76,20 @@
       if (ctx.underline) rPr += '<w:u w:val="single"/>';
       if (ctx.strikethrough) rPr += '<w:strike/>';
       if (ctx.highlight) rPr += '<w:highlight w:val="yellow"/>';
-      if (ctx.code) rPr += '<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:shd w:val="clear" w:color="auto" w:fill="F1F5F9"/>';
+      if (ctx.superscript) rPr += '<w:vertAlign w:val="superscript"/>';
+      if (ctx.subscript) rPr += '<w:vertAlign w:val="subscript"/>';
+      if (ctx.textColor) {
+        let hexColor = ctx.textColor.replace(/^#/, '');
+        if (hexColor.length === 3) hexColor = hexColor.split('').map(c => c + c).join('');
+        if (/^[0-9A-Fa-f]{6}$/.test(hexColor)) {
+          rPr += `<w:color w:val="${hexColor.toUpperCase()}"/>`;
+        }
+      }
+      if (ctx.fontFamily) {
+        rPr += `<w:rFonts w:ascii="${escXml(ctx.fontFamily)}" w:hAnsi="${escXml(ctx.fontFamily)}"/>`;
+      } else if (ctx.code) {
+        rPr += '<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:shd w:val="clear" w:color="auto" w:fill="F1F5F9"/>';
+      }
       return `<w:r>${rPr ? `<w:rPr>${rPr}</w:rPr>` : ''}<w:t xml:space="preserve">${escXml(txt)}</w:t></w:r>`;
     }
 
@@ -127,11 +140,17 @@
     // Preformatted Code Block
     if (tag === 'PRE') {
       const codeText = el.textContent || '';
-      const escCode = escXml(codeText).replace(/\r\n|\r|\n/g, '</w:t><w:br/><w:t xml:space="preserve">');
+      const lines = codeText.split(/\r\n|\r|\n/);
       const pBdr = `<w:pBdr><w:top w:val="single" w:sz="4" w:space="4" w:color="E2E8F0"/><w:left w:val="single" w:sz="4" w:space="4" w:color="E2E8F0"/><w:bottom w:val="single" w:sz="4" w:space="4" w:color="E2E8F0"/><w:right w:val="single" w:sz="4" w:space="4" w:color="E2E8F0"/></w:pBdr>`;
       const shd = `<w:shd w:val="clear" w:color="auto" w:fill="F8FAFC"/>`;
       const rPr = `<w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="20"/><w:color w:val="334155"/></w:rPr>`;
-      return `<w:p><w:pPr><w:pStyle w:val="Normal"/>${pBdr}${shd}</w:pPr><w:r>${rPr}<w:t xml:space="preserve">${escCode}</w:t></w:r></w:p>`;
+      
+      let runsXml = '';
+      lines.forEach((line, idx) => {
+        if (idx > 0) runsXml += '<w:br/>';
+        runsXml += `<w:r>${rPr}<w:t xml:space="preserve">${escXml(line)}</w:t></w:r>`;
+      });
+      return `<w:p><w:pPr><w:pStyle w:val="Normal"/>${pBdr}${shd}</w:pPr>${runsXml}</w:p>`;
     }
 
     // Paperuss Embed Card (print/PDF/DOCX static card fallback)
@@ -206,6 +225,30 @@
       return '<w:r><w:br/></w:r>';
     }
 
+    // Extract inline style properties if node has style attribute
+    const styleAttr = el.getAttribute ? el.getAttribute('style') || '' : '';
+    let nodeTextColor = ctx.textColor;
+    const colorMatch = styleAttr.match(/color:\s*([^;]+)/i);
+    if (colorMatch) {
+      const cVal = colorMatch[1].trim();
+      if (cVal.startsWith('#')) {
+        nodeTextColor = cVal;
+      } else if (cVal.startsWith('rgb')) {
+        const rgbVals = cVal.match(/\d+/g);
+        if (rgbVals && rgbVals.length >= 3) {
+          const hex = rgbVals.slice(0, 3).map(x => parseInt(x, 10).toString(16).padStart(2, '0')).join('');
+          nodeTextColor = '#' + hex;
+        }
+      }
+    }
+
+    let nodeFontFamily = ctx.fontFamily;
+    const fontMatch = styleAttr.match(/font-family:\s*([^;]+)/i);
+    if (fontMatch) {
+      const fontVal = fontMatch[1].split(',')[0].replace(/["']/g, '').trim();
+      if (fontVal) nodeFontFamily = fontVal;
+    }
+
     // Inline formatting tags
     const nextCtx = {
       ...ctx,
@@ -214,7 +257,11 @@
       underline: ctx.underline || tag === 'U',
       strikethrough: ctx.strikethrough || tag === 'S' || tag === 'STRIKE' || tag === 'DEL',
       highlight: ctx.highlight || tag === 'MARK',
-      code: ctx.code || tag === 'CODE'
+      superscript: ctx.superscript || tag === 'SUP',
+      subscript: ctx.subscript || tag === 'SUB',
+      code: ctx.code || tag === 'CODE',
+      textColor: nodeTextColor,
+      fontFamily: nodeFontFamily
     };
     return await convertChildrenToWml(el, nextCtx);
   }
@@ -279,8 +326,39 @@
         if (cellTag === 'TH') isHeaderRow = true;
         if (cellTag === 'TD' || cellTag === 'TH') {
           const contentXml = await convertChildrenToWml(cell, ctx);
-          const pXml = contentXml.includes('<w:p>') ? contentXml : `<w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr>${contentXml}</w:p>`;
-          const shdXml = cellTag === 'TH' ? '<w:shd w:val="clear" w:color="auto" w:fill="F1F5F9"/>' : '';
+          const cellStyle = cell.getAttribute ? cell.getAttribute('style') || '' : '';
+          
+          // Alignment
+          let jcXml = '';
+          const alignMatch = cellStyle.match(/text-align:\s*(left|center|right|justify)/i);
+          if (alignMatch) {
+            const alignVal = alignMatch[1].toLowerCase();
+            const wmlAlign = alignVal === 'justify' ? 'both' : alignVal;
+            jcXml = `<w:jc w:val="${wmlAlign}"/>`;
+          }
+
+          const pXml = contentXml.includes('<w:p>')
+            ? contentXml
+            : `<w:p><w:pPr><w:pStyle w:val="Normal"/>${jcXml}</w:pPr>${contentXml}</w:p>`;
+          
+          // Background shading
+          let fillHex = cellTag === 'TH' ? 'F1F5F9' : '';
+          const bgMatch = cellStyle.match(/background(?:-color)?:\s*([^;]+)/i);
+          if (bgMatch) {
+            const bgVal = bgMatch[1].trim();
+            if (bgVal.startsWith('#')) {
+              let hex = bgVal.replace('#', '');
+              if (hex.length === 3) hex = hex.split('').map(x => x + x).join('');
+              if (/^[0-9A-Fa-f]{6}$/.test(hex)) fillHex = hex.toUpperCase();
+            } else if (bgVal.startsWith('rgb')) {
+              const rgbVals = bgVal.match(/\d+/g);
+              if (rgbVals && rgbVals.length >= 3) {
+                fillHex = rgbVals.slice(0, 3).map(x => parseInt(x, 10).toString(16).padStart(2, '0')).join('').toUpperCase();
+              }
+            }
+          }
+
+          const shdXml = fillHex ? `<w:shd w:val="clear" w:color="auto" w:fill="${fillHex}"/>` : '';
           cellsXml += `<w:tc><w:tcPr><w:tcW w:w="2500" w:type="dxa"/>${shdXml}</w:tcPr>${pXml}</w:tc>`;
         }
       }
@@ -488,13 +566,21 @@
   }
 
   /**
-   * Build standard word/numbering.xml for lists.
+   * Build standard word/numbering.xml for multi-level lists.
    */
   function buildNumberingXml() {
+    let bulletLevels = '';
+    let decimalLevels = '';
+    for (let lvl = 0; lvl <= 8; lvl++) {
+      const leftIndent = 720 + (lvl * 360);
+      bulletLevels += `<w:lvl w:ilvl="${lvl}"><w:numFmt w:val="bullet"/><w:lvlText w:val="•"/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="${leftIndent}" w:hanging="360"/></w:pPr></w:lvl>`;
+      decimalLevels += `<w:lvl w:ilvl="${lvl}"><w:numFmt w:val="decimal"/><w:lvlText w:val="%${lvl + 1}."/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="${leftIndent}" w:hanging="360"/></w:pPr></w:lvl>`;
+    }
+
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n` +
       `<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
-      `<w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val="•"/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum>` +
-      `<w:abstractNum w:abstractNumId="2"><w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum>` +
+      `<w:abstractNum w:abstractNumId="1">${bulletLevels}</w:abstractNum>` +
+      `<w:abstractNum w:abstractNumId="2">${decimalLevels}</w:abstractNum>` +
       `<w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>` +
       `<w:num w:numId="2"><w:abstractNumId w:val="2"/></w:num>` +
       `</w:numbering>`;
