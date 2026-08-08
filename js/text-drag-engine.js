@@ -154,7 +154,7 @@ function _cometRafLoop() {
     // Opacity + scale fade with distance
     const t = i / Math.max(_cometTailEls.length - 1, 1);
     el.style.opacity   = String((1 - t * 0.88).toFixed(3));
-    el.style.fontSize  = `${Math.max(7, 13 - i * 0.8)}px`;
+    el.style.fontSize  = `${Math.max(10, 17 - i * 0.9)}px`;
   });
 
   _rafId = requestAnimationFrame(_cometRafLoop);
