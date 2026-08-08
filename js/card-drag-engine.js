@@ -126,13 +126,15 @@ document.addEventListener('pointerdown', (e) => {
   const targetEl = (e.target && e.target.nodeType === 3) ? e.target.parentElement : e.target;
   if (!targetEl || !noteBody.contains(targetEl)) return;
 
-  // EXCLUSIONS: Do NOT start card drag on text typing fields, buttons, links, controls
-  const INTERACTIVE = 'input, textarea, button, a, [contenteditable="true"], .card-resize-handle, .audio-control-btn, .file-download-btn, .embed-action-btn';
-  const isTyping = targetEl.closest && targetEl.closest(INTERACTIVE);
-  // Allow drag if target is explicit card drag handle
-  const isDragHandle = targetEl.closest && targetEl.closest('.card-drag-handle, .file-card-header, .embed-editor-toolbar, .paperuss-card-file');
+  // Explicit drag handle (e.g. grip icon on toolbar or card header)
+  const isDragHandle = targetEl.closest && targetEl.closest('.card-drag-handle, .file-card-header');
 
-  if (isTyping && !isDragHandle) return;
+  // Interactive UI targets (toolbar buttons, dropdowns, inputs, links, media controls)
+  const INTERACTIVE = 'input, textarea, select, button, a, [contenteditable="true"], .embed-tb-btn, .embed-tb-dropdown, .embed-tb-select, .card-resize-handle, .audio-control-btn, .file-download-btn, .embed-action-btn';
+  const isInteractiveUI = targetEl.closest && targetEl.closest(INTERACTIVE);
+
+  // Never capture drag if clicking interactive toolbar controls (unless clicking explicit drag handle)
+  if (isInteractiveUI && !isDragHandle) return;
 
   const card = targetEl.closest ? targetEl.closest(CARD_SELECTOR) : null;
   if (!card || !noteBody.contains(card)) return;
@@ -141,12 +143,6 @@ document.addEventListener('pointerdown', (e) => {
   _cardStartX    = e.clientX;
   _cardStartY    = e.clientY;
   _cardPreparing = true;
-
-  try {
-    if (card.setPointerCapture && e.pointerId != null) {
-      card.setPointerCapture(e.pointerId);
-    }
-  } catch (_) {}
 }, true);
 
 // ── 1.5. dragstart CAPTURE — 100% kill native browser ghost ────
@@ -191,7 +187,14 @@ document.addEventListener('pointermove', (e) => {
       _cardDragging  = true;
       _cardPreparing = false;
       document.body.classList.add('is-card-dragging');
-      if (_cardElement) _cardElement.classList.add('is-dragging-card-source');
+      if (_cardElement) {
+        _cardElement.classList.add('is-dragging-card-source');
+        try {
+          if (_cardElement.setPointerCapture && e.pointerId != null) {
+            _cardElement.setPointerCapture(e.pointerId);
+          }
+        } catch (_) {}
+      }
       _spawnCardHeroGhost(_cardElement, e.clientX, e.clientY);
       if (navigator.vibrate) navigator.vibrate(15);
     }
