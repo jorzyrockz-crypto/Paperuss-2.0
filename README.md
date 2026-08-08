@@ -105,7 +105,7 @@ https://my-paperuss-database-2.jorzyrockz.workers.dev/
 
 The `Deploy Cloudflare Worker` GitHub Actions workflow publishes `main` using a Worker with static assets. Add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as repository secrets before enabling deployment.
 
-Published GitHub Releases are automatically converted into `CHANGELOG.md` and `changelog.json`. The app serves the JSON document at `/changelog.json` and displays it from the profile menu’s **What’s new** action.
+Published GitHub Releases are automatically converted into [`CHANGELOG.md`](CHANGELOG.md) and `changelog.json`. The product roadmap, future release schedule, and **Canopy Spatial Canvas Engine** milestones are detailed in [`ROADMAP.md`](ROADMAP.md).
 
 ### Firebase Hosting
 
