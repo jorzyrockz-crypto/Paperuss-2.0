@@ -44,18 +44,11 @@
   const origOpenLeavesDrawer = window.openLeavesDrawer;
   if(origOpenLeavesDrawer) {
     window.openLeavesDrawer = function() {
-      const overlay = document.getElementById('leavesDrawerOverlay');
-      if (!overlay) return;
+      origOpenLeavesDrawer();
       const contentEl = document.getElementById('leavesDrawerContent');
-      if (contentEl) {
-        if (window.state.drawerMode === 'leaves') {
-          if (typeof window.renderLeavesList === 'function') window.renderLeavesList(contentEl);
-        } else {
-          window.renderLeafline(contentEl);
-        }
+      if (contentEl && window.state.drawerMode === 'leafline') {
+        window.renderLeafline(contentEl);
       }
-      overlay.classList.remove('hidden');
-      overlay.classList.add('show');
     };
   }
 

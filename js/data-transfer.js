@@ -99,8 +99,7 @@ function importNotes(file){
       let added=0;
       // Map of old note ID -> new note ID for leaf remapping
       const noteIdMap = {};
-
-      importedNotes.forEach(n=>{
+      for (const n of importedNotes) {
         if(n && typeof n==='object'){
           let content=String(n.content||'');
           if(content && !looksLikeHtml(content)) content=mdToHtml(content);
@@ -132,53 +131,54 @@ function importNotes(file){
 
           const newNote = {
             id: newNoteId,
-            title: String(n.title||''),
-            content: hadLeaves ? content : content, // main content kept for compat
-            tags: Array.isArray(n.tags)?n.tags.filter(t=>typeof t==='string'):[],
-            pinned: !!n.pinned, archived: !!n.archived,
-            fontStyle: n.fontStyle||'sans',
-            pageViewEnabled: !!n.pageViewEnabled,
-            pageSize: n.pageSize||'a4',
-            pageOrientation: n.pageOrientation||'portrait',
-            pageMargins: n.pageMargins||'normal',
-            createdAt: n.createdAt||Date.now(), updatedAt: n.updatedAt||Date.now(),
-            calendarStart: Number.isFinite(+n.calendarStart)?+n.calendarStart:null,
-            calendarEnd: Number.isFinite(+n.calendarEnd)?+n.calendarEnd:null,
-            calendarRepeat: ['daily','weekly','monthly','yearly'].includes(n.calendarRepeat)?n.calendarRepeat:null,
-            calendarNotify: n.calendarNotify===true,
-            coverImage: n.coverImage&&typeof n.coverImage==='object'?n.coverImage:null,
+            title: n.title || 'Untitled',
+            content: content,
+            pinned: !!n.pinned,
+            archived: !!n.archived,
+            tags: Array.isArray(n.tags) ? n.tags : [],
+            createdAt: n.createdAt || Date.now(),
+            updatedAt: n.updatedAt || Date.now(),
+            deletedAt: n.deletedAt || null,
             ...(hadLeaves ? { leafOrder: newLeafOrder, defaultLeafId: newDefaultLeafId, leafCount: newLeafCount } : {})
           };
           notes.push(newNote);
 
           // Import Leaf records into IDB if v3 and paperussLeaves is available
           if (hadLeaves && window.paperussLeaves) {
-            noteLeafExport.forEach(async lf => {
+            for (const lf of noteLeafExport) {
               try {
                 const newLeafId = leafIdRemap[lf.id];
-                if (!newLeafId) return;
+                if (!newLeafId) continue;
                 const newOrder = newLeafOrder.indexOf(newLeafId);
                 // Remap media IDs in leaf content
                 let leafContent = String(lf.content || '');
                 leafContent = leafContent.replace(/data-media-id="([^"]+)"/g,(m,id)=>idMap[id]?`data-media-id="${idMap[id]}"`:m);
-                await window.paperussLeaves.leafPut({
+                const leafObj = {
                   id: newLeafId,
                   noteId: newNoteId,
                   title: lf.title || 'Leaf',
                   content: leafContent,
+                  color: lf.color || 'slate',
                   order: newOrder >= 0 ? newOrder : (lf.order || 0),
                   createdAt: lf.createdAt || Date.now(),
                   updatedAt: lf.updatedAt || Date.now()
+                };
+                await window.paperussLeaves.leafPut(leafObj);
+                await window.paperussLeaves.leafQueuePut({
+                  id: 'mut_imp_' + Date.now() + '_' + Math.random().toString(36).substr(2,6),
+                  noteId: newNoteId,
+                  action: 'put',
+                  data: Object.assign({}, leafObj),
+                  timestamp: Date.now()
                 });
               } catch(e) {
                 console.warn('importNotes: leaf IDB import error', e);
               }
-            });
+            }
           }
 
-          added++;
         }
-      });
+      }
 
       if(typeof sanitizeNoteCollection==='function') notes=sanitizeNoteCollection(notes);
       save(); renderAll();

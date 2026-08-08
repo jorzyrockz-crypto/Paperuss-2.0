@@ -237,7 +237,7 @@ function _commitDrop(clientX, clientY) {
         while (burst.firstChild) burst.parentNode.insertBefore(burst.firstChild, burst);
         burst.remove();
       }
-    }, 420);
+    }, 1400); // matches CSS animation duration
   }
 
   if (typeof handleBodyInput === 'function') handleBodyInput();

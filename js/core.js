@@ -2102,10 +2102,16 @@ window.paperussLeafManager = {
               noteId: remoteLeaf.noteId || noteId,
               title: remoteLeaf.title || 'Leaf',
               content: remoteLeaf.content || '',
+              color: remoteLeaf.color || 'slate',
               order: typeof remoteLeaf.order === 'number' ? remoteLeaf.order : 0,
               createdAt: remoteLeaf.createdAt || Date.now(),
               updatedAt: remoteLeaf.updatedAt || Date.now()
             });
+            if (n && Array.isArray(n.leafOrder) && !n.leafOrder.includes(remoteLeaf.id)) {
+              n.leafOrder.push(remoteLeaf.id);
+              n.leafCount = n.leafOrder.length;
+              if (typeof persist === 'function') persist();
+            }
           }
         }
       }

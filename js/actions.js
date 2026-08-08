@@ -588,12 +588,22 @@ async function duplicateNoteAction() {
   if (window.paperussLeaves && window.paperussLeaves.isNoteMigratedToLeaves(n)) {
     try {
       const oldLeaves = await window.paperussLeaves.leafGetByNoteId(n.id);
+      const leafMap = {};
+      oldLeaves.forEach(l => { leafMap[l.id] = l; });
+      const leafOrderIds = (Array.isArray(n.leafOrder) && n.leafOrder.length > 0)
+        ? n.leafOrder
+        : oldLeaves.map(l => l.id);
+
       const idMap = {};
       const newLeafOrder = [];
       
-      for (const lf of oldLeaves) {
+      for (const oldLeafId of leafOrderIds) {
+        const lf = leafMap[oldLeafId] || (oldLeafId.startsWith('virtual_main') ? window.paperussLeaves.getVirtualMainLeaf(n) : null);
+        if (!lf) continue;
+
         const newLeafId = 'leaf_' + Date.now() + '_' + Math.random().toString(36).substr(2,6);
-        idMap[lf.id] = newLeafId;
+        idMap[oldLeafId] = newLeafId;
+        if (oldLeafId === n.defaultLeafId) idMap['default'] = newLeafId;
         newLeafOrder.push(newLeafId);
         
         const cleanLeafContent = typeof window.cleanInternalEditorUI === 'function' ? window.cleanInternalEditorUI(lf.content || '') : (lf.content || '');
@@ -616,7 +626,8 @@ async function duplicateNoteAction() {
       }
       
       newNote.leafOrder = newLeafOrder;
-      newNote.defaultLeafId = idMap[n.defaultLeafId] || n.defaultLeafId || newLeafOrder[0];
+      newNote.leafCount = newLeafOrder.length;
+      newNote.defaultLeafId = idMap[n.defaultLeafId] || idMap['default'] || newLeafOrder[0];
       
       const oldActiveId = window.paperussLeaves.getNoteActiveLeafId(n);
       if (oldActiveId && idMap[oldActiveId]) {
