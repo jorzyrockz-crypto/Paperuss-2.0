@@ -320,9 +320,19 @@
         }
         blob = new Blob([uint8], { type: 'image/' + ext });
       }
-      if (!blob && src && src.startsWith('blob:') && typeof fetch === 'function') {
-        const res = await fetch(src);
-        blob = await res.blob();
+      if (!blob && src && (src.startsWith('blob:') || src.startsWith('http:') || src.startsWith('https:')) && typeof fetch === 'function') {
+        try {
+          const res = await fetch(src);
+          if (res.ok) {
+            blob = await res.blob();
+            if (blob.type) {
+              const m = blob.type.match(/image\/([a-zA-Z0-9]+)/);
+              if (m) ext = m[1].toLowerCase();
+            }
+          }
+        } catch (fe) {
+          console.warn('docx export image fetch error:', fe);
+        }
       }
     } catch (e) {
       console.warn('docx-export: failed to extract image blob:', e);

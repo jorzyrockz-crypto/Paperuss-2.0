@@ -202,7 +202,43 @@
         }
       }
 
-      // Sanitize HTML
+      // Detect multi-leaf sections if doc has page breaks or section headings
+      const leafSections = [];
+      let currentSection = { title: docTitle || 'Main', nodes: [] };
+      const children = Array.from(body.childNodes);
+
+      for (const child of children) {
+        const isHeadingDivider = (child.tagName === 'H1' && !child.classList.contains('editor-title')) ||
+                                 (child.tagName === 'H2' && leafSections.length > 0);
+        const isPageBreak = (child.tagName === 'HR' && child.style && child.style.pageBreakBefore === 'always') ||
+                            (child.tagName === 'P' && child.querySelector && child.querySelector('br[type="page"]'));
+
+        if ((isHeadingDivider || isPageBreak) && currentSection.nodes.length > 0) {
+          leafSections.push(currentSection);
+          let newTitle = `Leaf ${leafSections.length + 1}`;
+          if (child.tagName === 'H1' || child.tagName === 'H2') {
+            newTitle = (child.textContent || '').trim() || newTitle;
+          }
+          currentSection = { title: newTitle, nodes: [] };
+          if (child.tagName !== 'H1' && child.tagName !== 'H2') continue;
+        }
+        currentSection.nodes.push(child);
+      }
+      if (currentSection.nodes.length > 0) {
+        leafSections.push(currentSection);
+      }
+
+      // If multi-leaf sections were found (2+): use section 1 for Main leaf content
+      if (leafSections.length > 1) {
+        const sec1Div = document.createElement('div');
+        leafSections[0].nodes.forEach(n => sec1Div.appendChild(n));
+        let sec1Html = sec1Div.innerHTML;
+        if (typeof cleanInternalEditorUI === 'function') sec1Html = cleanInternalEditorUI(sec1Html);
+        if (typeof sanitizeNoteHTML === 'function') sec1Html = sanitizeNoteHTML(sec1Html);
+        body.innerHTML = sec1Html;
+      }
+
+      // Sanitize HTML for primary note content
       let cleanHtml = body.innerHTML;
       if (typeof cleanInternalEditorUI === 'function') {
         cleanHtml = cleanInternalEditorUI(cleanHtml);
@@ -234,11 +270,33 @@
       }
       addedNote = n;
 
-      // Automatically create Main Leaf and ensure identical clean HTML
+      // Automatically create Main Leaf
       if (window.paperussLeafManager && typeof window.paperussLeafManager.materializeVirtualNote === 'function') {
         const materialized = await window.paperussLeafManager.materializeVirtualNote(n);
         if (!materialized) {
           throw new Error('Failed to materialize Main Leaf');
+        }
+
+        // Add additional leaves if multi-leaf sections were detected
+        if (leafSections.length > 1) {
+          for (let s = 1; s < leafSections.length; s++) {
+            const sec = leafSections[s];
+            const secDiv = document.createElement('div');
+            sec.nodes.forEach(node => secDiv.appendChild(node));
+            let secHtml = secDiv.innerHTML;
+            if (typeof cleanInternalEditorUI === 'function') secHtml = cleanInternalEditorUI(secHtml);
+            if (typeof sanitizeNoteHTML === 'function') secHtml = sanitizeNoteHTML(secHtml);
+
+            const newLeafId = await window.paperussLeafManager.addLeaf(n.id, sec.title || `Leaf ${s + 1}`);
+            if (newLeafId && window.paperussLeaves) {
+              const leafObj = await window.paperussLeaves.leafGet(newLeafId);
+              if (leafObj) {
+                leafObj.content = secHtml;
+                leafObj.updatedAt = Date.now();
+                await window.paperussLeaves.leafPut(leafObj);
+              }
+            }
+          }
         }
       } else {
         if (typeof persist === 'function') persist();
