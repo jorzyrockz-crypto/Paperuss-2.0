@@ -4,7 +4,7 @@ An overview of completed milestones, active feature branches in development, and
 
 ---
 
-## 🌿 Botanical Workspace Architecture (`Branch ➔ Stem ➔ Leafline ➔ Leaves ➔ Leaf ➔ Twig`)
+## 🌿 Botanical Workspace Architecture (`Branch ➔ Stem ➔ Leafline ➔ Leaves ➔ Leaf ➔ Veins ➔ Twig`)
 
 PapeRuss 2.0 structures note workspaces using an organic botanical hierarchy:
 
@@ -27,6 +27,9 @@ PapeRuss 2.0 structures note workspaces using an organic botanical hierarchy:
                           LEAF (Document)
                    Single Rich-Text Sub-Note
                                 │
+                              VEINS
+              Internal Headings, Anchors & Links
+                                │
                               TWIG
                        Inline Tag / Label
 ```
@@ -37,6 +40,7 @@ PapeRuss 2.0 structures note workspaces using an organic botanical hierarchy:
 - 🌿 **Leafline**: The UI navigation bar (`.leafline-ui` in `js/leafline.js`) displaying the breadcrumb tree of headings and sub-note tabs at the top of the editor.
 - 🍃 **Leaves**: The collection array of sub-note tabs contained inside a Note workspace (`fix/leaf-implementation`).
 - 🍃 **Leaf**: A single rich-text sub-note document or tab inside a Note workspace.
+- 🩺 **Veins**: The internal structural **Headings (`h1`–`h6`), TOC Anchors & Cross-Block Links** that transport structure throughout a single Leaf.
 - 🌱 **Twig**: An **Inline Tag / Label** attached to specific notes or content blocks.
 
 ---
