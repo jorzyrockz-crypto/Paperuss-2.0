@@ -1766,6 +1766,35 @@ function reflowCardGridRows(container = document) {
 }
 window.reflowCardGridRows = reflowCardGridRows;
 
+function refreshCardComponentsAfterDrop(rootContainer) {
+  const container = rootContainer || document.getElementById('noteBody') || document;
+  if (!container) return;
+
+  // Reset embed hydration flags so floating toolbars & iframe players re-mount cleanly
+  const embeds = container.querySelectorAll('.paperuss-embed');
+  embeds.forEach(embed => {
+    embed.removeAttribute('data-hydrated');
+    embed._needsRehydration = true;
+  });
+
+  if (typeof hydrateEmbeds === 'function') hydrateEmbeds(container);
+  if (typeof hydrateSoundCards === 'function') hydrateSoundCards(container);
+  if (typeof hydrateAudioCards === 'function') hydrateAudioCards(container);
+  if (typeof hydrateAttachmentCards === 'function') hydrateAttachmentCards(container);
+  if (typeof hydrateVideoCards === 'function') hydrateVideoCards(container);
+  if (typeof hydrateGlobalBlockItems === 'function') hydrateGlobalBlockItems(container);
+
+  if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+    lucide.createIcons();
+    setTimeout(() => {
+      if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+        lucide.createIcons();
+      }
+    }, 50);
+  }
+}
+window.refreshCardComponentsAfterDrop = refreshCardComponentsAfterDrop;
+
 document.addEventListener('drop', (e) => {
   stopAutoScrollOnDrag();
   if (!draggedCardElement) return;

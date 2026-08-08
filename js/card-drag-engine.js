@@ -228,11 +228,13 @@ document.addEventListener('pointerup', (e) => {
       handleDropAction(_cardElement, targetBlock, mode);
     }
     if (typeof reflowCardGridRows === 'function') reflowCardGridRows();
+    if (typeof refreshCardComponentsAfterDrop === 'function') refreshCardComponentsAfterDrop(document.getElementById('noteBody'));
     if (typeof handleBodyInput === 'function') handleBodyInput();
     if (typeof save === 'function') save();
     if (navigator.vibrate) navigator.vibrate(25);
   } else if (_cardElement && (!targetBlock || !document.getElementById('noteBody')?.contains(targetEl))) {
     if (typeof detachCardFromGrid === 'function') detachCardFromGrid(_cardElement);
+    if (typeof refreshCardComponentsAfterDrop === 'function') refreshCardComponentsAfterDrop(document.getElementById('noteBody'));
     if (typeof handleBodyInput === 'function') handleBodyInput();
     if (typeof save === 'function') save();
   }
