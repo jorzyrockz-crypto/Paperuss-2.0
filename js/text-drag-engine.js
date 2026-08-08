@@ -1,35 +1,49 @@
 /* ============================================================
-   PAPERUSS CUSTOM TEXT DRAG ENGINE  v1.0
+   PAPERUSS CUSTOM TEXT DRAG ENGINE  v2.0 — Warp Comet
    ============================================================
    Intercepts highlighted-text drags BEFORE the native browser
    drag system fires by using:
      1. capture-phase pointerdown  — registers drag intent
      2. setPointerCapture on target — owns all future pointer events
      3. capture-phase dragstart    — blocks native ghost completely
-     4. capture-phase pointermove  — drives Swarm ghost at 60fps
+     4. capture-phase pointermove  — drives Comet at 60fps via RAF
      5. capture-phase pointerup    — commits rich-text drop
 
+   Ghost: Warp Speed Comet — velocity-tracked star head + character
+   tail that fans behind the drag direction, stretching wider/longer
+   the faster you move. Slowing down collapses the tail to orbit.
+
    Card Morphing Hero Ghost: 🚧 UNDER CONSTRUCTION 🚧
-   Card ghost drag is disabled until a stable single engine is
-   ready. The existing block-gutter drag (editor-ui.js) still
-   works for block reordering via the ⠿ handle.
    ============================================================ */
 
 // ── State ────────────────────────────────────────────────────
-let _txtDragging     = false;   // ghost is live, following cursor
-let _txtPreparing    = false;   // pointerdown inside selection, waiting for threshold
-let _txtStartX       = 0;
-let _txtStartY       = 0;
-let _txtSourceRange  = null;
-let _txtText         = '';
-let _txtHTML         = '';
-let _txtCaptureEl    = null;    // element we called setPointerCapture on
-let _txtCaretMarker  = null;    // blinking drop-point caret line
-let _txtGhost        = null;    // swarm ghost element
+let _txtDragging    = false;
+let _txtPreparing   = false;
+let _txtStartX      = 0;
+let _txtStartY      = 0;
+let _txtSourceRange = null;
+let _txtText        = '';
+let _txtHTML        = '';
+let _txtCaptureEl   = null;
+let _txtCaretMarker = null;
+
+// ── Comet State ──────────────────────────────────────────────
+let _cometOrb       = null;    // the star-head element
+let _cometTailEls   = [];      // individual char tail elements
+let _trailBuffer    = [];      // ring buffer of past {x,y} positions
+let _prevX          = 0;
+let _prevY          = 0;
+let _rafId          = null;
+const TRAIL_MAX     = 16;      // how many past positions we remember
+const TAIL_CHARS    = 9;       // max characters in tail
 
 // ── Helpers ──────────────────────────────────────────────────
-function _removeTxtGhost() {
-  if (_txtGhost) { _txtGhost.remove(); _txtGhost = null; }
+function _removeComet() {
+  if (_cometOrb) { _cometOrb.remove(); _cometOrb = null; }
+  _cometTailEls.forEach(el => el.remove());
+  _cometTailEls = [];
+  _trailBuffer  = [];
+  if (_rafId)   { cancelAnimationFrame(_rafId); _rafId = null; }
 }
 
 function _removeTxtCaret() {
@@ -43,11 +57,12 @@ function _resetTxt() {
   _txtText        = '';
   _txtHTML        = '';
   _txtCaptureEl   = null;
-  _removeTxtGhost();
+  _removeComet();
   _removeTxtCaret();
   document.body.classList.remove('is-text-dragging');
 }
 
+// ── Caret marker ─────────────────────────────────────────────
 function _updateCaretMarker(clientX, clientY) {
   let range = null;
   if (document.caretRangeFromPoint) {
@@ -60,65 +75,113 @@ function _updateCaretMarker(clientX, clientY) {
       range.collapse(true);
     }
   }
-  if (range) {
-    const rects = range.getClientRects();
-    if (rects.length > 0) {
-      const rect = rects[0];
-      if (!_txtCaretMarker) {
-        _txtCaretMarker = document.createElement('div');
-        _txtCaretMarker.className = 'text-drag-caret-marker';
-        document.body.appendChild(_txtCaretMarker);
-      }
-      _txtCaretMarker.style.left   = `${rect.left + window.scrollX}px`;
-      _txtCaretMarker.style.top    = `${rect.top + window.scrollY}px`;
-      _txtCaretMarker.style.height = `${Math.max(rect.height, 16)}px`;
-    }
+  if (!range) return;
+  const rects = range.getClientRects();
+  if (!rects.length) return;
+  const rect = rects[0];
+  if (!_txtCaretMarker) {
+    _txtCaretMarker = document.createElement('div');
+    _txtCaretMarker.className = 'text-drag-caret-marker';
+    document.body.appendChild(_txtCaretMarker);
   }
+  _txtCaretMarker.style.left   = `${rect.left + window.scrollX}px`;
+  _txtCaretMarker.style.top    = `${rect.top  + window.scrollY}px`;
+  _txtCaretMarker.style.height = `${Math.max(rect.height, 16)}px`;
 }
 
-function _spawnSwarmGhost(clientX, clientY) {
-  _removeTxtGhost();
-  _txtGhost = document.createElement('div');
-  _txtGhost.className = 'magic-flying-text-ghost';
+// ── Spawn comet ───────────────────────────────────────────────
+function _spawnComet(clientX, clientY) {
+  _removeComet();
 
-  // ── Orbit characters — max 8, non-space chars only for clean orbit ──
-  const orbitSource = Array.from(_txtText.replace(/\s+/g, '')).slice(0, 8);
-  const totalChars  = orbitSource.length || 1;
+  // ── Star head orb ──
+  _cometOrb = document.createElement('div');
+  _cometOrb.className = 'comet-orb-head';
+  _cometOrb.textContent = '✦';
+  _cometOrb.style.left = `${clientX}px`;
+  _cometOrb.style.top  = `${clientY}px`;
+  document.body.appendChild(_cometOrb);
 
-  const charsHTML = orbitSource.map((ch, idx) => {
-    const safe       = ch.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const angle      = (idx / totalChars) * 360;
-    // Alternate inner/outer radius for depth illusion
-    const radius     = idx % 2 === 0 ? 11 + (idx * 1.5) : 15 + (idx * 1.2);
-    const flyDelay   = (idx * 0.045).toFixed(2);
-    const flyDur     = (0.45 + (idx % 3) * 0.08).toFixed(2);
-    // Vary orbit speed slightly per character — feels organic not robotic
-    const orbitDur   = (2.4 + (idx % 4) * 0.35).toFixed(2);
-    return `<span class="swarm-char" style="--angle:${angle}deg;--radius:${radius}px;--fly-delay:${flyDelay}s;--fly-dur:${flyDur}s;--orbit-dur:${orbitDur}s;">${safe}</span>`;
-  }).join('');
+  // ── Tail character elements ──
+  const chars = Array.from(_txtText.replace(/\s+/g, '')).slice(0, TAIL_CHARS);
+  if (!chars.length) chars.push('·');
 
-  // ── Pill label — first 18 chars of text ──
-  const snippetLabel = _txtText.length > 18 ? _txtText.substring(0, 18) + '…' : _txtText;
-  const wordCount    = _txtText.trim().split(/\s+/).filter(Boolean).length;
-  const wordLabel    = wordCount === 1 ? '1 word' : `${wordCount} words`;
+  chars.forEach((ch, i) => {
+    const el = document.createElement('span');
+    el.className = 'comet-tail-char';
+    el.textContent = ch;
+    // i=0 is closest to orb (brightest), i=last is furthest (faintest)
+    el.style.setProperty('--tail-idx', String(i));
+    el.style.setProperty('--tail-total', String(chars.length));
+    el.style.left = `${clientX}px`;
+    el.style.top  = `${clientY}px`;
+    document.body.appendChild(el);
+    _cometTailEls.push(el);
+  });
 
-  _txtGhost.innerHTML = `
-    <span class="live-magnet-orb">✦</span>
-    <span class="live-char-stream">${charsHTML}</span>
-    <span class="ghost-snippet-label">${snippetLabel.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
-    <span class="ghost-word-count">${wordLabel}</span>
-  `;
-  _txtGhost.style.left = `${clientX}px`;
-  _txtGhost.style.top  = `${clientY}px`;
-  document.body.appendChild(_txtGhost);
+  // Seed trail buffer at spawn point
+  for (let i = 0; i < TRAIL_MAX; i++) _trailBuffer.push({ x: clientX, y: clientY });
+  _prevX = clientX;
+  _prevY = clientY;
+
+  _rafId = requestAnimationFrame(_cometRafLoop);
 }
 
+// ── RAF update loop ────────────────────────────────────────────
+function _cometRafLoop() {
+  if (!_txtDragging) return;
+
+  // Velocity — distance moved since last frame
+  const dx       = _cometOrb ? parseFloat(_cometOrb.style.left) - _prevX : 0;
+  const dy       = _cometOrb ? parseFloat(_cometOrb.style.top)  - _prevY : 0;
+  const speed    = Math.hypot(dx, dy);
+
+  // Tail spread multiplier — faster drag = longer tail spacing
+  const spread   = Math.min(1 + speed * 0.35, 5.5);
+
+  _cometTailEls.forEach((el, i) => {
+    // Each char samples a different point in the trail history
+    // i=0 → very recent past (just behind orb)
+    // i=last → oldest point (furthest back)
+    const bufIdx  = Math.round((i + 1) * (TRAIL_MAX / (_cometTailEls.length + 1)) * spread);
+    const clamped = Math.min(bufIdx, _trailBuffer.length - 1);
+    const pos     = _trailBuffer[Math.max(0, _trailBuffer.length - 1 - clamped)];
+
+    if (pos) {
+      el.style.left = `${pos.x}px`;
+      el.style.top  = `${pos.y}px`;
+    }
+
+    // Opacity + scale fade with distance
+    const t = i / Math.max(_cometTailEls.length - 1, 1);
+    el.style.opacity   = String((1 - t * 0.88).toFixed(3));
+    el.style.fontSize  = `${Math.max(7, 13 - i * 0.8)}px`;
+  });
+
+  _rafId = requestAnimationFrame(_cometRafLoop);
+}
+
+// ── Update orb position + trail buffer ────────────────────────
+function _updateComet(clientX, clientY) {
+  if (!_cometOrb) return;
+
+  _prevX = parseFloat(_cometOrb.style.left) || clientX;
+  _prevY = parseFloat(_cometOrb.style.top)  || clientY;
+
+  // Move star head to cursor instantly
+  _cometOrb.style.left = `${clientX}px`;
+  _cometOrb.style.top  = `${clientY}px`;
+
+  // Push new position into ring buffer
+  _trailBuffer.push({ x: clientX, y: clientY });
+  if (_trailBuffer.length > TRAIL_MAX) _trailBuffer.shift();
+}
+
+// ── Commit drop ───────────────────────────────────────────────
 function _commitDrop(clientX, clientY) {
   const el = document.elementFromPoint(clientX, clientY);
   const editable = el && el.closest
     ? el.closest('[contenteditable="true"],input,textarea,#noteTitle,#noteBody,td,th,li,p,h1,h2,h3,h4,h5,h6,.note-editor')
     : null;
-
   if (!editable || !_txtText) return;
 
   if (editable.tagName === 'INPUT' || editable.tagName === 'TEXTAREA') {
@@ -128,7 +191,7 @@ function _commitDrop(clientX, clientY) {
     return;
   }
 
-  // Remove source text first
+  // Delete source selection
   if (_txtSourceRange) {
     try { _txtSourceRange.deleteContents(); } catch (_) {}
   }
@@ -158,7 +221,7 @@ function _commitDrop(clientX, clientY) {
   while (tempDiv.firstChild) { lastNode = tempDiv.firstChild; frag.appendChild(lastNode); }
   dropRange.insertNode(frag);
 
-  // Drop-release burst animation
+  // Drop-release burst
   if (lastNode) {
     const burst = document.createElement('span');
     burst.className = 'text-drop-release-burst';
@@ -174,34 +237,34 @@ function _commitDrop(clientX, clientY) {
         while (burst.firstChild) burst.parentNode.insertBefore(burst.firstChild, burst);
         burst.remove();
       }
-    }, 350);
+    }, 420);
   }
 
   if (typeof handleBodyInput === 'function') handleBodyInput();
   if (typeof save === 'function') save();
 }
 
-// ── 1. pointerdown CAPTURE — register intent + claim pointer ─
+// ═══════════════════════════════════════════════════════════════
+//  EVENT LISTENERS — all in capture phase so they fire FIRST
+// ═══════════════════════════════════════════════════════════════
+
+// ── 1. pointerdown ────────────────────────────────────────────
 document.addEventListener('pointerdown', (e) => {
   _resetTxt();
-
-  // Only trigger on primary pointer (left mouse / first finger)
   if (e.button !== 0 && e.pointerType === 'mouse') return;
 
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
 
-  // Must be clicking inside an editable area
   const target = (e.target && e.target.nodeType === 3) ? e.target.parentElement : e.target;
   const editable = target && target.closest
     ? target.closest('[contenteditable="true"],input,textarea,#noteTitle,#noteBody,td,th,li,p,h1,h2,h3,h4,h5,h6,.note-editor')
     : null;
   if (!editable) return;
 
-  // Must be clicking inside the selection bounds
   try {
-    const range = sel.getRangeAt(0);
-    const rects = Array.from(range.getClientRects());
+    const range  = sel.getRangeAt(0);
+    const rects  = Array.from(range.getClientRects());
     const inside = rects.some(r =>
       e.clientX >= r.left && e.clientX <= r.right &&
       e.clientY >= r.top  && e.clientY <= r.bottom
@@ -215,78 +278,68 @@ document.addEventListener('pointerdown', (e) => {
     _txtHTML = div.innerHTML;
   } catch (_) { return; }
 
-  _txtStartX   = e.clientX;
-  _txtStartY   = e.clientY;
+  _txtStartX    = e.clientX;
+  _txtStartY    = e.clientY;
   _txtPreparing = true;
 
-  // CRITICAL: claim the pointer so pointermove fires even if
-  // embeds.js or other listeners call e.preventDefault()
+  // Claim pointer — guarantees pointermove fires even after e.preventDefault() elsewhere
   try {
     if (e.target && e.target.setPointerCapture && e.pointerId != null) {
       e.target.setPointerCapture(e.pointerId);
       _txtCaptureEl = e.target;
     }
   } catch (_) {}
-}, true); // ← capture phase = fires FIRST, before any other listener
+}, true);
 
 
-// ── 2. dragstart CAPTURE — block native ghost ─────────────────
+// ── 2. dragstart — block native ghost ─────────────────────────
 document.addEventListener('dragstart', (e) => {
-  // If our text drag is active/preparing — kill native drag entirely
   if (_txtDragging || _txtPreparing) {
     e.preventDefault();
     e.stopImmediatePropagation();
     return;
   }
-  // Yield to gutter block drag (editor-ui.js uses application/x-paperuss-drag)
+  // Yield to block gutter drag
   if (e.dataTransfer && e.dataTransfer.types &&
       e.dataTransfer.types.includes && e.dataTransfer.types.includes('application/x-paperuss-drag')) {
     return;
   }
-}, true); // ← capture phase = fires FIRST
+}, true);
 
 
-// ── 3. pointermove CAPTURE — drive ghost at 60fps ─────────────
+// ── 3. pointermove — drive comet at 60fps ─────────────────────
 document.addEventListener('pointermove', (e) => {
   if (!_txtPreparing && !_txtDragging) return;
 
+  // Activate once threshold crossed
   if (_txtPreparing && !_txtDragging) {
     const dist = Math.hypot(e.clientX - _txtStartX, e.clientY - _txtStartY);
     if (dist > 5) {
       _txtDragging  = true;
       _txtPreparing = false;
       document.body.classList.add('is-text-dragging');
-
-      // Clear browser selection so it doesn't show native drag highlight
       try { window.getSelection().removeAllRanges(); } catch (_) {}
-
-      _spawnSwarmGhost(e.clientX, e.clientY);
+      _spawnComet(e.clientX, e.clientY);
     }
   }
 
   if (_txtDragging) {
     e.preventDefault();
-    if (_txtGhost) {
-      _txtGhost.style.left = `${e.clientX}px`;
-      _txtGhost.style.top  = `${e.clientY}px`;
-    }
+    _updateComet(e.clientX, e.clientY);
     _updateCaretMarker(e.clientX, e.clientY);
   }
-}, true); // ← capture phase
+}, true);
 
 
-// ── 4. pointerup CAPTURE — commit drop ────────────────────────
+// ── 4. pointerup — commit drop ────────────────────────────────
 document.addEventListener('pointerup', (e) => {
-  if (!_txtDragging) {
-    _resetTxt();
-    return;
-  }
+  if (!_txtDragging) { _resetTxt(); return; }
   e.preventDefault();
   _commitDrop(e.clientX, e.clientY);
   _resetTxt();
-}, true); // ← capture phase
+}, true);
 
 
-// ── 5. pointercancel / lostpointercapture — abort ─────────────
-document.addEventListener('pointercancel', _resetTxt, true);
-document.addEventListener('lostpointercapture', _resetTxt, true);
+// ── 5. abort ─────────────────────────────────────────────────
+document.addEventListener('pointercancel',       _resetTxt, true);
+document.addEventListener('lostpointercapture',  _resetTxt, true);
