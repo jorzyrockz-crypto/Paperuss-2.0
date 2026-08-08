@@ -8,7 +8,19 @@
   const STORAGE_KEY = 'paperuss_branches_v1';
   const ACTIVE_BRANCH_KEY = 'paperuss_active_branch_v1';
 
-  // Default initial branches if none exist
+  const OUTLINE_ICONS = [
+    'folder', 'briefcase', 'user', 'lightbulb', 'archive', 
+    'bookmark', 'code', 'heart', 'star', 'terminal', 
+    'target', 'zap', 'coffee', 'database', 'shield', 
+    'globe', 'hash', 'layers', 'file-text', 'compass'
+  ];
+
+  const COLOR_PRESETS = [
+    '#6366f1', '#10b981', '#3b82f6', '#f59e0b', 
+    '#ec4899', '#a855f7', '#f43f5e', '#14b8a6', '#64748b'
+  ];
+
+  // Default initial branches
   const DEFAULT_BRANCHES = [
     { id: 'branch-personal', name: 'Personal', color: '#10b981', icon: 'user', parentId: null, order: 0 },
     { id: 'branch-work', name: 'Work & Projects', color: '#3b82f6', icon: 'briefcase', parentId: null, order: 1 },
@@ -18,6 +30,7 @@
 
   let branchesCache = null;
   let activeBranchId = null;
+  let activeMoreMenu = null;
 
   function loadBranches() {
     try {
@@ -29,7 +42,7 @@
         saveBranches(branchesCache);
       }
     } catch (e) {
-      console.warn('[BranchEngine] Failed to load branches from localStorage:', e);
+      console.warn('[BranchEngine] Failed to load branches:', e);
       branchesCache = [...DEFAULT_BRANCHES];
     }
     return branchesCache;
@@ -62,7 +75,6 @@
       localStorage.setItem(ACTIVE_BRANCH_KEY, activeBranchId);
     } catch (e) {}
     
-    // Filter notes list if state engine exists
     if (window.state && typeof window.renderNotesList === 'function') {
       window.renderNotesList();
     }
@@ -116,7 +128,7 @@
           branches: branchesCache,
           branchesUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true }).catch(err => {
-          console.warn('[BranchEngine] Firestore branch sync suppressed:', err);
+          console.warn('[BranchEngine] Firestore sync suppressed:', err);
         });
       } catch (e) {}
     }
@@ -129,6 +141,74 @@
     return window.state.notes.filter(n => !n.archived && !n.trashed && (n.category === name || n.branchId === branch?.id)).length;
   }
 
+  function closeMoreMenu() {
+    if (activeMoreMenu && activeMoreMenu.parentElement) {
+      activeMoreMenu.remove();
+    }
+    activeMoreMenu = null;
+  }
+
+  function openBranchMoreMenu(e, branch) {
+    e.stopPropagation();
+    closeMoreMenu();
+
+    const menu = document.createElement('div');
+    menu.className = 'branch-more-dropdown show';
+    menu.innerHTML = `
+      <button type="button" class="branch-menu-item" id="bmiEdit">
+        <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit Branch
+      </button>
+      <button type="button" class="branch-menu-item" id="bmiAddSub">
+        <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Add Sub-Branch
+      </button>
+      <div class="branch-menu-divider"></div>
+      <button type="button" class="branch-menu-item danger" id="bmiDelete">
+        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Delete Branch
+      </button>
+    `;
+
+    document.body.appendChild(menu);
+    activeMoreMenu = menu;
+
+    const rect = e.target.getBoundingClientRect();
+    let top = rect.bottom + 4;
+    let left = Math.min(rect.left, window.innerWidth - 180);
+
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons({ el: menu });
+    }
+
+    menu.querySelector('#bmiEdit').onclick = () => {
+      closeMoreMenu();
+      openBranchModal(branch);
+    };
+
+    menu.querySelector('#bmiAddSub').onclick = () => {
+      closeMoreMenu();
+      openBranchModal(null, branch.id);
+    };
+
+    menu.querySelector('#bmiDelete').onclick = () => {
+      closeMoreMenu();
+      if (confirm(`Delete branch "${branch.name}"? Notes inside will be unassigned.`)) {
+        deleteBranch(branch.id);
+      }
+    };
+
+    setTimeout(() => {
+      const dismissHandler = (evt) => {
+        if (!menu.contains(evt.target)) {
+          closeMoreMenu();
+          document.removeEventListener('pointerdown', dismissHandler);
+        }
+      };
+      document.addEventListener('pointerdown', dismissHandler);
+    }, 50);
+  }
+
   function renderSidebarBranchTree() {
     const container = document.getElementById('sidebarBranchTree');
     if (!container) return;
@@ -138,14 +218,16 @@
 
     let html = `
       <div class="branch-tree-header">
-        <span class="branch-tree-title"><i data-lucide="git-branch" class="w-3.5 h-3.5"></i> BRANCHES</span>
+        <span class="branch-tree-title">
+          <i data-lucide="git-branch" class="w-3.5 h-3.5"></i> BRANCHES
+        </span>
         <button type="button" class="btn-new-branch-icon" id="btnAddBranch" title="Create New Branch">
           <i data-lucide="plus" class="w-3.5 h-3.5"></i>
         </button>
       </div>
       <div class="branch-tree-list">
         <div class="branch-item ${currentActive === 'all' ? 'active' : ''}" data-branch-id="all">
-          <span class="branch-color-dot" style="background:#6366f1"></span>
+          <i data-lucide="library" class="branch-icon w-4 h-4" style="color:#6366f1"></i>
           <span class="branch-name">All Notes</span>
           <span class="branch-count">${window.state?.notes?.filter(n=>!n.archived&&!n.trashed).length || 0}</span>
         </div>
@@ -157,13 +239,14 @@
       const count = countNotesInBranch(b.id);
       const isSelected = currentActive === b.id || currentActive === b.name;
       const subBranches = branches.filter(sub => sub.parentId === b.id);
+      const iconName = b.icon || 'folder';
 
       html += `
         <div class="branch-item ${isSelected ? 'active' : ''}" data-branch-id="${b.id}" data-branch-name="${escHtml(b.name)}">
-          <span class="branch-color-dot" style="background:${b.color || '#6366f1'}"></span>
+          <i data-lucide="${iconName}" class="branch-icon w-4 h-4" style="color:${b.color || '#6366f1'}"></i>
           <span class="branch-name">${escHtml(b.name)}</span>
           <span class="branch-count">${count}</span>
-          <button class="branch-opt-btn" data-branch-id="${b.id}" title="Branch Options">⋮</button>
+          <button type="button" class="branch-opt-btn" data-branch-id="${b.id}" title="Branch Options">⋮</button>
         </div>
       `;
 
@@ -173,11 +256,13 @@
         subBranches.forEach(sub => {
           const subCount = countNotesInBranch(sub.id);
           const subSelected = currentActive === sub.id || currentActive === sub.name;
+          const subIcon = sub.icon || 'folder';
           html += `
             <div class="branch-item sub-branch-item ${subSelected ? 'active' : ''}" data-branch-id="${sub.id}" data-branch-name="${escHtml(sub.name)}">
-              <span class="branch-color-dot" style="background:${sub.color || '#6366f1'}"></span>
+              <i data-lucide="${subIcon}" class="branch-icon w-3.5 h-3.5" style="color:${sub.color || '#6366f1'}"></i>
               <span class="branch-name">${escHtml(sub.name)}</span>
               <span class="branch-count">${subCount}</span>
+              <button type="button" class="branch-opt-btn" data-branch-id="${sub.id}" title="Branch Options">⋮</button>
             </div>
           `;
         });
@@ -188,7 +273,7 @@
     html += `</div>`;
     container.innerHTML = html;
 
-    // Refresh Lucide icons
+    // Refresh Lucide outline icons
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
       window.lucide.createIcons({ el: container });
     }
@@ -199,6 +284,15 @@
         if (e.target.closest('.branch-opt-btn')) return;
         const bId = item.dataset.branchId;
         setActiveBranchId(bId);
+      };
+    });
+
+    // 3-dot More Menu triggers
+    container.querySelectorAll('.branch-opt-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        const bId = btn.dataset.branchId;
+        const branch = branches.find(b => b.id === bId);
+        if (branch) openBranchMoreMenu(e, branch);
       };
     });
 
@@ -244,14 +338,25 @@
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  function openBranchModal(editBranch = null) {
+  function openBranchModal(editBranch = null, parentId = null) {
     let modal = document.getElementById('branchModal');
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'branchModal';
       modal.className = 'modal-backdrop hidden';
+      
+      let iconGridHtml = OUTLINE_ICONS.map(ic => `
+        <button type="button" class="bm-icon-btn ${ic === 'folder' ? 'active' : ''}" data-icon="${ic}" title="${ic}">
+          <i data-lucide="${ic}" class="w-4 h-4"></i>
+        </button>
+      `).join('');
+
+      let colorPresetsHtml = COLOR_PRESETS.map(c => `
+        <button type="button" class="bm-color-preset ${c === '#6366f1' ? 'active' : ''}" data-color="${c}" style="background:${c}"></button>
+      `).join('');
+
       modal.innerHTML = `
-        <div class="modal-card print-setup-modal" style="max-width:400px">
+        <div class="modal-card print-setup-modal" style="max-width:440px">
           <div class="print-modal-header">
             <h3 style="margin:0;font-size:16px;font-weight:700" id="branchModalTitle">New Branch Category</h3>
             <button type="button" class="tool-btn" id="btnCloseBranchModal">✕</button>
@@ -261,14 +366,21 @@
               <label class="pm-label">Branch Name</label>
               <input type="text" id="bmNameInput" class="pm-select" placeholder="e.g. Finance, Lofi Study, Health" />
             </div>
+
             <div class="pm-field-group">
-              <label class="pm-label">Accent Color</label>
-              <div class="pm-segmented-control" id="bmColorPicker">
-                <button type="button" class="pm-segment-btn active" data-color="#6366f1" style="color:#6366f1">Indigo</button>
-                <button type="button" class="pm-segment-btn" data-color="#10b981" style="color:#10b981">Emerald</button>
-                <button type="button" class="pm-segment-btn" data-color="#3b82f6" style="color:#3b82f6">Blue</button>
-                <button type="button" class="pm-segment-btn" data-color="#f59e0b" style="color:#f59e0b">Amber</button>
-                <button type="button" class="pm-segment-btn" data-color="#ec4899" style="color:#ec4899">Pink</button>
+              <label class="pm-label">Outline Icon</label>
+              <div class="bm-icon-grid" id="bmIconGrid">
+                ${iconGridHtml}
+              </div>
+            </div>
+
+            <div class="pm-field-group">
+              <label class="pm-label">Color Accent</label>
+              <div class="bm-color-picker-row">
+                <div class="bm-color-presets" id="bmColorPresets">
+                  ${colorPresetsHtml}
+                </div>
+                <input type="color" id="bmCustomHexInput" class="bm-custom-hex" value="#6366f1" title="Custom Hex Color" />
               </div>
             </div>
           </div>
@@ -280,29 +392,74 @@
       `;
       document.body.appendChild(modal);
 
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons({ el: modal });
+      }
+
       modal.querySelector('#btnCloseBranchModal').onclick = () => modal.classList.add('hidden');
       modal.querySelector('#btnCancelBranch').onclick = () => modal.classList.add('hidden');
 
-      const colorBtns = modal.querySelectorAll('#bmColorPicker .pm-segment-btn');
-      colorBtns.forEach(btn => {
+      // Icon Selector
+      modal.querySelectorAll('#bmIconGrid .bm-icon-btn').forEach(btn => {
         btn.onclick = () => {
-          colorBtns.forEach(b => b.classList.remove('active'));
+          modal.querySelectorAll('#bmIconGrid .bm-icon-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
         };
       });
 
+      // Color Selector
+      modal.querySelectorAll('#bmColorPresets .bm-color-preset').forEach(btn => {
+        btn.onclick = () => {
+          modal.querySelectorAll('#bmColorPresets .bm-color-preset').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          modal.querySelector('#bmCustomHexInput').value = btn.dataset.color;
+        };
+      });
+
+      modal.querySelector('#bmCustomHexInput').oninput = (e) => {
+        modal.querySelectorAll('#bmColorPresets .bm-color-preset').forEach(b => b.classList.remove('active'));
+      };
+
       modal.querySelector('#btnSaveBranch').onclick = () => {
         const name = modal.querySelector('#bmNameInput').value.trim();
-        const activeColorBtn = modal.querySelector('#bmColorPicker .pm-segment-btn.active');
-        const color = activeColorBtn ? activeColorBtn.dataset.color : '#6366f1';
+        const activeIconBtn = modal.querySelector('#bmIconGrid .bm-icon-btn.active');
+        const activeColorBtn = modal.querySelector('#bmColorPresets .bm-color-preset.active');
+        const customHex = modal.querySelector('#bmCustomHexInput').value;
+
+        const icon = activeIconBtn ? activeIconBtn.dataset.icon : 'folder';
+        const color = activeColorBtn ? activeColorBtn.dataset.color : customHex;
+        const editId = modal.dataset.editBranchId;
+        const pId = modal.dataset.parentId;
+
         if (name) {
-          createBranch({ name, color });
+          if (editId) {
+            updateBranch(editId, { name, icon, color });
+          } else {
+            createBranch({ name, icon, color, parentId: pId || null });
+          }
           modal.classList.add('hidden');
         }
       };
     }
 
+    modal.dataset.editBranchId = editBranch ? editBranch.id : '';
+    modal.dataset.parentId = parentId || '';
+    modal.querySelector('#branchModalTitle').textContent = editBranch ? 'Edit Branch' : (parentId ? 'Add Sub-Branch' : 'New Branch Category');
     modal.querySelector('#bmNameInput').value = editBranch ? editBranch.name : '';
+
+    // Select active icon
+    const activeIcon = editBranch ? (editBranch.icon || 'folder') : 'folder';
+    modal.querySelectorAll('#bmIconGrid .bm-icon-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.icon === activeIcon);
+    });
+
+    // Select active color
+    const activeColor = editBranch ? (editBranch.color || '#6366f1') : '#6366f1';
+    modal.querySelector('#bmCustomHexInput').value = activeColor;
+    modal.querySelectorAll('#bmColorPresets .bm-color-preset').forEach(b => {
+      b.classList.toggle('active', b.dataset.color === activeColor);
+    });
+
     modal.classList.remove('hidden');
     modal.querySelector('#bmNameInput').focus();
   }
