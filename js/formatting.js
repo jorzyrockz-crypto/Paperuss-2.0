@@ -972,8 +972,17 @@ function applyParagraphStyle(val) {
   // Use formatBlock to convert the block element tag
   document.execCommand('formatBlock', false, targetTag);
   
+  // Re-acquire active block after formatBlock DOM node replacement
+  let anchor = window.getSelection()?.anchorNode;
+  if (anchor && anchor.nodeType === 3) anchor = anchor.parentElement;
+  let activeBlock = anchor ? anchor.closest('p, h1, h2, h3, h4, h5, h6, blockquote, li, div') : null;
+
   // Clean up and apply our semantic classes to the newly formatted blocks
   const blocks = getSelectedBlocks();
+  if (activeBlock && !blocks.includes(activeBlock) && ed.contains(activeBlock) && activeBlock !== ed) {
+    blocks.push(activeBlock);
+  }
+
   blocks.forEach(b => {
     b.classList.remove('editor-title', 'editor-subtitle');
     if (targetClass) b.classList.add(targetClass);
@@ -1111,6 +1120,9 @@ function initQuoteContextPanel() {
     document.body.appendChild(panel);
   }
 
+  // Prevent mousedown inside panel from stealing selection/focus
+  panel.addEventListener('mousedown', (e) => e.preventDefault());
+
   let activeQuote = null;
 
   document.addEventListener('selectionchange', () => {
@@ -1124,15 +1136,18 @@ function initQuoteContextPanel() {
       if (bq) {
         activeQuote = bq;
         const rect = bq.getBoundingClientRect();
-        panel.style.left = `${Math.max(10, rect.left + window.scrollX)}px`;
-        panel.style.top = `${Math.max(10, rect.top + window.scrollY - 36)}px`;
+        panel.style.position = 'fixed';
+        panel.style.left = `${Math.max(10, Math.min(rect.left, window.innerWidth - 320))}px`;
+        panel.style.top = `${Math.max(10, rect.top - 42)}px`;
         panel.style.display = 'flex';
         panel.classList.remove('hidden');
         return;
       }
     }
-    panel.style.display = 'none';
-    panel.classList.add('hidden');
+    if (panel && !panel.contains(document.activeElement)) {
+      panel.style.display = 'none';
+      panel.classList.add('hidden');
+    }
   });
 
   panel.addEventListener('click', (e) => {
@@ -1143,7 +1158,7 @@ function initQuoteContextPanel() {
     if (typeof handleBodyInput === 'function') handleBodyInput();
     if (typeof save === 'function') save();
     if (window.HistoryManager) window.HistoryManager.capture(true);
-    if (typeof toast === 'function') toast(`Quote style updated to ${style}`);
+    if (typeof toast === 'function') toast(`Quote style: ${style}`);
   });
 }
 

@@ -452,6 +452,7 @@ function bind(){
   }
 
   document.getElementById('formatBar').onclick=e=>{
+    if(e.target.closest('#quotePicker') || e.target.closest('#quoteStyleDropdown')) return;
     const media=e.target.closest('[data-media]');
     if(media){
       e.preventDefault();
@@ -460,6 +461,7 @@ function bind(){
       return;
     }
     const b=e.target.closest('[data-cmd]'); if(!b) return;
+    if(b.id === 'quoteBtn' || b.closest('#quotePicker')) return;
     e.preventDefault();
     applyCommand(b.dataset.cmd, b.dataset.val);
     if(typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
@@ -1201,14 +1203,120 @@ function isSingleStandaloneUrl(str) {
   if(enableNotifBtn) enableNotifBtn.onclick=requestNotifPermission;
 
   /* ---------- SYSTEM FONT STYLE PICKER ---------- */
-  const fsBtn=document.getElementById('fontStyleBtn');
-  if(fsBtn) fsBtn.onclick=e=>{ e.stopPropagation(); toggleDropdown('fontStyleDropdown'); };
-  const fsDrop=document.getElementById('fontStyleDropdown');
-  if(fsDrop) fsDrop.onclick=e=>{
-    const opt=e.target.closest('[data-fontstyle]'); if(!opt) return;
-    fsDrop.classList.remove('show');
-    applyFontStyle(opt.dataset.fontstyle);
+  let _savedFontRange = null;
+
+  document.addEventListener('selectionchange', () => {
+    const ed = typeof bodyEl === 'function' ? bodyEl() : null;
+    const sel = window.getSelection();
+    if (ed && sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)) {
+      _savedFontRange = sel.getRangeAt(0).cloneRange();
+    }
+  });
+
+  const fsBtn = document.getElementById('fontStyleBtn');
+  if (fsBtn) {
+    fsBtn.addEventListener('mousedown', (e) => {
+      const ed = typeof bodyEl === 'function' ? bodyEl() : null;
+      const sel = window.getSelection();
+      if (ed && sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)) {
+        _savedFontRange = sel.getRangeAt(0).cloneRange();
+      }
+    });
+    fsBtn.onclick = e => { e.stopPropagation(); toggleDropdown('fontStyleDropdown'); };
+  }
+
+  const fsDrop = document.getElementById('fontStyleDropdown');
+  if (fsDrop) {
+    fsDrop.addEventListener('mousedown', (e) => {
+      e.preventDefault(); // Prevent button from stealing focus from editor
+      const ed = typeof bodyEl === 'function' ? bodyEl() : null;
+      const sel = window.getSelection();
+      if (ed && sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)) {
+        _savedFontRange = sel.getRangeAt(0).cloneRange();
+      }
+    });
+    fsDrop.onclick = e => {
+      const opt = e.target.closest('[data-fontstyle]'); if (!opt) return;
+      if (typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
+      if (_savedFontRange) {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(_savedFontRange);
+      }
+      applyFontStyle(opt.dataset.fontstyle);
+      _savedFontRange = null;
+    };
+  }
+
+  /* ---------- LINE SPACING PICKER ---------- */
+  const lsBtn=document.getElementById('lineSpacingBtn');
+  if(lsBtn) lsBtn.onclick=e=>{ e.stopPropagation(); toggleDropdown('lineSpacingDropdown'); };
+  const lsDrop=document.getElementById('lineSpacingDropdown');
+  if(lsDrop) lsDrop.onclick=e=>{
+    const opt=e.target.closest('[data-spacing]'); if(!opt) return;
+    lsDrop.classList.remove('show');
+    if(typeof applyLineSpacing === 'function') applyLineSpacing(opt.dataset.spacing);
   };
+
+  /* ---------- QUOTE STYLE PICKER ---------- */
+  const qBtn = document.getElementById('quoteBtn');
+  if (qBtn) qBtn.onclick = e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const ed = bodyEl();
+    const sel = window.getSelection();
+    if (sel && sel.anchorNode && ed && ed.contains(sel.anchorNode)) {
+      let node = sel.anchorNode;
+      if (node.nodeType === 3) node = node.parentElement;
+      const inBq = node.closest && node.closest('blockquote');
+      if (!inBq) {
+        document.execCommand('formatBlock', false, 'blockquote');
+        if (typeof handleBodyInput === 'function') handleBodyInput();
+        if (typeof updateToolbarState === 'function') updateToolbarState();
+      }
+    } else {
+      document.execCommand('formatBlock', false, 'blockquote');
+      if (typeof handleBodyInput === 'function') handleBodyInput();
+      if (typeof updateToolbarState === 'function') updateToolbarState();
+    }
+    toggleDropdown('quoteStyleDropdown');
+  };
+  let _cachedQuoteBq = null;
+
+  const qDrop = document.getElementById('quoteStyleDropdown');
+  if (qDrop) {
+    // Before dropdown opens, capture the active blockquote from current selection
+    qDrop.addEventListener('mousedown', () => {
+      const ed = bodyEl();
+      const sel = window.getSelection();
+      _cachedQuoteBq = null;
+      if (sel && sel.anchorNode && ed && ed.contains(sel.anchorNode)) {
+        let node = sel.anchorNode;
+        if (node.nodeType === 3) node = node.parentElement;
+        _cachedQuoteBq = node.closest && node.closest('blockquote');
+      }
+      // Also search for nearest blockquote in editor as fallback
+      if (!_cachedQuoteBq && ed) {
+        _cachedQuoteBq = ed.querySelector('blockquote');
+      }
+    });
+
+    qDrop.onclick = e => {
+      const opt = e.target.closest('[data-qstyle]');
+      if (!opt) return;
+      if (typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
+      const style = opt.dataset.qstyle;
+      const bq = _cachedQuoteBq;
+      if (bq && bq.isConnected) {
+        bq.setAttribute('data-quote-style', style);
+        if (typeof handleBodyInput === 'function') handleBodyInput();
+        if (typeof save === 'function') save();
+        if (window.HistoryManager) window.HistoryManager.capture(true);
+        if (typeof toast === 'function') toast(`Quote style: ${style}`);
+      }
+      _cachedQuoteBq = null;
+    };
+  }
 
   /* ---------- TABLE SIZE PICKER ---------- */
   const tblBtn=document.getElementById('tableBtn');
@@ -1229,6 +1337,11 @@ function isSingleStandaloneUrl(str) {
     if(e.key==='/' && !typing){ e.preventDefault(); document.getElementById('searchInput').focus(); }
     if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='n'){ e.preventDefault(); createNote(); }
     if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='s'){ e.preventDefault(); save(); toast('All notes saved'); }
+    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='p'){
+      e.preventDefault();
+      if(typeof openPrintModal === 'function') openPrintModal();
+      else if(typeof printCurrentNote === 'function') printCurrentNote();
+    }
     if(e.key==='Escape'){ document.getElementById('modalRoot').innerHTML=''; document.getElementById('searchInput').blur(); }
     if(e.key==='F11'){
       e.preventDefault();
@@ -1425,7 +1538,7 @@ function isSingleStandaloneUrl(str) {
 
   // Close dropdowns when clicking outside
   window.closeAllEditorDropdowns = () => {
-    ['tcDropdown','paraStyleDropdown','hlDropdown','szDropdown','fontStyleDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown','overflowDropdown'].forEach(id=>{
+    ['tcDropdown','paraStyleDropdown','hlDropdown','szDropdown','fontStyleDropdown','lineSpacingDropdown','quoteStyleDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown','overflowDropdown'].forEach(id=>{
       const el=document.getElementById(id);
       if(el && el.classList.contains('show')){
         el.classList.remove('show');
@@ -1433,7 +1546,7 @@ function isSingleStandaloneUrl(str) {
         el.style.right=''; el.style.zIndex=''; el.style.maxHeight=''; el.style.overflowY='';
       }
     });
-    ['tcBtn','paraStyleBtn','hlBtn','szBtn','fontStyleBtn','tableBtn','pageLayoutBtn','templateBtn','footerTagsBtn','overflowBtn'].forEach(id=>{
+    ['tcBtn','paraStyleBtn','hlBtn','szBtn','fontStyleBtn','lineSpacingBtn','quoteBtn','tableBtn','pageLayoutBtn','templateBtn','footerTagsBtn','overflowBtn'].forEach(id=>{
       const btn=document.getElementById(id);
       if(btn) btn.setAttribute('aria-expanded', 'false');
     });
@@ -1442,7 +1555,7 @@ function isSingleStandaloneUrl(str) {
   const closeAllDropdowns = window.closeAllEditorDropdowns;
   document.addEventListener('click', e=>{
     if(!e.target.closest('#tcPicker') && !e.target.closest('#paraStylePicker') && !e.target.closest('#hlPicker') && !e.target.closest('.sz-picker')
-      && !e.target.closest('#fontStylePicker') && !e.target.closest('#tablePicker')
+      && !e.target.closest('#fontStylePicker') && !e.target.closest('#lineSpacingPicker') && !e.target.closest('#quotePicker') && !e.target.closest('#tablePicker')
       && !e.target.closest('#pageLayoutPicker') && !e.target.closest('#templatePicker')
       && !e.target.closest('#footerTagsPicker') && !e.target.closest('#overflowPicker')
       && !e.target.closest('#notifBellWrap') && !e.target.closest('#notifPanel')){
@@ -1562,8 +1675,18 @@ function isSingleStandaloneUrl(str) {
   initAuthAndSync();
   // Schedule event notifications for any existing notes that have them
   if(typeof rescheduleAllEventNotifications==='function') rescheduleAllEventNotifications();
-  state.currentId = filteredNotes()[0]?.id || null;
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetNoteId = urlParams.get('noteId');
+  const targetLeafId = urlParams.get('leafId');
+  if (targetNoteId && getNote(targetNoteId)) {
+    state.currentId = targetNoteId;
+  } else {
+    state.currentId = filteredNotes()[0]?.id || null;
+  }
   renderAll();
+  if (targetNoteId && targetLeafId && typeof switchLeafAction === 'function') {
+    setTimeout(() => { switchLeafAction(targetLeafId); }, 100);
+  }
   if (window.paperussLeaves && typeof window.paperussLeaves.repairContaminatedLeavesOnce === 'function') {
     window.paperussLeaves.repairContaminatedLeavesOnce().then((repaired) => {
       if (repaired > 0 && typeof renderEditor === 'function') renderEditor();

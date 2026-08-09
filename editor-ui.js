@@ -2,36 +2,104 @@
    SYSTEM FONT STYLING
    ============================================================ */
 function applyFontStyle(fontStyle){
-  const n=getNote(state.currentId);
-  if(n){
-    n.fontStyle = fontStyle;
-    n.updatedAt = Date.now();
-    save();
-  }
   const ed=bodyEl();
-  if(ed){
+  if(!ed) return;
+
+  const fontsMap={
+    'sans':'"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    'calibri':'Calibri, Carlito, Aptos, sans-serif',
+    'segoe':'"Segoe UI", -apple-system, sans-serif',
+    'serif':'Georgia, "Times New Roman", serif',
+    'mono':'Consolas, ui-monospace, SFMono-Regular, monospace',
+    'arial':'Arial, Helvetica, sans-serif',
+    'bookman':'"Bookman Old Style", Bookman, serif',
+    'oldenglish':'"Old English Text MT", "Cloister Black", serif',
+    'rounded':'"SF Pro Rounded", "Quicksand", system-ui, -apple-system, sans-serif'
+  };
+
+  const sel=window.getSelection();
+  const isTextHighlighted = sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode);
+
+  if (isTextHighlighted) {
+    // Apply inline font-family strictly to highlighted text selection
+    wrapSelectionInSpan({ fontFamily: fontsMap[fontStyle] || fontsMap.sans });
+  } else {
+    // No text highlighted: set default font style for whole note container
+    const n=getNote(state.currentId);
+    if(n){
+      n.fontStyle = fontStyle;
+      n.updatedAt = Date.now();
+      save();
+    }
     ed.setAttribute('data-fontstyle', fontStyle);
   }
+
   const fsLabel=document.getElementById('fontStyleLabel');
-  const fsMap={'sans':'Sans', 'serif':'Serif', 'mono':'Mono', 'rounded':'Rounded'};
+  const fsMap = {
+    'sans': 'Sans',
+    'calibri': 'Calibri',
+    'segoe': 'Segoe UI',
+    'serif': 'Serif',
+    'mono': 'Mono',
+    'arial': 'Arial',
+    'bookman': 'Bookman',
+    'oldenglish': 'Old English',
+    'rounded': 'Rounded'
+  };
   if(fsLabel) fsLabel.textContent = fsMap[fontStyle] || 'Sans';
   document.querySelectorAll('#fontStyleDropdown .fs-opt').forEach(opt=>{
     opt.classList.toggle('active', opt.dataset.fontstyle === fontStyle);
   });
 
-  // Also if text is selected inside the editor, wrap selection in font-family span
-  const sel=window.getSelection();
-  if(sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)){
-    const fontsMap={
-      'sans':'"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      'serif':'Georgia, "Times New Roman", serif',
-      'mono':'ui-monospace, SFMono-Regular, Menlo, monospace',
-      'rounded':'"SF Pro Rounded", "Quicksand", system-ui, -apple-system, sans-serif'
-    };
-    wrapSelectionInSpan({fontFamily: fontsMap[fontStyle]});
-  }
-  toast(`Font set to ${fsMap[fontStyle]}`);
+  if (typeof handleBodyInput === 'function') handleBodyInput();
+  if (typeof updateToolbarState === 'function') updateToolbarState();
+  toast(`Font set to ${fsMap[fontStyle] || 'Sans'}`);
 }
+window.applyFontStyle = applyFontStyle;
+
+function applyLineSpacing(spacing) {
+  const val = parseFloat(spacing) || 1.0;
+  const ed = typeof bodyEl === 'function' ? bodyEl() : document.getElementById('noteContent');
+  if (!ed) return;
+
+  const sel = window.getSelection();
+  let appliedToBlocks = false;
+
+  if (sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)) {
+    const range = sel.getRangeAt(0);
+    const blocks = ed.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, blockquote');
+    blocks.forEach(blk => {
+      if (sel.containsNode(blk, true)) {
+        blk.style.lineHeight = String(val);
+        blk.setAttribute('data-line-spacing', String(spacing));
+        appliedToBlocks = true;
+      }
+    });
+  }
+
+  if (!appliedToBlocks) {
+    ed.style.lineHeight = String(val);
+    ed.setAttribute('data-line-spacing', String(spacing));
+    const n = typeof getNote === 'function' && typeof state !== 'undefined' ? getNote(state.currentId) : null;
+    if (n) {
+      n.lineHeight = String(val);
+      n.lineSpacing = String(val);
+    }
+  }
+
+  const lsDrop = document.getElementById('lineSpacingDropdown');
+  if (lsDrop) {
+    lsDrop.querySelectorAll('.ls-opt').forEach(opt => {
+      opt.classList.toggle('active', opt.dataset.spacing === String(spacing));
+    });
+  }
+
+  if (typeof handleBodyInput === 'function') handleBodyInput();
+  if (typeof save === 'function') save();
+  if (window.HistoryManager) window.HistoryManager.capture(true);
+  if (typeof toast === 'function') toast(`Line spacing set to ${val}`);
+}
+window.applyLineSpacing = applyLineSpacing;
 
 /* ============================================================
    CLOSE ALL FLOATING EDITOR TOOLS
@@ -95,6 +163,12 @@ function initBlockTools(){
   };
   const showGutterForBlock=block=>{
     if(!block || !block.isConnected) return;
+    // Suppress text editor block drag handle over cards (cards use their own floating toolbar & hero ghost drag)
+    const isCard = block.closest && block.closest('.media-card, .paperuss-embed, .paperuss-card-audio, .paperuss-card-file, .paperuss-card, .broken-media-card, [data-paperuss-embed="true"]');
+    if (isCard) {
+      hideGutter();
+      return;
+    }
     clearTimeout(gutterHideTimer);
     activeGutterBlock=block;
     gutter.classList.add('show');
@@ -1069,16 +1143,25 @@ function applyPageLayoutToEditor(note) {
     edBody.style.maxWidth = '100%';
     const pageH = (orient === 'landscape' ? dim.w : dim.h);
     edBody.style.minHeight = pageH + 'px';
-    edBody.style.padding = pad;
+    edBody.style.paddingLeft = pad;
+    edBody.style.paddingRight = pad;
+    edBody.style.paddingTop = note.headerHeight || '74px';
+    edBody.style.paddingBottom = note.footerHeight || '74px';
     edBody.style.margin = '0 auto';
     // Visual auto pagebreak guidelines
     edBody.style.background = `repeating-linear-gradient(to bottom, transparent, transparent calc(${pageH}px - 2px), #cbd5e1 calc(${pageH}px - 2px), #cbd5e1 ${pageH}px), #fff`;
     
     applyZoom();
+    if (window.PageLayoutEngine && typeof window.PageLayoutEngine.apply === 'function') {
+      window.PageLayoutEngine.apply(note);
+    }
   } else {
     edScroll.classList.remove('wysiwyg-mode');
     edBody.classList.remove('wysiwyg-paper');
     if(zoomControls) zoomControls.style.display = 'none';
+    if (window.PageLayoutEngine && typeof window.PageLayoutEngine.clear === 'function') {
+      window.PageLayoutEngine.clear();
+    }
     edBody.style.width = '';
     edBody.style.maxWidth = '';
     edBody.style.minHeight = '';

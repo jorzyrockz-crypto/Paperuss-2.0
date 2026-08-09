@@ -1143,7 +1143,10 @@ function applyPageLayoutToEditor(note) {
     edBody.style.maxWidth = '100%';
     const pageH = (orient === 'landscape' ? dim.w : dim.h);
     edBody.style.minHeight = pageH + 'px';
-    edBody.style.padding = pad;
+    edBody.style.paddingLeft = pad;
+    edBody.style.paddingRight = pad;
+    edBody.style.paddingTop = note.headerHeight || '74px';
+    edBody.style.paddingBottom = note.footerHeight || '74px';
     edBody.style.margin = '0 auto';
     // Visual auto pagebreak guidelines
     edBody.style.background = `repeating-linear-gradient(to bottom, transparent, transparent calc(${pageH}px - 2px), #cbd5e1 calc(${pageH}px - 2px), #cbd5e1 ${pageH}px), #fff`;

@@ -1203,31 +1203,48 @@ function isSingleStandaloneUrl(str) {
   if(enableNotifBtn) enableNotifBtn.onclick=requestNotifPermission;
 
   /* ---------- SYSTEM FONT STYLE PICKER ---------- */
-  const fsBtn=document.getElementById('fontStyleBtn');
-  if(fsBtn) fsBtn.onclick=e=>{ e.stopPropagation(); toggleDropdown('fontStyleDropdown'); };
   let _savedFontRange = null;
-  const fsDrop=document.getElementById('fontStyleDropdown');
-  if(fsDrop){
-    // Cache the selection BEFORE clicking the dropdown causes focus loss
-    fsDrop.addEventListener('mousedown', () => {
-      const ed = bodyEl();
+
+  document.addEventListener('selectionchange', () => {
+    const ed = typeof bodyEl === 'function' ? bodyEl() : null;
+    const sel = window.getSelection();
+    if (ed && sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)) {
+      _savedFontRange = sel.getRangeAt(0).cloneRange();
+    }
+  });
+
+  const fsBtn = document.getElementById('fontStyleBtn');
+  if (fsBtn) {
+    fsBtn.addEventListener('mousedown', (e) => {
+      const ed = typeof bodyEl === 'function' ? bodyEl() : null;
       const sel = window.getSelection();
-      _savedFontRange = null;
-      if (sel && sel.rangeCount && !sel.isCollapsed && ed && ed.contains(sel.anchorNode)) {
+      if (ed && sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)) {
         _savedFontRange = sel.getRangeAt(0).cloneRange();
       }
     });
-    fsDrop.onclick=e=>{
-      const opt=e.target.closest('[data-fontstyle]'); if(!opt) return;
-      if(typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
-      // Restore selection before applying font so wrapSelectionInSpan works
+    fsBtn.onclick = e => { e.stopPropagation(); toggleDropdown('fontStyleDropdown'); };
+  }
+
+  const fsDrop = document.getElementById('fontStyleDropdown');
+  if (fsDrop) {
+    fsDrop.addEventListener('mousedown', (e) => {
+      e.preventDefault(); // Prevent button from stealing focus from editor
+      const ed = typeof bodyEl === 'function' ? bodyEl() : null;
+      const sel = window.getSelection();
+      if (ed && sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)) {
+        _savedFontRange = sel.getRangeAt(0).cloneRange();
+      }
+    });
+    fsDrop.onclick = e => {
+      const opt = e.target.closest('[data-fontstyle]'); if (!opt) return;
+      if (typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
       if (_savedFontRange) {
         const sel = window.getSelection();
         sel.removeAllRanges();
         sel.addRange(_savedFontRange);
-        _savedFontRange = null;
       }
       applyFontStyle(opt.dataset.fontstyle);
+      _savedFontRange = null;
     };
   }
 
