@@ -109,12 +109,24 @@ function saveSession(session){
 
 function showAuthLanding(){
   const el=document.getElementById('authLanding');
-  if(el) el.classList.remove('hidden');
+  if(el) {
+    el.classList.remove('hidden');
+    el.classList.remove('leaving');
+  }
 }
 function hideAuthLanding(){
   const el=document.getElementById('authLanding');
-  if(el) el.classList.add('hidden');
+  if(el && !el.classList.contains('hidden')){
+    el.classList.add('leaving');
+    setTimeout(() => {
+      el.classList.add('hidden');
+      el.classList.remove('leaving');
+    }, 350);
+  } else if(el) {
+    el.classList.add('hidden');
+  }
 }
+
 
 async function continueAsGuest(){
   // Explicit guest choice also clears any persisted Firebase session so auth
