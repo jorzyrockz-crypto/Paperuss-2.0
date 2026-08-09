@@ -6511,6 +6511,65 @@ h1[data-heading-style="cyber"], h2[data-heading-style="cyber"], h3[data-heading-
   color: var(--accent, #6366f1) !important;
 }
 
+/* Header & Footer Context-Aware Floating Toolbar */
+.hf-context-panel {
+  position: absolute !important;
+  z-index: 10000 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  background: var(--bg-primary, #ffffff) !important;
+  border: 1px solid var(--border, rgba(0,0,0,0.15)) !important;
+  border-radius: 8px !important;
+  padding: 4px 8px !important;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.18) !important;
+  backdrop-filter: blur(16px) !important;
+}
+
+.hf-theme-btn {
+  border: 1px solid var(--border, rgba(0,0,0,0.1)) !important;
+  background: var(--bg-hover, rgba(0,0,0,0.03)) !important;
+  padding: 3px 8px !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  color: var(--fg, #111827) !important;
+  transition: all 0.15s ease !important;
+}
+
+.hf-theme-btn:hover {
+  background: var(--accent, #6366f1) !important;
+  color: #ffffff !important;
+  border-color: var(--accent, #6366f1) !important;
+}
+
+.hf-action-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  border: none !important;
+  background: transparent !important;
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  color: var(--fg-muted, #64748b) !important;
+}
+
+.hf-action-btn:hover {
+  background: var(--bg-hover, rgba(0,0,0,0.06)) !important;
+  color: var(--accent, #6366f1) !important;
+}
+
+[contenteditable="true"][data-header-field]:focus,
+[contenteditable="true"][data-footer-field]:focus {
+  outline: 1px dashed var(--accent, #6366f1) !important;
+  outline-offset: 2px !important;
+  border-radius: 3px !important;
+}
+
 /* Floating Quote Context Panel */
 .quote-context-panel {
   position: absolute !important;

@@ -64,7 +64,7 @@
 
     return `<div class="pv-header-overlay pv-header-${style}" contenteditable="false">
       ${bannerHtml}
-      <div class="pv-header-content" style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+      <div class="pv-header-content" style="display:flex;justify-space-between;align-items:center;width:100%;">
         <div class="pv-header-left" contenteditable="true" data-header-field="title"><strong class="pv-brand-${style}">${esc(customHeader)}</strong> <span class="pv-dot">•</span> <span>${esc(noteTitle)}</span></div>
         <div class="pv-header-right" contenteditable="true" data-header-field="subtitle" style="color:var(--fg-muted,#64748b);">${esc(customSubtitle)}</div>
       </div>
@@ -78,11 +78,160 @@
 
     return `<div class="pv-footer-overlay pv-footer-${style}" contenteditable="false">
       <div class="pv-footer-resizer" title="Drag to adjust Footer Height"></div>
-      <div class="pv-footer-content" style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+      <div class="pv-footer-content" style="display:flex;justify-space-between;align-items:center;width:100%;">
         <div class="pv-footer-left" contenteditable="true" data-footer-field="ref" style="color:var(--fg-muted,#94a3b8);">Ref ID: ${esc(refId)}</div>
         <div class="pv-footer-right pv-pagenum-${style}">${pagenumText}</div>
       </div>
     </div>`;
+  }
+
+  /* ============================================================
+     HEADER & FOOTER CONTEXT-AWARE FLOATING TOOLBAR
+     ============================================================ */
+  let hfPanel = null;
+  let activeHFZone = null;
+
+  function initHeaderFooterContextPanel() {
+    if (hfPanel) return;
+
+    hfPanel = document.createElement('div');
+    hfPanel.id = 'hfContextPanel';
+    hfPanel.className = 'hf-context-panel glass-panel hidden';
+    hfPanel.style.display = 'none';
+    hfPanel.style.zIndex = '10000';
+    hfPanel.innerHTML = `
+      <div class="hf-panel-group" style="display:flex;align-items:center;gap:4px;">
+        <span class="hf-label" style="font-size:10px;font-weight:700;color:var(--fg-muted,#64748b);">Theme:</span>
+        <button type="button" class="hf-theme-btn" data-hf-theme="executive" title="Executive Indigo">🏢 Exec</button>
+        <button type="button" class="hf-theme-btn" data-hf-theme="serif" title="Editorial Serif">📜 Serif</button>
+        <button type="button" class="hf-theme-btn" data-hf-theme="blueprint" title="Tech Blueprint">⚡ Mono</button>
+        <button type="button" class="hf-theme-btn" data-hf-theme="botanical" title="Zen Botanical">🌸 Zen</button>
+        <button type="button" class="hf-theme-btn" data-hf-theme="vintage" title="Vintage Press">📰 Press</button>
+        <button type="button" class="hf-theme-btn" data-hf-theme="cyber" title="Cyber Codex">🔮 Cyber</button>
+      </div>
+      <div class="hf-sep" style="width:1px;height:16px;background:var(--border,rgba(0,0,0,0.15));margin:0 4px;"></div>
+      <div class="hf-panel-group" style="display:flex;align-items:center;gap:4px;">
+        <button type="button" class="hf-action-btn" id="hfBannerToggle" title="Toggle Header Banner Image">
+          <i data-lucide="image" class="w-3.5 h-3.5"></i>
+          <span>Banner</span>
+        </button>
+        <button type="button" class="hf-action-btn" id="hfResetText" title="Reset Header/Footer Text">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+          <span>Reset</span>
+        </button>
+      </div>
+    `;
+    document.body.appendChild(hfPanel);
+
+    document.addEventListener('selectionchange', handleHFSelectionChange);
+    document.addEventListener('click', handleHFClick);
+
+    hfPanel.addEventListener('click', (e) => {
+      const themeBtn = e.target.closest('button[data-hf-theme]');
+      const bannerBtn = e.target.closest('#hfBannerToggle');
+      const resetBtn = e.target.closest('#hfResetText');
+
+      const targetNote = (typeof activeNoteForAction === 'function' ? activeNoteForAction() : null) || (typeof getNote === 'function' && typeof state !== 'undefined' ? getNote(state.currentId) : null);
+      if (!targetNote) return;
+
+      if (themeBtn) {
+        const theme = themeBtn.dataset.hfTheme;
+        targetNote.documentStyle = theme;
+        try {
+          const saved = JSON.parse(localStorage.getItem('paperuss_print_prefs') || '{}');
+          saved.documentStyle = theme;
+          localStorage.setItem('paperuss_print_prefs', JSON.stringify(saved));
+        } catch(_) {}
+        targetNote.updatedAt = Date.now();
+        if (typeof save === 'function') save();
+        recalculatePageViewPagination(targetNote);
+        if (typeof toast === 'function') toast(`Document theme set to ${theme}`);
+      } else if (bannerBtn) {
+        if (targetNote.headerImage) {
+          targetNote.headerImage = '';
+          targetNote.useCoverAsHeader = false;
+          if (typeof toast === 'function') toast('Header banner removed');
+        } else if (targetNote.coverImage?.src) {
+          targetNote.headerImage = targetNote.coverImage.src;
+          targetNote.useCoverAsHeader = true;
+          if (typeof toast === 'function') toast('Cover set as Header Banner');
+        } else {
+          const imgInput = document.getElementById('mediaImageInput');
+          if (imgInput) imgInput.click();
+        }
+        targetNote.updatedAt = Date.now();
+        if (typeof save === 'function') save();
+        recalculatePageViewPagination(targetNote);
+      } else if (resetBtn) {
+        delete targetNote.customHeaderTitle;
+        delete targetNote.customSubtitle;
+        delete targetNote.customFooterText;
+        targetNote.updatedAt = Date.now();
+        if (typeof save === 'function') save();
+        recalculatePageViewPagination(targetNote);
+        if (typeof toast === 'function') toast('Header & Footer reset to default');
+      }
+    });
+  }
+
+  function handleHFSelectionChange() {
+    const edBody = document.getElementById('noteBody');
+    if (!edBody) return;
+    const sel = window.getSelection();
+    if (sel && sel.anchorNode && edBody.contains(sel.anchorNode)) {
+      let node = sel.anchorNode;
+      if (node.nodeType === 3) node = node.parentElement;
+      const hfZone = node.closest && node.closest('.pv-header-overlay, .pv-footer-overlay');
+      if (hfZone) {
+        activeHFZone = hfZone;
+        const rect = hfZone.getBoundingClientRect();
+        hfPanel.style.left = `${Math.max(10, Math.min(rect.left + window.scrollX, window.innerWidth - 320))}px`;
+        hfPanel.style.top = `${Math.max(10, rect.top + window.scrollY - 44)}px`;
+        hfPanel.style.display = 'flex';
+        hfPanel.classList.remove('hidden');
+        if (typeof lucide?.createIcons === 'function') {
+          try { lucide.createIcons(); } catch(_) {}
+        }
+        return;
+      }
+    }
+    if (hfPanel && !hfPanel.contains(document.activeElement)) {
+      hfPanel.style.display = 'none';
+      hfPanel.classList.add('hidden');
+    }
+  }
+
+  function handleHFClick(e) {
+    if (hfPanel && !hfPanel.contains(e.target) && !e.target.closest('.pv-header-overlay, .pv-footer-overlay')) {
+      hfPanel.style.display = 'none';
+      hfPanel.classList.add('hidden');
+    }
+  }
+
+  function autoExpandHeaderFooterHeights(edBody, targetNote) {
+    const headerOverlays = edBody.querySelectorAll('.pv-header-overlay');
+    const footerOverlays = edBody.querySelectorAll('.pv-footer-overlay');
+
+    let maxHeaderH = 50;
+    headerOverlays.forEach(h => {
+      maxHeaderH = Math.max(maxHeaderH, h.offsetHeight || h.scrollHeight || 50);
+    });
+
+    let maxFooterH = 50;
+    footerOverlays.forEach(f => {
+      maxFooterH = Math.max(maxFooterH, f.offsetHeight || f.scrollHeight || 50);
+    });
+
+    const targetTop = maxHeaderH + 24;
+    const targetBottom = maxFooterH + 24;
+
+    edBody.style.paddingTop = `${targetTop}px`;
+    edBody.style.paddingBottom = `${targetBottom}px`;
+
+    if (targetNote) {
+      targetNote.headerHeight = edBody.style.paddingTop;
+      targetNote.footerHeight = edBody.style.paddingBottom;
+    }
   }
 
   function attachResizerDragHandlers(edBody, targetNote) {
@@ -142,6 +291,27 @@
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', onUp);
       };
+    });
+  }
+
+  function attachHeaderFooterEditableListeners(edBody, targetNote) {
+    edBody.querySelectorAll('[data-header-field], [data-footer-field]').forEach(field => {
+      if (field.dataset.editListenerAttached) return;
+      field.dataset.editListenerAttached = 'true';
+
+      field.addEventListener('input', () => {
+        const hField = field.dataset.headerField;
+        const fField = field.dataset.footerField;
+        const text = field.textContent.trim();
+
+        if (hField === 'title') targetNote.customHeaderTitle = text;
+        else if (hField === 'subtitle') targetNote.customSubtitle = text;
+        else if (fField === 'ref') targetNote.customFooterText = text;
+
+        targetNote.updatedAt = Date.now();
+        if (typeof save === 'function') save();
+        autoExpandHeaderFooterHeights(edBody, targetNote);
+      });
     });
   }
 
@@ -254,7 +424,10 @@
       finalFooter.innerHTML = createFooterHtml(currentPageNum, Math.max(currentPageNum, totalEstimatedPages), refId, targetNote);
       edBody.appendChild(finalFooter.firstElementChild);
 
+      autoExpandHeaderFooterHeights(edBody, targetNote);
       attachResizerDragHandlers(edBody, targetNote);
+      attachHeaderFooterEditableListeners(edBody, targetNote);
+      initHeaderFooterContextPanel();
 
     } catch (e) {
       console.warn('PageView Pagination error:', e);
