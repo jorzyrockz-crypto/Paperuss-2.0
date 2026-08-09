@@ -22,7 +22,7 @@
 
   function clearPaginationMarkers(edBody) {
     if (!edBody) return;
-    const markers = edBody.querySelectorAll('.pv-page-divider');
+    const markers = edBody.querySelectorAll('.pv-page-divider, .pv-header-overlay, .pv-footer-overlay');
     markers.forEach(m => m.remove());
 
     const children = Array.from(edBody.children);
@@ -32,6 +32,20 @@
         delete child.dataset.pvBreakPushed;
       }
     });
+  }
+
+  function createHeaderHtml(noteTitle, leafTitle) {
+    return `<div class="pv-header-overlay" contenteditable="false">
+      <div class="pv-header-left"><strong style="color:var(--accent,#6366f1);">PapeRuss</strong> <span class="pv-dot">•</span> <span>${esc(noteTitle)}</span></div>
+      <div class="pv-header-right" style="color:var(--fg-muted,#64748b);">${esc(leafTitle)}</div>
+    </div>`;
+  }
+
+  function createFooterHtml(pageNum, totalPages, refId) {
+    return `<div class="pv-footer-overlay" contenteditable="false">
+      <div class="pv-footer-left" style="color:var(--fg-muted,#94a3b8);">Ref ID: ${esc(refId)}</div>
+      <div class="pv-footer-right" style="font-weight:700;color:var(--fg-muted,#64748b);">Page ${pageNum} of ${totalPages}</div>
+    </div>`;
   }
 
   function recalculatePageViewPagination(note) {
@@ -46,9 +60,20 @@
       clearPaginationMarkers(edBody);
 
       const targetNote = note || (typeof activeNoteForAction === 'function' ? activeNoteForAction() : null);
+      if (!targetNote) { isPaginating = false; return; }
+
       const { h: pageH } = getPageDimensions(targetNote);
 
-      const children = Array.from(edBody.children).filter(el => !el.classList.contains('pv-page-divider'));
+      const noteTitle = (typeof titleOf === 'function' ? titleOf(targetNote) : targetNote.title) || 'Untitled Note';
+      const leafTitle = (window.currentActiveLeaf ? window.currentActiveLeaf.title : '') || 'Active Leaf';
+      const refId = targetNote.id ? targetNote.id.substring(0, 8) : 'PAPERUSS';
+
+      const children = Array.from(edBody.children).filter(el =>
+        !el.classList.contains('pv-page-divider') &&
+        !el.classList.contains('pv-header-overlay') &&
+        !el.classList.contains('pv-footer-overlay')
+      );
+
       if (children.length === 0) {
         isPaginating = false;
         return;
@@ -56,6 +81,14 @@
 
       const bodyRect = edBody.getBoundingClientRect();
       const bodyTop = bodyRect.top;
+      const totalHeight = edBody.scrollHeight;
+      const totalEstimatedPages = Math.max(1, Math.ceil(totalHeight / pageH));
+
+      // Inject Page 1 Header at top
+      const page1Header = document.createElement('div');
+      page1Header.innerHTML = createHeaderHtml(noteTitle, leafTitle);
+      edBody.insertBefore(page1Header.firstElementChild, edBody.firstChild);
+
       let currentPageNum = 1;
       let currentThreshold = bodyTop + pageH;
 
@@ -69,7 +102,11 @@
         if (childBottom > currentThreshold && childTop < currentThreshold) {
           currentPageNum++;
 
-          // Create physical page split divider
+          // Footer for previous page
+          const prevFooter = document.createElement('div');
+          prevFooter.innerHTML = createFooterHtml(currentPageNum - 1, totalEstimatedPages, refId);
+
+          // Physical page split divider
           const divider = document.createElement('div');
           divider.className = 'pv-page-divider';
           divider.contentEditable = 'false';
@@ -79,6 +116,10 @@
           const padRight = window.getComputedStyle(edBody).paddingRight || '20mm';
           divider.style.marginLeft = `-${padLeft}`;
           divider.style.marginRight = `-${padRight}`;
+
+          // Header for next page
+          const nextPageHeader = document.createElement('div');
+          nextPageHeader.innerHTML = createHeaderHtml(noteTitle, leafTitle);
 
           // If block is large (e.g. card, callout, table, image), push it down to next page top
           const isComplexBlock = child.classList.contains('paperuss-card') ||
@@ -93,9 +134,15 @@
             const pushDistance = currentThreshold - childTop + 16;
             child.style.marginTop = `${pushDistance}px`;
             child.dataset.pvBreakPushed = 'true';
+
+            edBody.insertBefore(prevFooter.firstElementChild, child);
             edBody.insertBefore(divider, child);
+            edBody.insertBefore(nextPageHeader.firstElementChild, child);
           } else {
-            edBody.insertBefore(divider, child.nextSibling || child);
+            const targetRef = child.nextSibling || child;
+            edBody.insertBefore(prevFooter.firstElementChild, targetRef);
+            edBody.insertBefore(divider, targetRef);
+            edBody.insertBefore(nextPageHeader.firstElementChild, targetRef);
           }
 
           currentThreshold += pageH;
@@ -104,11 +151,22 @@
           currentThreshold += pageH;
         }
       }
+
+      // Inject Final Page Footer at bottom of document
+      const finalFooter = document.createElement('div');
+      finalFooter.innerHTML = createFooterHtml(currentPageNum, Math.max(currentPageNum, totalEstimatedPages), refId);
+      edBody.appendChild(finalFooter.firstElementChild);
+
     } catch (e) {
       console.warn('PageView Pagination error:', e);
     } finally {
       isPaginating = false;
     }
+  }
+
+  function esc(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   function schedulePagination(note) {

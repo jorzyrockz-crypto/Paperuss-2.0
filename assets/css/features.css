@@ -7095,6 +7095,45 @@ a.paperuss-inline-link:hover {
   border-color: #334155 !important;
 }
 
+/* Page View Header & Footer Overlay Rules */
+.pv-header-overlay {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: var(--fg-muted, #64748b) !important;
+  border-bottom: 1px dashed var(--border, rgba(0,0,0,0.14)) !important;
+  padding-bottom: 6px !important;
+  margin-bottom: 24px !important;
+  user-select: none !important;
+  pointer-events: none !important;
+}
+
+.pv-footer-overlay {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: var(--fg-muted, #64748b) !important;
+  border-top: 1px dashed var(--border, rgba(0,0,0,0.14)) !important;
+  padding-top: 6px !important;
+  margin-top: 24px !important;
+  user-select: none !important;
+  pointer-events: none !important;
+}
+
+.pv-header-left, .pv-footer-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.pv-dot {
+  color: var(--accent, #6366f1) !important;
+}
+
 /* ============================================================
    SIDEBAR BRANCH TREE & CATEGORY STYLES
    ============================================================ */
