@@ -469,8 +469,14 @@
       (typeof getNote === 'function' && typeof state !== 'undefined' && state.currentId)
         ? getNote(state.currentId) : null;
 
-    edBody.addEventListener('input', () => schedulePagination(getCurrentNote()));
-    edBody.addEventListener('keyup', () => schedulePagination(getCurrentNote()));
+    edBody.addEventListener('input', (e) => {
+      if (e.target.closest('.pv-header-overlay, .pv-footer-overlay')) return;
+      schedulePagination(getCurrentNote());
+    });
+    edBody.addEventListener('keyup', (e) => {
+      if (e.target.closest('.pv-header-overlay, .pv-footer-overlay')) return;
+      schedulePagination(getCurrentNote());
+    });
 
     // Window resize handler
     window.addEventListener('resize', () => schedulePagination(getCurrentNote()));

@@ -468,9 +468,8 @@ function bind(){
   };
   // Keep selection when clicking toolbar
   document.getElementById('formatBar').addEventListener('mousedown', e=>{
-    if(e.target.closest('[data-cmd],[data-media]')){
-      if(e.detail !== 0) e.preventDefault();
-    }
+    if(e.target.closest('input')) return;
+    if(e.detail !== 0) e.preventDefault();
   });
 
   // Media file inputs
@@ -1203,48 +1202,17 @@ function isSingleStandaloneUrl(str) {
   if(enableNotifBtn) enableNotifBtn.onclick=requestNotifPermission;
 
   /* ---------- SYSTEM FONT STYLE PICKER ---------- */
-  let _savedFontRange = null;
-
-  document.addEventListener('selectionchange', () => {
-    const ed = typeof bodyEl === 'function' ? bodyEl() : null;
-    const sel = window.getSelection();
-    if (ed && sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)) {
-      _savedFontRange = sel.getRangeAt(0).cloneRange();
-    }
-  });
-
   const fsBtn = document.getElementById('fontStyleBtn');
   if (fsBtn) {
-    fsBtn.addEventListener('mousedown', (e) => {
-      const ed = typeof bodyEl === 'function' ? bodyEl() : null;
-      const sel = window.getSelection();
-      if (ed && sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)) {
-        _savedFontRange = sel.getRangeAt(0).cloneRange();
-      }
-    });
     fsBtn.onclick = e => { e.stopPropagation(); toggleDropdown('fontStyleDropdown'); };
   }
 
   const fsDrop = document.getElementById('fontStyleDropdown');
   if (fsDrop) {
-    fsDrop.addEventListener('mousedown', (e) => {
-      e.preventDefault(); // Prevent button from stealing focus from editor
-      const ed = typeof bodyEl === 'function' ? bodyEl() : null;
-      const sel = window.getSelection();
-      if (ed && sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)) {
-        _savedFontRange = sel.getRangeAt(0).cloneRange();
-      }
-    });
     fsDrop.onclick = e => {
       const opt = e.target.closest('[data-fontstyle]'); if (!opt) return;
       if (typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
-      if (_savedFontRange) {
-        const sel = window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(_savedFontRange);
-      }
       applyFontStyle(opt.dataset.fontstyle);
-      _savedFontRange = null;
     };
   }
 
@@ -1281,32 +1249,23 @@ function isSingleStandaloneUrl(str) {
     }
     toggleDropdown('quoteStyleDropdown');
   };
-  let _cachedQuoteBq = null;
-
   const qDrop = document.getElementById('quoteStyleDropdown');
   if (qDrop) {
-    // Before dropdown opens, capture the active blockquote from current selection
-    qDrop.addEventListener('mousedown', () => {
-      const ed = bodyEl();
-      const sel = window.getSelection();
-      _cachedQuoteBq = null;
-      if (sel && sel.anchorNode && ed && ed.contains(sel.anchorNode)) {
-        let node = sel.anchorNode;
-        if (node.nodeType === 3) node = node.parentElement;
-        _cachedQuoteBq = node.closest && node.closest('blockquote');
-      }
-      // Also search for nearest blockquote in editor as fallback
-      if (!_cachedQuoteBq && ed) {
-        _cachedQuoteBq = ed.querySelector('blockquote');
-      }
-    });
-
     qDrop.onclick = e => {
       const opt = e.target.closest('[data-qstyle]');
       if (!opt) return;
       if (typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
       const style = opt.dataset.qstyle;
-      const bq = _cachedQuoteBq;
+
+      const ed = bodyEl();
+      const sel = window.getSelection();
+      let bq = null;
+      if (sel && sel.anchorNode && ed && ed.contains(sel.anchorNode)) {
+        let node = sel.anchorNode;
+        if (node.nodeType === 3) node = node.parentElement;
+        bq = node.closest && node.closest('blockquote');
+      }
+
       if (bq && bq.isConnected) {
         bq.setAttribute('data-quote-style', style);
         if (typeof handleBodyInput === 'function') handleBodyInput();
@@ -1314,7 +1273,6 @@ function isSingleStandaloneUrl(str) {
         if (window.HistoryManager) window.HistoryManager.capture(true);
         if (typeof toast === 'function') toast(`Quote style: ${style}`);
       }
-      _cachedQuoteBq = null;
     };
   }
 
