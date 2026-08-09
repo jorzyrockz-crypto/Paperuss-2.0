@@ -37,8 +37,15 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         branchesCache = JSON.parse(raw);
-        branchesCache.forEach((b, idx) => { if (typeof b.order !== "number") b.order = idx; });
-        branchesCache.sort((a, b) => a.order - b.order);
+        // Self-healing sanitizer: restore orphaned sub-branches to root
+        const validIds = new Set(branchesCache.map(b => b.id));
+        branchesCache.forEach((b, idx) => {
+          if (b.parentId && (!validIds.has(b.parentId) || b.parentId === b.id)) {
+            b.parentId = null;
+          }
+          if (typeof b.order !== 'number') b.order = idx;
+        });
+        branchesCache.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       } else {
         branchesCache = [...DEFAULT_BRANCHES];
         saveBranches(branchesCache);
@@ -659,10 +666,8 @@ function escHtml(str) {
     const draggedBranch = branches[draggedIdx];
     const targetBranch = branches[targetIdx];
 
-    // Maintain parent context if reordering within parent group
-    if (draggedBranch.parentId !== targetBranch.parentId) {
-      draggedBranch.parentId = targetBranch.parentId || null;
-    }
+    // Match target's parent level so branch never becomes orphaned
+    draggedBranch.parentId = targetBranch.parentId || null;
 
     // Remove dragged item
     branches.splice(draggedIdx, 1);
@@ -674,7 +679,7 @@ function escHtml(str) {
     // Insert at new position
     branches.splice(newTargetIdx, 0, draggedBranch);
 
-    // Re-assign order numbers
+    // Re-assign order numbers cleanly
     branches.forEach((b, idx) => {
       b.order = idx;
     });
