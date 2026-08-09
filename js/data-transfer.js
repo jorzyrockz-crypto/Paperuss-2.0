@@ -515,8 +515,13 @@ function buildSharedContentHtml(payload) {
 function createNoteFromSharedData(payload, branchTag){
   if (!payload) return;
   const now = Date.now();
-  let noteTitle = payload.title || (payload.text ? payload.text.substring(0, 30) : 'Shared Content');
+  let noteTitle = payload.title || (payload.text ? payload.text.substring(0, 30) : 'Shared Bookmark');
   const body = buildSharedContentHtml(payload);
+
+  const tags = ['bookmarks', 'shared'];
+  if (branchTag && !tags.includes(branchTag)) {
+    tags.push(branchTag);
+  }
 
   const newNote = {
     id: uid(),
@@ -524,7 +529,7 @@ function createNoteFromSharedData(payload, branchTag){
     content: body || '<p></p>',
     pinned: false,
     archived: false,
-    tags: ['shared', ...(branchTag ? [branchTag] : [])],
+    tags: tags,
     createdAt: now,
     updatedAt: now
   };
@@ -534,7 +539,7 @@ function createNoteFromSharedData(payload, branchTag){
   renderNotesList();
   selectNote(newNote.id);
   if (typeof showToast === 'function') {
-    showToast('Saved shared content to new note!');
+    showToast('Saved to 📌 Bookmarks Branch!');
   }
 }
 
@@ -606,7 +611,7 @@ function openIncomingShareModal(payload) {
   // Populate Note dropdown
   const noteSelect = overlay.querySelector('#shareNoteSelect');
   if (noteSelect) {
-    let html = `<option value="">+ Create new note</option>`;
+    let html = `<option value="">+ Create new note (📌 Bookmarks Branch)</option>`;
     if (typeof notes !== 'undefined' && Array.isArray(notes)) {
       notes.forEach(n => {
         const title = n.title || 'Untitled Note';
@@ -683,7 +688,7 @@ function updateShareSaveHint() {
   const leafId = leafSelect ? leafSelect.value : "";
 
   if (!noteId) {
-    hintEl.textContent = "Creates a brand-new note with the shared content.";
+    hintEl.textContent = "Saves to 📌 Bookmarks Branch as a new note.";
   } else {
     const selectedNoteOption = noteSelect.options[noteSelect.selectedIndex];
     const noteTitle = selectedNoteOption ? selectedNoteOption.text : 'selected note';
@@ -697,6 +702,7 @@ function updateShareSaveHint() {
     }
   }
 }
+
 
 function closeIncomingShareModal() {
   const overlay = document.getElementById('incomingShareOverlay');
