@@ -69,11 +69,16 @@
         if (childBottom > currentThreshold && childTop < currentThreshold) {
           currentPageNum++;
 
-          // Create page break divider
+          // Create physical page split divider
           const divider = document.createElement('div');
           divider.className = 'pv-page-divider';
           divider.contentEditable = 'false';
-          divider.innerHTML = `<span class="pv-page-label">── Page ${currentPageNum} ──</span>`;
+          divider.innerHTML = `<span class="pv-page-label">PAGE ${currentPageNum}</span>`;
+
+          const padLeft = window.getComputedStyle(edBody).paddingLeft || '20mm';
+          const padRight = window.getComputedStyle(edBody).paddingRight || '20mm';
+          divider.style.marginLeft = `-${padLeft}`;
+          divider.style.marginRight = `-${padRight}`;
 
           // If block is large (e.g. card, callout, table, image), push it down to next page top
           const isComplexBlock = child.classList.contains('paperuss-card') ||
