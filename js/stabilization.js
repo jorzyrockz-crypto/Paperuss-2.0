@@ -6,9 +6,9 @@
   'use strict';
 
   const BUILD=Object.freeze({
-    name:'PapeRuss 2.2 Leaf Architecture & Warp Comet Engine',
-    version:'2.2.0-leaves-drag-engine',
-    cacheName:'paperuss-shell-v36',
+    name:'PapeRuss 2.5 Page View Layout & Quote Context Engine',
+    version:'2.5.0-page-view-quote-engine',
+    cacheName:'paperuss-shell-v233',
     schemaVersion:4
   });
 
