@@ -357,6 +357,7 @@ const DROPDOWN_TRIGGERS={
   szDropdown:'szBtn',
   fontStyleDropdown:'fontStyleBtn',
   lineSpacingDropdown:'lineSpacingBtn',
+  quoteStyleDropdown:'quoteBtn',
   tableGridPicker:'tableBtn',
   templateDropdown:'templateBtn',
   paraStyleDropdown:'paraStyleBtn',

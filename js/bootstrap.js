@@ -1220,6 +1220,44 @@ function isSingleStandaloneUrl(str) {
     if(typeof applyLineSpacing === 'function') applyLineSpacing(opt.dataset.spacing);
   };
 
+  /* ---------- QUOTE STYLE PICKER ---------- */
+  const qBtn = document.getElementById('quoteBtn');
+  if (qBtn) qBtn.onclick = e => {
+    e.stopPropagation();
+    const ed = bodyEl();
+    const sel = window.getSelection();
+    if (sel && sel.anchorNode && ed && ed.contains(sel.anchorNode)) {
+      let node = sel.anchorNode;
+      if (node.nodeType === 3) node = node.parentElement;
+      const inBq = node.closest && node.closest('blockquote');
+      if (!inBq) {
+        document.execCommand('formatBlock', false, 'blockquote');
+      }
+    }
+    toggleDropdown('quoteStyleDropdown');
+  };
+  const qDrop = document.getElementById('quoteStyleDropdown');
+  if (qDrop) qDrop.onclick = e => {
+    const opt = e.target.closest('[data-qstyle]');
+    if (!opt) return;
+    qDrop.classList.remove('show');
+    const style = opt.dataset.qstyle;
+    const ed = bodyEl();
+    const sel = window.getSelection();
+    if (sel && sel.anchorNode && ed && ed.contains(sel.anchorNode)) {
+      let node = sel.anchorNode;
+      if (node.nodeType === 3) node = node.parentElement;
+      const bq = node.closest && node.closest('blockquote');
+      if (bq) {
+        bq.setAttribute('data-quote-style', style);
+        if (typeof handleBodyInput === 'function') handleBodyInput();
+        if (typeof save === 'function') save();
+        if (window.HistoryManager) window.HistoryManager.capture(true);
+        if (typeof toast === 'function') toast(`Quote style updated to ${style}`);
+      }
+    }
+  };
+
   /* ---------- TABLE SIZE PICKER ---------- */
   const tblBtn=document.getElementById('tableBtn');
   if(tblBtn) tblBtn.onclick=e=>{ e.stopPropagation(); toggleDropdown('tableGridPicker'); };
@@ -1440,7 +1478,7 @@ function isSingleStandaloneUrl(str) {
 
   // Close dropdowns when clicking outside
   window.closeAllEditorDropdowns = () => {
-    ['tcDropdown','paraStyleDropdown','hlDropdown','szDropdown','fontStyleDropdown','lineSpacingDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown','overflowDropdown'].forEach(id=>{
+    ['tcDropdown','paraStyleDropdown','hlDropdown','szDropdown','fontStyleDropdown','lineSpacingDropdown','quoteStyleDropdown','tableGridPicker','pageLayoutDropdown','templateDropdown','footerTagsDropdown','overflowDropdown'].forEach(id=>{
       const el=document.getElementById(id);
       if(el && el.classList.contains('show')){
         el.classList.remove('show');
@@ -1448,7 +1486,7 @@ function isSingleStandaloneUrl(str) {
         el.style.right=''; el.style.zIndex=''; el.style.maxHeight=''; el.style.overflowY='';
       }
     });
-    ['tcBtn','paraStyleBtn','hlBtn','szBtn','fontStyleBtn','lineSpacingBtn','tableBtn','pageLayoutBtn','templateBtn','footerTagsBtn','overflowBtn'].forEach(id=>{
+    ['tcBtn','paraStyleBtn','hlBtn','szBtn','fontStyleBtn','lineSpacingBtn','quoteBtn','tableBtn','pageLayoutBtn','templateBtn','footerTagsBtn','overflowBtn'].forEach(id=>{
       const btn=document.getElementById(id);
       if(btn) btn.setAttribute('aria-expanded', 'false');
     });
@@ -1457,7 +1495,7 @@ function isSingleStandaloneUrl(str) {
   const closeAllDropdowns = window.closeAllEditorDropdowns;
   document.addEventListener('click', e=>{
     if(!e.target.closest('#tcPicker') && !e.target.closest('#paraStylePicker') && !e.target.closest('#hlPicker') && !e.target.closest('.sz-picker')
-      && !e.target.closest('#fontStylePicker') && !e.target.closest('#lineSpacingPicker') && !e.target.closest('#tablePicker')
+      && !e.target.closest('#fontStylePicker') && !e.target.closest('#lineSpacingPicker') && !e.target.closest('#quotePicker') && !e.target.closest('#tablePicker')
       && !e.target.closest('#pageLayoutPicker') && !e.target.closest('#templatePicker')
       && !e.target.closest('#footerTagsPicker') && !e.target.closest('#overflowPicker')
       && !e.target.closest('#notifBellWrap') && !e.target.closest('#notifPanel')){

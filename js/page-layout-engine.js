@@ -103,9 +103,10 @@
         tooltip.className = 'pv-resize-tooltip';
         document.body.appendChild(tooltip);
 
+        let liveRaf = null;
         const onMove = (moveEv) => {
           const deltaY = moveEv.clientY - startY;
-          const newPad = Math.max(30, Math.min(200, Math.round(isHeader ? startPad + deltaY : startPad - deltaY)));
+          const newPad = Math.max(20, Math.min(250, Math.round(isHeader ? startPad + deltaY : startPad - deltaY)));
           const mmVal = Math.round(newPad * 0.264583);
 
           if (isHeader) edBody.style.paddingTop = `${newPad}px`;
@@ -115,19 +116,27 @@
           tooltip.style.top = `${moveEv.clientY - 10}px`;
           tooltip.style.display = 'block';
           tooltip.textContent = `${isHeader ? 'Header Height' : 'Footer Height'}: ${mmVal}mm (${newPad}px)`;
+
+          if (!liveRaf) {
+            liveRaf = requestAnimationFrame(() => {
+              liveRaf = null;
+              recalculatePageViewPagination(targetNote);
+            });
+          }
         };
 
         const onUp = () => {
           window.removeEventListener('pointermove', onMove);
           window.removeEventListener('pointerup', onUp);
           tooltip.remove();
+          if (liveRaf) { cancelAnimationFrame(liveRaf); liveRaf = null; }
           if (targetNote) {
             if (isHeader) targetNote.headerHeight = edBody.style.paddingTop;
             else targetNote.footerHeight = edBody.style.paddingBottom;
             targetNote.updatedAt = Date.now();
             if (typeof save === 'function') save();
           }
-          schedulePagination(targetNote);
+          recalculatePageViewPagination(targetNote);
         };
 
         window.addEventListener('pointermove', onMove);

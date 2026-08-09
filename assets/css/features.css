@@ -6475,10 +6475,46 @@ h1[data-heading-style="cyber"], h2[data-heading-style="cyber"], h3[data-heading-
   padding-bottom: 6px !important;
 }
 
+/* Quote Style Context Dropdown Panel */
+.quote-style-dropdown {
+  position: absolute !important;
+  z-index: 10000 !important; /* Higher layer than toolbar (z-index 999) */
+  min-width: 220px !important;
+  background: var(--bg-primary, #ffffff) !important;
+  border: 1px solid var(--border, rgba(0,0,0,0.15)) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.2) !important;
+  backdrop-filter: blur(16px) !important;
+  padding: 4px !important;
+}
+
+.qsd-opt {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  width: 100% !important;
+  padding: 6px 10px !important;
+  border: none !important;
+  background: transparent !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--fg, #111827) !important;
+  text-align: left !important;
+  transition: all 0.15s ease !important;
+}
+
+.qsd-opt:hover {
+  background: var(--bg-hover, rgba(99, 102, 241, 0.08)) !important;
+  color: var(--accent, #6366f1) !important;
+}
+
 /* Floating Quote Context Panel */
 .quote-context-panel {
   position: absolute !important;
-  z-index: 999 !important;
+  z-index: 10000 !important;
   display: flex !important;
   align-items: center !important;
   gap: 4px !important;
