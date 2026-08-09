@@ -6803,6 +6803,117 @@ a.paperuss-inline-link:hover {
 }
 
 /* ============================================================
+   6 CREATIVE DOCUMENT PRINT STYLES
+   ============================================================ */
+/* 1. Modern Executive (Default Indigo Sans-Serif) */
+#printSheet[data-print-theme="executive"],
+#printSheet:not([data-print-theme]) {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+#printSheet[data-print-theme="executive"] .ps-brand {
+  color: #6366f1 !important;
+}
+#printSheet[data-print-theme="executive"] .ps-header {
+  border-bottom: 2px solid #6366f1 !important;
+}
+
+/* 2. Editorial Serif (Literary Serif & Warm Gold Accent) */
+#printSheet[data-print-theme="serif"] {
+  font-family: Georgia, Merriweather, "Playfair Display", "Times New Roman", serif !important;
+}
+#printSheet[data-print-theme="serif"] h1,
+#printSheet[data-print-theme="serif"] h2,
+#printSheet[data-print-theme="serif"] h3 {
+  font-family: Georgia, Merriweather, serif !important;
+  font-weight: 700 !important;
+}
+#printSheet[data-print-theme="serif"] .ps-brand {
+  color: #b45309 !important;
+  font-style: italic !important;
+}
+#printSheet[data-print-theme="serif"] .ps-header {
+  border-bottom: 2px solid #d97706 !important;
+}
+#printSheet[data-print-theme="serif"] .ps-toc-header {
+  border-bottom-color: #d97706 !important;
+}
+
+/* 3. Tech Blueprint (Technical Monospace & Emerald Accent) */
+#printSheet[data-print-theme="blueprint"] {
+  font-family: Consolas, "Fira Code", "Courier New", monospace !important;
+}
+#printSheet[data-print-theme="blueprint"] .ps-brand {
+  color: #059669 !important;
+  letter-spacing: 1px !important;
+  text-transform: uppercase !important;
+}
+#printSheet[data-print-theme="blueprint"] .ps-header {
+  border-bottom: 2px solid #10b981 !important;
+  background: #f0fdf4 !important;
+  padding: 8px 12px !important;
+  border-radius: 6px !important;
+}
+#printSheet[data-print-theme="blueprint"] .ps-toc-header {
+  border-bottom-color: #10b981 !important;
+}
+
+/* 4. Zen Botanical (Sage Green & Organic Minimalist) */
+#printSheet[data-print-theme="botanical"] {
+  font-family: "Avenir Next", Optima, -apple-system, BlinkMacSystemFont, sans-serif !important;
+  line-height: 1.8 !important;
+}
+#printSheet[data-print-theme="botanical"] .ps-brand {
+  color: #047857 !important;
+  font-weight: 600 !important;
+}
+#printSheet[data-print-theme="botanical"] .ps-header {
+  border-bottom: 2px solid #059669 !important;
+}
+#printSheet[data-print-theme="botanical"] .callout {
+  background: #f0fdf4 !important;
+  border-left-color: #059669 !important;
+}
+
+/* 5. Vintage Press (Newspaper Double Border & Retro Press) */
+#printSheet[data-print-theme="vintage"] {
+  font-family: Georgia, "Times New Roman", serif !important;
+}
+#printSheet[data-print-theme="vintage"] h1 {
+  font-family: Impact, "Trebuchet MS", sans-serif !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1px !important;
+}
+#printSheet[data-print-theme="vintage"] .ps-brand {
+  color: #111827 !important;
+  font-weight: 900 !important;
+  letter-spacing: 2px !important;
+  text-transform: uppercase !important;
+}
+#printSheet[data-print-theme="vintage"] .ps-header {
+  border-bottom: 3px double #111827 !important;
+  text-align: center !important;
+}
+
+/* 6. Cyber Codex (Futuristic Neon Cyan & Magenta Accents) */
+#printSheet[data-print-theme="cyber"] {
+  font-family: Consolas, "Trebuchet MS", sans-serif !important;
+}
+#printSheet[data-print-theme="cyber"] .ps-brand {
+  color: #0891b2 !important;
+  letter-spacing: 1.5px !important;
+}
+#printSheet[data-print-theme="cyber"] .ps-header {
+  border-bottom: 2px dashed #06b6d4 !important;
+  background: #ecfeff !important;
+  padding: 8px 12px !important;
+  border-radius: 6px !important;
+}
+#printSheet[data-print-theme="cyber"] .ps-toc-header {
+  border-bottom-color: #ec4899 !important;
+  color: #be185d !important;
+}
+
+/* ============================================================
    SIDEBAR BRANCH TREE & CATEGORY STYLES
    ============================================================ */
 .sidebar-branch-tree-wrapper {

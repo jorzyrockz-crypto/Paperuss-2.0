@@ -355,6 +355,9 @@ async function preparePrintSheet(targetNote, options) {
   const showPageNums = options.showPageNums !== false;
   const customHeaderTitle = options.customHeaderTitle || 'PapeRuss';
   const customSubtitle = options.customSubtitle || 'Professional note record';
+  const documentStyle = options.documentStyle || 'executive';
+
+  sheet.setAttribute('data-print-theme', documentStyle);
 
   let cleanHtml = '';
 
@@ -505,6 +508,7 @@ async function openPrintModal() {
   } catch (e) {}
 
   let printScope = 'active'; // 'active', 'all', or 'single:<leafId>'
+  let documentStyle = savedPrefs.documentStyle || 'executive';
   let pageSize = savedPrefs.pageSize || note.pageSize || 'auto';
   let orientation = savedPrefs.orientation || note.pageOrientation || 'portrait';
   let margin = savedPrefs.margin || note.pageMargins || 'normal';
@@ -538,6 +542,19 @@ async function openPrintModal() {
                   <optgroup label="Select Specific Single Leaf">
                     ${allLeaves.map((l, idx) => `<option value="single:${l.id}" ${printScope === 'single:' + l.id ? 'selected' : ''}>🍃 Leaf ${idx + 1}: ${esc(l.title || 'Untitled')}</option>`).join('')}
                   </optgroup>` : ''}
+                </select>
+              </div>
+
+              <!-- Document Aesthetic Style Dropdown -->
+              <div class="pm-field-group">
+                <label class="pm-label" for="pmDocumentStyle">Document Aesthetic Style</label>
+                <select id="pmDocumentStyle" class="pm-select" style="font-weight:600;padding:10px 12px;">
+                  <option value="executive" ${documentStyle === 'executive' ? 'selected' : ''}>🏢 Modern Executive (Royal Indigo Sans)</option>
+                  <option value="serif" ${documentStyle === 'serif' ? 'selected' : ''}>📜 Editorial Serif (Warm Gold Serif)</option>
+                  <option value="blueprint" ${documentStyle === 'blueprint' ? 'selected' : ''}>⚡ Tech Blueprint (Emerald Monospace)</option>
+                  <option value="botanical" ${documentStyle === 'botanical' ? 'selected' : ''}>🌸 Zen Botanical (Sage Minimalist)</option>
+                  <option value="vintage" ${documentStyle === 'vintage' ? 'selected' : ''}>📰 Vintage Press (Newsprint Double-Line)</option>
+                  <option value="cyber" ${documentStyle === 'cyber' ? 'selected' : ''}>🔮 Cyber Codex (Neon Cyan/Magenta)</option>
                 </select>
               </div>
 
@@ -620,8 +637,8 @@ async function openPrintModal() {
             <div class="pm-preview-column" style="width:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-secondary, #f8fafc);border:1px solid var(--border, rgba(0,0,0,0.08));border-radius:12px;padding:12px;">
               <span style="font-size:10px;font-weight:700;color:var(--fg-muted,#64748b);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Live Preview</span>
               <div class="pm-paper-thumbnail ${orientation}" id="pmPaperThumb" style="width:${orientation === 'landscape' ? '140px' : '100px'};height:${orientation === 'landscape' ? '100px' : '140px'};background:#fff;border:1px solid #cbd5e1;box-shadow:0 4px 12px rgba(0,0,0,0.1);border-radius:4px;padding:8px;display:flex;flex-direction:column;justify-content:space-between;position:relative;transition:all 0.2s ease;">
-                <div style="display:${showHeader ? 'flex' : 'none'};justify-content:space-between;border-bottom:1px solid #1d4ed8;padding-bottom:2px;margin-bottom:4px;">
-                  <span style="font-size:6px;font-weight:700;color:#1d4ed8;">${esc(customHeaderTitle || 'PapeRuss')}</span>
+                <div id="pmThumbHeader" style="display:${showHeader ? 'flex' : 'none'};justify-content:space-between;border-bottom:1px solid ${documentStyle === 'serif' ? '#d97706' : (documentStyle === 'blueprint' ? '#10b981' : (documentStyle === 'botanical' ? '#059669' : (documentStyle === 'vintage' ? '#111827' : (documentStyle === 'cyber' ? '#06b6d4' : '#1d4ed8'))))};padding-bottom:2px;margin-bottom:4px;">
+                  <span id="pmThumbBrand" style="font-size:6px;font-weight:700;color:${documentStyle === 'serif' ? '#b45309' : (documentStyle === 'blueprint' ? '#059669' : (documentStyle === 'botanical' ? '#047857' : (documentStyle === 'vintage' ? '#111827' : (documentStyle === 'cyber' ? '#0891b2' : '#1d4ed8'))))};">${esc(customHeaderTitle || 'PapeRuss')}</span>
                   <span style="font-size:5px;color:#94a3b8;">${fullDate(Date.now())}</span>
                 </div>
                 <div style="flex:1;overflow:hidden;">
@@ -668,6 +685,11 @@ async function openPrintModal() {
       leafSelect.onchange = (e) => { printScope = e.target.value; renderModal(); };
     }
 
+    const docStyleSelect = document.getElementById('pmDocumentStyle');
+    if (docStyleSelect) {
+      docStyleSelect.onchange = (e) => { documentStyle = e.target.value; renderModal(); };
+    }
+
     document.getElementById('pmPresetFormal').onclick = () => {
       showHeader = true; showFooter = true; showPageNums = true; renderModal();
     };
@@ -698,12 +720,13 @@ async function openPrintModal() {
       closeModal();
       try {
         localStorage.setItem('paperuss_print_prefs', JSON.stringify({
-          pageSize, orientation, margin, showHeader, showFooter, showPageNums, customHeaderTitle, customSubtitle
+          documentStyle, pageSize, orientation, margin, showHeader, showFooter, showPageNums, customHeaderTitle, customSubtitle
         }));
       } catch (e) {}
 
       await preparePrintSheet(note, {
         scope: printScope,
+        documentStyle,
         pageSize,
         orientation,
         margin,
