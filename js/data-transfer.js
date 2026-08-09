@@ -460,15 +460,32 @@ async function checkIncomingSharedData(){
     const text = params.get('text');
     const url = params.get('url');
     const isShared = params.get('shared');
+    const action = params.get('action');
 
-    // 1. Direct GET share parameters
+    // 1. Direct text selection action ("🍃 Add to PapeRuss Leaf")
+    if (action === 'new-leaf-from-text' && (text || title || url)) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      const payload = { title, text, url, files: [] };
+      const activeNote = (typeof state !== 'undefined' && state.currentId && typeof notes !== 'undefined')
+        ? notes.find(n => n.id === state.currentId)
+        : (typeof notes !== 'undefined' && notes.length ? notes[0] : null);
+
+      if (activeNote) {
+        await appendSharedDataAsNewLeaf(activeNote, payload);
+      } else {
+        createNoteFromSharedData(payload);
+      }
+      return;
+    }
+
+    // 2. Direct GET share parameters
     if (title || text || url) {
       window.history.replaceState({}, document.title, window.location.pathname);
       openIncomingShareModal({ title, text, url, files: [] });
       return;
     }
 
-    // 2. POST share payload cached by Service Worker
+    // 3. POST share payload cached by Service Worker
     if (isShared === '1' && 'caches' in window) {
       window.history.replaceState({}, document.title, window.location.pathname);
       const cacheName = window.PAPERUSS_BUILD?.cacheName || 'paperuss-shell-v35';
@@ -477,13 +494,55 @@ async function checkIncomingSharedData(){
       if (match) {
         const data = await match.json();
         await cache.delete('./__pending_shared_payload__');
-        openIncomingShareModal(data);
+        if (action === 'new-leaf-from-text') {
+          const activeNote = (typeof state !== 'undefined' && state.currentId && typeof notes !== 'undefined')
+            ? notes.find(n => n.id === state.currentId)
+            : (typeof notes !== 'undefined' && notes.length ? notes[0] : null);
+          if (activeNote) await appendSharedDataAsNewLeaf(activeNote, data);
+          else createNoteFromSharedData(data);
+        } else {
+          openIncomingShareModal(data);
+        }
       }
     }
   } catch (err) {
     console.error('Error handling incoming shared data:', err);
   }
 }
+
+async function appendSharedDataAsNewLeaf(targetNote, payload) {
+  if (!targetNote || !payload) return;
+  const now = Date.now();
+  const sharedHtml = buildSharedContentHtml(payload);
+  const newLeafId = uid();
+  const leafTitle = payload.title || (payload.text ? payload.text.substring(0, 30) : 'Shared Leaf');
+  const newLeaf = {
+    id: newLeafId,
+    noteId: targetNote.id,
+    title: leafTitle,
+    content: sharedHtml || '<p></p>',
+    order: (targetNote.leafCount || 1),
+    createdAt: now,
+    updatedAt: now
+  };
+
+  if (typeof selectNote === 'function') selectNote(targetNote.id);
+
+  if (window.paperussLeaves && typeof window.paperussLeaves.leafPut === 'function') {
+    await window.paperussLeaves.leafPut(newLeaf);
+  }
+  if (!Array.isArray(targetNote.leafOrder)) targetNote.leafOrder = [targetNote.defaultLeafId || ('virtual_main_' + targetNote.id)];
+  targetNote.leafOrder.push(newLeafId);
+  targetNote.leafCount = targetNote.leafOrder.length;
+  if (!targetNote.defaultLeafId) targetNote.defaultLeafId = targetNote.leafOrder[0];
+  targetNote.updatedAt = now;
+
+  if (typeof saveNotesLocally === 'function') saveNotesLocally();
+  if (typeof renderLeafTabs === 'function') renderLeafTabs();
+  if (typeof switchToLeaf === 'function') switchToLeaf(newLeafId);
+  if (typeof showToast === 'function') showToast(`🍃 Added new Leaf to "${targetNote.title}"!`);
+}
+
 
 function buildSharedContentHtml(payload) {
   let body = '';
