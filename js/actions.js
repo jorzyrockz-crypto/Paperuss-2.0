@@ -636,17 +636,22 @@ async function openPrintModal() {
             <!-- Live Mini Preview Thumbnail Column -->
             <div class="pm-preview-column" style="width:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-secondary, #f8fafc);border:1px solid var(--border, rgba(0,0,0,0.08));border-radius:12px;padding:12px;">
               <span style="font-size:10px;font-weight:700;color:var(--fg-muted,#64748b);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Live Preview</span>
-              <div class="pm-paper-thumbnail ${orientation}" id="pmPaperThumb" style="width:${orientation === 'landscape' ? '140px' : '100px'};height:${orientation === 'landscape' ? '100px' : '140px'};background:#fff;border:1px solid #cbd5e1;box-shadow:0 4px 12px rgba(0,0,0,0.1);border-radius:4px;padding:8px;display:flex;flex-direction:column;justify-content:space-between;position:relative;transition:all 0.2s ease;">
-                <div id="pmThumbHeader" style="display:${showHeader ? 'flex' : 'none'};justify-content:space-between;border-bottom:1px solid ${documentStyle === 'serif' ? '#d97706' : (documentStyle === 'blueprint' ? '#10b981' : (documentStyle === 'botanical' ? '#059669' : (documentStyle === 'vintage' ? '#111827' : (documentStyle === 'cyber' ? '#06b6d4' : '#1d4ed8'))))};padding-bottom:2px;margin-bottom:4px;">
+              <div class="pm-paper-thumbnail ${orientation}" id="pmPaperThumb" style="width:${orientation === 'landscape' ? '140px' : '100px'};height:${orientation === 'landscape' ? '100px' : '140px'};background:${documentStyle === 'vintage' ? '#faf7f0' : '#fff'};border:1px solid #cbd5e1;box-shadow:0 4px 12px rgba(0,0,0,0.1);border-radius:4px;padding:8px;display:flex;flex-direction:column;justify-content:space-between;position:relative;transition:all 0.2s ease;font-family:${documentStyle === 'serif' || documentStyle === 'vintage' ? 'Georgia, serif' : (documentStyle === 'blueprint' || documentStyle === 'cyber' ? 'monospace' : 'sans-serif')};">
+                <div id="pmThumbHeader" style="display:${showHeader ? 'flex' : 'none'};justify-content:space-between;border-bottom:${documentStyle === 'vintage' ? '2px double #111827' : (documentStyle === 'cyber' ? '1px dashed #06b6d4' : (documentStyle === 'blueprint' ? '1px dashed #10b981' : '1px solid ' + (documentStyle === 'serif' ? '#d97706' : (documentStyle === 'botanical' ? '#059669' : '#1d4ed8'))))};padding-bottom:2px;margin-bottom:4px;">
                   <span id="pmThumbBrand" style="font-size:6px;font-weight:700;color:${documentStyle === 'serif' ? '#b45309' : (documentStyle === 'blueprint' ? '#059669' : (documentStyle === 'botanical' ? '#047857' : (documentStyle === 'vintage' ? '#111827' : (documentStyle === 'cyber' ? '#0891b2' : '#1d4ed8'))))};">${esc(customHeaderTitle || 'PapeRuss')}</span>
                   <span style="font-size:5px;color:#94a3b8;">${fullDate(Date.now())}</span>
                 </div>
                 <div style="flex:1;overflow:hidden;">
-                  <div style="font-size:7px;font-weight:700;color:#1e293b;margin-bottom:2px;">${esc(titleOf(note))}</div>
+                  <div style="font-size:7px;font-weight:700;color:#1e293b;margin-bottom:2px;text-align:${documentStyle === 'serif' || documentStyle === 'vintage' ? 'center' : 'left'};">${esc(titleOf(note))}</div>
                   ${printScope === 'all' ? '<div style="font-size:5px;background:#eff6ff;color:#1d4ed8;padding:1px 3px;border-radius:2px;margin-bottom:3px;">Table of Contents (All Leaves)</div>' : (printScope.startsWith('single:') ? '<div style="font-size:5px;background:#f0fdf4;color:#15803d;padding:1px 3px;border-radius:2px;margin-bottom:3px;">Single Leaf Mode</div>' : '<div style="font-size:5px;background:#f8fafc;color:#475569;padding:1px 3px;border-radius:2px;margin-bottom:3px;">Active Leaf Mode</div>')}
-                  <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;"></div>
-                  <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;width:80%;"></div>
-                  <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;width:90%;"></div>
+                  <div style="display:flex;gap:3px;align-items:flex-start;">
+                    ${documentStyle === 'serif' ? '<span style="font-size:12px;font-weight:700;color:#b45309;line-height:1;margin-right:1px;">P</span>' : ''}
+                    <div style="flex:1;">
+                      <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;"></div>
+                      <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;width:80%;"></div>
+                      <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;width:90%;"></div>
+                    </div>
+                  </div>
                 </div>
                 <div style="display:${showFooter ? 'flex' : 'none'};justify-content:space-between;align-items:center;border-top:1px solid #e2e8f0;padding-top:2px;margin-top:4px;">
                   <span style="font-size:5px;color:#94a3b8;">Ref ID: ${esc(note.id.substring(0,8))}</span>
