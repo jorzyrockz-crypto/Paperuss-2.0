@@ -952,6 +952,13 @@ function applyParagraphStyle(val) {
   
   let targetTag = val;
   let targetClass = '';
+  let headingStyle = '';
+
+  if (val && val.includes(':')) {
+    const parts = val.split(':');
+    targetTag = parts[0];
+    headingStyle = parts[1];
+  }
   
   if (val === 'h1-title') {
     targetTag = 'h1';
@@ -969,10 +976,12 @@ function applyParagraphStyle(val) {
   blocks.forEach(b => {
     b.classList.remove('editor-title', 'editor-subtitle');
     if (targetClass) b.classList.add(targetClass);
+    if (headingStyle) b.setAttribute('data-heading-style', headingStyle);
   });
   
   handleBodyInput();
   updateToolbarState();
+  if (window.HistoryManager) window.HistoryManager.capture(true);
 }
 
 function getSelectedBlocks() {
