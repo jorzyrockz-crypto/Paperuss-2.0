@@ -12,9 +12,9 @@
   const STORAGE_KEY_PRESET = 'paperuss_sound_preset';
 
   let audioCtx = null;
-  let enabled = localStorage.getItem(STORAGE_KEY_ENABLED) !== 'false';
-  let dragEnabled = localStorage.getItem(STORAGE_KEY_DRAG_ENABLED) !== 'false';
-  let volume = parseFloat(localStorage.getItem(STORAGE_KEY_VOLUME) || '0.25');
+  let enabled = localStorage.getItem(STORAGE_KEY_ENABLED) !== 'false'; // Default: enabled
+  let dragEnabled = localStorage.getItem(STORAGE_KEY_DRAG_ENABLED) !== 'false'; // Default: enabled
+  let volume = parseFloat(localStorage.getItem(STORAGE_KEY_VOLUME) || '0.25'); // Default: 25%
   let preset = localStorage.getItem(STORAGE_KEY_PRESET) || 'botanical_paper';
 
   function getAudioContext() {
@@ -28,6 +28,7 @@
     return audioCtx;
   }
 
+  // Auto-resume AudioContext on first click or keypress
   function initAudioOnUserInteraction() {
     const handler = () => {
       getAudioContext();
@@ -42,6 +43,13 @@
     document.addEventListener('DOMContentLoaded', initAudioOnUserInteraction);
   } else {
     initAudioOnUserInteraction();
+  }
+
+  function createMasterGain(ctx, duration) {
+    const masterGain = ctx.createGain();
+    const now = ctx.currentTime;
+    masterGain.gain.setValueAtTime(volume, now);
+    return masterGain;
   }
 
   const WorkspaceAudio = {
@@ -72,6 +80,7 @@
       }
     },
 
+    // 🍃 1. Leaf Tab Switch — Soft paper / wood rustle
     playLeafSwitch() {
       if (!enabled) return;
       const ctx = getAudioContext();
@@ -101,6 +110,7 @@
       osc.stop(now + 0.05);
     },
 
+    // 🌲 2. Branch Create — Warm 528Hz acoustic harmonic chime
     playBranchCreate() {
       if (!enabled) return;
       const ctx = getAudioContext();
@@ -126,13 +136,14 @@
       });
     },
 
+    // ☑️ 3. Task Complete — Ascending dual-tone pentatonic chime (C5 → G5)
     playTaskCheck() {
       if (!enabled) return;
       const ctx = getAudioContext();
       if (!ctx) return;
       const now = ctx.currentTime;
 
-      const notes = [523.25, 783.99];
+      const notes = [523.25, 783.99]; // C5, G5
       notes.forEach((freq, idx) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -152,6 +163,7 @@
       });
     },
 
+    // 📲 4. Modal Open / Bottom Sheet Slide — Soft sine pop
     playModalSlide() {
       if (!enabled) return;
       const ctx = getAudioContext();
@@ -175,6 +187,7 @@
       osc.stop(now + 0.045);
     },
 
+    // 💾 5. Save Ping — Subtle 520Hz warm harmonic bell
     playSavePing() {
       if (!enabled) return;
       const ctx = getAudioContext();
@@ -197,6 +210,7 @@
       osc.stop(now + 0.13);
     },
 
+    // 🤏 6. Drag Lift / Start — Soft magnetic lift tone
     playDragStart() {
       if (!enabled || !dragEnabled) return;
       const ctx = getAudioContext();
@@ -220,6 +234,7 @@
       osc.stop(now + 0.04);
     },
 
+    // 🎯 7. Drag Hover / Target Switch — Micro-haptic tick
     playDragHover() {
       if (!enabled || !dragEnabled) return;
       const ctx = getAudioContext();
@@ -242,6 +257,7 @@
       osc.stop(now + 0.02);
     },
 
+    // 📥 8. Drag Drop / Placement Snap — Satisfying wooden snap / paper drop
     playDragDrop() {
       if (!enabled || !dragEnabled) return;
       const ctx = getAudioContext();
@@ -265,6 +281,7 @@
       osc.stop(now + 0.05);
     },
 
+    // ↩️ 9. Drag Cancel / Revert — Gentle downward glide
     playDragCancel() {
       if (!enabled || !dragEnabled) return;
       const ctx = getAudioContext();
@@ -288,6 +305,7 @@
       osc.stop(now + 0.06);
     },
 
+    // 🔊 Test Preview Sound
     playTestSound() {
       this.playTaskCheck();
     }

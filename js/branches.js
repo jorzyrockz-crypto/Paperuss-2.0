@@ -72,6 +72,7 @@
   }
 
   function setActiveBranchId(id) {
+    if (window.WorkspaceAudio?.playLeafSwitch) window.WorkspaceAudio.playLeafSwitch();
     activeBranchId = id || 'all';
     try {
       localStorage.setItem(ACTIVE_BRANCH_KEY, activeBranchId);
@@ -97,6 +98,7 @@
     };
     branches.push(newBranch);
     saveBranches(branches);
+    if (window.WorkspaceAudio?.playBranchCreate) window.WorkspaceAudio.playBranchCreate();
     return newBranch;
   }
 
@@ -441,6 +443,7 @@
 
       item.addEventListener('dragstart', (e) => {
         window._draggingBranchId = bId;
+        if (window.WorkspaceAudio?.playDragStart) window.WorkspaceAudio.playDragStart();
         item.classList.add('dragging-branch');
         e.dataTransfer.setData('application/x-paperuss-branch-id', bId);
         e.dataTransfer.effectAllowed = 'move';
@@ -490,7 +493,8 @@
         item.classList.remove('drag-over', 'drop-above', 'drop-below');
 
         if (draggedBranchId && bId && bId !== 'all' && bId !== 'unassigned' && draggedBranchId !== bId) {
-          reorderBranches(draggedBranchId, bId, insertBefore);
+          if (window.WorkspaceAudio?.playDragDrop) window.WorkspaceAudio.playDragDrop();
+        reorderBranches(draggedBranchId, bId, insertBefore);
           return;
         }
 
