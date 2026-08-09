@@ -152,8 +152,8 @@
     var(--auth-canvas);
   color:var(--auth-ink);
   padding:24px;overflow:hidden;
-  animation:authFadeIn .36s cubic-bezier(0.16, 1, 0.3, 1) both;
-  transition:opacity 0.36s cubic-bezier(0.4, 0, 0.2, 1), filter 0.36s ease, transform 0.36s cubic-bezier(0.16, 1, 0.3, 1);
+  animation:authFadeIn .48s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition:opacity 0.42s cubic-bezier(0.4, 0, 0.2, 1), filter 0.42s ease, transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
 }
 [data-theme="dark"] .auth-landing{
   --auth-canvas:#0a0f1c;--auth-surface:#111c36;--auth-subtle:#162042;
@@ -162,18 +162,19 @@
 }
 .auth-landing.leaving{
   opacity:0!important;
-  filter:blur(8px);
-  transform:scale(1.03);
+  filter:blur(12px);
+  transform:scale(1.04);
   pointer-events:none;
 }
 .auth-landing.hidden{display:none!important}
 .app{
-  animation:appPageEnter 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition:opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
 }
-@keyframes appPageEnter{
-  from{opacity:0;transform:scale(0.992)}
-  to{opacity:1;transform:scale(1)}
+html:not(.has-session) .app{
+  opacity:0;
+  transform:scale(0.988);
 }
+
 
 .auth-landing::before,.auth-landing::after{
   content:"";position:absolute;border-radius:50%;pointer-events:none;filter:blur(2px);

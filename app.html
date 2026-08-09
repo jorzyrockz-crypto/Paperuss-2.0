@@ -13,10 +13,15 @@
 try {
   const paperussSession = JSON.parse(localStorage.getItem('octonotes:session'));
   if (paperussSession && (paperussSession.mode === 'auth' || paperussSession.mode === 'guest')) {
-    document.documentElement.classList.remove('auth-pending');
+    document.documentElement.classList.add('has-session');
   }
 } catch (_) {}
 </script>
+<style>
+  html.has-session #authLanding { display: none !important; }
+  html:not(.has-session) .app { opacity: 0; pointer-events: none; }
+</style>
+
 <!-- Open Graph & Meta Sharing Debugger Tags -->
 <meta property="og:title" content="Paperuss 2.0 - Fast Offline Notes, Embeds & Rich Links">
 <meta property="og:description" content="Paperuss is a fast, offline-first notes, tasks, and media embed app with rich link cards.">
@@ -127,7 +132,7 @@ try {
 
 
 <!-- ============ AUTH LANDING PAGE (sign-in / guest mode) ============ -->
-<div class="auth-landing hidden" id="authLanding">
+<div class="auth-landing" id="authLanding">
   <div class="auth-card">
     <div class="auth-logo-wrap">
       <img class="auth-app-logo" src="assets/icons/paperuss-192.png" srcset="assets/icons/paperuss-192.png 192w, assets/icons/paperuss-512.png 512w, assets/icons/paperuss-logo.png 1024w" sizes="52px" alt="PapeRuss logo">

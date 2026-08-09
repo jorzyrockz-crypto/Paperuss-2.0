@@ -121,12 +121,14 @@ function hideAuthLanding(){
   const el=document.getElementById('authLanding');
   if(el && !el.classList.contains('hidden')){
     el.classList.add('leaving');
-    setTimeout(() => {
+    document.documentElement.classList.add('has-session');
+    setTimeout(()=>{
       el.classList.add('hidden');
       el.classList.remove('leaving');
-    }, 350);
+    }, 420);
   } else if(el) {
     el.classList.add('hidden');
+    document.documentElement.classList.add('has-session');
   }
   document.documentElement.classList.remove('auth-pending');
   if(typeof updateLeafTitleBar === 'function') updateLeafTitleBar();
