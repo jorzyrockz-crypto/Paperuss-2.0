@@ -66,11 +66,23 @@ Error generating stack: `+i.message+`
         if (headerText === 'Library' || headerText === 'Branches') {
           event.preventDefault();
           openApp();
+          return;
         } else if (headerText === 'Leafline') {
+          event.preventDefault();
           document.getElementById('leafline')?.scrollIntoView({ behavior: 'smooth' });
+          return;
         }
         const footerItem = event.target.closest('footer span');
-        if (footerItem?.textContent?.trim() === 'Changelog') openApp('?changelog=1');
+        const footerText = footerItem?.textContent?.trim();
+        if (footerText === 'Changelog') {
+          event.preventDefault();
+          openApp('?changelog=1');
+          return;
+        } else if (footerText === 'GitHub') {
+          event.preventDefault();
+          window.open('https://github.com/jorzyrockz-crypto/Paperuss-2.0', '_blank');
+          return;
+        }
       }, true);
     })();
   </script>

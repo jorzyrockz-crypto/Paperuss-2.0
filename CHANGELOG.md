@@ -2,6 +2,19 @@
 
 This file is generated from [GitHub Releases](https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases).
 
+## [v2.6.0-editor-suite](https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases) — 2026-08-09
+
+**PapeRuss 2.6 Page Layout, Formatting & Editor Suite**
+
+### What's New in PapeRuss v2.6.0
+- **6-Leaf Preseeded Master Note**: Refactored seed data into 1 comprehensive parent Note ("Welcome to PapeRuss 👋") containing 6 distinct Leaf tabs (Primary System Documentation, Formatting Suite, Spreadsheet & Formulas, Print Layout & PDF Engine, Music Hub & Media Studio, Leafline & Branch Tree) using official PNG artwork assets.
+- **Homepage & Editor Route Separation**: Declared `index.html` as the public marketing landing page and `app.html` as the editor application/PWA entry point, wired via `firebase.json` hosting rewrites, `sw.js` offline caching, PWA `manifest.webmanifest`, and automated regression test assertions.
+- **Print & Page Layout Engine**: Integrated Print Layout with Formal/Clean presets, binding margins, document aesthetic styles (Executive, Serif, Clean, Vintage, Paper), unified editable Header/Footer overlays, repeating table headers (`thead`), and Word-style curved page gaps.
+- **Creative Headings & Typography Suite**: Added 5 creative heading options (Banner, Ribbon, Accent-Left, Underlined, Floating), enhanced selection font fallbacks, and Quote Style Context Panel with Literary, Tech, and Modern preset themes.
+- **Leafline Timeline Outline**: Interactive document outline palette integrated into the Leaves drawer with a 3-segment list view switch (Notes, Leaves, Leafline) and note-level leafline entry navigation.
+- **Custom Cursor & Accent Theme**: Custom SVG cursor asset engine (`paperuss-caret.svg`, `paperuss-text-caret.svg`, `paperuss-pointer.svg`, `paperuss-cursor.svg`) with accent-tinted typing insertion carets and Paper theme palette.
+- **Auth Overlay & Rename Modal UI**: Elevated Auth landing overlay isolation (`z-index: 99999`), redesigned Editorial Glassmorphism "Rename Leaf" modal, and universal Image Toolbar support with automatic drop-target highlight line cleanup.
+
 ## [v2.4.0-branches-engine](https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases) — 2026-08-09
 
 **Branch Engine, Sidebar Categories & Notebooks, Leafline Integration & Print Suite**

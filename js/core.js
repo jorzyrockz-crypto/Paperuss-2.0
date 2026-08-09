@@ -607,6 +607,15 @@ function load(){
     notes=seedNotes();
     localStorage.setItem('paperuss:seedNoteIds',JSON.stringify(notes.map(note=>note.id)));
     save();
+    if(window.paperussLeaves && typeof window.paperussLeaves.leafPut === 'function'){
+      notes.forEach(n => {
+        if(Array.isArray(n.seedLeaves)){
+          n.seedLeaves.forEach(l => {
+            try { window.paperussLeaves.leafPut(l); } catch(_){}
+          });
+        }
+      });
+    }
   }
 }
 function save(){
