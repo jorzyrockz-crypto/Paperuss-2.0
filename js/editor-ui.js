@@ -1140,10 +1140,16 @@ function applyPageLayoutToEditor(note) {
     edBody.style.background = `repeating-linear-gradient(to bottom, transparent, transparent calc(${pageH}px - 2px), #cbd5e1 calc(${pageH}px - 2px), #cbd5e1 ${pageH}px), #fff`;
     
     applyZoom();
+    if (window.PageLayoutEngine && typeof window.PageLayoutEngine.apply === 'function') {
+      window.PageLayoutEngine.apply(note);
+    }
   } else {
     edScroll.classList.remove('wysiwyg-mode');
     edBody.classList.remove('wysiwyg-paper');
     if(zoomControls) zoomControls.style.display = 'none';
+    if (window.PageLayoutEngine && typeof window.PageLayoutEngine.clear === 'function') {
+      window.PageLayoutEngine.clear();
+    }
     edBody.style.width = '';
     edBody.style.maxWidth = '';
     edBody.style.minHeight = '';
