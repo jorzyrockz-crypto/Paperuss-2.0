@@ -1080,3 +1080,64 @@ function applyOutdent() {
   updateToolbarState();
 }
 
+/* ---- Floating Quote Context Panel ---- */
+function initQuoteContextPanel() {
+  let panel = document.getElementById('quoteContextPanel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'quoteContextPanel';
+    panel.className = 'quote-context-panel hidden';
+    panel.style.display = 'none';
+    panel.innerHTML = `
+      <span style="font-size:10px;font-weight:700;color:var(--fg-muted,#64748b);margin-right:4px;">Quote Style:</span>
+      <button type="button" class="qcp-btn" data-qstyle="executive">🏢 Executive</button>
+      <button type="button" class="qcp-btn" data-qstyle="literary">📜 Literary</button>
+      <button type="button" class="qcp-btn" data-qstyle="tech">⚡ Tech</button>
+      <button type="button" class="qcp-btn" data-qstyle="vintage">📰 Press</button>
+      <button type="button" class="qcp-btn" data-qstyle="botanical">🌸 Zen</button>
+      <button type="button" class="qcp-btn" data-qstyle="cyber">🔮 Cyber</button>
+    `;
+    document.body.appendChild(panel);
+  }
+
+  let activeQuote = null;
+
+  document.addEventListener('selectionchange', () => {
+    const ed = typeof bodyEl === 'function' ? bodyEl() : document.getElementById('noteBody');
+    if (!ed) return;
+    const sel = window.getSelection();
+    if (sel && sel.anchorNode && ed.contains(sel.anchorNode)) {
+      let node = sel.anchorNode;
+      if (node.nodeType === 3) node = node.parentElement;
+      const bq = node.closest && node.closest('blockquote');
+      if (bq) {
+        activeQuote = bq;
+        const rect = bq.getBoundingClientRect();
+        panel.style.left = `${Math.max(10, rect.left + window.scrollX)}px`;
+        panel.style.top = `${Math.max(10, rect.top + window.scrollY - 36)}px`;
+        panel.style.display = 'flex';
+        panel.classList.remove('hidden');
+        return;
+      }
+    }
+    panel.style.display = 'none';
+    panel.classList.add('hidden');
+  });
+
+  panel.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-qstyle]');
+    if (!btn || !activeQuote) return;
+    const style = btn.dataset.qstyle;
+    activeQuote.setAttribute('data-quote-style', style);
+    if (typeof handleBodyInput === 'function') handleBodyInput();
+    if (typeof save === 'function') save();
+    if (typeof toast === 'function') toast(`Quote style updated to ${style}`);
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initQuoteContextPanel);
+} else {
+  initQuoteContextPanel();
+}
+

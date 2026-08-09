@@ -6322,7 +6322,9 @@ a.paperuss-inline-link:hover {
     orphans: 3 !important;
   }
 
-  /* Line Spacing Preservation in Print */
+  /* Line Spacing Preservation in Print & Editor */
+  #printSheet [data-line-spacing="0.5"], #printSheet [data-line-height="0.5"], #printSheet .ls-0-5, [data-line-spacing="0.5"] { line-height: 0.5 !important; }
+  #printSheet [data-line-spacing="0.75"], #printSheet [data-line-height="0.75"], #printSheet .ls-0-75, [data-line-spacing="0.75"] { line-height: 0.75 !important; }
   #printSheet [data-line-spacing="1.0"], #printSheet [data-line-height="1.0"], #printSheet .ls-1-0 { line-height: 1.0 !important; }
   #printSheet [data-line-spacing="1.15"], #printSheet [data-line-height="1.15"], #printSheet .ls-1-15 { line-height: 1.15 !important; }
   #printSheet [data-line-spacing="1.25"], #printSheet [data-line-height="1.25"], #printSheet .ls-1-25 { line-height: 1.25 !important; }
@@ -6330,6 +6332,178 @@ a.paperuss-inline-link:hover {
   #printSheet [data-line-spacing="1.75"], #printSheet [data-line-height="1.75"], #printSheet .ls-1-75 { line-height: 1.75 !important; }
   #printSheet [data-line-spacing="2.0"], #printSheet [data-line-height="2.0"], #printSheet .ls-2-0 { line-height: 2.0 !important; }
   #printSheet [data-line-spacing="2.5"], #printSheet [data-line-height="2.5"], #printSheet .ls-2-5 { line-height: 2.5 !important; }
+
+/* ============================================================
+   6 CREATIVE QUOTE PRESET STYLES
+   ============================================================ */
+/* 1. Literary Pull-Quote */
+blockquote[data-quote-style="literary"],
+.quote-style-literary {
+  font-family: Georgia, Merriweather, serif !important;
+  font-style: italic !important;
+  text-align: center !important;
+  padding: 16px 24px !important;
+  margin: 18px 0 !important;
+  background: #fefcf6 !important;
+  border-top: 2px solid #d97706 !important;
+  border-bottom: 2px solid #d97706 !important;
+  border-left: none !important;
+  color: #451a03 !important;
+  position: relative !important;
+}
+blockquote[data-quote-style="literary"]::before {
+  content: "“" !important;
+  font-size: 28pt !important;
+  color: #d97706 !important;
+  line-height: 0 !important;
+  vertical-align: -12px !important;
+  margin-right: 6px !important;
+}
+
+/* 2. Executive Callout */
+blockquote[data-quote-style="executive"],
+.quote-style-executive {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  background: #f8fafc !important;
+  border-left: 4px solid #6366f1 !important;
+  padding: 14px 18px !important;
+  margin: 16px 0 !important;
+  border-radius: 6px !important;
+  color: #0f172a !important;
+}
+
+/* 3. Tech Console Quote */
+blockquote[data-quote-style="tech"],
+.quote-style-tech {
+  font-family: Consolas, "Fira Code", monospace !important;
+  background: #0f172a !important;
+  color: #34d399 !important;
+  border-left: 4px solid #10b981 !important;
+  padding: 12px 16px !important;
+  margin: 16px 0 !important;
+  border-radius: 6px !important;
+}
+
+/* 4. Editorial Press Quote */
+blockquote[data-quote-style="vintage"],
+.quote-style-vintage {
+  font-family: Georgia, serif !important;
+  border-top: 2px solid #111827 !important;
+  border-bottom: 2px solid #111827 !important;
+  border-left: none !important;
+  background: #faf7f0 !important;
+  padding: 16px 20px !important;
+  margin: 18px 0 !important;
+  color: #111827 !important;
+}
+
+/* 5. Zen Minimal Quote */
+blockquote[data-quote-style="botanical"],
+.quote-style-botanical {
+  font-family: "Avenir Next", Optima, sans-serif !important;
+  background: #f0fdf4 !important;
+  border-left: 4px solid #059669 !important;
+  padding: 14px 20px !important;
+  margin: 16px 0 !important;
+  border-radius: 12px !important;
+  color: #064e3b !important;
+  line-height: 1.8 !important;
+}
+
+/* 6. Cyber Neon Quote */
+blockquote[data-quote-style="cyber"],
+.quote-style-cyber {
+  font-family: Consolas, monospace !important;
+  background: #ecfeff !important;
+  border-left: 4px dashed #06b6d4 !important;
+  border-right: 2px solid #ec4899 !important;
+  padding: 12px 18px !important;
+  margin: 16px 0 !important;
+  color: #0891b2 !important;
+}
+
+/* ============================================================
+   5 CREATIVE HEADING PRESET STYLES
+   ============================================================ */
+/* 1. Modern Banner Heading */
+h1[data-heading-style="banner"], h2[data-heading-style="banner"], h3[data-heading-style="banner"] {
+  background: #eff6ff !important;
+  border-left: 4px solid #2563eb !important;
+  padding: 8px 14px !important;
+  border-radius: 4px !important;
+  color: #1e40af !important;
+}
+
+/* 2. Serif Flourish Heading */
+h1[data-heading-style="flourish"], h2[data-heading-style="flourish"], h3[data-heading-style="flourish"] {
+  font-family: Georgia, Merriweather, serif !important;
+  text-align: center !important;
+  color: #78350f !important;
+  border-bottom: 2px solid #d97706 !important;
+  padding-bottom: 8px !important;
+}
+
+/* 3. Tech Bracket Heading */
+h1[data-heading-style="bracket"], h2[data-heading-style="bracket"], h3[data-heading-style="bracket"] {
+  font-family: Consolas, "Fira Code", monospace !important;
+  color: #047857 !important;
+  border-bottom: 2px dashed #10b981 !important;
+  padding-bottom: 6px !important;
+}
+h1[data-heading-style="bracket"]::before {
+  content: "// " !important;
+  color: #10b981 !important;
+}
+
+/* 4. Newspaper Press Heading */
+h1[data-heading-style="newspaper"], h2[data-heading-style="newspaper"], h3[data-heading-style="newspaper"] {
+  font-family: Impact, "Trebuchet MS", sans-serif !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1.5px !important;
+  border-bottom: 3px double #111827 !important;
+  padding-bottom: 6px !important;
+  color: #111827 !important;
+}
+
+/* 5. Cyber Neon Heading */
+h1[data-heading-style="cyber"], h2[data-heading-style="cyber"], h3[data-heading-style="cyber"] {
+  font-family: Consolas, monospace !important;
+  color: #0891b2 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 2px !important;
+  border-bottom: 2px dashed #ec4899 !important;
+  padding-bottom: 6px !important;
+}
+
+/* Floating Quote Context Panel */
+.quote-context-panel {
+  position: absolute !important;
+  z-index: 999 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  background: var(--bg-primary, #ffffff) !important;
+  border: 1px solid var(--border, rgba(0,0,0,0.15)) !important;
+  border-radius: 8px !important;
+  padding: 4px 6px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15) !important;
+}
+
+.qcp-btn {
+  border: none !important;
+  background: transparent !important;
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  color: var(--fg, #111827) !important;
+}
+
+.qcp-btn:hover {
+  background: var(--bg-hover, rgba(0,0,0,0.06)) !important;
+  color: var(--accent, #6366f1) !important;
+}
 
   /* Card Integrity & Border Lockdown in Print */
   #printSheet .paperuss-embed,
