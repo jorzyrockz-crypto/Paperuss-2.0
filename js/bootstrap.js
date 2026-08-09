@@ -452,6 +452,7 @@ function bind(){
   }
 
   document.getElementById('formatBar').onclick=e=>{
+    if(e.target.closest('#quotePicker') || e.target.closest('#quoteStyleDropdown')) return;
     const media=e.target.closest('[data-media]');
     if(media){
       e.preventDefault();
@@ -460,6 +461,7 @@ function bind(){
       return;
     }
     const b=e.target.closest('[data-cmd]'); if(!b) return;
+    if(b.id === 'quoteBtn' || b.closest('#quotePicker')) return;
     e.preventDefault();
     applyCommand(b.dataset.cmd, b.dataset.val);
     if(typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
@@ -1223,6 +1225,7 @@ function isSingleStandaloneUrl(str) {
   /* ---------- QUOTE STYLE PICKER ---------- */
   const qBtn = document.getElementById('quoteBtn');
   if (qBtn) qBtn.onclick = e => {
+    e.preventDefault();
     e.stopPropagation();
     const ed = bodyEl();
     const sel = window.getSelection();
@@ -1232,7 +1235,13 @@ function isSingleStandaloneUrl(str) {
       const inBq = node.closest && node.closest('blockquote');
       if (!inBq) {
         document.execCommand('formatBlock', false, 'blockquote');
+        if (typeof handleBodyInput === 'function') handleBodyInput();
+        if (typeof updateToolbarState === 'function') updateToolbarState();
       }
+    } else {
+      document.execCommand('formatBlock', false, 'blockquote');
+      if (typeof handleBodyInput === 'function') handleBodyInput();
+      if (typeof updateToolbarState === 'function') updateToolbarState();
     }
     toggleDropdown('quoteStyleDropdown');
   };
