@@ -663,6 +663,10 @@ async function openPrintModal() {
           </div>
 
           <div class="print-modal-footer">
+            <button type="button" class="btn" id="printModalFullPreview" style="margin-right:auto;display:flex;align-items:center;gap:6px;">
+              <i data-lucide="eye" class="w-4 h-4 text-indigo-500"></i>
+              <span>📖 Interactive Page View</span>
+            </button>
             <button type="button" class="btn" id="printModalCancel">Cancel</button>
             <button type="button" class="btn btn-primary" id="printModalSubmit">
               <i data-lucide="printer" class="w-4 h-4 mr-1 inline"></i> Open Print / PDF Dialog
@@ -679,6 +683,22 @@ async function openPrintModal() {
     // Attach Event Listeners
     document.getElementById('printModalClose').onclick = closeModal;
     document.getElementById('printModalCancel').onclick = closeModal;
+
+    document.getElementById('printModalFullPreview').onclick = () => {
+      closeModal();
+      openPagedPreviewModal(note, {
+        scope: printScope,
+        documentStyle,
+        pageSize,
+        orientation,
+        margin,
+        showHeader,
+        showFooter,
+        showPageNums,
+        customHeaderTitle,
+        customSubtitle
+      });
+    };
 
     const overlay = document.getElementById('printModalOverlay');
     if (overlay) {
@@ -743,6 +763,76 @@ async function openPrintModal() {
       });
       setTimeout(() => window.print(), 120);
     };
+  }
+
+  async function openPagedPreviewModal(note, options) {
+    const root = document.getElementById('modalRoot');
+    if (!root) return;
+  
+    const sheet = await preparePrintSheet(note, options);
+    if (!sheet) return;
+  
+    let zoomScale = 1.0;
+  
+    function renderPreview() {
+      const isLandscape = options.orientation === 'landscape';
+      const documentStyle = options.documentStyle || 'executive';
+  
+      root.innerHTML = `
+        <div class="paged-preview-backdrop" id="pagedPreviewBackdrop">
+          <div class="paged-preview-topbar">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <i data-lucide="book-open" class="w-5 h-5 text-indigo-400"></i>
+              <span style="font-weight:700;font-size:15px;">Interactive Page View Preview</span>
+              <span style="font-size:12px;background:rgba(255,255,255,0.1);padding:2px 8px;border-radius:99px;color:#cbd5e1;">${esc(titleOf(note))}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.08);padding:3px 8px;border-radius:8px;">
+                <button type="button" class="btn-new-branch-icon" id="ppZoomOut" title="Zoom Out" style="color:#fff;"><i data-lucide="zoom-out" class="w-4 h-4"></i></button>
+                <span style="font-size:12px;font-weight:600;min-width:42px;text-align:center;" id="ppZoomText">${Math.round(zoomScale * 100)}%</span>
+                <button type="button" class="btn-new-branch-icon" id="ppZoomIn" title="Zoom In" style="color:#fff;"><i data-lucide="zoom-in" class="w-4 h-4"></i></button>
+              </div>
+              <button type="button" class="btn btn-primary" id="ppPrintSubmit">
+                <i data-lucide="printer" class="w-4 h-4 mr-1 inline"></i> Open Print / PDF Dialog
+              </button>
+              <button type="button" class="changelog-close" id="ppClose" style="color:#fff;" aria-label="Close"><i data-lucide="x"></i></button>
+            </div>
+          </div>
+  
+          <div class="paged-preview-body">
+            <div class="paged-paper-sheet ${isLandscape ? 'landscape' : ''}" id="pagedPaperSheet" data-print-theme="${documentStyle}" style="transform: scale(${zoomScale});">
+              ${sheet.innerHTML}
+            </div>
+          </div>
+        </div>
+      `;
+  
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        try { window.lucide.createIcons(); } catch (e) {}
+      }
+  
+      document.getElementById('ppClose').onclick = () => openPrintModal();
+      document.getElementById('ppZoomOut').onclick = () => {
+        if (zoomScale > 0.55) { zoomScale -= 0.15; updateZoom(); }
+      };
+      document.getElementById('ppZoomIn').onclick = () => {
+        if (zoomScale < 1.6) { zoomScale += 0.15; updateZoom(); }
+      };
+  
+      document.getElementById('ppPrintSubmit').onclick = () => {
+        root.innerHTML = '';
+        setTimeout(() => window.print(), 120);
+      };
+  
+      function updateZoom() {
+        const paper = document.getElementById('pagedPaperSheet');
+        const text = document.getElementById('ppZoomText');
+        if (paper) paper.style.transform = `scale(${zoomScale})`;
+        if (text) text.textContent = `${Math.round(zoomScale * 100)}%`;
+      }
+    }
+  
+    renderPreview();
   }
 
   function closeModal() {
