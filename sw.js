@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'paperuss-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v266-fix-branch-sidebar-id`;
+const CACHE_NAME = `${CACHE_PREFIX}v267-fix-seed-images-static`;
 const APP_SHELL = [
   './',
   './index.html',

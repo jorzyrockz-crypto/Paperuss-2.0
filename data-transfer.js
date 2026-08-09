@@ -147,7 +147,7 @@ function seedNotes(){
   const leaf5Id = 'seed_leaf_media';
   const leaf6Id = 'seed_leaf_leafline';
 
-  const leaf1Content = `<p><img src="assets/images/paperuss-banner-light.png" alt="PapeRuss 2.0 Primary Documentation" style="width:100%;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.15);"></p>
+  const leaf1Content = `<p><img src="assets/images/paperuss-banner-light.png" alt="PapeRuss 2.0 Primary Documentation" style="width:100%;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.15);" data-static="true"></p>
 <h1>Welcome to PapeRuss 👋 — System Documentation</h1>
 <p>PapeRuss 2.0 is an editorial-grade, <strong>offline-first</strong> document editor and knowledge suite designed for focused writing, structured notes, and rich interactive media.</p>
 
@@ -179,7 +179,7 @@ function seedNotes(){
   <li><strong>Leafline &amp; Branch Tree</strong> — Timeline outline palette, 3-segment view switch, and drag-and-drop branch tree.</li>
 </ol>`;
 
-  const leaf2Content = `<p><img src="assets/images/paperuss-botanical-blue.png" alt="Formatting Suite" style="width:100%;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.15);"></p>
+  const leaf2Content = `<p><img src="assets/images/paperuss-botanical-blue.png" alt="Formatting Suite" style="width:100%;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.15);" data-static="true"></p>
 <h1>Cheatsheet &amp; Formatting Suite</h1>
 <p>PapeRuss 2.0 provides an editorial-grade formatting engine for technical documents, journals, and reports.</p>
 
@@ -208,7 +208,7 @@ function seedNotes(){
   <li data-task="1"><input type="checkbox"> Press <code>Ctrl + F</code> to open Find and Replace bar</li>
 </ul>`;
 
-  const leaf3Content = `<p><img src="assets/images/paperuss-blueprint-leaves.png" alt="Spreadsheet & Planning" style="width:100%;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.15);"></p>
+  const leaf3Content = `<p><img src="assets/images/paperuss-blueprint-leaves.png" alt="Spreadsheet & Planning" style="width:100%;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.15);" data-static="true"></p>
 <h1>Spreadsheet, Formulas &amp; Financial Planning</h1>
 <p>PapeRuss 2.0 embeds live Excel formula calculation and currency formatting directly inside document tables. Type <strong><code>=</code></strong> inside any cell to trigger autocomplete!</p>
 
@@ -240,7 +240,7 @@ function seedNotes(){
   </tbody>
 </table></div>`;
 
-  const leaf4Content = `<p><img src="assets/images/paperuss-branch-tree.png" alt="Print Layout & Aesthetics" style="width:100%;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.15);"></p>
+  const leaf4Content = `<p><img src="assets/images/paperuss-branch-tree.png" alt="Print Layout & Aesthetics" style="width:100%;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.15);" data-static="true"></p>
 <h1>Print Layout, Aesthetics &amp; PDF Engine</h1>
 <p>PapeRuss 2.0 incorporates a publication-grade page layout engine for live page editing, PDF export, and physical printing.</p>
 
@@ -258,7 +258,7 @@ function seedNotes(){
 <h2>🖨️ Multi-Page Table Printing</h2>
 <p>Tables automatically repeat their header row (<code>thead</code>) across page breaks and enforce row split prevention (<code>break-inside: avoid</code>) when exported to PDF or sent to a physical printer.</p>`;
 
-  const leaf5Content = `<p><img src="assets/images/paperuss-botanical-dark.png" alt="Media Studio" style="width:100%;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.15);"></p>
+  const leaf5Content = `<p><img src="assets/images/paperuss-botanical-dark.png" alt="Media Studio" style="width:100%;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.15);" data-static="true"></p>
 <h1>Music Hub, Voice Cards &amp; Media Studio</h1>
 <p>PapeRuss 2.0 integrates audio playback, video embeds, and rich media cards directly into your workflow.</p>
 
@@ -291,7 +291,7 @@ function seedNotes(){
 <h2>🖼️ Floating Image Toolbar &amp; 3:1 Covers</h2>
 <p>Click or hover any image to access the floating toolbar for sizing, float alignment (Left, Center, Right), image replacement, and <strong>3:1 Panoramic Notebook Covers</strong> with vertical drag positioning.</p>`;
 
-  const leaf6Content = `<p><img src="assets/images/paperuss-blueprint-leaves.png" alt="Leafline Navigation" style="width:100%;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.15);"></p>
+  const leaf6Content = `<p><img src="assets/images/paperuss-blueprint-leaves.png" alt="Leafline Navigation" style="width:100%;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.15);" data-static="true"></p>
 <h1>Leafline Outline &amp; Botanical Branch Tree</h1>
 <p>PapeRuss 2.0 offers powerful navigation tools to jump across document headings and organize notebooks into branch hierarchies.</p>
 

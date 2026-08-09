@@ -539,6 +539,9 @@ async function hydrateMediaInEditor(){
   if(typeof repairMalformedLinkCards === 'function') repairMalformedLinkCards(ed);
   const deadImgs = ed.querySelectorAll('img:not([data-media-id])');
   for(const img of deadImgs){
+    // Skip static asset images — they load from the server and have no blob
+    const imgSrc = img.getAttribute('src') || '';
+    if(img.dataset.static || imgSrc.startsWith('assets/') || imgSrc.startsWith('./assets/')) continue;
     if(img.complete && img.naturalWidth === 0 && typeof setupBrokenImageElement==='function'){
       setupBrokenImageElement(img);
     }
