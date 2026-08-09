@@ -428,15 +428,85 @@ async function appendSharedDataAsNewLeaf(targetNote, payload) {
   if (typeof showToast === 'function') showToast(`🍃 Added new Leaf to "${targetNote.title}"!`);
 }
 
+function extractIframeFromText(rawText) {
+  if (!rawText) return null;
+  const match = rawText.match(/<iframe[^>]*\bsrc=["']([^"']+)["'][^>]*>[\s\S]*?<\/iframe>/i);
+  if (!match) return null;
+  const fullIframe = match[0];
+  const src = match[1];
+
+  let cleaned = fullIframe
+    .replace(/\bwidth=["'][^"']*["']/gi, 'width="100%"')
+    .replace(/\bstyle=["'][^"']*["']/gi, 'style="width:100%;min-height:280px;border:none;border-radius:12px;"');
+
+  if (!/\bstyle=/i.test(cleaned)) {
+    cleaned = cleaned.replace(/<iframe/i, '<iframe style="width:100%;min-height:280px;border:none;border-radius:12px;"');
+  }
+
+  return {
+    src: src,
+    html: `<div class="paperuss-embed" data-paperuss-embed="true" style="margin:12px 0;border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.08);background:var(--surface,#f8f9fa);">${cleaned}</div>`
+  };
+}
+
+function parseUrlToEmbedHtml(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+
+    if (u.hostname.includes('youtube.com') || u.hostname.includes('youtu.be')) {
+      let videoId = '';
+      if (u.hostname.includes('youtu.be')) {
+        videoId = u.pathname.replace('/', '');
+      } else if (u.searchParams.has('v')) {
+        videoId = u.searchParams.get('v');
+      } else if (u.pathname.includes('/embed/')) {
+        videoId = u.pathname.split('/embed/')[1];
+      }
+      if (videoId) {
+        return `<div class="paperuss-embed" data-paperuss-embed="true" style="margin:12px 0;border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.08);aspect-ratio:16/9;background:#000;"><iframe src="https://www.youtube.com/embed/${esc(videoId)}" style="width:100%;height:100%;border:none;" allowfullscreen></iframe></div>`;
+      }
+    }
+
+    if (u.hostname.includes('spotify.com')) {
+      const spotifyPath = u.pathname.replace(/^\//, '');
+      return `<div class="paperuss-embed" data-paperuss-embed="true" style="margin:12px 0;border-radius:14px;overflow:hidden;"><iframe src="https://open.spotify.com/embed/${esc(spotifyPath)}" style="width:100%;height:152px;border:none;border-radius:12px;" allow="encrypted-media"></iframe></div>`;
+    }
+
+    if (u.hostname.includes('soundcloud.com')) {
+      return `<div class="paperuss-embed" data-paperuss-embed="true" style="margin:12px 0;border-radius:14px;overflow:hidden;"><iframe src="https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%232f6cf6&auto_play=false" style="width:100%;height:166px;border:none;" allow="autoplay"></iframe></div>`;
+    }
+
+    const domain = u.hostname.replace('www.', '');
+    const favicon = `https://www.google.com/s2/favicons?sz=32&domain=${domain}`;
+    return `<div class="paperuss-card" data-url="${esc(url)}" style="margin:12px 0;padding:12px 14px;border:1px solid var(--border,rgba(0,0,0,0.1));border-radius:14px;background:var(--surface,#f8f9fa);display:flex;align-items:center;gap:12px;"><img src="${favicon}" style="width:20px;height:20px;border-radius:4px;" alt=""><div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(domain)}</div><a href="${esc(url)}" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:var(--accent,#2f6cf6);text-decoration:none;word-break:break-all;">${esc(url)}</a></div></div>`;
+  } catch(_) {
+    return null;
+  }
+}
 
 function buildSharedContentHtml(payload) {
   let body = '';
-  if (payload.text) {
-    body += `<p>${esc(payload.text)}</p>`;
+
+  const rawIframeText = extractIframeFromText(payload.text) || extractIframeFromText(payload.url);
+  if (rawIframeText) {
+    const cleanText = (payload.text || '').replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, '').trim();
+    if (cleanText) body += `<p>${esc(cleanText)}</p>`;
+    body += rawIframeText.html;
+  } else {
+    if (payload.text) {
+      body += `<p>${esc(payload.text)}</p>`;
+    }
+    if (payload.url) {
+      const embedHtml = parseUrlToEmbedHtml(payload.url);
+      if (embedHtml) {
+        body += embedHtml;
+      } else {
+        body += `<p><a href="${esc(payload.url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 12px;background:var(--hover);border-radius:8px;text-decoration:none;color:var(--accent);margin-top:6px;">🔗 ${esc(payload.url)}</a></p>`;
+      }
+    }
   }
-  if (payload.url) {
-    body += `<p><a href="${esc(payload.url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 12px;background:var(--hover);border-radius:8px;text-decoration:none;color:var(--accent);margin-top:6px;">🔗 ${esc(payload.url)}</a></p>`;
-  }
+
   if (payload.files && payload.files.length > 0) {
     payload.files.forEach(f => {
       try {
@@ -460,6 +530,9 @@ function createNoteFromSharedData(payload, branchTag){
   if (!payload) return;
   const now = Date.now();
   let noteTitle = payload.title || (payload.text ? payload.text.substring(0, 30) : 'Shared Bookmark');
+  if (extractIframeFromText(payload.text) || extractIframeFromText(payload.url)) {
+    noteTitle = payload.title || 'Shared Media Embed';
+  }
   const body = buildSharedContentHtml(payload);
 
   const tags = ['bookmarks', 'shared'];
@@ -504,10 +577,18 @@ function openIncomingShareModal(payload) {
   const faviconEl = overlay.querySelector('#sharePreviewFavicon');
   const imagesEl = overlay.querySelector('#sharePreviewImages');
 
-  if (titleEl) titleEl.textContent = payload.title || 'Shared Content';
-  if (textEl) {
-    textEl.textContent = payload.text || '';
-    textEl.style.display = payload.text ? '' : 'none';
+  const rawIframe = extractIframeFromText(payload.text) || extractIframeFromText(payload.url);
+  if (rawIframe) {
+    if (titleEl) titleEl.textContent = payload.title || '🎬 Live Media Embed Shared';
+    if (textEl) textEl.textContent = 'Interactive <iframe> Embed Code Detected';
+    if (domainEl) domainEl.textContent = 'Live Embed Component';
+    if (urlBarEl) urlBarEl.style.display = '';
+  } else {
+    if (titleEl) titleEl.textContent = payload.title || 'Shared Content';
+    if (textEl) {
+      textEl.textContent = payload.text || '';
+      textEl.style.display = payload.text ? '' : 'none';
+    }
   }
 
   if (payload.url && urlBarEl) {
