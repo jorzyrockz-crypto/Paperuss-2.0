@@ -6486,6 +6486,11 @@ h1[data-heading-style="cyber"], h2[data-heading-style="cyber"], h3[data-heading-
   box-shadow: 0 12px 32px rgba(0,0,0,0.2) !important;
   backdrop-filter: blur(16px) !important;
   padding: 4px !important;
+  display: none;
+}
+
+.quote-style-dropdown.show {
+  display: block !important;
 }
 
 .qsd-opt {

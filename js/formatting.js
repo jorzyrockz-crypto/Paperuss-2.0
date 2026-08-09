@@ -978,6 +978,7 @@ function applyParagraphStyle(val) {
     b.classList.remove('editor-title', 'editor-subtitle');
     if (targetClass) b.classList.add(targetClass);
     if (headingStyle) b.setAttribute('data-heading-style', headingStyle);
+    else b.removeAttribute('data-heading-style'); // clear stale creative style when switching back to normal/standard heading
   });
   
   handleBodyInput();

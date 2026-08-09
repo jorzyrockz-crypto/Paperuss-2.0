@@ -64,7 +64,7 @@
 
     return `<div class="pv-header-overlay pv-header-${style}" contenteditable="false">
       ${bannerHtml}
-      <div class="pv-header-content" style="display:flex;justify-space-between;align-items:center;width:100%;">
+      <div class="pv-header-content" style="display:flex;justify-content:space-between;align-items:center;width:100%;">
         <div class="pv-header-left" contenteditable="true" data-header-field="title"><strong class="pv-brand-${style}">${esc(customHeader)}</strong> <span class="pv-dot">•</span> <span>${esc(noteTitle)}</span></div>
         <div class="pv-header-right" contenteditable="true" data-header-field="subtitle" style="color:var(--fg-muted,#64748b);">${esc(customSubtitle)}</div>
       </div>
@@ -78,7 +78,7 @@
 
     return `<div class="pv-footer-overlay pv-footer-${style}" contenteditable="false">
       <div class="pv-footer-resizer" title="Drag to adjust Footer Height"></div>
-      <div class="pv-footer-content" style="display:flex;justify-space-between;align-items:center;width:100%;">
+      <div class="pv-footer-content" style="display:flex;justify-content:space-between;align-items:center;width:100%;">
         <div class="pv-footer-left" contenteditable="true" data-footer-field="ref" style="color:var(--fg-muted,#94a3b8);">Ref ID: ${esc(refId)}</div>
         <div class="pv-footer-right pv-pagenum-${style}">${pagenumText}</div>
       </div>
@@ -185,8 +185,9 @@
       if (hfZone) {
         activeHFZone = hfZone;
         const rect = hfZone.getBoundingClientRect();
-        hfPanel.style.left = `${Math.max(10, Math.min(rect.left + window.scrollX, window.innerWidth - 320))}px`;
-        hfPanel.style.top = `${Math.max(10, rect.top + window.scrollY - 44)}px`;
+        hfPanel.style.position = 'fixed';
+        hfPanel.style.left = `${Math.max(10, Math.min(rect.left, window.innerWidth - 340))}px`;
+        hfPanel.style.top = `${Math.max(10, rect.top - 48)}px`;
         hfPanel.style.display = 'flex';
         hfPanel.classList.remove('hidden');
         if (typeof lucide?.createIcons === 'function') {
@@ -209,28 +210,31 @@
   }
 
   function autoExpandHeaderFooterHeights(edBody, targetNote) {
+    // Only auto-expand if the user has NOT manually set a custom height via the resizer
+    const hasCustomHeader = targetNote && targetNote._headerResized;
+    const hasCustomFooter = targetNote && targetNote._footerResized;
+
     const headerOverlays = edBody.querySelectorAll('.pv-header-overlay');
     const footerOverlays = edBody.querySelectorAll('.pv-footer-overlay');
 
-    let maxHeaderH = 50;
-    headerOverlays.forEach(h => {
-      maxHeaderH = Math.max(maxHeaderH, h.offsetHeight || h.scrollHeight || 50);
-    });
+    if (!hasCustomHeader) {
+      let maxHeaderH = 50;
+      headerOverlays.forEach(h => {
+        maxHeaderH = Math.max(maxHeaderH, h.offsetHeight || h.scrollHeight || 50);
+      });
+      const targetTop = maxHeaderH + 24;
+      edBody.style.paddingTop = `${targetTop}px`;
+      if (targetNote) targetNote.headerHeight = edBody.style.paddingTop;
+    }
 
-    let maxFooterH = 50;
-    footerOverlays.forEach(f => {
-      maxFooterH = Math.max(maxFooterH, f.offsetHeight || f.scrollHeight || 50);
-    });
-
-    const targetTop = maxHeaderH + 24;
-    const targetBottom = maxFooterH + 24;
-
-    edBody.style.paddingTop = `${targetTop}px`;
-    edBody.style.paddingBottom = `${targetBottom}px`;
-
-    if (targetNote) {
-      targetNote.headerHeight = edBody.style.paddingTop;
-      targetNote.footerHeight = edBody.style.paddingBottom;
+    if (!hasCustomFooter) {
+      let maxFooterH = 50;
+      footerOverlays.forEach(f => {
+        maxFooterH = Math.max(maxFooterH, f.offsetHeight || f.scrollHeight || 50);
+      });
+      const targetBottom = maxFooterH + 24;
+      edBody.style.paddingBottom = `${targetBottom}px`;
+      if (targetNote) targetNote.footerHeight = edBody.style.paddingBottom;
     }
   }
 
@@ -280,8 +284,8 @@
           tooltip.remove();
           if (liveRaf) { cancelAnimationFrame(liveRaf); liveRaf = null; }
           if (targetNote) {
-            if (isHeader) targetNote.headerHeight = edBody.style.paddingTop;
-            else targetNote.footerHeight = edBody.style.paddingBottom;
+            if (isHeader) { targetNote.headerHeight = edBody.style.paddingTop; targetNote._headerResized = true; }
+            else { targetNote.footerHeight = edBody.style.paddingBottom; targetNote._footerResized = true; }
             targetNote.updatedAt = Date.now();
             if (typeof save === 'function') save();
           }
@@ -295,11 +299,13 @@
   }
 
   function attachHeaderFooterEditableListeners(edBody, targetNote) {
+    if (!targetNote) return;
     edBody.querySelectorAll('[data-header-field], [data-footer-field]').forEach(field => {
       if (field.dataset.editListenerAttached) return;
       field.dataset.editListenerAttached = 'true';
 
       field.addEventListener('input', () => {
+        if (!targetNote) return;
         const hField = field.dataset.headerField;
         const fField = field.dataset.footerField;
         const text = field.textContent.trim();
@@ -326,7 +332,9 @@
     try {
       clearPaginationMarkers(edBody);
 
-      const targetNote = note || (typeof activeNoteForAction === 'function' ? activeNoteForAction() : null);
+      const targetNote = note
+        || (typeof getNote === 'function' && typeof state !== 'undefined' && state.currentId ? getNote(state.currentId) : null)
+        || (typeof window.currentNote !== 'undefined' ? window.currentNote : null);
       if (!targetNote) { isPaginating = false; return; }
 
       const { h: pageH } = getPageDimensions(targetNote);
@@ -454,11 +462,15 @@
 
     edBody.dataset.pvObserverAttached = 'true';
 
-    edBody.addEventListener('input', () => schedulePagination());
-    edBody.addEventListener('keyup', () => schedulePagination());
+    const getCurrentNote = () =>
+      (typeof getNote === 'function' && typeof state !== 'undefined' && state.currentId)
+        ? getNote(state.currentId) : null;
+
+    edBody.addEventListener('input', () => schedulePagination(getCurrentNote()));
+    edBody.addEventListener('keyup', () => schedulePagination(getCurrentNote()));
 
     // Window resize handler
-    window.addEventListener('resize', () => schedulePagination());
+    window.addEventListener('resize', () => schedulePagination(getCurrentNote()));
   }
 
   window.PageLayoutEngine = {
