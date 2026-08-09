@@ -1,12 +1,12 @@
 /* ============================================================
-   PAPERUSS 2.0 STABILIZATION RUNTIME
+   PAPERUSS 2.0 RUNTIME
    Shared release metadata, data normalization, and HTML safety.
    ============================================================ */
 (function initPaperussStabilization(global){
   'use strict';
 
   const BUILD=Object.freeze({
-    name:'PapeRuss 2.5 Page View Layout & Quote Context Engine',
+    name:'PapeRuss 2.0',
     version:'2.5.0-page-view-quote-engine',
     cacheName:'paperuss-shell-v233',
     schemaVersion:4

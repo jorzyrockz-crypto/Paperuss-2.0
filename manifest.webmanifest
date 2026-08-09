@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "PapeRuss 2.0 Stabilization",
+  "name": "PapeRuss 2.0",
   "short_name": "PapeRuss 2.0",
-  "description": "Stabilized offline-first notes, tasks, calendar, media, and planning workspace.",
+  "description": "Offline-first notes, tasks, calendar, media, and planning workspace.",
   "start_url": "./app.html",
   "scope": "./",
   "display": "standalone",
