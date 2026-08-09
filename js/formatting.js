@@ -1131,6 +1131,7 @@ function initQuoteContextPanel() {
     activeQuote.setAttribute('data-quote-style', style);
     if (typeof handleBodyInput === 'function') handleBodyInput();
     if (typeof save === 'function') save();
+    if (window.HistoryManager) window.HistoryManager.capture(true);
     if (typeof toast === 'function') toast(`Quote style updated to ${style}`);
   });
 }

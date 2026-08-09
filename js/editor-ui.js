@@ -71,6 +71,7 @@ function applyLineSpacing(spacing) {
     blocks.forEach(blk => {
       if (sel.containsNode(blk, true)) {
         blk.style.lineHeight = String(val);
+        blk.setAttribute('data-line-spacing', String(spacing));
         appliedToBlocks = true;
       }
     });
@@ -78,6 +79,12 @@ function applyLineSpacing(spacing) {
 
   if (!appliedToBlocks) {
     ed.style.lineHeight = String(val);
+    ed.setAttribute('data-line-spacing', String(spacing));
+    const n = typeof getNote === 'function' && typeof state !== 'undefined' ? getNote(state.currentId) : null;
+    if (n) {
+      n.lineHeight = String(val);
+      n.lineSpacing = String(val);
+    }
   }
 
   const lsDrop = document.getElementById('lineSpacingDropdown');
@@ -87,7 +94,9 @@ function applyLineSpacing(spacing) {
     });
   }
 
+  if (typeof handleBodyInput === 'function') handleBodyInput();
   if (typeof save === 'function') save();
+  if (window.HistoryManager) window.HistoryManager.capture(true);
   if (typeof toast === 'function') toast(`Line spacing set to ${val}`);
 }
 window.applyLineSpacing = applyLineSpacing;
