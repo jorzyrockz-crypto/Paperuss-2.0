@@ -358,7 +358,20 @@ async function preparePrintSheet(targetNote, options) {
 
   let cleanHtml = '';
 
-  if (scope === 'all' && window.paperussLeaves && window.paperussLeaves.leafGet) {
+  if (scope.startsWith('single:') && window.paperussLeaves && window.paperussLeaves.leafGet) {
+    const leafId = scope.replace('single:', '');
+    let lObj = await window.paperussLeaves.leafGet(leafId);
+    if (!lObj && (leafId === 'virtual_main_' + note.id)) {
+      lObj = { id: leafId, title: 'Main', content: note.content };
+    }
+    if (lObj) {
+      cleanHtml = `<h2 class="ps-leaf-title" style="margin-top:0!important;">${esc(lObj.title || 'Leaf')}</h2>`;
+      cleanHtml += sanitizeContentForPrint(lObj.content || '', lObj.title);
+    } else {
+      let currentHtml = (typeof bodyEl === 'function' && bodyEl() ? bodyEl().innerHTML : '') || note.content || '';
+      cleanHtml = sanitizeContentForPrint(currentHtml, titleOf(note));
+    }
+  } else if (scope === 'all' && window.paperussLeaves && window.paperussLeaves.leafGet) {
     const leafOrder = (typeof window.getNoteLeafOrder === 'function')
       ? window.getNoteLeafOrder(note)
       : (note.leafOrder || ['virtual_main_' + note.id]);
@@ -447,7 +460,7 @@ async function preparePrintSheet(targetNote, options) {
   return sheet;
 }
 
-function openPrintModal() {
+async function openPrintModal() {
   const note = activeNoteForAction();
   if (!note) {
     if (typeof toast === 'function') toast('No active note available to print.');
@@ -457,13 +470,20 @@ function openPrintModal() {
   const root = document.getElementById('modalRoot');
   if (!root) return;
 
-  const leafCount = (typeof window.paperussLeaves !== 'undefined' && window.paperussLeaves.getNoteLeafCount)
-    ? window.paperussLeaves.getNoteLeafCount(note)
-    : (note.leafOrder ? note.leafOrder.length : 1);
+  let allLeaves = [];
+  if (window.paperussLeaves && typeof window.paperussLeaves.leafGetByNoteId === 'function') {
+    try {
+      allLeaves = await window.paperussLeaves.leafGetByNoteId(note.id);
+    } catch (e) {}
+  }
+  if (!allLeaves || allLeaves.length === 0) {
+    allLeaves = [{ id: 'virtual_main_' + note.id, title: 'Main', content: note.content }];
+  }
 
-  const activeLeafTitle = (window.currentActiveLeaf ? window.currentActiveLeaf.title : '') || 'Active Leaf';
+  const leafCount = allLeaves.length;
+  const activeLeafTitle = (window.currentActiveLeaf ? window.currentActiveLeaf.title : '') || (allLeaves[0] ? allLeaves[0].title : 'Active Leaf');
 
-  let printScope = 'active'; // 'active' or 'all'
+  let printScope = 'active'; // 'active', 'all', or 'single:<leafId>'
   let pageSize = note.pageSize || 'auto';
   let orientation = note.pageOrientation || 'portrait';
   let margin = note.pageMargins || 'normal';
@@ -487,10 +507,10 @@ function openPrintModal() {
 
           <div class="print-modal-body-wrapper" style="display:flex;gap:16px;padding:20px;overflow-y:auto;max-height:calc(90vh - 120px);">
             <div class="print-modal-body-fields" style="flex:1;display:flex;flex-direction:column;gap:14px;min-width:260px;">
-              <!-- Print Scope (Single Leaf vs All Leaves) -->
+              <!-- Print Scope & Specific Leaf Dropdown -->
               <div class="pm-field-group">
                 <label class="pm-label">Print Scope</label>
-                <div class="pm-segmented-control">
+                <div class="pm-segmented-control" style="margin-bottom:${leafCount > 1 ? '8px' : '0'};">
                   <button type="button" class="pm-segment-btn ${printScope === 'active' ? 'active' : ''}" id="pmScopeActive">
                     <i data-lucide="file-text" class="w-4 h-4 inline mr-1"></i>
                     <span>Active Leaf (${esc(activeLeafTitle)})</span>
@@ -500,6 +520,18 @@ function openPrintModal() {
                     <span>All Leaves (${leafCount}) + TOC</span>
                   </button>
                 </div>
+
+                ${leafCount > 1 ? `
+                <div class="pm-field-group" style="margin-top:4px;">
+                  <label class="pm-label" for="pmLeafSelect" style="font-size:11px;">Or Select Specific Leaf to Print</label>
+                  <select id="pmLeafSelect" class="pm-select">
+                    <option value="active" ${printScope === 'active' ? 'selected' : ''}>📍 Currently Active Leaf (${esc(activeLeafTitle)})</option>
+                    <option value="all" ${printScope === 'all' ? 'selected' : ''}>📚 All Leaves (${leafCount} total) + Table of Contents</option>
+                    <optgroup label="Single Specific Leaf">
+                      ${allLeaves.map((l, idx) => `<option value="single:${l.id}" ${printScope === 'single:' + l.id ? 'selected' : ''}>🍃 Leaf ${idx + 1}: ${esc(l.title || 'Untitled')}</option>`).join('')}
+                    </optgroup>
+                  </select>
+                </div>` : ''}
               </div>
 
               <!-- Custom Header Titles -->
@@ -611,6 +643,11 @@ function openPrintModal() {
 
     document.getElementById('pmScopeActive').onclick = () => { printScope = 'active'; renderModal(); };
     document.getElementById('pmScopeAll').onclick = () => { printScope = 'all'; renderModal(); };
+
+    const leafSelect = document.getElementById('pmLeafSelect');
+    if (leafSelect) {
+      leafSelect.onchange = (e) => { printScope = e.target.value; renderModal(); };
+    }
 
     document.getElementById('pmCustomTitle').oninput = (e) => { customHeaderTitle = e.target.value; updateThumbnail(); };
     document.getElementById('pmCustomSubtitle').oninput = (e) => { customSubtitle = e.target.value; };
