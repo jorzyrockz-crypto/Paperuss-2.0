@@ -441,7 +441,7 @@ async function preparePrintSheet(targetNote, options) {
     </div>` : ''}
     <h1>${esc(titleOf(note))}</h1>
     ${tags ? `<div class="ps-tags">${tags}</div>` : ''}
-    <main class="ps-content">${cleanHtml}</main>
+    <main class="ps-content" ${(note.lineHeight || note.lineSpacing) ? `style="line-height:${note.lineHeight || note.lineSpacing};"` : ''}>${cleanHtml}</main>
     ${showFooter ? `
     <footer class="ps-footer">
       <div class="ps-footer-copy">

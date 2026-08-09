@@ -6322,6 +6322,31 @@ a.paperuss-inline-link:hover {
     orphans: 3 !important;
   }
 
+  /* Line Spacing Preservation in Print */
+  #printSheet [data-line-spacing="1.0"], #printSheet [data-line-height="1.0"], #printSheet .ls-1-0 { line-height: 1.0 !important; }
+  #printSheet [data-line-spacing="1.15"], #printSheet [data-line-height="1.15"], #printSheet .ls-1-15 { line-height: 1.15 !important; }
+  #printSheet [data-line-spacing="1.25"], #printSheet [data-line-height="1.25"], #printSheet .ls-1-25 { line-height: 1.25 !important; }
+  #printSheet [data-line-spacing="1.5"], #printSheet [data-line-height="1.5"], #printSheet .ls-1-5 { line-height: 1.5 !important; }
+  #printSheet [data-line-spacing="1.75"], #printSheet [data-line-height="1.75"], #printSheet .ls-1-75 { line-height: 1.75 !important; }
+  #printSheet [data-line-spacing="2.0"], #printSheet [data-line-height="2.0"], #printSheet .ls-2-0 { line-height: 2.0 !important; }
+  #printSheet [data-line-spacing="2.5"], #printSheet [data-line-height="2.5"], #printSheet .ls-2-5 { line-height: 2.5 !important; }
+
+  /* Card Integrity & Border Lockdown in Print */
+  #printSheet .paperuss-embed,
+  #printSheet .paperuss-card,
+  #printSheet .paperuss-card-file,
+  #printSheet .paperuss-card-audio,
+  #printSheet .media-card {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 12px 0 !important;
+    overflow: hidden !important;
+  }
+
   /* Completely Hide ALL App Wrappers, Editor UI Controls, Overlays & Drag Handles */
   .app,
   #modalRoot,

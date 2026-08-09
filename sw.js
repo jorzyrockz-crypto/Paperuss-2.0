@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'paperuss-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v222`;
+const CACHE_NAME = `${CACHE_PREFIX}v223`;
 const APP_SHELL = [
   './',
   './index.html',
