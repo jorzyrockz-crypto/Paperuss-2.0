@@ -1400,3 +1400,37 @@ async function mergeAllLeavesAction(noteId) {
   });
 }
 window.mergeAllLeavesAction = mergeAllLeavesAction;
+
+function checkAppShortcutLaunchActions() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+    if (!action) return;
+
+    // Clean URL query parameter after reading
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    if (action === 'new-note') {
+      if (typeof createNewNoteAction === 'function') createNewNoteAction();
+    } else if (action === 'new-leaf') {
+      if (typeof createNewLeafAction === 'function') createNewLeafAction();
+    } else if (action === 'bookmarks') {
+      if (typeof state !== 'undefined') {
+        state.tag = 'bookmarks';
+        if (typeof renderSidebar === 'function') renderSidebar();
+        if (typeof renderList === 'function') renderList();
+        if (typeof showToast === 'function') showToast('Opened 📌 Bookmarks Branch');
+      }
+    } else if (action === 'search') {
+      const searchInput = document.getElementById('searchInput');
+      if (searchInput) {
+        searchInput.focus();
+        if (typeof showToast === 'function') showToast('Search focused');
+      }
+    }
+  } catch (err) {
+    console.error('Error handling app shortcut action:', err);
+  }
+}
+window.checkAppShortcutLaunchActions = checkAppShortcutLaunchActions;
+

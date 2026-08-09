@@ -1665,6 +1665,7 @@ function isSingleStandaloneUrl(str) {
   updateNotifBadge();
   startReminderWatcher();
   if(typeof checkIncomingSharedData === 'function') setTimeout(checkIncomingSharedData, 300);
+  if(typeof checkAppShortcutLaunchActions === 'function') setTimeout(checkAppShortcutLaunchActions, 350);
   if('launchQueue' in window){
     window.launchQueue.setConsumer(async (launchParams)=>{
       if(!launchParams.files || !launchParams.files.length) return;
