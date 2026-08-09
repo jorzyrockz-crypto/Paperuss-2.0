@@ -2,6 +2,20 @@
 
 This file is generated from [GitHub Releases](https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases).
 
+## [v2.4.0-branches-engine](https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases) — 2026-08-09
+
+**Branch Engine, Sidebar Categories & Notebooks, Leafline Integration & Print Suite**
+
+### What's New in PapeRuss v2.4.0
+- **Branch Engine & Sidebar Category Tree**: Collapsible sidebar tree (`#sidebarBranchTree`) displaying root branches and nested sub-branches with ChatGPT-style Lucide outline icons, custom accent colors, real-time note count badges, drag & drop note dropzones, and 3-dot More Menu dropdowns.
+- **Full-Screen Frosted Glass Overlay Modal**: Re-architected Edit Branch into a full-screen frosted glass overlay backdrop (`.branch-modal-backdrop`).
+- **Leafline Breadcrumb Path Navigation**: Dynamic topbar header displaying `🌿 Branch Name ▸ 📝 Note Title ▸ 🍃 Leaf Tab`.
+- **Automatic Branch Category Note Creation**: New notes automatically inherit the active branch category with toast feedback.
+- **Print & PDF Setup Suite**: Enhanced Print Modal featuring a Live Paper Thumbnail Preview column, Custom Header Title & Subtitle inputs, Paper Size (A4, Letter, Legal), Orientation (Portrait/Landscape), and Margin controls.
+- **Text Wrap Clipping Resolution**: Fixed heading text clipping under floated cards by disabling BFC overflow clipping and enforcing 42% max-width for floated cards.
+- **Floating 6-Dot Handle Cleanup**: Completely removed redundant floating 6-dot drag handles (`#blockDragHandle`) in favor of custom 100% direct Card & Text Drag Engines.
+- **Botanical Architecture Documentation**: Added `ROADMAP.md` documenting the complete botanical hierarchy (`Branch ➔ Stem ➔ Leafline ➔ Leaves ➔ Leaf ➔ Veins ➔ Twig`) and future release schedule through v3.2.0.
+
 ## [v2.3.0-word-engine-hotfix](https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases) — 2026-08-09
 
 **Maximum Word Import/Export System, Typography Suite & Line Spacing Tool**
