@@ -353,6 +353,8 @@ async function preparePrintSheet(targetNote, options) {
   const showHeader = options.showHeader !== false;
   const showFooter = options.showFooter !== false;
   const showPageNums = options.showPageNums !== false;
+  const customHeaderTitle = options.customHeaderTitle || 'PapeRuss';
+  const customSubtitle = options.customSubtitle || 'Professional note record';
 
   let cleanHtml = '';
 
@@ -412,8 +414,8 @@ async function preparePrintSheet(targetNote, options) {
     ${showHeader ? `
     <div class="ps-header">
       <div>
-        <div class="ps-brand">PapeRuss</div>
-        <div style="font-size:10px;color:#64748b;margin-top:3px">Professional note record</div>
+        <div class="ps-brand">${esc(customHeaderTitle)}</div>
+        <div style="font-size:10px;color:#64748b;margin-top:3px">${esc(customSubtitle)}</div>
       </div>
       <div class="ps-meta">
         Created ${fullDate(note.createdAt)}<br>
@@ -468,6 +470,8 @@ function openPrintModal() {
   let showHeader = true;
   let showFooter = true;
   let showPageNums = true;
+  let customHeaderTitle = 'PapeRuss';
+  let customSubtitle = 'Professional note record';
 
   function renderModal() {
     root.innerHTML = `
@@ -481,69 +485,103 @@ function openPrintModal() {
             <button type="button" class="changelog-close" id="printModalClose" aria-label="Close"><i data-lucide="x"></i></button>
           </div>
 
-          <div class="print-modal-body">
-            <!-- Print Scope (Single Leaf vs All Leaves) -->
-            <div class="pm-field-group">
-              <label class="pm-label">Print Scope</label>
-              <div class="pm-segmented-control">
-                <button type="button" class="pm-segment-btn ${printScope === 'active' ? 'active' : ''}" id="pmScopeActive">
-                  <i data-lucide="file-text" class="w-4 h-4 inline mr-1"></i>
-                  <span>Active Leaf only (${esc(activeLeafTitle)})</span>
-                </button>
-                <button type="button" class="pm-segment-btn ${printScope === 'all' ? 'active' : ''}" id="pmScopeAll">
-                  <i data-lucide="files" class="w-4 h-4 inline mr-1"></i>
-                  <span>All Leaves (${leafCount} total) + TOC</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- Page Size & Orientation -->
-            <div class="pm-grid-2">
+          <div class="print-modal-body-wrapper" style="display:flex;gap:16px;padding:20px;overflow-y:auto;max-height:calc(90vh - 120px);">
+            <div class="print-modal-body-fields" style="flex:1;display:flex;flex-direction:column;gap:14px;min-width:260px;">
+              <!-- Print Scope (Single Leaf vs All Leaves) -->
               <div class="pm-field-group">
-                <label class="pm-label" for="pmPageSize">Paper Size</label>
-                <select id="pmPageSize" class="pm-select">
-                  <option value="auto" ${pageSize === 'auto' ? 'selected' : ''}>Auto / Default</option>
-                  <option value="A4" ${pageSize === 'A4' ? 'selected' : ''}>A4 (210 × 297 mm)</option>
-                  <option value="letter" ${pageSize === 'letter' ? 'selected' : ''}>US Letter (8.5 × 11 in)</option>
-                  <option value="legal" ${pageSize === 'legal' ? 'selected' : ''}>US Legal (8.5 × 14 in)</option>
+                <label class="pm-label">Print Scope</label>
+                <div class="pm-segmented-control">
+                  <button type="button" class="pm-segment-btn ${printScope === 'active' ? 'active' : ''}" id="pmScopeActive">
+                    <i data-lucide="file-text" class="w-4 h-4 inline mr-1"></i>
+                    <span>Active Leaf (${esc(activeLeafTitle)})</span>
+                  </button>
+                  <button type="button" class="pm-segment-btn ${printScope === 'all' ? 'active' : ''}" id="pmScopeAll">
+                    <i data-lucide="files" class="w-4 h-4 inline mr-1"></i>
+                    <span>All Leaves (${leafCount}) + TOC</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Custom Header Titles -->
+              <div class="pm-field-group">
+                <label class="pm-label">Custom Document Header</label>
+                <div class="pm-grid-2">
+                  <input type="text" id="pmCustomTitle" class="pm-select" value="${esc(customHeaderTitle)}" placeholder="Brand / Company">
+                  <input type="text" id="pmCustomSubtitle" class="pm-select" value="${esc(customSubtitle)}" placeholder="Subtitle">
+                </div>
+              </div>
+
+              <!-- Page Size & Orientation -->
+              <div class="pm-grid-2">
+                <div class="pm-field-group">
+                  <label class="pm-label" for="pmPageSize">Paper Size</label>
+                  <select id="pmPageSize" class="pm-select">
+                    <option value="auto" ${pageSize === 'auto' ? 'selected' : ''}>Auto / Default</option>
+                    <option value="A4" ${pageSize === 'A4' ? 'selected' : ''}>A4 (210 × 297 mm)</option>
+                    <option value="letter" ${pageSize === 'letter' ? 'selected' : ''}>US Letter (8.5 × 11 in)</option>
+                    <option value="legal" ${pageSize === 'legal' ? 'selected' : ''}>US Legal (8.5 × 14 in)</option>
+                  </select>
+                </div>
+
+                <div class="pm-field-group">
+                  <label class="pm-label" for="pmOrientation">Orientation</label>
+                  <select id="pmOrientation" class="pm-select">
+                    <option value="portrait" ${orientation === 'portrait' ? 'selected' : ''}>Portrait</option>
+                    <option value="landscape" ${orientation === 'landscape' ? 'selected' : ''}>Landscape</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Page Margins -->
+              <div class="pm-field-group">
+                <label class="pm-label" for="pmMargins">Page Margins</label>
+                <select id="pmMargins" class="pm-select">
+                  <option value="normal" ${margin === 'normal' ? 'selected' : ''}>Normal (16mm 17mm 19mm)</option>
+                  <option value="narrow" ${margin === 'narrow' ? 'selected' : ''}>Narrow (10mm)</option>
+                  <option value="wide" ${margin === 'wide' ? 'selected' : ''}>Wide (25mm)</option>
                 </select>
               </div>
 
+              <!-- Content Toggles -->
               <div class="pm-field-group">
-                <label class="pm-label" for="pmOrientation">Orientation</label>
-                <select id="pmOrientation" class="pm-select">
-                  <option value="portrait" ${orientation === 'portrait' ? 'selected' : ''}>Portrait</option>
-                  <option value="landscape" ${orientation === 'landscape' ? 'selected' : ''}>Landscape</option>
-                </select>
+                <label class="pm-label">Document Elements</label>
+                <div class="pm-toggles-grid">
+                  <label class="pm-checkbox-label">
+                    <input type="checkbox" id="pmShowHeader" ${showHeader ? 'checked' : ''}>
+                    <span>Header & Metadata</span>
+                  </label>
+                  <label class="pm-checkbox-label">
+                    <input type="checkbox" id="pmShowFooter" ${showFooter ? 'checked' : ''}>
+                    <span>Footer & QR Reference Code</span>
+                  </label>
+                  <label class="pm-checkbox-label">
+                    <input type="checkbox" id="pmShowPageNums" ${showPageNums ? 'checked' : ''}>
+                    <span>Page Numbers (Page X of Y)</span>
+                  </label>
+                </div>
               </div>
             </div>
 
-            <!-- Page Margins -->
-            <div class="pm-field-group">
-              <label class="pm-label" for="pmMargins">Page Margins</label>
-              <select id="pmMargins" class="pm-select">
-                <option value="normal" ${margin === 'normal' ? 'selected' : ''}>Normal (16mm 17mm 19mm)</option>
-                <option value="narrow" ${margin === 'narrow' ? 'selected' : ''}>Narrow (10mm)</option>
-                <option value="wide" ${margin === 'wide' ? 'selected' : ''}>Wide (25mm)</option>
-              </select>
-            </div>
-
-            <!-- Content Toggles -->
-            <div class="pm-field-group">
-              <label class="pm-label">Document Elements</label>
-              <div class="pm-toggles-grid">
-                <label class="pm-checkbox-label">
-                  <input type="checkbox" id="pmShowHeader" ${showHeader ? 'checked' : ''}>
-                  <span>Header & Metadata (Created/Edited dates)</span>
-                </label>
-                <label class="pm-checkbox-label">
-                  <input type="checkbox" id="pmShowFooter" ${showFooter ? 'checked' : ''}>
-                  <span>Footer & QR Reference Code</span>
-                </label>
-                <label class="pm-checkbox-label">
-                  <input type="checkbox" id="pmShowPageNums" ${showPageNums ? 'checked' : ''}>
-                  <span>Page Numbers (Page X of Y)</span>
-                </label>
+            <!-- Live Mini Preview Thumbnail Column -->
+            <div class="pm-preview-column" style="width:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-secondary, #f8fafc);border:1px solid var(--border, rgba(0,0,0,0.08));border-radius:12px;padding:12px;">
+              <span style="font-size:10px;font-weight:700;color:var(--fg-muted,#64748b);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Live Preview</span>
+              <div class="pm-paper-thumbnail ${orientation}" id="pmPaperThumb" style="width:${orientation === 'landscape' ? '140px' : '100px'};height:${orientation === 'landscape' ? '100px' : '140px'};background:#fff;border:1px solid #cbd5e1;box-shadow:0 4px 12px rgba(0,0,0,0.1);border-radius:4px;padding:8px;display:flex;flex-direction:column;justify-content:space-between;position:relative;transition:all 0.2s ease;">
+                <div style="display:${showHeader ? 'flex' : 'none'};justify-content:space-between;border-bottom:1px solid #1d4ed8;padding-bottom:2px;margin-bottom:4px;">
+                  <span style="font-size:6px;font-weight:700;color:#1d4ed8;">${esc(customHeaderTitle || 'PapeRuss')}</span>
+                  <span style="font-size:5px;color:#94a3b8;">${fullDate(Date.now())}</span>
+                </div>
+                <div style="flex:1;overflow:hidden;">
+                  <div style="font-size:7px;font-weight:700;color:#1e293b;margin-bottom:2px;">${esc(titleOf(note))}</div>
+                  ${printScope === 'all' ? '<div style="font-size:5px;background:#eff6ff;color:#1d4ed8;padding:1px 3px;border-radius:2px;margin-bottom:3px;">Table of Contents (All Leaves)</div>' : ''}
+                  <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;"></div>
+                  <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;width:80%;"></div>
+                  <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;width:90%;"></div>
+                </div>
+                <div style="display:${showFooter ? 'flex' : 'none'};justify-content:space-between;align-items:center;border-top:1px solid #e2e8f0;padding-top:2px;margin-top:4px;">
+                  <span style="font-size:5px;color:#94a3b8;">Ref ID: ${esc(note.id.substring(0,8))}</span>
+                  <div style="width:10px;height:10px;background:#111827;border-radius:1px;"></div>
+                </div>
+                <div style="display:${showPageNums ? 'block' : 'none'};position:absolute;bottom:2px;right:4px;font-size:5px;color:#64748b;">Page 1 of 1</div>
               </div>
             </div>
           </div>
@@ -574,13 +612,24 @@ function openPrintModal() {
     document.getElementById('pmScopeActive').onclick = () => { printScope = 'active'; renderModal(); };
     document.getElementById('pmScopeAll').onclick = () => { printScope = 'all'; renderModal(); };
 
+    document.getElementById('pmCustomTitle').oninput = (e) => { customHeaderTitle = e.target.value; updateThumbnail(); };
+    document.getElementById('pmCustomSubtitle').oninput = (e) => { customSubtitle = e.target.value; };
+
     document.getElementById('pmPageSize').onchange = (e) => { pageSize = e.target.value; };
-    document.getElementById('pmOrientation').onchange = (e) => { orientation = e.target.value; };
+    document.getElementById('pmOrientation').onchange = (e) => { orientation = e.target.value; renderModal(); };
     document.getElementById('pmMargins').onchange = (e) => { margin = e.target.value; };
 
-    document.getElementById('pmShowHeader').onchange = (e) => { showHeader = e.target.checked; };
-    document.getElementById('pmShowFooter').onchange = (e) => { showFooter = e.target.checked; };
-    document.getElementById('pmShowPageNums').onchange = (e) => { showPageNums = e.target.checked; };
+    document.getElementById('pmShowHeader').onchange = (e) => { showHeader = e.target.checked; renderModal(); };
+    document.getElementById('pmShowFooter').onchange = (e) => { showFooter = e.target.checked; renderModal(); };
+    document.getElementById('pmShowPageNums').onchange = (e) => { showPageNums = e.target.checked; renderModal(); };
+
+    function updateThumbnail() {
+      const thumb = document.getElementById('pmPaperThumb');
+      if (thumb) {
+        thumb.style.width = orientation === 'landscape' ? '140px' : '100px';
+        thumb.style.height = orientation === 'landscape' ? '100px' : '140px';
+      }
+    }
 
     document.getElementById('printModalSubmit').onclick = async () => {
       closeModal();
@@ -591,7 +640,9 @@ function openPrintModal() {
         margin,
         showHeader,
         showFooter,
-        showPageNums
+        showPageNums,
+        customHeaderTitle,
+        customSubtitle
       });
       setTimeout(() => window.print(), 120);
     };
