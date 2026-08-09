@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'paperuss-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v265-fix-branch-reorder-sanitizer`;
+const CACHE_NAME = `${CACHE_PREFIX}v266-fix-branch-sidebar-id`;
 const APP_SHELL = [
   './',
   './index.html',

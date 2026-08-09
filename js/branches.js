@@ -347,7 +347,7 @@
   }
 
   function renderSidebarBranchTree() {
-    const container = document.getElementById('branchSidebarTree') || document.querySelector('.branch-tree-container');
+    const container = document.getElementById('sidebarBranchTree') || document.getElementById('branchSidebarTree') || document.querySelector('.branch-tree-container');
     if (!container) return;
 
     const branches = loadBranches();
