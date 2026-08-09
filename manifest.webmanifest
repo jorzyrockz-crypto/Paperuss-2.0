@@ -3,7 +3,7 @@
   "name": "PapeRuss 2.0 Stabilization",
   "short_name": "PapeRuss 2.0",
   "description": "Stabilized offline-first notes, tasks, calendar, media, and planning workspace.",
-  "start_url": "./index.html",
+  "start_url": "./app.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
@@ -35,7 +35,7 @@
   },
   "file_handlers": [
     {
-      "action": "./index.html",
+      "action": "./app.html",
       "name": "Text/Markdown Documents",
       "icons": [
         {

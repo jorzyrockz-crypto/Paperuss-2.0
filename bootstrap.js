@@ -466,11 +466,16 @@ function bind(){
     applyCommand(b.dataset.cmd, b.dataset.val);
     if(typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
   };
-  // Keep selection when clicking toolbar
-  document.getElementById('formatBar').addEventListener('mousedown', e=>{
-    if(e.target.closest('[data-cmd],[data-media]')){
-      if(e.detail !== 0) e.preventDefault();
+  // Preserve editor selection before dropdown triggers receive focus. Pointerdown
+  // covers mouse, pen, and touch; mousedown prevention keeps desktop selection visible.
+  document.getElementById('formatBar').addEventListener('pointerdown', e=>{
+    if(e.target.closest('button,[role="menuitem"]')){
+      window.captureEditorFormattingSelection?.();
     }
+  }, true);
+  document.getElementById('formatBar').addEventListener('mousedown', e=>{
+    if(e.target.closest('input')) return;
+    if(e.detail !== 0) e.preventDefault();
   });
 
   // Media file inputs
@@ -1203,48 +1208,21 @@ function isSingleStandaloneUrl(str) {
   if(enableNotifBtn) enableNotifBtn.onclick=requestNotifPermission;
 
   /* ---------- SYSTEM FONT STYLE PICKER ---------- */
-  let _savedFontRange = null;
-
-  document.addEventListener('selectionchange', () => {
-    const ed = typeof bodyEl === 'function' ? bodyEl() : null;
-    const sel = window.getSelection();
-    if (ed && sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)) {
-      _savedFontRange = sel.getRangeAt(0).cloneRange();
-    }
-  });
-
   const fsBtn = document.getElementById('fontStyleBtn');
   if (fsBtn) {
-    fsBtn.addEventListener('mousedown', (e) => {
-      const ed = typeof bodyEl === 'function' ? bodyEl() : null;
-      const sel = window.getSelection();
-      if (ed && sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)) {
-        _savedFontRange = sel.getRangeAt(0).cloneRange();
-      }
-    });
     fsBtn.onclick = e => { e.stopPropagation(); toggleDropdown('fontStyleDropdown'); };
   }
 
   const fsDrop = document.getElementById('fontStyleDropdown');
   if (fsDrop) {
-    fsDrop.addEventListener('mousedown', (e) => {
-      e.preventDefault(); // Prevent button from stealing focus from editor
-      const ed = typeof bodyEl === 'function' ? bodyEl() : null;
-      const sel = window.getSelection();
-      if (ed && sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)) {
-        _savedFontRange = sel.getRangeAt(0).cloneRange();
-      }
-    });
     fsDrop.onclick = e => {
       const opt = e.target.closest('[data-fontstyle]'); if (!opt) return;
+      e.preventDefault();
+      e.stopPropagation();
+      window.restoreEditorFormattingSelection?.();
       if (typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
-      if (_savedFontRange) {
-        const sel = window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(_savedFontRange);
-      }
       applyFontStyle(opt.dataset.fontstyle);
-      _savedFontRange = null;
+      window.captureEditorFormattingSelection?.();
     };
   }
 
@@ -1259,62 +1237,48 @@ function isSingleStandaloneUrl(str) {
   };
 
   /* ---------- QUOTE STYLE PICKER ---------- */
+  let activeQuoteForPicker = null;
   const qBtn = document.getElementById('quoteBtn');
   if (qBtn) qBtn.onclick = e => {
     e.preventDefault();
     e.stopPropagation();
-    const ed = bodyEl();
-    const sel = window.getSelection();
-    if (sel && sel.anchorNode && ed && ed.contains(sel.anchorNode)) {
-      let node = sel.anchorNode;
-      if (node.nodeType === 3) node = node.parentElement;
-      const inBq = node.closest && node.closest('blockquote');
-      if (!inBq) {
-        document.execCommand('formatBlock', false, 'blockquote');
-        if (typeof handleBodyInput === 'function') handleBodyInput();
-        if (typeof updateToolbarState === 'function') updateToolbarState();
-      }
-    } else {
-      document.execCommand('formatBlock', false, 'blockquote');
-      if (typeof handleBodyInput === 'function') handleBodyInput();
-      if (typeof updateToolbarState === 'function') updateToolbarState();
-    }
+    window.restoreEditorFormattingSelection?.();
+    activeQuoteForPicker = typeof window.resolveQuoteForFormatting === 'function'
+      ? window.resolveQuoteForFormatting(null, false)
+      : null;
+    window.styleQuotePresetMenu?.(activeQuoteForPicker?.dataset.quoteStyle || '');
+    window.captureEditorFormattingSelection?.();
     toggleDropdown('quoteStyleDropdown');
   };
-  let _cachedQuoteBq = null;
-
   const qDrop = document.getElementById('quoteStyleDropdown');
   if (qDrop) {
-    // Before dropdown opens, capture the active blockquote from current selection
-    qDrop.addEventListener('mousedown', () => {
-      const ed = bodyEl();
-      const sel = window.getSelection();
-      _cachedQuoteBq = null;
-      if (sel && sel.anchorNode && ed && ed.contains(sel.anchorNode)) {
-        let node = sel.anchorNode;
-        if (node.nodeType === 3) node = node.parentElement;
-        _cachedQuoteBq = node.closest && node.closest('blockquote');
-      }
-      // Also search for nearest blockquote in editor as fallback
-      if (!_cachedQuoteBq && ed) {
-        _cachedQuoteBq = ed.querySelector('blockquote');
-      }
-    });
-
     qDrop.onclick = e => {
       const opt = e.target.closest('[data-qstyle]');
       if (!opt) return;
+      e.preventDefault();
+      e.stopPropagation();
+      window.restoreEditorFormattingSelection?.();
       if (typeof window.closeAllEditorDropdowns === 'function') window.closeAllEditorDropdowns();
       const style = opt.dataset.qstyle;
-      const bq = _cachedQuoteBq;
-      if (bq && bq.isConnected) {
-        bq.setAttribute('data-quote-style', style);
-        if (typeof handleBodyInput === 'function') handleBodyInput();
-        if (typeof save === 'function') save();
-        if (window.HistoryManager) window.HistoryManager.capture(true);
-        if (typeof toast === 'function') toast(`Quote style: ${style}`);
+
+      const ed = bodyEl();
+      const sel = window.getSelection();
+      let bq = activeQuoteForPicker?.isConnected ? activeQuoteForPicker : null;
+      if (sel && sel.anchorNode && ed && ed.contains(sel.anchorNode)) {
+        let node = sel.anchorNode;
+        if (node.nodeType === 3) node = node.parentElement;
+        bq = (node.closest && node.closest('blockquote')) || bq;
       }
-      _cachedQuoteBq = null;
+
+      if (style === 'clear') {
+        if (typeof window.clearQuoteFormatting === 'function' && !window.clearQuoteFormatting(bq) && typeof toast === 'function') {
+          toast('Place the cursor inside a quote to clear it');
+        }
+      } else if (typeof window.applyQuotePresetStyle === 'function') {
+        window.applyQuotePresetStyle(style, bq, true);
+      }
+      activeQuoteForPicker = null;
+      window.captureEditorFormattingSelection?.();
     };
   }
 
@@ -1364,7 +1328,8 @@ function isSingleStandaloneUrl(str) {
   }
 
   document.addEventListener('selectionchange', ()=>{
-    if(document.activeElement===bodyEl()) updateToolbarState();
+    const active = document.activeElement;
+    if(active===bodyEl() || active?.matches?.('[data-header-field], [data-footer-field]')) updateToolbarState();
   });
 
   // Paragraph Style dropdown
@@ -1374,8 +1339,12 @@ function isSingleStandaloneUrl(str) {
   if(paraStyleDropdown) paraStyleDropdown.onclick=e=>{
     const opt=e.target.closest('[data-cmd]');
     if(!opt) return;
+    e.preventDefault();
+    e.stopPropagation();
+    window.restoreEditorFormattingSelection?.();
     paraStyleDropdown.classList.remove('show');
     applyCommand(opt.dataset.cmd, opt.dataset.val);
+    window.captureEditorFormattingSelection?.();
   };
 
   // Highlight dropdown

@@ -57,14 +57,21 @@ function _getCardMetadata(cardEl) {
 
 function _clearCardHighlights() {
   if (_cardDropTargetEl) {
-    _cardDropTargetEl.classList.remove('drop-target-left', 'drop-target-right', 'drop-target-top', 'drop-target-bottom');
+    _cardDropTargetEl.classList.remove('drop-target-left', 'drop-target-right', 'drop-target-top', 'drop-target-bottom', 'drop-target');
   }
-  document.querySelectorAll('.drop-target-left, .drop-target-right, .drop-target-top, .drop-target-bottom').forEach(el => {
-    el.classList.remove('drop-target-left', 'drop-target-right', 'drop-target-top', 'drop-target-bottom');
+  document.querySelectorAll('.drop-target-left, .drop-target-right, .drop-target-top, .drop-target-bottom, .drop-target').forEach(el => {
+    el.classList.remove('drop-target-left', 'drop-target-right', 'drop-target-top', 'drop-target-bottom', 'drop-target');
   });
+  const noteBody = document.getElementById('noteBody');
+  if (noteBody) {
+    noteBody.querySelectorAll('.drop-target-left, .drop-target-right, .drop-target-top, .drop-target-bottom, .drop-target').forEach(el => {
+      el.classList.remove('drop-target-left', 'drop-target-right', 'drop-target-top', 'drop-target-bottom', 'drop-target');
+    });
+  }
   _cardDropTargetEl = null;
   _cardDropMode     = null;
 }
+window.clearCardDropHighlights = _clearCardHighlights;
 
 function _resetCardDrag() {
   if (_cardElement) {
@@ -265,3 +272,10 @@ document.addEventListener('pointerup', (e) => {
 // ── 4. abort ─────────────────────────────────────────────────
 document.addEventListener('pointercancel',      _resetCardDrag, true);
 document.addEventListener('lostpointercapture', _resetCardDrag, true);
+document.addEventListener('dragend',            _resetCardDrag, true);
+document.addEventListener('mouseleave',         _resetCardDrag, true);
+window.addEventListener('blur',                 _resetCardDrag, true);
+document.addEventListener('visibilitychange',   () => { if (document.hidden) _resetCardDrag(); }, true);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') _resetCardDrag();
+}, true);

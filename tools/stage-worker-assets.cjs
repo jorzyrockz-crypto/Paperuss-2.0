@@ -3,7 +3,7 @@ const path=require('node:path');
 
 const root=path.resolve(__dirname,'..');
 const output=path.join(root,'.worker-assets');
-const files=['index.html','manifest.webmanifest','sw.js','changelog.json'];
+const files=['index.html','app.html','manifest.webmanifest','sw.js','changelog.json'];
 const directories=['assets','js'];
 
 fs.rmSync(output,{recursive:true,force:true});
@@ -21,4 +21,3 @@ for(const directory of directories){
   }
 }
 console.log(`Staged root files and asset directories in ${output}`);
-

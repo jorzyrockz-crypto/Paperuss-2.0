@@ -542,7 +542,7 @@ const APP_FONT_STACKS={
   sans:'"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif',
   serif:'Georgia,"Times New Roman",serif',
   mono:'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace',
-  rounded:'"SF Pro Rounded","Quicksand",system-ui,-apple-system,sans-serif'
+  rounded:'"SF Pro Rounded",Quicksand,"Arial Rounded MT Bold","Trebuchet MS",Arial,sans-serif'
 };
 
 function applySettingsEffects(){
@@ -829,15 +829,18 @@ const ACCENT_PRESETS={
 };
 
 function applyAccent(key){
-  const preset=ACCENT_PRESETS[key]||ACCENT_PRESETS.blue;
   const root=document.documentElement;
+  const theme=root.getAttribute('data-theme');
+  const preset=theme==='paper' && key==='blue'
+    ? {accent:'#2f6cf6', emphasis:'#255ad6'}
+    : (ACCENT_PRESETS[key]||ACCENT_PRESETS.blue);
   root.style.setProperty('--accent', preset.accent);
   root.style.setProperty('--accent-emphasis', preset.emphasis);
   root.style.setProperty('--accent-soft', preset.accent+'24');
   root.style.setProperty('--accent-ring', preset.accent+'52');
   root.style.setProperty('--selection', preset.accent+'42');
   const themeMeta=document.querySelector('meta[name="theme-color"]');
-  if(themeMeta) themeMeta.content=document.documentElement.getAttribute('data-theme')==='dark'?'#0b0e14':preset.accent;
+  if(themeMeta) themeMeta.content=theme==='dark'?'#0b0e14':(theme==='paper'?'#fbf8f0':preset.accent);
   document.querySelectorAll('#accentSwatchRow .accent-swatch').forEach(el=>{
     el.classList.toggle('active', el.dataset.accent===key);
   });

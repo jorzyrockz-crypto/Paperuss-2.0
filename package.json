@@ -8,6 +8,7 @@
     "build:vercel": "node tools/stage-worker-assets.cjs",
     "build:cloudflare": "node tools/stage-worker-assets.cjs",
     "stage-assets": "node tools/stage-worker-assets.cjs",
+    "test:editor-context": "node tools/test-editor-context-regressions.cjs",
     "generate-changelog": "node tools/generate-changelog.mjs",
     "release": "node tools/release.mjs",
     "deploy:cloudflare": "node tools/stage-worker-assets.cjs && wrangler deploy"

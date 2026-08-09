@@ -982,7 +982,7 @@ function initResponsiveImages(){
   let lastClickedImg=null; // for Shift-range selection
 
   ed.addEventListener('click', e=>{
-    const img=e.target.closest('img[data-media-id]');
+    const img=e.target.closest('img');
     if(!img){
       // Click outside image: clear selections unless clicking toolbar or card chrome
       if(!e.target.closest('.img-toolbar') && !e.target.closest('#imgBatchBar') && !e.target.closest('.paperuss-card') && !e.target.closest('.paperuss-embed')){
@@ -1053,7 +1053,7 @@ function initResponsiveImages(){
 
   // Long press: enters multi-select mode on mobile/tablet; opens context on desktop
   ed.addEventListener('touchstart', e=>{
-    const img=e.target.closest('img[data-media-id]');
+    const img=e.target.closest('img');
     if(!img) return;
     longPressTimer=setTimeout(()=>{
       if(deviceClass()==='phone'){
@@ -1119,26 +1119,28 @@ function initResponsiveImages(){
         return;
       }
 
-      if(btn.id==='imgTbCrop') return openCropModal(selectedImg);
-      if(btn.id==='imgTbAlignLeft') return setImageAlign(selectedImg,'left');
-      if(btn.id==='imgTbAlignCenter') return setImageAlign(selectedImg,'center');
-      if(btn.id==='imgTbAlignRight') return setImageAlign(selectedImg,'right');
-      if(btn.id==='imgTbRotate') return rotateImage(selectedImg);
-      if(btn.id==='imgTbFlip') return flipImage(selectedImg);
-      if(btn.id==='imgTbFlipV') return flipImageVertical(selectedImg);
-      if(btn.id==='imgTbCaption') return toggleImageCaption(selectedImg);
-      if(btn.id==='imgTbCover') return setNotebookCover(selectedImg);
-      if(btn.id==='imgTbHeaderBanner') return setHeaderBannerFromImage(selectedImg);
-      if(btn.id==='imgTbReplace') return requestImageReplacement(selectedImg);
-      if(btn.id==='imgTbView') return openImageFullscreen(selectedImg);
+      const targetImg = selectedImg || (typeof hoveredImg !== 'undefined' ? hoveredImg : null);
+      if(btn.id==='imgTbCrop') return openCropModal(targetImg);
+      if(btn.id==='imgTbAlignLeft') return setImageAlign(targetImg,'left');
+      if(btn.id==='imgTbAlignCenter') return setImageAlign(targetImg,'center');
+      if(btn.id==='imgTbAlignRight') return setImageAlign(targetImg,'right');
+      if(btn.id==='imgTbRotate') return rotateImage(targetImg);
+      if(btn.id==='imgTbFlip') return flipImage(targetImg);
+      if(btn.id==='imgTbFlipV') return flipImageVertical(targetImg);
+      if(btn.id==='imgTbCaption') return toggleImageCaption(targetImg);
+      if(btn.id==='imgTbCover') return setNotebookCover(targetImg);
+      if(btn.id==='imgTbHeaderBanner') return setHeaderBannerFromImage(targetImg);
+      if(btn.id==='imgTbReplace') return requestImageReplacement(targetImg);
+      if(btn.id==='imgTbView') return openImageFullscreen(targetImg);
       if(btn.id==='imgTbDownload'){
-        const id=selectedImg.getAttribute('data-media-id');
+        if (!targetImg) return;
+        const id=targetImg.getAttribute('data-media-id');
         mediaGet(id).then(rec=>downloadMediaById(id, rec?rec.name:'image'));
         return;
       }
       if(btn.id==='imgTbDelete' || btn.getAttribute('data-action')==='delete-card'){
-        const img=selectedImg; clearImageSelection();
-        img.remove(); handleBodyInput(); toast('Card removed');
+        const img=targetImg; clearImageSelection();
+        if (img) { img.remove(); handleBodyInput(); toast('Card removed'); }
       }
     });
   }

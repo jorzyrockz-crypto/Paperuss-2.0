@@ -1,9 +1,149 @@
 /* ============================================================
    WYSIWYG FORMATTING
    ============================================================ */
-function focusEditor(){ bodyEl().focus(); }
+function getHeaderFooterFormattingField() {
+  const ed = bodyEl();
+  const sel = window.getSelection();
+  let node = sel?.anchorNode;
+  if (node?.nodeType === Node.TEXT_NODE) node = node.parentElement;
+  const selectedField = node?.closest?.('.pv-editable-field[data-header-field], .pv-editable-field[data-footer-field]');
+  if (selectedField && ed?.contains(selectedField)) return selectedField;
+  if (sel?.anchorNode && ed?.contains(sel.anchorNode)) return null;
+  const focusedField = document.activeElement?.closest?.('.pv-editable-field[data-header-field], .pv-editable-field[data-footer-field]');
+  if (focusedField && ed?.contains(focusedField)) return focusedField;
+  return savedEditorFormattingField?.isConnected ? savedEditorFormattingField : null;
+}
+
+function focusEditor(){
+  const target = getHeaderFooterFormattingField() || bodyEl();
+  target?.focus({ preventScroll: true });
+}
+
+let savedEditorFormattingRange = null;
+let savedEditorFormattingField = null;
+let headerFooterFormattingInProgress = false;
+
+function captureEditorFormattingSelection() {
+  const ed = bodyEl();
+  const sel = window.getSelection();
+  if (!ed || !sel || !sel.rangeCount || !ed.contains(sel.anchorNode)) {
+    savedEditorFormattingRange = null;
+    savedEditorFormattingField = null;
+    return false;
+  }
+  try {
+    savedEditorFormattingRange = sel.getRangeAt(0).cloneRange();
+    let node = sel.anchorNode;
+    if (node?.nodeType === Node.TEXT_NODE) node = node.parentElement;
+    savedEditorFormattingField = node?.closest?.('.pv-editable-field[data-header-field], .pv-editable-field[data-footer-field]') || null;
+    return true;
+  } catch (_) {
+    savedEditorFormattingRange = null;
+    return false;
+  }
+}
+
+function restoreEditorFormattingSelection() {
+  const ed = bodyEl();
+  if (!ed || !savedEditorFormattingRange) return false;
+  const range = savedEditorFormattingRange;
+  if (!range.commonAncestorContainer?.isConnected || !ed.contains(range.commonAncestorContainer)) {
+    savedEditorFormattingRange = null;
+    return false;
+  }
+  try {
+    (savedEditorFormattingField?.isConnected ? savedEditorFormattingField : ed).focus({ preventScroll: true });
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range.cloneRange());
+    return true;
+  } catch (_) {
+    savedEditorFormattingRange = null;
+    return false;
+  }
+}
+
+function clearEditorFormattingSelection() {
+  savedEditorFormattingRange = null;
+  savedEditorFormattingField = null;
+}
+
+function persistHeaderFooterFormatting(field) {
+  if (!field?.isConnected) return false;
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  return true;
+}
+
+function applyHeaderFooterFormattingCommand(cmd, val, field) {
+  if (!field) return false;
+  field.focus({ preventScroll: true });
+  const nativeCommands = new Set([
+    'bold', 'italic', 'underline', 'strikeThrough', 'removeFormat',
+    'insertUnorderedList', 'insertOrderedList', 'indent', 'outdent'
+  ]);
+
+  headerFooterFormattingInProgress = true;
+  try {
+    if (cmd === 'fontSize') applyFontSize(val);
+    else if (cmd === 'hilite') applyHighlight(val);
+    else if (cmd === 'textColor') applyTextColor(val);
+    else if (cmd === 'formatBlock') applyParagraphStyle(val);
+    else if (cmd === 'align') document.execCommand(({ left: 'justifyLeft', center: 'justifyCenter', right: 'justifyRight', full: 'justifyFull', justify: 'justifyFull' })[val] || 'justifyLeft', false, null);
+    else if (nativeCommands.has(cmd)) document.execCommand(cmd, false, val || null);
+    else {
+      if (typeof toast === 'function') toast('That tool is available in the document body');
+      return true;
+    }
+  } finally {
+    headerFooterFormattingInProgress = false;
+  }
+
+  persistHeaderFooterFormatting(field);
+  updateToolbarState();
+  return true;
+}
+
+window.captureEditorFormattingSelection = captureEditorFormattingSelection;
+window.restoreEditorFormattingSelection = restoreEditorFormattingSelection;
+window.clearEditorFormattingSelection = clearEditorFormattingSelection;
+window.getHeaderFooterFormattingField = getHeaderFooterFormattingField;
+window.persistHeaderFooterFormatting = persistHeaderFooterFormatting;
+
+function resolveQuoteForFormatting(preferredQuote = null, createIfMissing = false) {
+  const ed = bodyEl();
+  const sel = window.getSelection();
+  let quote = preferredQuote?.isConnected ? preferredQuote : null;
+  if (!quote && sel?.anchorNode && ed?.contains(sel.anchorNode)) {
+    let node = sel.anchorNode;
+    if (node.nodeType === 3) node = node.parentElement;
+    quote = node?.closest?.('blockquote') || null;
+  }
+  if (!quote && createIfMissing && sel?.anchorNode && ed?.contains(sel.anchorNode)) {
+    document.execCommand('formatBlock', false, 'blockquote');
+    let node = window.getSelection()?.anchorNode;
+    if (node?.nodeType === 3) node = node.parentElement;
+    quote = node?.closest?.('blockquote') || null;
+  }
+  return quote && ed?.contains(quote) ? quote : null;
+}
+
+function applyQuotePresetStyle(style, preferredQuote = null, createIfMissing = true) {
+  const quote = resolveQuoteForFormatting(preferredQuote, createIfMissing);
+  if (!quote || !style) return false;
+  quote.setAttribute('data-quote-style', style);
+  if (typeof handleBodyInput === 'function') handleBodyInput();
+  if (typeof save === 'function') save();
+  if (window.HistoryManager) window.HistoryManager.capture(true);
+  if (typeof toast === 'function') toast(`Quote style: ${style}`);
+  return true;
+}
+
+window.resolveQuoteForFormatting = resolveQuoteForFormatting;
+window.applyQuotePresetStyle = applyQuotePresetStyle;
 
 function applyCommand(cmd, val){
+  const headerFooterField = getHeaderFooterFormattingField();
+  if (headerFooterField && applyHeaderFooterFormattingCommand(cmd, val, headerFooterField)) return;
   focusEditor();
   if(window.HistoryManager) window.HistoryManager.capture(true);
   if(cmd==='createLink' || cmd==='embedTool'){
@@ -138,7 +278,7 @@ function applyFontSize(size){
   }
   if(szWrapper && szWrapper!==ed && szWrapper.style.fontSize){
     szWrapper.style.fontSize=size;
-    handleBodyInput(); updateToolbarState();
+    if (!headerFooterFormattingInProgress) handleBodyInput(); updateToolbarState();
     return;
   }
 
@@ -196,7 +336,7 @@ function applyHighlight(color){
         }
       }
     }
-    handleBodyInput(); updateToolbarState();
+    if (!headerFooterFormattingInProgress) handleBodyInput(); updateToolbarState();
     return;
   }
 
@@ -220,7 +360,7 @@ function applyHighlight(color){
   if(mark && mark.style.background===color){
     const t=document.createTextNode(mark.textContent);
     mark.replaceWith(t);
-    handleBodyInput(); updateToolbarState();
+    if (!headerFooterFormattingInProgress) handleBodyInput(); updateToolbarState();
     return;
   }
 
@@ -270,7 +410,7 @@ function applyTextColor(color){
   } else {
     document.execCommand('foreColor', false, color);
   }
-  handleBodyInput();
+  if (!headerFooterFormattingInProgress) handleBodyInput();
   updateToolbarState();
 }
 
@@ -376,13 +516,20 @@ function positionDropdownAsPortal(drop, triggerId){
   const r=trigger ? trigger.getBoundingClientRect() : {left:8,bottom:120,top:80,right:88};
   const safe=8;
 
+  // The quote menu must not remain a child of the responsive toolbar. If its
+  // stylesheet is stale or an overflow rule wins, an in-flow menu can stretch
+  // the picker to the editor's full height. Mount it at body level instead.
+  if(drop.id === 'quoteStyleDropdown' && drop.parentElement !== document.body){
+    document.body.appendChild(drop);
+  }
+
   // Temporarily make it visible in document flow so actual width/height can be measured accurately
   const prevDisplay = drop.style.display;
   const prevVisibility = drop.style.visibility;
   drop.style.visibility = 'hidden';
   drop.style.display = 'block';
-  const w = drop.offsetWidth || 190;
-  const h = drop.offsetHeight || 220;
+  const w = drop.offsetWidth || (drop.id === 'quoteStyleDropdown' ? 248 : 190);
+  const h = drop.offsetHeight || (drop.id === 'quoteStyleDropdown' ? 354 : 220);
   drop.style.display = prevDisplay;
   drop.style.visibility = prevVisibility;
 
@@ -990,7 +1137,7 @@ function applyParagraphStyle(val) {
     else b.removeAttribute('data-heading-style'); // clear stale creative style when switching back to normal/standard heading
   });
   
-  handleBodyInput();
+  if (!headerFooterFormattingInProgress) handleBodyInput();
   updateToolbarState();
   if (window.HistoryManager) window.HistoryManager.capture(true);
 }
@@ -1099,72 +1246,3 @@ function applyOutdent() {
   handleBodyInput();
   updateToolbarState();
 }
-
-/* ---- Floating Quote Context Panel ---- */
-function initQuoteContextPanel() {
-  let panel = document.getElementById('quoteContextPanel');
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.id = 'quoteContextPanel';
-    panel.className = 'quote-context-panel hidden';
-    panel.style.display = 'none';
-    panel.innerHTML = `
-      <span style="font-size:10px;font-weight:700;color:var(--fg-muted,#64748b);margin-right:4px;">Quote Style:</span>
-      <button type="button" class="qcp-btn" data-qstyle="executive">🏢 Executive</button>
-      <button type="button" class="qcp-btn" data-qstyle="literary">📜 Literary</button>
-      <button type="button" class="qcp-btn" data-qstyle="tech">⚡ Tech</button>
-      <button type="button" class="qcp-btn" data-qstyle="vintage">📰 Press</button>
-      <button type="button" class="qcp-btn" data-qstyle="botanical">🌸 Zen</button>
-      <button type="button" class="qcp-btn" data-qstyle="cyber">🔮 Cyber</button>
-    `;
-    document.body.appendChild(panel);
-  }
-
-  // Prevent mousedown inside panel from stealing selection/focus
-  panel.addEventListener('mousedown', (e) => e.preventDefault());
-
-  let activeQuote = null;
-
-  document.addEventListener('selectionchange', () => {
-    const ed = typeof bodyEl === 'function' ? bodyEl() : document.getElementById('noteBody');
-    if (!ed) return;
-    const sel = window.getSelection();
-    if (sel && sel.anchorNode && ed.contains(sel.anchorNode)) {
-      let node = sel.anchorNode;
-      if (node.nodeType === 3) node = node.parentElement;
-      const bq = node.closest && node.closest('blockquote');
-      if (bq) {
-        activeQuote = bq;
-        const rect = bq.getBoundingClientRect();
-        panel.style.position = 'fixed';
-        panel.style.left = `${Math.max(10, Math.min(rect.left, window.innerWidth - 320))}px`;
-        panel.style.top = `${Math.max(10, rect.top - 42)}px`;
-        panel.style.display = 'flex';
-        panel.classList.remove('hidden');
-        return;
-      }
-    }
-    if (panel && !panel.contains(document.activeElement)) {
-      panel.style.display = 'none';
-      panel.classList.add('hidden');
-    }
-  });
-
-  panel.addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-qstyle]');
-    if (!btn || !activeQuote) return;
-    const style = btn.dataset.qstyle;
-    activeQuote.setAttribute('data-quote-style', style);
-    if (typeof handleBodyInput === 'function') handleBodyInput();
-    if (typeof save === 'function') save();
-    if (window.HistoryManager) window.HistoryManager.capture(true);
-    if (typeof toast === 'function') toast(`Quote style: ${style}`);
-  });
-}
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initQuoteContextPanel);
-} else {
-  initQuoteContextPanel();
-}
-

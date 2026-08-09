@@ -5,24 +5,32 @@ function applyFontStyle(fontStyle){
   const ed=bodyEl();
   if(!ed) return;
 
-  const fontsMap={
-    'sans':'"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    'calibri':'Calibri, Carlito, Aptos, sans-serif',
-    'segoe':'"Segoe UI", -apple-system, sans-serif',
-    'serif':'Georgia, "Times New Roman", serif',
-    'mono':'Consolas, ui-monospace, SFMono-Regular, monospace',
-    'arial':'Arial, Helvetica, sans-serif',
-    'bookman':'"Bookman Old Style", Bookman, serif',
-    'oldenglish':'"Old English Text MT", "Cloister Black", serif',
-    'rounded':'"SF Pro Rounded", "Quicksand", system-ui, -apple-system, sans-serif'
+  const fontStylesMap={
+    'sans':{fontFamily:'"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',letterSpacing:'normal'},
+    'calibri':{fontFamily:'Calibri, Carlito, Aptos, Arial, sans-serif',letterSpacing:'normal'},
+    'segoe':{fontFamily:'"Segoe UI", Tahoma, -apple-system, sans-serif',letterSpacing:'normal'},
+    'serif':{fontFamily:'Georgia, "Times New Roman", serif',letterSpacing:'normal'},
+    'mono':{fontFamily:'Consolas, "Courier New", ui-monospace, SFMono-Regular, monospace',letterSpacing:'normal'},
+    'arial':{fontFamily:'Arial, Helvetica, sans-serif',letterSpacing:'normal'},
+    'bookman':{fontFamily:'"Bookman Old Style", Bookman, Georgia, serif',letterSpacing:'normal'},
+    'oldenglish':{fontFamily:'"Old English Text MT", "Cloister Black", "Kunstler Script", "French Script MT", Georgia, serif',letterSpacing:'0.035em'},
+    'rounded':{fontFamily:'"SF Pro Rounded", Quicksand, "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif',letterSpacing:'0.01em'}
   };
 
   const sel=window.getSelection();
+  const headerFooterField = typeof window.getHeaderFooterFormattingField === 'function'
+    ? window.getHeaderFooterFormattingField() : null;
   const isTextHighlighted = sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode);
 
-  if (isTextHighlighted) {
+  if (isTextHighlighted || headerFooterField) {
     // Apply inline font-family strictly to highlighted text selection
-    wrapSelectionInSpan({ fontFamily: fontsMap[fontStyle] || fontsMap.sans });
+    const span = wrapSelectionInSpan(fontStylesMap[fontStyle] || fontStylesMap.sans);
+    if (span) {
+      const range = document.createRange();
+      range.selectNodeContents(span);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
   } else {
     // No text highlighted: set default font style for whole note container
     const n=getNote(state.currentId);
@@ -51,8 +59,11 @@ function applyFontStyle(fontStyle){
     opt.classList.toggle('active', opt.dataset.fontstyle === fontStyle);
   });
 
-  if (typeof handleBodyInput === 'function') handleBodyInput();
+  if (headerFooterField && typeof window.persistHeaderFooterFormatting === 'function') {
+    window.persistHeaderFooterFormatting(headerFooterField);
+  } else if (typeof handleBodyInput === 'function') handleBodyInput();
   if (typeof updateToolbarState === 'function') updateToolbarState();
+  if (typeof window.captureEditorFormattingSelection === 'function') window.captureEditorFormattingSelection();
   toast(`Font set to ${fsMap[fontStyle] || 'Sans'}`);
 }
 window.applyFontStyle = applyFontStyle;
@@ -61,13 +72,16 @@ function applyLineSpacing(spacing) {
   const val = parseFloat(spacing) || 1.0;
   const ed = typeof bodyEl === 'function' ? bodyEl() : document.getElementById('noteContent');
   if (!ed) return;
+  const headerFooterField = typeof window.getHeaderFooterFormattingField === 'function'
+    ? window.getHeaderFooterFormattingField() : null;
+  const formattingScope = headerFooterField || ed;
 
   const sel = window.getSelection();
   let appliedToBlocks = false;
 
   if (sel && sel.rangeCount && !sel.isCollapsed && ed.contains(sel.anchorNode)) {
     const range = sel.getRangeAt(0);
-    const blocks = ed.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, blockquote');
+    const blocks = formattingScope.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, blockquote');
     blocks.forEach(blk => {
       if (sel.containsNode(blk, true)) {
         blk.style.lineHeight = String(val);
@@ -78,12 +92,14 @@ function applyLineSpacing(spacing) {
   }
 
   if (!appliedToBlocks) {
-    ed.style.lineHeight = String(val);
-    ed.setAttribute('data-line-spacing', String(spacing));
-    const n = typeof getNote === 'function' && typeof state !== 'undefined' ? getNote(state.currentId) : null;
-    if (n) {
-      n.lineHeight = String(val);
-      n.lineSpacing = String(val);
+    formattingScope.style.lineHeight = String(val);
+    formattingScope.setAttribute('data-line-spacing', String(spacing));
+    if (!headerFooterField) {
+      const n = typeof getNote === 'function' && typeof state !== 'undefined' ? getNote(state.currentId) : null;
+      if (n) {
+        n.lineHeight = String(val);
+        n.lineSpacing = String(val);
+      }
     }
   }
 
@@ -94,8 +110,12 @@ function applyLineSpacing(spacing) {
     });
   }
 
-  if (typeof handleBodyInput === 'function') handleBodyInput();
-  if (typeof save === 'function') save();
+  if (headerFooterField && typeof window.persistHeaderFooterFormatting === 'function') {
+    window.persistHeaderFooterFormatting(headerFooterField);
+  } else {
+    if (typeof handleBodyInput === 'function') handleBodyInput();
+    if (typeof save === 'function') save();
+  }
   if (window.HistoryManager) window.HistoryManager.capture(true);
   if (typeof toast === 'function') toast(`Line spacing set to ${val}`);
 }
@@ -1074,7 +1094,19 @@ function initPageLayoutUI() {
     const note = activeNoteForAction();
     if(!note) return;
 
-    if(prop === 'mode') note.pageViewEnabled = (val === 'wysiwyg');
+    if(['mode', 'size', 'orient', 'margin'].includes(prop)) delete note.layoutPreset;
+    if(prop === 'preset') {
+      note.pageViewEnabled = true;
+      note.layoutPreset = val;
+      note.pageSize = 'a4';
+      note.pageOrientation = 'portrait';
+      note.pageMargins = val === 'clean' ? 'narrow' : 'normal';
+      note.showHeader = val === 'formal';
+      note.showFooter = val === 'formal';
+      note.showPageNums = val === 'formal';
+    }
+    else if(prop === 'style') note.documentStyle = val;
+    else if(prop === 'mode') note.pageViewEnabled = (val === 'wysiwyg');
     else if(prop === 'size') note.pageSize = val;
     else if(prop === 'orient') note.pageOrientation = val;
     else if(prop === 'margin') note.pageMargins = val;
@@ -1102,6 +1134,8 @@ function syncPageLayoutDropdown(note) {
     const prop = btn.dataset.prop;
     const val = btn.dataset.val;
     if(prop === 'mode') btn.classList.toggle('active', (val === 'wysiwyg') === isWysiwyg);
+    else if(prop === 'preset') btn.classList.toggle('active', val === note.layoutPreset);
+    else if(prop === 'style') btn.classList.toggle('active', val === (note.documentStyle || 'executive'));
     else if(prop === 'size') btn.classList.toggle('active', val === size);
     else if(prop === 'orient') btn.classList.toggle('active', val === orient);
     else if(prop === 'margin') btn.classList.toggle('active', val === margin);
@@ -1138,18 +1172,21 @@ function applyPageLayoutToEditor(note) {
     let pad = '20mm'; // normal
     if(marginType === 'narrow') pad = '12mm';
     if(marginType === 'wide') pad = '30mm';
+    const leftPad = marginType === 'binding' ? '35mm' : pad;
+    const rightPad = marginType === 'binding' ? '20mm' : pad;
 
     edBody.style.width = w + 'px';
     edBody.style.maxWidth = '100%';
     const pageH = (orient === 'landscape' ? dim.w : dim.h);
     edBody.style.minHeight = pageH + 'px';
-    edBody.style.paddingLeft = pad;
-    edBody.style.paddingRight = pad;
-    edBody.style.paddingTop = note.headerHeight || '74px';
-    edBody.style.paddingBottom = note.footerHeight || '74px';
+    edBody.style.paddingLeft = leftPad;
+    edBody.style.paddingRight = rightPad;
+    edBody.style.paddingTop = '74px';
+    edBody.style.paddingBottom = '74px';
     edBody.style.margin = '0 auto';
-    // Visual auto pagebreak guidelines
-    edBody.style.background = `repeating-linear-gradient(to bottom, transparent, transparent calc(${pageH}px - 2px), #cbd5e1 calc(${pageH}px - 2px), #cbd5e1 ${pageH}px), #fff`;
+    // Page boundaries are real editor chrome supplied by PageLayoutEngine.
+    // Do not paint a repeating line through document content.
+    edBody.style.backgroundImage = 'none';
     
     applyZoom();
     if (window.PageLayoutEngine && typeof window.PageLayoutEngine.apply === 'function') {

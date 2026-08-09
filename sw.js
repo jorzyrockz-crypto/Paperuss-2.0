@@ -1,8 +1,9 @@
 const CACHE_PREFIX = 'paperuss-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v233`;
+const CACHE_NAME = `${CACHE_PREFIX}v262-modern-text-caret`;
 const APP_SHELL = [
   './',
   './index.html',
+  './app.html',
   './manifest.webmanifest',
   './assets/css/core.css',
   './assets/css/features.css',
@@ -14,12 +15,17 @@ const APP_SHELL = [
   './assets/icons/paperuss-192.png',
   './assets/icons/paperuss-512.png',
   './assets/icons/russ-apps-banner.png',
+  './assets/cursors/paperuss-cursor.svg',
+  './assets/cursors/paperuss-caret.svg',
+  './assets/cursors/paperuss-text-caret.svg',
+  './assets/cursors/paperuss-pointer.svg',
   './js/stabilization.js',
   './js/history.js',
   './js/core.js',
   './js/leaves.js',
   './js/leafline.js',
   './js/productivity.js',
+  './js/page-layout-engine.js',
   './js/editor-ui.js',
   './js/tasks-settings.js',
   './js/cloud-notifications.js',
@@ -27,6 +33,7 @@ const APP_SHELL = [
   './js/actions.js',
   './js/link-parser.js',
   './js/embeds.js',
+  './js/media-widget.js',
   './js/formatting.js',
   './js/text-drag-engine.js',
   './js/media.js',
@@ -36,6 +43,8 @@ const APP_SHELL = [
   './assets/vendor/jszip.min.js',
   './js/docx-export.js',
   './js/responsive-images.js',
+  './js/tables.js',
+  './js/branches.js',
   './js/bootstrap.js',
   './assets/vendor/mammoth.browser.min.js'
 ];
@@ -57,8 +66,9 @@ async function precacheShell(){
     .map((result,index)=>result.status==='rejected'?APP_SHELL[index]:null)
     .filter(Boolean);
   const indexFailed=failed.includes('./index.html') || failed.includes('./');
+  const appFailed=failed.includes('./app.html');
   if(failed.length) console.warn('PapeRuss precache skipped unavailable assets:',failed);
-  if(indexFailed) throw new Error('PapeRuss offline shell could not cache index.html');
+  if(indexFailed || appFailed) throw new Error('PapeRuss offline shell could not cache its homepage and app entry points');
 }
 
 self.addEventListener('install',event=>{
@@ -130,10 +140,10 @@ self.addEventListener('fetch',event=>{
           title,text,url:sharedUrl,files:filesData,timestamp:Date.now()
         }),{headers:{'Content-Type':'application/json'}});
         await cache.put('./__pending_shared_payload__',payloadResponse);
-        return Response.redirect('./index.html?shared=1',303);
+        return Response.redirect('./app.html?shared=1',303);
       }catch(error){
         console.warn('Share target handling failed',error);
-        return Response.redirect('./index.html',303);
+        return Response.redirect('./app.html',303);
       }
     })());
     return;
@@ -163,7 +173,8 @@ self.addEventListener('fetch',event=>{
   }
 
   if(request.mode==='navigate'){
-    event.respondWith(networkFirst(request,'./index.html'));
+    const isAppNavigation=/\/app(?:\.html)?$/.test(url.pathname);
+    event.respondWith(networkFirst(request,isAppNavigation?'./app.html':'./index.html'));
     return;
   }
 

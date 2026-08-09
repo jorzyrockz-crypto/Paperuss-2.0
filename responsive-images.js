@@ -245,7 +245,10 @@ function deviceClass(){
 function normalizeEditorImages(){
   const ed=bodyEl(); if(!ed) return;
   const def=IMG_DEFAULT_SIZE[deviceClass()];
-  ed.querySelectorAll('img[data-media-id]').forEach(img=>{
+  ed.querySelectorAll('img').forEach(img=>{
+    if(!img.getAttribute('data-media-id')){
+      img.setAttribute('data-media-id', 'img_' + Math.random().toString(36).slice(2, 9));
+    }
     if(!img.getAttribute('data-img-size')){
       img.setAttribute('data-img-size', def);
     }
@@ -479,28 +482,42 @@ function setImageAlign(img,dir){
 
 /* --- Notebook Cover Integration --- */
 function setNotebookCover(imgOrSrc){
-  const n=getNote(state.currentId);
-  if(!n) return;
-  const src = typeof imgOrSrc==='string' ? imgOrSrc : imgOrSrc.src;
-  const mediaId=typeof imgOrSrc==='object'?imgOrSrc.getAttribute('data-media-id'):null;
-  const crop=typeof imgOrSrc==='object'?imgOrSrc.getAttribute('data-crop-params'):null;
-  n.coverImage = { src, mediaId, cropParams:crop||null, positionY: 50 };
-  save();
+  const target = imgOrSrc || (typeof selectedImg !== 'undefined' ? selectedImg : null) || (typeof hoveredImg !== 'undefined' ? hoveredImg : null);
+  if (!target) {
+    if (typeof toast === 'function') toast('No image selected for cover');
+    return;
+  }
+  const n = (typeof activeNoteForAction === 'function' ? activeNoteForAction() : null) || (typeof getNote === 'function' && typeof state !== 'undefined' ? getNote(state.currentId) : null);
+  if (!n) {
+    if (typeof toast === 'function') toast('No active note found');
+    return;
+  }
+  const src = typeof target === 'string' ? target : (target.src || target.getAttribute('src') || '');
+  const mediaId = typeof target === 'object' ? target.getAttribute('data-media-id') : null;
+  const crop = typeof target === 'object' ? target.getAttribute('data-crop-params') : null;
+  if (!src && !mediaId) {
+    if (typeof toast === 'function') toast('Invalid cover image source');
+    return;
+  }
+  n.coverImage = { src, mediaId, cropParams: crop || null, positionY: 50 };
+  if (typeof save === 'function') save();
+  if (typeof handleBodyInput === 'function') handleBodyInput();
   renderNotebookCover();
-  toast('Set as Notebook Cover');
+  if (typeof toast === 'function') toast('Set as Notebook Cover');
 }
 
 function removeNotebookCover(){
-  const n=getNote(state.currentId);
-  if(!n) return;
+  const n = (typeof activeNoteForAction === 'function' ? activeNoteForAction() : null) || (typeof getNote === 'function' && typeof state !== 'undefined' ? getNote(state.currentId) : null);
+  if (!n) return;
   delete n.coverImage;
-  save();
+  if (typeof save === 'function') save();
+  if (typeof handleBodyInput === 'function') handleBodyInput();
   renderNotebookCover();
-  toast('Cover removed');
+  if (typeof toast === 'function') toast('Cover removed');
 }
 
 async function renderNotebookCover(){
-  const n=getNote(state.currentId);
+  const n = (typeof activeNoteForAction === 'function' ? activeNoteForAction() : null) || (typeof getNote === 'function' && typeof state !== 'undefined' ? getNote(state.currentId) : null);
   const contentEl=document.getElementById('editorContent');
   let coverEl=document.getElementById('noteCoverHeader');
   if(!n || !n.coverImage){

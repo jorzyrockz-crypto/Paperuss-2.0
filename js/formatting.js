@@ -1,9 +1,247 @@
 /* ============================================================
    WYSIWYG FORMATTING
    ============================================================ */
-function focusEditor(){ bodyEl().focus(); }
+function getHeaderFooterFormattingField() {
+  const ed = bodyEl();
+  const sel = window.getSelection();
+  let node = sel?.anchorNode;
+  if (node?.nodeType === Node.TEXT_NODE) node = node.parentElement;
+  const selectedField = node?.closest?.('.pv-editable-field[data-header-field], .pv-editable-field[data-footer-field]');
+  if (selectedField && ed?.contains(selectedField)) return selectedField;
+  if (sel?.anchorNode && ed?.contains(sel.anchorNode)) return null;
+  const focusedField = document.activeElement?.closest?.('.pv-editable-field[data-header-field], .pv-editable-field[data-footer-field]');
+  if (focusedField && ed?.contains(focusedField)) return focusedField;
+  return savedEditorFormattingField?.isConnected ? savedEditorFormattingField : null;
+}
+
+function focusEditor(){
+  const target = getHeaderFooterFormattingField() || bodyEl();
+  target?.focus({ preventScroll: true });
+}
+
+let savedEditorFormattingRange = null;
+let savedEditorFormattingField = null;
+let headerFooterFormattingInProgress = false;
+
+function captureEditorFormattingSelection() {
+  const ed = bodyEl();
+  const sel = window.getSelection();
+  if (!ed || !sel || !sel.rangeCount || !ed.contains(sel.anchorNode)) {
+    savedEditorFormattingRange = null;
+    savedEditorFormattingField = null;
+    return false;
+  }
+  try {
+    savedEditorFormattingRange = sel.getRangeAt(0).cloneRange();
+    let node = sel.anchorNode;
+    if (node?.nodeType === Node.TEXT_NODE) node = node.parentElement;
+    savedEditorFormattingField = node?.closest?.('.pv-editable-field[data-header-field], .pv-editable-field[data-footer-field]') || null;
+    return true;
+  } catch (_) {
+    savedEditorFormattingRange = null;
+    return false;
+  }
+}
+
+function restoreEditorFormattingSelection() {
+  const ed = bodyEl();
+  if (!ed || !savedEditorFormattingRange) return false;
+  const range = savedEditorFormattingRange;
+  if (!range.commonAncestorContainer?.isConnected || !ed.contains(range.commonAncestorContainer)) {
+    savedEditorFormattingRange = null;
+    return false;
+  }
+  try {
+    (savedEditorFormattingField?.isConnected ? savedEditorFormattingField : ed).focus({ preventScroll: true });
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range.cloneRange());
+    return true;
+  } catch (_) {
+    savedEditorFormattingRange = null;
+    return false;
+  }
+}
+
+function clearEditorFormattingSelection() {
+  savedEditorFormattingRange = null;
+  savedEditorFormattingField = null;
+}
+
+function persistHeaderFooterFormatting(field) {
+  if (!field?.isConnected) return false;
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  return true;
+}
+
+function applyHeaderFooterFormattingCommand(cmd, val, field) {
+  if (!field) return false;
+  field.focus({ preventScroll: true });
+  const nativeCommands = new Set([
+    'bold', 'italic', 'underline', 'strikeThrough', 'removeFormat',
+    'insertUnorderedList', 'insertOrderedList', 'indent', 'outdent'
+  ]);
+
+  headerFooterFormattingInProgress = true;
+  try {
+    if (cmd === 'fontSize') applyFontSize(val);
+    else if (cmd === 'hilite') applyHighlight(val);
+    else if (cmd === 'textColor') applyTextColor(val);
+    else if (cmd === 'formatBlock') applyParagraphStyle(val);
+    else if (cmd === 'align') document.execCommand(({ left: 'justifyLeft', center: 'justifyCenter', right: 'justifyRight', full: 'justifyFull', justify: 'justifyFull' })[val] || 'justifyLeft', false, null);
+    else if (nativeCommands.has(cmd)) document.execCommand(cmd, false, val || null);
+    else {
+      if (typeof toast === 'function') toast('That tool is available in the document body');
+      return true;
+    }
+  } finally {
+    headerFooterFormattingInProgress = false;
+  }
+
+  persistHeaderFooterFormatting(field);
+  updateToolbarState();
+  return true;
+}
+
+window.captureEditorFormattingSelection = captureEditorFormattingSelection;
+window.restoreEditorFormattingSelection = restoreEditorFormattingSelection;
+window.clearEditorFormattingSelection = clearEditorFormattingSelection;
+window.getHeaderFooterFormattingField = getHeaderFooterFormattingField;
+window.persistHeaderFooterFormatting = persistHeaderFooterFormatting;
+
+function resolveQuoteForFormatting(preferredQuote = null, createIfMissing = false) {
+  const ed = bodyEl();
+  const sel = window.getSelection();
+  let quote = preferredQuote?.isConnected ? preferredQuote : null;
+  if (!quote && sel?.anchorNode && ed?.contains(sel.anchorNode)) {
+    let node = sel.anchorNode;
+    if (node.nodeType === 3) node = node.parentElement;
+    quote = node?.closest?.('blockquote') || null;
+  }
+  if (!quote && createIfMissing && sel?.anchorNode && ed?.contains(sel.anchorNode)) {
+    document.execCommand('formatBlock', false, 'blockquote');
+    let node = window.getSelection()?.anchorNode;
+    if (node?.nodeType === 3) node = node.parentElement;
+    quote = node?.closest?.('blockquote') || null;
+  }
+  return quote && ed?.contains(quote) ? quote : null;
+}
+
+const QUOTE_INLINE_PRESETS = {
+  executive: { fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', fontStyle: 'normal', textAlign: 'left', backgroundColor: '#f8fafc', color: '#0f172a', borderLeft: '4px solid #6366f1', padding: '14px 18px', margin: '16px 0', borderRadius: '6px' },
+  literary: { fontFamily: 'Georgia, Merriweather, serif', fontStyle: 'italic', textAlign: 'center', backgroundColor: '#fefcf6', color: '#451a03', borderTop: '2px solid #d97706', borderBottom: '2px solid #d97706', padding: '16px 24px', margin: '18px 0' },
+  tech: { fontFamily: 'Consolas, "Fira Code", monospace', fontStyle: 'normal', textAlign: 'left', backgroundColor: '#0f172a', color: '#34d399', borderLeft: '4px solid #10b981', padding: '12px 16px', margin: '16px 0', borderRadius: '6px' },
+  vintage: { fontFamily: 'Georgia, serif', fontStyle: 'normal', textAlign: 'left', backgroundColor: '#faf7f0', color: '#111827', borderTop: '2px solid #111827', borderBottom: '2px solid #111827', padding: '16px 20px', margin: '18px 0' },
+  botanical: { fontFamily: '"Avenir Next", Optima, sans-serif', fontStyle: 'normal', textAlign: 'left', backgroundColor: '#f0fdf4', color: '#064e3b', borderLeft: '4px solid #059669', padding: '14px 20px', margin: '16px 0', borderRadius: '12px', lineHeight: '1.8' },
+  cyber: { fontFamily: 'Consolas, monospace', fontStyle: 'normal', textAlign: 'left', backgroundColor: '#ecfeff', color: '#0891b2', borderLeft: '4px dashed #06b6d4', borderRight: '2px solid #ec4899', padding: '12px 18px', margin: '16px 0' }
+};
+
+function applyQuotePresetStyle(style, preferredQuote = null, createIfMissing = true) {
+  if (window.HistoryManager) window.HistoryManager.capture(true);
+  const quote = resolveQuoteForFormatting(preferredQuote, createIfMissing);
+  if (!quote || !QUOTE_INLINE_PRESETS[style]) return false;
+  quote.setAttribute('data-quote-style', style);
+  applyQuoteInlinePreset(quote, style);
+  if (typeof handleBodyInput === 'function') handleBodyInput();
+  if (typeof save === 'function') save();
+  if (window.HistoryManager) window.HistoryManager.capture(true);
+  if (typeof toast === 'function') toast(`Quote style: ${style}`);
+  return true;
+}
+
+const QUOTE_INLINE_PROPERTIES = [
+  'fontFamily', 'fontStyle', 'textAlign', 'backgroundColor', 'color',
+  'borderTop', 'borderRight', 'borderBottom', 'borderLeft', 'borderRadius',
+  'padding', 'margin', 'lineHeight', 'boxShadow', 'letterSpacing', 'textTransform'
+];
+
+function applyQuoteInlinePreset(quote, style) {
+  QUOTE_INLINE_PROPERTIES.forEach(property => { quote.style[property] = ''; });
+  Object.assign(quote.style, QUOTE_INLINE_PRESETS[style] || {});
+}
+
+function clearQuoteFormatting(preferredQuote = null) {
+  const quote = resolveQuoteForFormatting(preferredQuote, false);
+  if (!quote) return false;
+  if (window.HistoryManager) window.HistoryManager.capture(true);
+  const paragraph = document.createElement('p');
+  const meaningfulChildren = Array.from(quote.children).filter(child => !child.classList.contains('callout-badge'));
+  if (meaningfulChildren.length === 1 && meaningfulChildren[0].tagName === 'P') {
+    paragraph.innerHTML = meaningfulChildren[0].innerHTML;
+  } else {
+    const clone = quote.cloneNode(true);
+    clone.querySelectorAll('.callout-badge').forEach(badge => badge.remove());
+    paragraph.innerHTML = clone.innerHTML;
+  }
+  quote.replaceWith(paragraph);
+  const selection = window.getSelection();
+  if (selection) {
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  if (typeof handleBodyInput === 'function') handleBodyInput();
+  if (typeof updateToolbarState === 'function') updateToolbarState();
+  if (typeof save === 'function') save();
+  if (window.HistoryManager) window.HistoryManager.capture(true);
+  if (typeof toast === 'function') toast('Quote cleared');
+  return true;
+}
+
+window.resolveQuoteForFormatting = resolveQuoteForFormatting;
+window.applyQuotePresetStyle = applyQuotePresetStyle;
+window.clearQuoteFormatting = clearQuoteFormatting;
+
+function styleQuotePresetMenu(activeStyle = '') {
+  const menu = document.getElementById('quoteStyleDropdown');
+  if (!menu) return;
+  Object.assign(menu.style, {
+    width: '248px', maxWidth: 'calc(100vw - 16px)', padding: '5px',
+    borderRadius: '10px', background: 'var(--overlay)', color: 'var(--fg)',
+    border: '1px solid var(--border)', boxShadow: '0 12px 30px rgba(0,0,0,.24)'
+  });
+  const header = menu.querySelector('.qsd-header');
+  if (header) Object.assign(header.style, {
+    padding: '5px 8px 7px', margin: '0 0 3px', fontSize: '10px',
+    fontWeight: '700', letterSpacing: '.45px', textTransform: 'uppercase',
+    color: 'var(--fg-muted)', borderBottom: '1px solid var(--border)'
+  });
+  const body = menu.querySelector('.qsd-body');
+  if (body) Object.assign(body.style, { display: 'flex', flexDirection: 'column', gap: '1px' });
+  menu.querySelectorAll('.qsd-opt').forEach(button => {
+    const selected = button.dataset.qstyle === activeStyle;
+    Object.assign(button.style, {
+      display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
+      padding: '6px 8px', minHeight: '36px', border: '0', borderRadius: '7px',
+      background: selected ? 'var(--accent-soft)' : 'transparent',
+      color: button.dataset.qstyle === 'clear' ? 'var(--danger)' : 'var(--fg)',
+      textAlign: 'left', cursor: 'pointer'
+    });
+    const icon = button.querySelector('.qsd-icon');
+    if (icon) Object.assign(icon.style, { width: '20px', flex: '0 0 20px', display: 'inline-flex', justifyContent: 'center', fontSize: '14px' });
+    const text = button.querySelector('.qsd-text');
+    if (text) Object.assign(text.style, { display: 'flex', minWidth: '0', flexDirection: 'column', gap: '0' });
+    const title = button.querySelector('.qsd-title');
+    if (title) Object.assign(title.style, { color: 'inherit', fontSize: '12px', fontWeight: '650', lineHeight: '1.25' });
+    const sub = button.querySelector('.qsd-sub');
+    if (sub) Object.assign(sub.style, { color: 'var(--fg-muted)', fontSize: '10px', lineHeight: '1.2' });
+    button.onmouseenter = () => { button.style.background = 'var(--hover)'; };
+    button.onmouseleave = () => { button.style.background = selected ? 'var(--accent-soft)' : 'transparent'; };
+  });
+  const separator = menu.querySelector('.qsd-separator');
+  if (separator) Object.assign(separator.style, { height: '1px', margin: '3px 4px', background: 'var(--border)' });
+  if (typeof window.lucide?.createIcons === 'function') {
+    try { window.lucide.createIcons(); } catch (_) {}
+  }
+}
+window.styleQuotePresetMenu = styleQuotePresetMenu;
+styleQuotePresetMenu();
 
 function applyCommand(cmd, val){
+  const headerFooterField = getHeaderFooterFormattingField();
+  if (headerFooterField && applyHeaderFooterFormattingCommand(cmd, val, headerFooterField)) return;
   focusEditor();
   if(window.HistoryManager) window.HistoryManager.capture(true);
   if(cmd==='createLink' || cmd==='embedTool'){
@@ -36,13 +274,16 @@ function applyCommand(cmd, val){
       if(node.nodeType===3) node=node.parentElement;
       const bq=node.closest && node.closest('blockquote');
       if(bq){
+        if(window.HistoryManager) window.HistoryManager.capture(true);
         // Unwrap the blockquote — never nest.
         const frag=document.createDocumentFragment();
         while(bq.firstChild) frag.appendChild(bq.firstChild);
         bq.replaceWith(frag);
         handleBodyInput(); updateToolbarState();
+        if(window.HistoryManager) window.HistoryManager.capture(true);
         return;
       }
+      if(window.HistoryManager) window.HistoryManager.capture(true);
       // Not in a quote → wrap once, then guarantee no nested <blockquote>.
       document.execCommand('formatBlock', false, 'blockquote');
       ed.querySelectorAll('blockquote blockquote').forEach(inner=>{
@@ -51,6 +292,7 @@ function applyCommand(cmd, val){
         inner.replaceWith(frag);
       });
       handleBodyInput(); updateToolbarState();
+      if(window.HistoryManager) window.HistoryManager.capture(true);
       return;
     }
   } else if(cmd==='formatBlock'){
@@ -138,7 +380,7 @@ function applyFontSize(size){
   }
   if(szWrapper && szWrapper!==ed && szWrapper.style.fontSize){
     szWrapper.style.fontSize=size;
-    handleBodyInput(); updateToolbarState();
+    if (!headerFooterFormattingInProgress) handleBodyInput(); updateToolbarState();
     return;
   }
 
@@ -196,7 +438,7 @@ function applyHighlight(color){
         }
       }
     }
-    handleBodyInput(); updateToolbarState();
+    if (!headerFooterFormattingInProgress) handleBodyInput(); updateToolbarState();
     return;
   }
 
@@ -220,7 +462,7 @@ function applyHighlight(color){
   if(mark && mark.style.background===color){
     const t=document.createTextNode(mark.textContent);
     mark.replaceWith(t);
-    handleBodyInput(); updateToolbarState();
+    if (!headerFooterFormattingInProgress) handleBodyInput(); updateToolbarState();
     return;
   }
 
@@ -270,7 +512,7 @@ function applyTextColor(color){
   } else {
     document.execCommand('foreColor', false, color);
   }
-  handleBodyInput();
+  if (!headerFooterFormattingInProgress) handleBodyInput();
   updateToolbarState();
 }
 
@@ -376,14 +618,21 @@ function positionDropdownAsPortal(drop, triggerId){
   const r=trigger ? trigger.getBoundingClientRect() : {left:8,bottom:120,top:80,right:88};
   const safe=8;
 
+  // The quote menu must not remain a child of the responsive toolbar. If its
+  // stylesheet is stale or an overflow rule wins, an in-flow menu can stretch
+  // the picker to the editor's full height. Mount it at body level instead.
+  if(drop.id === 'quoteStyleDropdown' && drop.parentElement !== document.body){
+    document.body.appendChild(drop);
+  }
+
   // Temporarily make it visible in document flow so actual width/height can be measured accurately
   const prevDisplay = drop.style.display;
   const prevVisibility = drop.style.visibility;
   drop.style.visibility = 'hidden';
   drop.style.display = 'block';
-  const w = drop.offsetWidth || 190;
-  const h = drop.offsetHeight || 220;
-  drop.style.display = prevDisplay;
+  const w = drop.offsetWidth || (drop.id === 'quoteStyleDropdown' ? 248 : 190);
+  const h = drop.offsetHeight || (drop.id === 'quoteStyleDropdown' ? 354 : 220);
+  drop.style.display = (prevDisplay === 'none' ? '' : prevDisplay);
   drop.style.visibility = prevVisibility;
 
   // Horizontal: align with trigger left; flip to trigger right if overflowing right viewport edge
@@ -403,7 +652,7 @@ function positionDropdownAsPortal(drop, triggerId){
   drop.style.top = `${Math.round(top)}px`;
   drop.style.left = `${Math.round(left)}px`;
   drop.style.right = 'auto';
-  drop.style.zIndex = '9999'; // render above editor panes, sidebars, and modals
+  drop.style.zIndex = '10000'; // render above editor toolbar, sidebars, and modals
   if(h > window.innerHeight - 2 * safe){
     drop.style.maxHeight = `${window.innerHeight - 2 * safe}px`;
     drop.style.overflowY = 'auto';
@@ -990,7 +1239,7 @@ function applyParagraphStyle(val) {
     else b.removeAttribute('data-heading-style'); // clear stale creative style when switching back to normal/standard heading
   });
   
-  handleBodyInput();
+  if (!headerFooterFormattingInProgress) handleBodyInput();
   updateToolbarState();
   if (window.HistoryManager) window.HistoryManager.capture(true);
 }
@@ -1099,4 +1348,3 @@ function applyOutdent() {
   handleBodyInput();
   updateToolbarState();
 }
-

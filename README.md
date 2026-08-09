@@ -51,7 +51,7 @@ Browser permissions, PWA installation state, and browser cache remain device-spe
 
 ## Run locally
 
-Do not open `index.html` directly through a `file://` URL. Authentication and service-worker features require localhost or HTTPS.
+`index.html` is the public homepage and `app.html` is the editor/PWA entry point. Do not open either directly through a `file://` URL; authentication and service-worker features require localhost or HTTPS.
 
 From the repository root:
 
@@ -117,6 +117,10 @@ npx firebase-tools deploy --only "hosting,firestore:rules,storage"
 ```
 
 ## Project structure
+
+The canonical runtime sources are `js/` and `assets/css/`. `app.html` loads the
+editor runtime, while `index.html` is the public homepage. Root-level JavaScript and
+CSS files are legacy mirrors and must not be edited as the sole copy of a change.
 
 ```text
 .

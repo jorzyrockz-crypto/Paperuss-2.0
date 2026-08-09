@@ -10,6 +10,7 @@
     'letter': { w: 816, h: 1056 },
     'legal': { w: 816, h: 1344 }
   };
+  const PAGE_GAP_HEIGHT = 42;
 
   function getPageDimensions(note) {
     const sizeKey = (note && note.pageSize && PAGE_SIZES[note.pageSize]) ? note.pageSize : 'a4';
@@ -22,7 +23,15 @@
 
   function clearPaginationMarkers(edBody) {
     if (!edBody) return;
-    const markers = edBody.querySelectorAll('.pv-page-divider, .pv-header-overlay, .pv-footer-overlay');
+    // The shared toolbar is temporarily mounted inside the active page zone.
+    // Preserve it before pagination replaces that zone.
+    if (hfPanel && hfPanel.isConnected && edBody.contains(hfPanel)) {
+      hfPanel.classList.add('hidden');
+      hfPanel.style.setProperty('display', 'none', 'important');
+      document.body.appendChild(hfPanel);
+      activeHFZone = null;
+    }
+    const markers = edBody.querySelectorAll('.pv-page-divider, .pv-page-gap, .pv-header-overlay, .pv-footer-overlay');
     markers.forEach(m => m.remove());
 
     const children = Array.from(edBody.children);
@@ -54,19 +63,27 @@
   function createHeaderHtml(noteTitle, leafTitle, targetNote) {
     const style = getDocumentStyle(targetNote);
     const headerImgSrc = targetNote?.headerImage || (targetNote?.useCoverAsHeader && targetNote?.coverImage?.src);
-    const customHeader = targetNote?.customHeaderTitle || 'PapeRuss';
-    const customSubtitle = targetNote?.customSubtitle || leafTitle;
+    // The header is one free-form document region. Carry forward only header
+    // text that the user explicitly saved in the former split layout.
+    const legacyHeader = [targetNote?.customHeaderTitle, targetNote?.customSubtitle]
+      .filter(value => typeof value === 'string' && value.trim())
+      .join(' • ');
+    const headerContent = typeof targetNote?.customHeaderContent === 'string'
+      ? targetNote.customHeaderContent
+      : legacyHeader;
+    const headerHtml = typeof targetNote?.customHeaderHtml === 'string'
+      ? sanitizeHeaderFooterHtml(targetNote.customHeaderHtml)
+      : esc(headerContent);
 
     let bannerHtml = '';
     if (headerImgSrc) {
       bannerHtml = `<div class="pv-header-banner-wrap" style="width:100%;height:38px;margin-bottom:6px;overflow:hidden;border-radius:4px;"><img src="${esc(headerImgSrc)}" style="width:100%;height:100%;object-fit:cover;" /></div>`;
     }
 
-    return `<div class="pv-header-overlay pv-header-${style}" contenteditable="false">
+    return `<div class="pv-header-overlay pv-header-${style}" contenteditable="false" data-paperuss-page-ui="true">
       ${bannerHtml}
-      <div class="pv-header-content" style="display:flex;justify-content:space-between;align-items:center;width:100%;">
-        <div class="pv-header-left" contenteditable="true" data-header-field="title"><strong class="pv-brand-${style}">${esc(customHeader)}</strong> <span class="pv-dot">•</span> <span>${esc(noteTitle)}</span></div>
-        <div class="pv-header-right" contenteditable="true" data-header-field="subtitle" style="color:var(--fg-muted,#64748b);">${esc(customSubtitle)}</div>
+      <div class="pv-header-content">
+        <div class="pv-header-editor pv-editable-field" contenteditable="true" spellcheck="true" tabindex="0" role="textbox" aria-label="Document header" data-placeholder="Type header" data-header-field="content">${headerHtml}</div>
       </div>
       <div class="pv-header-resizer" title="Drag to adjust Header Height"></div>
     </div>`;
@@ -76,11 +93,19 @@
     const style = getDocumentStyle(targetNote);
     const pagenumText = formatPresetPageNum(pageNum, totalPages, style);
 
-    return `<div class="pv-footer-overlay pv-footer-${style}" contenteditable="false">
+    const customFooter = targetNote?.customFooterText || `Ref ID: ${refId}`;
+    const footerHtml = typeof targetNote?.customFooterHtml === 'string'
+      ? sanitizeHeaderFooterHtml(targetNote.customFooterHtml)
+      : esc(customFooter);
+
+    const showFooterText = targetNote?.showFooter !== false;
+    const showPageNums = targetNote?.showPageNums !== false;
+
+    return `<div class="pv-footer-overlay pv-footer-${style}" contenteditable="false" data-paperuss-page-ui="true">
       <div class="pv-footer-resizer" title="Drag to adjust Footer Height"></div>
       <div class="pv-footer-content" style="display:flex;justify-content:space-between;align-items:center;width:100%;">
-        <div class="pv-footer-left" contenteditable="true" data-footer-field="ref" style="color:var(--fg-muted,#94a3b8);">Ref ID: ${esc(refId)}</div>
-        <div class="pv-footer-right pv-pagenum-${style}">${pagenumText}</div>
+        ${showFooterText ? `<div class="pv-footer-left pv-editable-field" contenteditable="true" spellcheck="true" tabindex="0" data-footer-field="ref" style="color:var(--fg-muted,#94a3b8);">${footerHtml}</div>` : '<div></div>'}
+        ${showPageNums ? `<div class="pv-footer-right pv-pagenum-${style}">${pagenumText}</div>` : ''}
       </div>
     </div>`;
   }
@@ -96,30 +121,27 @@
 
     hfPanel = document.createElement('div');
     hfPanel.id = 'hfContextPanel';
-    hfPanel.className = 'hf-context-panel glass-panel hidden';
-    hfPanel.style.display = 'none';
-    hfPanel.style.zIndex = '10000';
+    hfPanel.className = 'img-toolbar hf-context-panel show hidden';
+    hfPanel.style.setProperty('display', 'none', 'important');
+    hfPanel.style.zIndex = '150';
+    // Only placement is specialized. The surface and controls deliberately
+    // reuse the image toolbar's shared design-system classes.
+    hfPanel.style.setProperty('position', 'absolute', 'important');
+    hfPanel.style.setProperty('left', '50%', 'important');
+    hfPanel.style.setProperty('transform', 'translateX(-50%) translateZ(0)', 'important');
+    hfPanel.setAttribute('contenteditable', 'false');
+    hfPanel.setAttribute('role', 'toolbar');
+    hfPanel.setAttribute('aria-label', 'Header and footer options');
     hfPanel.innerHTML = `
-      <div class="hf-panel-group" style="display:flex;align-items:center;gap:4px;">
-        <span class="hf-label" style="font-size:10px;font-weight:700;color:var(--fg-muted,#64748b);">Theme:</span>
-        <button type="button" class="hf-theme-btn" data-hf-theme="executive" title="Executive Indigo">🏢 Exec</button>
-        <button type="button" class="hf-theme-btn" data-hf-theme="serif" title="Editorial Serif">📜 Serif</button>
-        <button type="button" class="hf-theme-btn" data-hf-theme="blueprint" title="Tech Blueprint">⚡ Mono</button>
-        <button type="button" class="hf-theme-btn" data-hf-theme="botanical" title="Zen Botanical">🌸 Zen</button>
-        <button type="button" class="hf-theme-btn" data-hf-theme="vintage" title="Vintage Press">📰 Press</button>
-        <button type="button" class="hf-theme-btn" data-hf-theme="cyber" title="Cyber Codex">🔮 Cyber</button>
-      </div>
-      <div class="hf-sep" style="width:1px;height:16px;background:var(--border,rgba(0,0,0,0.15));margin:0 4px;"></div>
-      <div class="hf-panel-group" style="display:flex;align-items:center;gap:4px;">
-        <button type="button" class="hf-action-btn" id="hfBannerToggle" title="Toggle Header Banner Image">
-          <i data-lucide="image" class="w-3.5 h-3.5"></i>
-          <span>Banner</span>
-        </button>
-        <button type="button" class="hf-action-btn" id="hfResetText" title="Reset Header/Footer Text">
-          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
-          <span>Reset</span>
-        </button>
-      </div>
+      <button type="button" class="itb-btn hf-theme-btn" data-hf-theme="executive" title="Executive Indigo" aria-label="Executive Indigo"><i data-lucide="briefcase" class="w-4 h-4"></i></button>
+      <button type="button" class="itb-btn hf-theme-btn" data-hf-theme="serif" title="Editorial Serif" aria-label="Editorial Serif"><i data-lucide="book-open" class="w-4 h-4"></i></button>
+      <button type="button" class="itb-btn hf-theme-btn" data-hf-theme="blueprint" title="Tech Blueprint" aria-label="Tech Blueprint"><i data-lucide="ruler" class="w-4 h-4"></i></button>
+      <button type="button" class="itb-btn hf-theme-btn" data-hf-theme="botanical" title="Zen Botanical" aria-label="Zen Botanical"><i data-lucide="leaf" class="w-4 h-4"></i></button>
+      <button type="button" class="itb-btn hf-theme-btn" data-hf-theme="vintage" title="Vintage Press" aria-label="Vintage Press"><i data-lucide="newspaper" class="w-4 h-4"></i></button>
+      <button type="button" class="itb-btn hf-theme-btn" data-hf-theme="cyber" title="Cyber Codex" aria-label="Cyber Codex"><i data-lucide="sparkles" class="w-4 h-4"></i></button>
+      <span class="hf-format-separator" aria-hidden="true"></span>
+      <button type="button" class="itb-btn hf-action-btn" id="hfBannerToggle" title="Toggle Header Banner Image" aria-label="Toggle Header Banner Image"><i data-lucide="image" class="w-4 h-4"></i></button>
+      <button type="button" class="itb-btn hf-action-btn" id="hfResetText" title="Reset Header/Footer Text" aria-label="Reset Header/Footer Text"><i data-lucide="rotate-ccw" class="w-4 h-4"></i></button>
     `;
     document.body.appendChild(hfPanel);
 
@@ -166,8 +188,11 @@
         if (typeof save === 'function') save();
         recalculatePageViewPagination(targetNote);
       } else if (resetBtn) {
+        delete targetNote.customHeaderHtml;
+        delete targetNote.customHeaderContent;
         delete targetNote.customHeaderTitle;
         delete targetNote.customSubtitle;
+        delete targetNote.customFooterHtml;
         delete targetNote.customFooterText;
         targetNote.updatedAt = Date.now();
         if (typeof save === 'function') save();
@@ -186,13 +211,24 @@
       if (node.nodeType === 3) node = node.parentElement;
       const hfZone = node.closest && node.closest('.pv-header-overlay, .pv-footer-overlay');
       if (hfZone) {
+        if (activeHFZone && activeHFZone !== hfZone) activeHFZone.classList.remove('hf-toolbar-active');
         activeHFZone = hfZone;
-        const rect = hfZone.getBoundingClientRect();
-        hfPanel.style.position = 'fixed';
-        hfPanel.style.left = `${Math.max(10, Math.min(rect.left, window.innerWidth - 340))}px`;
-        hfPanel.style.top = `${Math.max(10, rect.top - 48)}px`;
-        hfPanel.style.display = 'flex';
+        activeHFZone.classList.add('hf-toolbar-active');
+        hfZone.appendChild(hfPanel);
+        const targetNote = (typeof activeNoteForAction === 'function' ? activeNoteForAction() : null) || (typeof getNote === 'function' && typeof state !== 'undefined' ? getNote(state.currentId) : null);
+        hfPanel.querySelectorAll('[data-hf-theme]').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.hfTheme === getDocumentStyle(targetNote));
+        });
+        hfPanel.style.setProperty('position', 'absolute', 'important');
+        hfPanel.style.setProperty('display', 'flex', 'important');
         hfPanel.classList.remove('hidden');
+        if (hfZone.classList.contains('pv-header-overlay')) {
+          hfPanel.style.setProperty('top', 'calc(100% + 8px)', 'important');
+          hfPanel.style.setProperty('bottom', 'auto', 'important');
+        } else {
+          hfPanel.style.setProperty('top', 'auto', 'important');
+          hfPanel.style.setProperty('bottom', 'calc(100% + 8px)', 'important');
+        }
         if (typeof lucide?.createIcons === 'function') {
           try { lucide.createIcons(); } catch(_) {}
         }
@@ -200,45 +236,52 @@
       }
     }
     if (hfPanel && !hfPanel.contains(document.activeElement)) {
-      hfPanel.style.display = 'none';
+      hfPanel.style.setProperty('display', 'none', 'important');
       hfPanel.classList.add('hidden');
+      if (activeHFZone) activeHFZone.classList.remove('hf-toolbar-active');
+      activeHFZone = null;
     }
+  }
+
+  function getActiveHeaderFooterField() {
+    const selection = window.getSelection();
+    let node = selection && selection.anchorNode;
+    if (node && node.nodeType === 3) node = node.parentElement;
+    const selectedField = node?.closest?.('[data-header-field], [data-footer-field]');
+    if (selectedField && activeHFZone?.contains(selectedField)) return selectedField;
+    return activeHFZone?.querySelector('[data-header-field], [data-footer-field]') || null;
   }
 
   function handleHFClick(e) {
     if (hfPanel && !hfPanel.contains(e.target) && !e.target.closest('.pv-header-overlay, .pv-footer-overlay')) {
-      hfPanel.style.display = 'none';
+      hfPanel.style.setProperty('display', 'none', 'important');
       hfPanel.classList.add('hidden');
+      if (activeHFZone) activeHFZone.classList.remove('hf-toolbar-active');
+      activeHFZone = null;
     }
   }
 
   function autoExpandHeaderFooterHeights(edBody, targetNote) {
-    // Only auto-expand if the user has NOT manually set a custom height via the resizer
     const hasCustomHeader = targetNote && targetNote._headerResized;
     const hasCustomFooter = targetNote && targetNote._footerResized;
 
     const headerOverlays = edBody.querySelectorAll('.pv-header-overlay');
     const footerOverlays = edBody.querySelectorAll('.pv-footer-overlay');
 
-    if (!hasCustomHeader) {
-      let maxHeaderH = 50;
-      headerOverlays.forEach(h => {
-        maxHeaderH = Math.max(maxHeaderH, h.offsetHeight || h.scrollHeight || 50);
-      });
-      const targetTop = maxHeaderH + 24;
-      edBody.style.paddingTop = `${targetTop}px`;
-      if (targetNote) targetNote.headerHeight = edBody.style.paddingTop;
-    }
+    // Headers and footers participate in normal document flow, so content
+    // already expands them downward. Changing page padding here double-counted
+    // that growth and moved the whole header away from the top of the page.
+    const legacyHeaderMinimum = hasCustomHeader ? Math.max(24, (parseFloat(targetNote.headerHeight) || 74) - 24) : 0;
+    const legacyFooterMinimum = hasCustomFooter ? Math.max(24, (parseFloat(targetNote.footerHeight) || 74) - 24) : 0;
+    const headerMinimum = parseFloat(targetNote?.headerMinHeight) || legacyHeaderMinimum;
+    const footerMinimum = parseFloat(targetNote?.footerMinHeight) || legacyFooterMinimum;
 
-    if (!hasCustomFooter) {
-      let maxFooterH = 50;
-      footerOverlays.forEach(f => {
-        maxFooterH = Math.max(maxFooterH, f.offsetHeight || f.scrollHeight || 50);
-      });
-      const targetBottom = maxFooterH + 24;
-      edBody.style.paddingBottom = `${targetBottom}px`;
-      if (targetNote) targetNote.footerHeight = edBody.style.paddingBottom;
-    }
+    headerOverlays.forEach(header => {
+      header.style.minHeight = headerMinimum ? `${headerMinimum}px` : '';
+    });
+    footerOverlays.forEach(footer => {
+      footer.style.minHeight = footerMinimum ? `${footerMinimum}px` : '';
+    });
   }
 
   function attachResizerDragHandlers(edBody, targetNote) {
@@ -251,9 +294,8 @@
         e.stopPropagation();
         const isHeader = resizer.classList.contains('pv-header-resizer');
         const startY = e.clientY;
-        const startPad = isHeader
-          ? (parseFloat(window.getComputedStyle(edBody).paddingTop) || 75)
-          : (parseFloat(window.getComputedStyle(edBody).paddingBottom) || 75);
+        const zone = resizer.closest(isHeader ? '.pv-header-overlay' : '.pv-footer-overlay');
+        const startHeight = Math.max(24, zone?.offsetHeight || parseFloat(window.getComputedStyle(zone).minHeight) || 50);
 
         let tooltip = document.createElement('div');
         tooltip.className = 'pv-resize-tooltip';
@@ -262,16 +304,17 @@
         let liveRaf = null;
         const onMove = (moveEv) => {
           const deltaY = moveEv.clientY - startY;
-          const newPad = Math.max(20, Math.min(250, Math.round(isHeader ? startPad + deltaY : startPad - deltaY)));
-          const mmVal = Math.round(newPad * 0.264583);
+          const newHeight = Math.max(24, Math.min(250, Math.round(isHeader ? startHeight + deltaY : startHeight - deltaY)));
+          const mmVal = Math.round(newHeight * 0.264583);
 
-          if (isHeader) edBody.style.paddingTop = `${newPad}px`;
-          else edBody.style.paddingBottom = `${newPad}px`;
+          edBody.querySelectorAll(isHeader ? '.pv-header-overlay' : '.pv-footer-overlay').forEach(item => {
+            item.style.minHeight = `${newHeight}px`;
+          });
 
           tooltip.style.left = `${moveEv.clientX + 15}px`;
           tooltip.style.top = `${moveEv.clientY - 10}px`;
           tooltip.style.display = 'block';
-          tooltip.textContent = `${isHeader ? 'Header Height' : 'Footer Height'}: ${mmVal}mm (${newPad}px)`;
+          tooltip.textContent = `${isHeader ? 'Header Height' : 'Footer Height'}: ${mmVal}mm (${newHeight}px)`;
 
           if (!liveRaf) {
             liveRaf = requestAnimationFrame(() => {
@@ -287,8 +330,8 @@
           tooltip.remove();
           if (liveRaf) { cancelAnimationFrame(liveRaf); liveRaf = null; }
           if (targetNote) {
-            if (isHeader) { targetNote.headerHeight = edBody.style.paddingTop; targetNote._headerResized = true; }
-            else { targetNote.footerHeight = edBody.style.paddingBottom; targetNote._footerResized = true; }
+            if (isHeader) { targetNote.headerMinHeight = zone?.style.minHeight || `${startHeight}px`; targetNote._headerResized = true; }
+            else { targetNote.footerMinHeight = zone?.style.minHeight || `${startHeight}px`; targetNote._footerResized = true; }
             targetNote.updatedAt = Date.now();
             if (typeof save === 'function') save();
           }
@@ -301,26 +344,99 @@
     });
   }
 
+  function getEditablePlainText(field) {
+    let output = '';
+    const blockTags = new Set(['DIV', 'P', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
+
+    const appendNewline = () => {
+      if (output && !output.endsWith('\n')) output += '\n';
+    };
+    const visit = node => {
+      if (node.nodeType === 3) {
+        output += node.nodeValue || '';
+        return;
+      }
+      if (node.nodeType !== 1) return;
+      if (node.tagName === 'BR') {
+        output += '\n';
+        return;
+      }
+      const isBlock = blockTags.has(node.tagName);
+      if (isBlock) appendNewline();
+      Array.from(node.childNodes).forEach(visit);
+      if (isBlock) appendNewline();
+    };
+
+    Array.from(field.childNodes).forEach(visit);
+    return output
+      .replace(/\u00a0/g, ' ')
+      .replace(/\r\n?/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/^\n+|\n+$/g, '');
+  }
+
   function attachHeaderFooterEditableListeners(edBody, targetNote) {
     if (!targetNote) return;
+
+    edBody.querySelectorAll('.pv-header-content, .pv-footer-content').forEach(row => {
+      if (row.dataset.editRoutingAttached) return;
+      row.dataset.editRoutingAttached = 'true';
+      row.addEventListener('pointerdown', (event) => {
+        if (event.target.closest('.pv-editable-field')) return;
+        const fields = Array.from(row.querySelectorAll('.pv-editable-field'));
+        if (!fields.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = row.getBoundingClientRect();
+        const field = event.clientX >= rect.left + rect.width / 2 ? fields[fields.length - 1] : fields[0];
+        field.focus({ preventScroll: true });
+        const range = document.createRange();
+        range.selectNodeContents(field);
+        range.collapse(false);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      });
+    });
+
     edBody.querySelectorAll('[data-header-field], [data-footer-field]').forEach(field => {
       if (field.dataset.editListenerAttached) return;
       field.dataset.editListenerAttached = 'true';
 
-      field.addEventListener('input', () => {
+      field.addEventListener('input', (event) => {
+        event.stopPropagation();
         if (!targetNote) return;
         const hField = field.dataset.headerField;
         const fField = field.dataset.footerField;
-        const text = field.textContent.trim();
+        const text = getEditablePlainText(field);
 
-        if (hField === 'title') targetNote.customHeaderTitle = text;
+        if (hField === 'content') {
+          targetNote.customHeaderContent = text;
+          targetNote.customHeaderHtml = sanitizeHeaderFooterHtml(field.innerHTML);
+          delete targetNote.customHeaderTitle;
+          delete targetNote.customSubtitle;
+        }
+        else if (hField === 'title') targetNote.customHeaderTitle = text;
+        else if (hField === 'note-title') {
+          if (typeof editField === 'function') editField('title', text);
+          else targetNote.title = text;
+          const titleInput = document.getElementById('noteTitle');
+          if (titleInput) titleInput.value = text;
+        }
         else if (hField === 'subtitle') targetNote.customSubtitle = text;
-        else if (fField === 'ref') targetNote.customFooterText = text;
+        else if (fField === 'ref') {
+          targetNote.customFooterText = text;
+          targetNote.customFooterHtml = sanitizeHeaderFooterHtml(field.innerHTML);
+        }
 
+        autoExpandHeaderFooterHeights(edBody, targetNote);
         targetNote.updatedAt = Date.now();
         if (typeof save === 'function') save();
-        autoExpandHeaderFooterHeights(edBody, targetNote);
       });
+
+      field.addEventListener('keydown', (event) => event.stopPropagation());
+      field.addEventListener('keyup', (event) => event.stopPropagation());
+      field.addEventListener('blur', () => schedulePagination(targetNote));
     });
   }
 
@@ -340,6 +456,11 @@
         || (typeof window.currentNote !== 'undefined' ? window.currentNote : null);
       if (!targetNote) { isPaginating = false; return; }
 
+      const documentStyle = getDocumentStyle(targetNote);
+      edBody.dataset.documentStyle = documentStyle;
+      const showHeader = targetNote.showHeader !== false;
+      const showFooterChrome = targetNote.showFooter !== false || targetNote.showPageNums !== false;
+
       const { h: pageH } = getPageDimensions(targetNote);
 
       const noteTitle = (typeof titleOf === 'function' ? titleOf(targetNote) : targetNote.title) || 'Untitled Note';
@@ -348,6 +469,7 @@
 
       const children = Array.from(edBody.children).filter(el =>
         !el.classList.contains('pv-page-divider') &&
+        !el.classList.contains('pv-page-gap') &&
         !el.classList.contains('pv-header-overlay') &&
         !el.classList.contains('pv-footer-overlay')
       );
@@ -363,41 +485,69 @@
       const totalEstimatedPages = Math.max(1, Math.ceil(totalHeight / pageH));
 
       // Inject Page 1 Header at top
-      const page1Header = document.createElement('div');
-      page1Header.innerHTML = createHeaderHtml(noteTitle, leafTitle, targetNote);
-      edBody.insertBefore(page1Header.firstElementChild, edBody.firstChild);
+      if (showHeader) {
+        const page1Header = document.createElement('div');
+        page1Header.innerHTML = createHeaderHtml(noteTitle, leafTitle, targetNote);
+        edBody.insertBefore(page1Header.firstElementChild, edBody.firstChild);
+      }
 
       let currentPageNum = 1;
       let currentThreshold = bodyTop + pageH;
+
+      const insertAt = (node, referenceNode) => {
+        if (!node) return;
+        if (referenceNode) edBody.insertBefore(node, referenceNode);
+        else edBody.appendChild(node);
+      };
+
+      const insertPageBoundary = (referenceNode, nextPageNum, topFill = 0) => {
+        const prevFooter = document.createElement('div');
+        if (showFooterChrome) {
+          prevFooter.innerHTML = createFooterHtml(nextPageNum - 1, totalEstimatedPages, refId, targetNote);
+          insertAt(prevFooter.firstElementChild, referenceNode);
+        }
+
+        const pageGap = document.createElement('div');
+        pageGap.className = 'pv-page-gap';
+        pageGap.contentEditable = 'false';
+        pageGap.dataset.paperussPageUi = 'true';
+        pageGap.setAttribute('aria-hidden', 'true');
+        pageGap.style.height = `${PAGE_GAP_HEIGHT}px`;
+        const padLeft = window.getComputedStyle(edBody).paddingLeft || '20mm';
+        const padRight = window.getComputedStyle(edBody).paddingRight || '20mm';
+        pageGap.style.marginLeft = `-${padLeft}`;
+        pageGap.style.marginRight = `-${padRight}`;
+        pageGap.style.marginTop = `${Math.max(0, Math.round(topFill))}px`;
+        insertAt(pageGap, referenceNode);
+
+        if (showHeader) {
+          const nextPageHeader = document.createElement('div');
+          nextPageHeader.innerHTML = createHeaderHtml(noteTitle, leafTitle, targetNote);
+          insertAt(nextPageHeader.firstElementChild, referenceNode);
+        }
+        return pageGap;
+      };
 
       for (let i = 0; i < children.length; i++) {
         const child = children[i];
         const childRect = child.getBoundingClientRect();
         const childTop = childRect.top;
         const childBottom = childRect.bottom;
+        const nextChild = children[i + 1];
+        const isHeading = child.tagName === 'H1' || child.tagName === 'H2' || child.tagName === 'H3';
+        const keepHeadingWithNext = isHeading && nextChild && childBottom <= currentThreshold &&
+          nextChild.getBoundingClientRect().bottom > currentThreshold;
+
+        if (keepHeadingWithNext) {
+          currentPageNum++;
+          const pageGap = insertPageBoundary(child, currentPageNum, currentThreshold - childTop);
+          currentThreshold = pageGap.getBoundingClientRect().bottom + pageH;
+          continue;
+        }
 
         // If block crosses current page threshold
         if (childBottom > currentThreshold && childTop < currentThreshold) {
           currentPageNum++;
-
-          // Footer for previous page
-          const prevFooter = document.createElement('div');
-          prevFooter.innerHTML = createFooterHtml(currentPageNum - 1, totalEstimatedPages, refId, targetNote);
-
-          // Physical page split divider
-          const divider = document.createElement('div');
-          divider.className = 'pv-page-divider';
-          divider.contentEditable = 'false';
-          divider.innerHTML = `<span class="pv-page-label">PAGE ${currentPageNum}</span>`;
-
-          const padLeft = window.getComputedStyle(edBody).paddingLeft || '20mm';
-          const padRight = window.getComputedStyle(edBody).paddingRight || '20mm';
-          divider.style.marginLeft = `-${padLeft}`;
-          divider.style.marginRight = `-${padRight}`;
-
-          // Header for next page
-          const nextPageHeader = document.createElement('div');
-          nextPageHeader.innerHTML = createHeaderHtml(noteTitle, leafTitle, targetNote);
 
           // If block is large (e.g. card, callout, table, image), push it down to next page top
           const isComplexBlock = child.classList.contains('paperuss-card') ||
@@ -408,32 +558,36 @@
                                  child.tagName === 'H1' ||
                                  child.tagName === 'H2';
 
+          let pageGap;
           if (isComplexBlock) {
-            const pushDistance = currentThreshold - childTop + 16;
-            child.style.marginTop = `${pushDistance}px`;
-            child.dataset.pvBreakPushed = 'true';
-
-            edBody.insertBefore(prevFooter.firstElementChild, child);
-            edBody.insertBefore(divider, child);
-            edBody.insertBefore(nextPageHeader.firstElementChild, child);
+            // Fill the remainder of the previous sheet before the gray page gap.
+            // Keeping this space on the boundary avoids creating a blank area
+            // between the next page's header and its first content block.
+            pageGap = insertPageBoundary(child, currentPageNum, currentThreshold - childTop);
           } else {
-            const targetRef = child.nextSibling || child;
-            edBody.insertBefore(prevFooter.firstElementChild, targetRef);
-            edBody.insertBefore(divider, targetRef);
-            edBody.insertBefore(nextPageHeader.firstElementChild, targetRef);
+            pageGap = insertPageBoundary(child.nextSibling, currentPageNum);
           }
-
-          currentThreshold += pageH;
+          currentThreshold = pageGap.getBoundingClientRect().bottom + pageH;
         } else if (childTop >= currentThreshold) {
           currentPageNum++;
-          currentThreshold += pageH;
+          const pageGap = insertPageBoundary(child, currentPageNum);
+          currentThreshold = pageGap.getBoundingClientRect().bottom + pageH;
         }
       }
 
       // Inject Final Page Footer at bottom of document
-      const finalFooter = document.createElement('div');
-      finalFooter.innerHTML = createFooterHtml(currentPageNum, Math.max(currentPageNum, totalEstimatedPages), refId, targetNote);
-      edBody.appendChild(finalFooter.firstElementChild);
+      if (showFooterChrome) {
+        const finalFooter = document.createElement('div');
+        finalFooter.innerHTML = createFooterHtml(currentPageNum, Math.max(currentPageNum, totalEstimatedPages), refId, targetNote);
+        edBody.appendChild(finalFooter.firstElementChild);
+      }
+
+      // Use the completed pagination result rather than the pre-layout height
+      // estimate so every footer shows the same accurate page total.
+      edBody.querySelectorAll('.pv-footer-right').forEach((pageNumber, index) => {
+        pageNumber.textContent = formatPresetPageNum(index + 1, currentPageNum, documentStyle);
+      });
+      edBody.dataset.pageCount = String(currentPageNum);
 
       autoExpandHeaderFooterHeights(edBody, targetNote);
       attachResizerDragHandlers(edBody, targetNote);
@@ -450,6 +604,29 @@
   function esc(str) {
     if (!str) return '';
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function sanitizeHeaderFooterHtml(html) {
+    const source = String(html || '');
+    if (!source) return '';
+    if (typeof sanitizeNoteHTML === 'function') return sanitizeNoteHTML(source);
+    const holder = document.createElement('div');
+    holder.innerHTML = source;
+    const allowed = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'S', 'BR', 'DIV', 'P', 'SPAN']);
+    holder.querySelectorAll('script,style,iframe,object,embed').forEach(node => node.remove());
+    Array.from(holder.querySelectorAll('*')).reverse().forEach(node => {
+      if (!allowed.has(node.tagName)) {
+        node.replaceWith(...Array.from(node.childNodes));
+        return;
+      }
+      Array.from(node.attributes).forEach(attr => {
+        if (attr.name !== 'style') node.removeAttribute(attr.name);
+      });
+      if (node.hasAttribute('style') && /url\s*\(|expression\s*\(|javascript:/i.test(node.getAttribute('style'))) {
+        node.removeAttribute('style');
+      }
+    });
+    return holder.innerHTML;
   }
 
   function schedulePagination(note) {
@@ -469,8 +646,13 @@
       (typeof getNote === 'function' && typeof state !== 'undefined' && state.currentId)
         ? getNote(state.currentId) : null;
 
-    edBody.addEventListener('input', () => schedulePagination(getCurrentNote()));
-    edBody.addEventListener('keyup', () => schedulePagination(getCurrentNote()));
+    edBody.addEventListener('input', (e) => {
+      if (e.target.closest('.pv-header-overlay, .pv-footer-overlay')) return;
+      schedulePagination(getCurrentNote());
+    });
+    edBody.addEventListener('load', (e) => {
+      if (e.target && e.target.tagName === 'IMG') schedulePagination(getCurrentNote());
+    }, true);
 
     // Window resize handler
     window.addEventListener('resize', () => schedulePagination(getCurrentNote()));
@@ -487,6 +669,7 @@
     clear: function() {
       const edBody = document.getElementById('noteBody');
       clearPaginationMarkers(edBody);
+      if (edBody) delete edBody.dataset.documentStyle;
     }
   };
 })();

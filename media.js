@@ -1407,6 +1407,8 @@ function currentAlignment(){
   return 'left';
 }
 function applyAlignment(dir){
+  const headerFooterField = typeof window.getHeaderFooterFormattingField === 'function'
+    ? window.getHeaderFooterFormattingField() : null;
   // Check if a card has explicit click focus or active selection FIRST
   let mediaBlock = document.querySelector('#noteBody .card-selected, #noteBody [data-card-selected="true"]');
 
@@ -1462,7 +1464,9 @@ function applyAlignment(dir){
   }
   document.execCommand(ALIGN_CMD[dir]||'justifyLeft', false, null);
   updateAlignmentButton();
-  if(typeof handleBodyInput === 'function') handleBodyInput();
+  if(headerFooterField && typeof window.persistHeaderFooterFormatting === 'function') {
+    window.persistHeaderFooterFormatting(headerFooterField);
+  } else if(typeof handleBodyInput === 'function') handleBodyInput();
   if(typeof updateToolbarState === 'function') updateToolbarState();
 }
 
@@ -1866,6 +1870,21 @@ document.addEventListener('touchend', (e) => {
   touchDragCard = null;
   if (typeof handleBodyInput === 'function') handleBodyInput();
   if (typeof save === 'function') save();
+});
+
+document.addEventListener('touchcancel', () => {
+  stopAutoScrollOnDrag();
+  if (touchDragGhost) {
+    touchDragGhost.remove();
+    touchDragGhost = null;
+  }
+  if (touchDragCard) {
+    touchDragCard.classList.remove('is-dragging');
+    touchDragCard = null;
+  }
+  document.querySelectorAll('.drop-target-left, .drop-target-right, .drop-target-top, .drop-target-bottom, .drop-target').forEach(el => {
+    el.classList.remove('drop-target-left', 'drop-target-right', 'drop-target-top', 'drop-target-bottom', 'drop-target');
+  });
 });
 
 // Interactive Magnetic Card Resizer logic

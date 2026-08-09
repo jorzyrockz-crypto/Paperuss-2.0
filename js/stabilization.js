@@ -291,16 +291,29 @@
       '.media-sync-indicator',
       '.media-sync-overlay',
       '.card-info-btn',
-      '.photo-info-overlay-wrap'
+      '.photo-info-overlay-wrap',
+      '.pv-page-divider',
+      '.pv-header-overlay',
+      '.pv-footer-overlay',
+      '[data-paperuss-page-ui="true"]'
     ].join(',');
 
     clone.querySelectorAll(UI_SELECTOR).forEach(el => el.remove());
+    clone.querySelectorAll('[data-pv-break-pushed="true"]').forEach(el => {
+      el.style.marginTop = '';
+      el.removeAttribute('data-pv-break-pushed');
+      if (!el.getAttribute('style')) el.removeAttribute('style');
+    });
     if (typeof window.dehydrateEmbeds === 'function') {
       window.dehydrateEmbeds(clone);
     }
     if (typeof window.dehydrateProductivityReferences === 'function') {
       window.dehydrateProductivityReferences(clone);
     }
+
+    clone.querySelectorAll('.drop-target-top, .drop-target-bottom, .drop-target-left, .drop-target-right, .drop-target, .is-dragging-card-source, .is-dragging').forEach(el => {
+      el.classList.remove('drop-target-top', 'drop-target-bottom', 'drop-target-left', 'drop-target-right', 'drop-target', 'is-dragging-card-source', 'is-dragging');
+    });
 
     const FORBIDDEN_IDS = ['noteBody', 'editorContent', 'editorScroll', 'formatBar', 'noteTitle', 'editorEmpty', 'findPanel'];
     clone.querySelectorAll('[id], [data-paperuss-content-root], [data-paperuss-ui]').forEach(el => {
@@ -384,7 +397,7 @@
     note.pageViewEnabled=note.pageViewEnabled===true;
     note.pageSize=['auto','a4','letter','legal'].includes(note.pageSize)?note.pageSize:'a4';
     note.pageOrientation=['portrait','landscape'].includes(note.pageOrientation)?note.pageOrientation:'portrait';
-    note.pageMargins=['narrow','normal','wide'].includes(note.pageMargins)?note.pageMargins:'normal';
+note.pageMargins=['narrow','normal','wide','binding'].includes(note.pageMargins)?note.pageMargins:'normal';
     if(note.coverImage && typeof note.coverImage==='object'){
       const source=String(note.coverImage.src||'').slice(0,5_000_000);
       const mediaId=sanitizeId(note.coverImage.mediaId);

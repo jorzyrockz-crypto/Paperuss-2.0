@@ -982,9 +982,9 @@ function initResponsiveImages(){
   let lastClickedImg=null; // for Shift-range selection
 
   ed.addEventListener('click', e=>{
-    const img=e.target.closest('img[data-media-id]');
+    const img=e.target.closest('img');
     if(!img){
-      // Click outside image: clear both selections unless clicking our own chrome
+      // Click outside image: clear both selections unless clicking rendering chrome
       if(!e.target.closest('.img-toolbar') && !e.target.closest('#imgBatchBar')){
         clearImageSelection();
         clearMultiSelection();
@@ -1042,7 +1042,7 @@ function initResponsiveImages(){
 
   // Long press: enters multi-select mode on mobile/tablet; opens context on desktop
   ed.addEventListener('touchstart', e=>{
-    const img=e.target.closest('img[data-media-id]');
+    const img=e.target.closest('img');
     if(!img) return;
     longPressTimer=setTimeout(()=>{
       if(deviceClass()==='phone'){
@@ -1068,27 +1068,29 @@ function initResponsiveImages(){
   if(tb){
     tb.addEventListener('mousedown', e=>e.preventDefault()); // keep selection
     tb.addEventListener('click', e=>{
-      const btn=e.target.closest('button'); if(!btn||!selectedImg) return;
-      if(btn.dataset.imgsize) return setImageSizeEx(selectedImg, btn.dataset.imgsize);
-      if(btn.id==='imgTbCrop') return openCropModal(selectedImg);
-      if(btn.id==='imgTbAlignLeft') return setImageAlign(selectedImg,'left');
-      if(btn.id==='imgTbAlignCenter') return setImageAlign(selectedImg,'center');
-      if(btn.id==='imgTbAlignRight') return setImageAlign(selectedImg,'right');
-      if(btn.id==='imgTbRotate') return rotateImage(selectedImg);
-      if(btn.id==='imgTbFlip') return flipImage(selectedImg);
-      if(btn.id==='imgTbFlipV') return flipImageVertical(selectedImg);
-      if(btn.id==='imgTbCaption') return toggleImageCaption(selectedImg);
-      if(btn.id==='imgTbCover') return setNotebookCover(selectedImg);
-      if(btn.id==='imgTbReplace') return requestImageReplacement(selectedImg);
-      if(btn.id==='imgTbView') return openImageFullscreen(selectedImg);
+      const btn=e.target.closest('button'); if(!btn) return;
+      const targetImg = selectedImg || (typeof hoveredImg !== 'undefined' ? hoveredImg : null);
+      if(!targetImg) return;
+      if(btn.dataset.imgsize) return setImageSizeEx(targetImg, btn.dataset.imgsize);
+      if(btn.id==='imgTbCrop') return openCropModal(targetImg);
+      if(btn.id==='imgTbAlignLeft') return setImageAlign(targetImg,'left');
+      if(btn.id==='imgTbAlignCenter') return setImageAlign(targetImg,'center');
+      if(btn.id==='imgTbAlignRight') return setImageAlign(targetImg,'right');
+      if(btn.id==='imgTbRotate') return rotateImage(targetImg);
+      if(btn.id==='imgTbFlip') return flipImage(targetImg);
+      if(btn.id==='imgTbFlipV') return flipImageVertical(targetImg);
+      if(btn.id==='imgTbCaption') return toggleImageCaption(targetImg);
+      if(btn.id==='imgTbCover') return setNotebookCover(targetImg);
+      if(btn.id==='imgTbReplace') return requestImageReplacement(targetImg);
+      if(btn.id==='imgTbView') return openImageFullscreen(targetImg);
       if(btn.id==='imgTbDownload'){
-        const id=selectedImg.getAttribute('data-media-id');
+        const id=targetImg.getAttribute('data-media-id');
         mediaGet(id).then(rec=>downloadMediaById(id, rec?rec.name:'image'));
         return;
       }
       if(btn.id==='imgTbDelete'){
-        const img=selectedImg; clearImageSelection();
-        img.remove(); handleBodyInput(); toast('Image removed');
+        const img=targetImg; clearImageSelection();
+        if (img) { img.remove(); handleBodyInput(); toast('Image removed'); }
       }
     });
   }

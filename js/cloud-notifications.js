@@ -110,12 +110,14 @@ function saveSession(session){
 function showAuthLanding(){
   const el=document.getElementById('authLanding');
   if(el) el.classList.remove('hidden');
+  document.documentElement.classList.remove('auth-pending');
   if(typeof closeLeavesDrawer === 'function') closeLeavesDrawer();
   if(typeof updateLeafTitleBar === 'function') updateLeafTitleBar();
 }
 function hideAuthLanding(){
   const el=document.getElementById('authLanding');
   if(el) el.classList.add('hidden');
+  document.documentElement.classList.remove('auth-pending');
   if(typeof updateLeafTitleBar === 'function') updateLeafTitleBar();
 }
 
@@ -1196,6 +1198,8 @@ function initAuthAndSync(){
   if(resetPasswordBtn) resetPasswordBtn.onclick=sendPasswordReset;
   const guestBtn=document.getElementById('authGuestBtn');
   if(guestBtn) guestBtn.onclick=continueAsGuest;
+  const homeBtn=document.getElementById('authHomeBtn');
+  if(homeBtn) homeBtn.onclick=()=>{ window.location.href='index.html'; };
 
   const avatarBtn=document.getElementById('profileAvatarBtn');
   const profilePanel=document.getElementById('profilePanel');
@@ -1392,4 +1396,3 @@ function renderNotifPanel(){
   body.innerHTML=html;
   refreshIcons();
 }
-

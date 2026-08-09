@@ -824,6 +824,7 @@ async function updateMediaCount(){
 
 function filteredNotes(){
   let arr = [];
+  const activeBranchId = window.BranchEngine?.getActiveBranchId?.() || 'all';
   notes.forEach(n=>{
     if(state.filter==='trash'){
       if(!n.deletedAt) return;
@@ -833,6 +834,7 @@ function filteredNotes(){
     if(state.filter==='pinned' && (!n.pinned || n.archived)) return;
     if(state.filter==='archived' && !n.archived) return;
     if(state.tag && !(n.tags||[]).includes(state.tag)) return;
+    if(activeBranchId !== 'all' && !window.BranchEngine?.noteBelongsToBranch?.(n, activeBranchId)) return;
     
     if(state.query){
       const q=state.query.toLowerCase();
@@ -913,7 +915,7 @@ function renderNoteCard(n){
       ${hasReminder ? '<i data-lucide="alarm-clock" class="w-3.5 h-3.5 text-accent" title="Has reminder"></i>' : ''}
     </div>` : '';
 
-    return `<div class="note-card v2 v2-${density} ${n.id===state.currentId?'active':''}" data-id="${n.id}" ${n.isVirtualSearchMatch ? `data-leaf-id="${n.searchMatchedLeafId}"` : ''}>
+    return `<div class="note-card v2 v2-${density} ${n.id===state.currentId?'active':''}" data-id="${n.id}" draggable="true" ${n.isVirtualSearchMatch ? `data-leaf-id="${n.searchMatchedLeafId}"` : ''}>
       <div class="v2-header">
         <div class="v2-title">${displayTitle}</div>
         ${metaTop}
@@ -939,7 +941,7 @@ function renderNoteCard(n){
   else if(hasAudio) mediaIcon='<i data-lucide="headphones" class="w-3 h-3 media-icon"></i>';
   else if(hasFile) mediaIcon='<i data-lucide="file" class="w-3 h-3 media-icon"></i>';
   
-  return `<div class="note-card ${n.id===state.currentId?'active':''}" data-id="${n.id}" ${n.isVirtualSearchMatch ? `data-leaf-id="${n.searchMatchedLeafId}"` : ''}>
+  return `<div class="note-card ${n.id===state.currentId?'active':''}" data-id="${n.id}" draggable="true" ${n.isVirtualSearchMatch ? `data-leaf-id="${n.searchMatchedLeafId}"` : ''}>
     <div class="note-title">
       ${displayTitle} ${mediaIcon}
     </div>
@@ -1134,6 +1136,7 @@ function renderEditor(){
   const titleInput=document.getElementById('noteTitle');
   titleInput.value=n.title||'';
   titleInput.readOnly=trashMode;
+  window.BranchEngine?.renderNoteBranchSelector?.(n, trashMode);
   state.suppressInput=true;
   revokeCachedURLs();
   
@@ -1671,6 +1674,15 @@ function renderAll(){
   renderEditor();
 }
 
+// Narrow adapter for optional organization features. Keeping the real notes
+// array private prevents branch UI code from maintaining a second app state.
+window.PaperussNoteStore = {
+  list: () => notes,
+  currentId: () => state.currentId,
+  save: () => save(),
+  render: () => renderAll()
+};
+
 /* ============================================================
    SYNC-SAFE ACTIVE NOTE REFRESH
    Called by cloud sync when the active note has a newer remote
@@ -2142,6 +2154,7 @@ window.flushActiveLeaf = async function() {
 };
 
 function setListMode(mode) {
+  if (!['notes', 'leaves', 'leafline'].includes(mode)) return;
   state.listMode = mode;
   const notesBtn = document.getElementById('modeNotesBtn');
   const leavesBtn = document.getElementById('modeLeavesBtn');
@@ -2149,6 +2162,11 @@ function setListMode(mode) {
   if (notesBtn) notesBtn.classList.toggle('active', mode === 'notes');
   if (leavesBtn) leavesBtn.classList.toggle('active', mode === 'leaves');
   if (leaflineBtn) leaflineBtn.classList.toggle('active', mode === 'leafline');
+  [notesBtn, leavesBtn, leaflineBtn].forEach(btn => {
+    if (btn) btn.setAttribute('aria-selected', String(btn.dataset.listmode === mode));
+  });
+  const listHeader = document.querySelector('.list-header');
+  if (listHeader) listHeader.dataset.mode = mode;
   const sortSelect = document.getElementById('sortSelect');
   if (sortSelect) sortSelect.style.display = (mode === 'leaves' || mode === 'leafline') ? 'none' : '';
   renderList();
@@ -2469,7 +2487,11 @@ function openLeavesDrawer() {
   if (!overlay) return;
   const contentEl = document.getElementById('leavesDrawerContent');
   if (contentEl) {
-    renderLeavesList(contentEl);
+    if (state.drawerMode === 'leafline' && typeof window.renderLeafline === 'function') {
+      window.renderLeafline(contentEl);
+    } else {
+      renderLeavesList(contentEl);
+    }
   }
   overlay.classList.remove('hidden');
   overlay.classList.add('show');
@@ -2552,7 +2574,7 @@ function initDraggableLeavesWidget() {
   let initialLeft = 0, initialTop = 0;
 
   handle.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('button')) return;
+    if (e.target.closest('button, .drawer-tab, .drawer-tabs, [role="button"], input, a')) return;
     isDragging = true;
     handle.style.cursor = 'grabbing';
     startX = e.clientX;

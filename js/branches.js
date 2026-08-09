@@ -75,9 +75,7 @@
       localStorage.setItem(ACTIVE_BRANCH_KEY, activeBranchId);
     } catch (e) {}
     
-    if (window.state && typeof window.renderNotesList === 'function') {
-      window.renderNotesList();
-    }
+    window.PaperussNoteStore?.render?.();
     renderSidebarBranchTree();
     if (typeof window.triggerLeaflineUpdate === 'function') {
       window.triggerLeaflineUpdate();
@@ -104,7 +102,18 @@
     const branches = loadBranches();
     const idx = branches.findIndex(b => b.id === id);
     if (idx !== -1) {
+      const oldName = branches[idx].name;
       branches[idx] = { ...branches[idx], ...updates };
+      if (updates.name && updates.name !== oldName) {
+        window.PaperussNoteStore?.list?.().forEach(note => {
+          if (note.branchId === id || (!note.branchId && note.category === oldName)) {
+            note.branchId = id;
+            note.category = updates.name;
+            note.updatedAt = Date.now();
+          }
+        });
+        window.PaperussNoteStore?.save?.();
+      }
       saveBranches(branches);
       return branches[idx];
     }
@@ -113,7 +122,15 @@
 
   function deleteBranch(id) {
     let branches = loadBranches();
-    branches = branches.filter(b => b.id !== id && b.parentId !== id);
+    const removedIds = new Set(getBranchScopeIds(id));
+    window.PaperussNoteStore?.list?.().forEach(note => {
+      if (removedIds.has(note.branchId)) {
+        note.branchId = '';
+        note.category = '';
+      }
+    });
+    window.PaperussNoteStore?.save?.();
+    branches = branches.filter(b => !removedIds.has(b.id));
     saveBranches(branches);
     if (getActiveBranchId() === id) {
       setActiveBranchId('all');
@@ -135,10 +152,109 @@
   }
 
   function countNotesInBranch(branchNameOrId) {
-    if (!window.state || !Array.isArray(window.state.notes)) return 0;
+    const notes = window.PaperussNoteStore?.list?.() || [];
     const branch = branchesCache?.find(b => b.id === branchNameOrId || b.name.toLowerCase() === String(branchNameOrId).toLowerCase());
-    const name = branch ? branch.name : branchNameOrId;
-    return window.state.notes.filter(n => !n.archived && !n.trashed && (n.category === name || n.branchId === branch?.id)).length;
+    const branchId = branch?.id || branchNameOrId;
+    return notes.filter(n => !n.archived && !n.deletedAt && noteBelongsToBranch(n, branchId)).length;
+  }
+
+  function assignNoteToBranch(noteId, branchId) {
+    if (branchId === 'unassigned') return unassignNote(noteId);
+    const branch = loadBranches().find(item => item.id === branchId);
+    const note = (window.PaperussNoteStore?.list?.() || []).find(item => item.id === noteId);
+    if (!branch || !note) return false;
+    note.branchId = branch.id;
+    note.category = branch.name;
+    note.updatedAt = Date.now();
+    window.PaperussNoteStore?.save?.();
+    window.PaperussNoteStore?.render?.();
+    renderSidebarBranchTree();
+    if (typeof window.toast === 'function') window.toast(`Moved to ${branch.name}`);
+    return true;
+  }
+
+  function unassignNote(noteId) {
+    const note = (window.PaperussNoteStore?.list?.() || []).find(item => item.id === noteId);
+    if (!note) return false;
+    note.branchId = '';
+    note.category = '';
+    note.updatedAt = Date.now();
+    window.PaperussNoteStore?.save?.();
+    window.PaperussNoteStore?.render?.();
+    renderSidebarBranchTree();
+    if (typeof window.toast === 'function') window.toast('Moved to Unassigned');
+    return true;
+  }
+
+  function getBranchScopeIds(id) {
+    const branches = loadBranches();
+    const scope = new Set([id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      branches.forEach(branch => {
+        if (branch.parentId && scope.has(branch.parentId) && !scope.has(branch.id)) {
+          scope.add(branch.id);
+          changed = true;
+        }
+      });
+    }
+    return Array.from(scope);
+  }
+
+  function noteBelongsToBranch(note, id) {
+    if (!note || !id || id === 'all') return true;
+    const branches = loadBranches();
+    if (id === 'unassigned') {
+      return !note.branchId || !branches.some(branch => branch.id === note.branchId);
+    }
+    const scope = new Set(getBranchScopeIds(id));
+    if (note.branchId) return scope.has(note.branchId);
+    const legacyBranch = branches.find(branch => scope.has(branch.id) && branch.name === note.category);
+    return !!legacyBranch;
+  }
+
+  function renderNoteBranchSelector(note, disabled = false) {
+    const control = document.getElementById('editorBranchControl');
+    const select = document.getElementById('noteBranchSelect');
+    if (!control || !select) return;
+    control.style.display = note ? 'inline-flex' : 'none';
+    if (!note) return;
+
+    const branches = loadBranches().slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+    select.replaceChildren();
+    select.add(new Option('Unassigned', 'unassigned'));
+    branches.forEach(branch => {
+      select.add(new Option(`${branch.parentId ? '— ' : ''}${branch.name}`, branch.id));
+    });
+    select.value = branches.some(branch => branch.id === note.branchId) ? note.branchId : 'unassigned';
+    select.disabled = !!disabled;
+  }
+
+  function initNoteBranchSelector() {
+    const select = document.getElementById('noteBranchSelect');
+    if (!select || select.dataset.branchListenerAttached) return;
+    select.dataset.branchListenerAttached = 'true';
+    select.addEventListener('change', () => {
+      const noteId = window.PaperussNoteStore?.currentId?.();
+      if (select.value === 'unassigned') unassignNote(noteId);
+      else assignNoteToBranch(noteId, select.value);
+    });
+  }
+
+  function migrateLegacyNoteBranches() {
+    const notes = window.PaperussNoteStore?.list?.() || [];
+    const byName = new Map(loadBranches().map(branch => [branch.name.toLowerCase(), branch]));
+    let changed = false;
+    notes.forEach(note => {
+      if (note.branchId || !note.category) return;
+      const branch = byName.get(String(note.category).toLowerCase());
+      if (!branch) return;
+      note.branchId = branch.id;
+      note.category = branch.name;
+      changed = true;
+    });
+    if (changed) window.PaperussNoteStore?.save?.();
   }
 
   function closeMoreMenu() {
@@ -155,6 +271,10 @@
     const menu = document.createElement('div');
     menu.className = 'branch-more-dropdown show';
     menu.innerHTML = `
+      <button type="button" class="branch-menu-item" id="bmiMoveCurrent">
+        <i data-lucide="folder-input" class="w-3.5 h-3.5"></i> Move Current Note Here
+      </button>
+      <div class="branch-menu-divider"></div>
       <button type="button" class="branch-menu-item" id="bmiEdit">
         <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit Branch
       </button>
@@ -181,6 +301,11 @@
       window.lucide.createIcons({ el: menu });
     }
 
+    menu.querySelector('#bmiMoveCurrent').onclick = () => {
+      closeMoreMenu();
+      assignNoteToBranch(window.PaperussNoteStore?.currentId?.(), branch.id);
+    };
+
     menu.querySelector('#bmiEdit').onclick = () => {
       closeMoreMenu();
       openBranchModal(branch);
@@ -193,9 +318,10 @@
 
     menu.querySelector('#bmiDelete').onclick = () => {
       closeMoreMenu();
-      if (confirm(`Delete branch "${branch.name}"? Notes inside will be unassigned.`)) {
-        deleteBranch(branch.id);
-      }
+      const remove = () => deleteBranch(branch.id);
+      if (typeof window.confirmDialog === 'function') {
+        window.confirmDialog('Delete branch?', `Notes in "${branch.name}" and its sub-branches will become Unassigned.`, 'Delete branch', remove);
+      } else if (confirm(`Delete branch "${branch.name}"? Notes inside will be unassigned.`)) remove();
     };
 
     setTimeout(() => {
@@ -229,7 +355,12 @@
         <div class="branch-item ${currentActive === 'all' ? 'active' : ''}" data-branch-id="all">
           <i data-lucide="library" class="branch-icon w-4 h-4" style="color:#6366f1"></i>
           <span class="branch-name">All Notes</span>
-          <span class="branch-count">${window.state?.notes?.filter(n=>!n.archived&&!n.trashed).length || 0}</span>
+          <span class="branch-count">${(window.PaperussNoteStore?.list?.() || []).filter(n=>!n.archived&&!n.deletedAt).length}</span>
+        </div>
+        <div class="branch-item ${currentActive === 'unassigned' ? 'active' : ''}" data-branch-id="unassigned" data-branch-name="Unassigned">
+          <i data-lucide="inbox" class="branch-icon w-4 h-4" style="color:#94a3b8"></i>
+          <span class="branch-name">Unassigned</span>
+          <span class="branch-count">${(window.PaperussNoteStore?.list?.() || []).filter(n=>!n.archived&&!n.deletedAt&&noteBelongsToBranch(n,'unassigned')).length}</span>
         </div>
     `;
 
@@ -312,16 +443,11 @@
         const bId = item.dataset.branchId;
         if (!bId || bId === 'all') return;
 
-        const activeNoteId = window.state?.activeNoteId;
-        if (activeNoteId && window.state.notes) {
-          const note = window.state.notes.find(n => n.id === activeNoteId);
-          if (note) {
-            note.category = bName;
-            note.branchId = bId;
-            if (typeof window.saveNotes === 'function') window.saveNotes();
-            if (typeof window.renderNotesList === 'function') window.renderNotesList();
-            renderSidebarBranchTree();
-          }
+        const draggedNoteId = e.dataTransfer?.getData('application/x-paperuss-note-id') || e.dataTransfer?.getData('text/plain');
+        const activeNoteId = draggedNoteId || window.PaperussNoteStore?.currentId?.();
+        const noteList = window.PaperussNoteStore?.list?.() || [];
+        if (activeNoteId) {
+          if (noteList.some(n => n.id === activeNoteId)) assignNoteToBranch(activeNoteId, bId);
         }
       };
     });
@@ -473,6 +599,11 @@
     createBranch,
     updateBranch,
     deleteBranch,
+    assignNoteToBranch,
+    unassignNote,
+    getBranchScopeIds,
+    noteBelongsToBranch,
+    renderNoteBranchSelector,
     renderSidebarBranchTree,
     openBranchModal
   };
@@ -480,6 +611,8 @@
   // Initialize on DOM Ready
   document.addEventListener('DOMContentLoaded', () => {
     loadBranches();
+    migrateLegacyNoteBranches();
+    initNoteBranchSelector();
     setTimeout(renderSidebarBranchTree, 300);
   });
 })();

@@ -700,6 +700,79 @@ async function createNewLeafAction() {
 }
 window.createNewLeafAction = createNewLeafAction;
 
+function requestLeafRename(currentTitle) {
+  const root = document.getElementById('modalRoot');
+  if (!root) return Promise.resolve(null);
+
+  return new Promise(resolve => {
+    root.innerHTML = `<div class="modal-overlay leaf-rename-overlay">
+      <form class="modal leaf-rename-modal" role="dialog" aria-modal="true" aria-labelledby="leafRenameTitle">
+        <div class="leaf-rename-heading">
+          <span class="leaf-rename-icon" aria-hidden="true"><i data-lucide="file-text"></i></span>
+          <div>
+            <h3 id="leafRenameTitle">Rename leaf</h3>
+            <p>Choose a clear name for this document leaf.</p>
+          </div>
+        </div>
+        <div class="leaf-rename-field">
+          <label class="leaf-rename-label" for="leafRenameInput">Leaf name</label>
+          <input id="leafRenameInput" class="leaf-rename-input" type="text" maxlength="120" autocomplete="off" spellcheck="true" aria-describedby="leafRenameError">
+        </div>
+        <div id="leafRenameError" class="leaf-rename-error" role="alert" aria-live="polite"></div>
+        <div class="modal-actions">
+          <button class="btn" type="button" data-leaf-rename-cancel>Cancel</button>
+          <button class="btn btn-primary" type="submit">Rename</button>
+        </div>
+      </form>
+    </div>`;
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      try { window.lucide.createIcons(); } catch (_) {}
+    }
+
+    const overlay = root.querySelector('.leaf-rename-overlay');
+    const form = root.querySelector('.leaf-rename-modal');
+    const input = root.querySelector('#leafRenameInput');
+    const error = root.querySelector('#leafRenameError');
+    input.value = String(currentTitle || 'Leaf');
+    let settled = false;
+
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      root.replaceChildren();
+      resolve(value);
+    };
+    const submit = event => {
+      event.preventDefault();
+      const title = input.value.trim();
+      if (!title) {
+        input.setAttribute('aria-invalid', 'true');
+        input.classList.add('has-error');
+        error.classList.add('show');
+        error.textContent = 'Enter a leaf name.';
+        input.focus();
+        return;
+      }
+      finish(title === currentTitle ? null : title);
+    };
+
+    form.addEventListener('submit', submit);
+    root.querySelector('[data-leaf-rename-cancel]').addEventListener('click', () => finish(null));
+    overlay.addEventListener('click', event => { if (event.target === overlay) finish(null); });
+    overlay.addEventListener('keydown', event => { if (event.key === 'Escape') finish(null); });
+    input.addEventListener('input', () => {
+      input.removeAttribute('aria-invalid');
+      error.textContent = '';
+    });
+    if (typeof window.lucide?.createIcons === 'function') {
+      try { window.lucide.createIcons(); } catch (_) {}
+    }
+    requestAnimationFrame(() => { input.focus(); input.select(); });
+  });
+}
+window.requestLeafRename = requestLeafRename;
+
 async function renameLeafAction(leafId) {
   const n = getNote(state.currentId);
   if (!n) return;
@@ -708,9 +781,9 @@ async function renameLeafAction(leafId) {
     const leafObj = await window.paperussLeaves.leafGet(leafId);
     if (leafObj && leafObj.title) currentTitle = leafObj.title;
   }
-  const newTitle = prompt('Rename leaf:', currentTitle);
-  if (newTitle && newTitle.trim() !== '' && newTitle !== currentTitle) {
-    await window.paperussLeafManager.renameLeaf(n.id, leafId, newTitle.trim());
+  const newTitle = await requestLeafRename(currentTitle);
+  if (newTitle) {
+    await window.paperussLeafManager.renameLeaf(n.id, leafId, newTitle);
     renderList();
     const contentEl = document.getElementById('leavesDrawerContent');
     if (contentEl && typeof renderLeavesList === 'function') renderLeavesList(contentEl);

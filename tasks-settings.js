@@ -421,7 +421,7 @@ const APP_FONT_STACKS={
   sans:'"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif',
   serif:'Georgia,"Times New Roman",serif',
   mono:'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace',
-  rounded:'"SF Pro Rounded","Quicksand",system-ui,-apple-system,sans-serif'
+  rounded:'"SF Pro Rounded",Quicksand,"Arial Rounded MT Bold","Trebuchet MS",Arial,sans-serif'
 };
 
 function applySettingsEffects(){

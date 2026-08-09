@@ -290,6 +290,19 @@ function ensurePrintSheet(){
   return sheet;
 }
 
+// The print dialog fires `beforeprint` even after the app has already built a
+// modal-configured sheet. Preserve that exact sheet for one print cycle.
+let preservePreparedPrintSheetOnce = false;
+
+function readSavedPrintPreferences() {
+  try {
+    const value = JSON.parse(localStorage.getItem('paperuss_print_prefs') || '{}');
+    return value && typeof value === 'object' ? value : {};
+  } catch (e) {
+    return {};
+  }
+}
+
 function fallbackReferenceMark(target,text){
   // Visual reference fallback if the optional QR library has not loaded.
   let seed=0;
@@ -320,6 +333,7 @@ function sanitizeContentForPrint(rawHtml, noteTitle) {
   // Remove ALL transient editor UI elements, block handles, card controls, toolbars, docks, sheets, and drop indicators
   temp.querySelectorAll(
     '.block-drop-indicator, .block-gutter, .block-hero-ghost, .ghost-drag-avatar, ' +
+    '.pv-header-overlay, .pv-footer-overlay, .pv-page-divider, .pv-page-gap, .pv-page-label, [data-paperuss-page-ui="true"], ' +
     '.leafline-ui, .resize-handle, .card-resize-handle, .image-resize-handle, .itb-container, .itb-dropdown, ' +
     '.embed-tb-container, .embed-tb-segment, .embed-tb-btn, .embed-tb-dropdown, .embed-wrap-dropdown, .embed-mode-dropdown, .embed-more-menu, .embed-editor-toolbar, .embed-context-panel, ' +
     '.table-controls, .table-controls-container, .table-btn, .mc-action, .table-action-menu, .tbl-tools, .tbl-submenu, .tbl-color-dropdown, .tbl-sheet, .tbl-sheet-backdrop, ' +
@@ -329,6 +343,32 @@ function sanitizeContentForPrint(rawHtml, noteTitle) {
     '.floating-fab-dock, .floating-quick-insert-fab, .leaf-toggle-fab, .leaves-drawer-overlay, .leaf-context-menu, .music-hub-modal-overlay, .notif-panel, .profile-panel, ' +
     '.broken-card-retry, .broken-card-actions, .ui-control, .editor-only'
   ).forEach(el => el.remove());
+
+  // Undo editor-only pagination offsets and active selection decoration.
+  temp.querySelectorAll('[data-pv-break-pushed="true"]').forEach(el => {
+    el.style.marginTop = '';
+    el.removeAttribute('data-pv-break-pushed');
+  });
+  temp.querySelectorAll(
+    '.card-selected, .embed-selected, .img-selected, .img-multi-selected, .tbl-selected, .pref-delete-selected, [data-card-selected="true"]'
+  ).forEach(el => {
+    el.classList.remove('card-selected', 'embed-selected', 'img-selected', 'img-multi-selected', 'tbl-selected', 'pref-delete-selected');
+    el.removeAttribute('data-card-selected');
+    el.style.outline = '';
+    el.style.outlineOffset = '';
+    el.style.boxShadow = '';
+  });
+
+  // Normalize semantic table headers so Chromium repeats them instead of
+  // orphaning a lone heading row at the bottom of a printed page.
+  temp.querySelectorAll('table').forEach(table => {
+    if (table.tHead) return;
+    const firstRow = table.rows && table.rows[0];
+    if (!firstRow || !firstRow.querySelector('th')) return;
+    const thead = document.createElement('thead');
+    thead.appendChild(firstRow);
+    table.insertBefore(thead, table.firstChild);
+  });
 
   // Strip contenteditable attributes to prevent selection outlines
   temp.querySelectorAll('[contenteditable]').forEach(el => el.removeAttribute('contenteditable'));
@@ -350,12 +390,29 @@ async function preparePrintSheet(targetNote, options) {
   const pageSize = options.pageSize || note.pageSize || 'auto';
   const orientation = options.orientation || note.pageOrientation || 'portrait';
   const margin = options.margin || note.pageMargins || 'normal';
-  const showHeader = options.showHeader !== false;
-  const showFooter = options.showFooter !== false;
-  const showPageNums = options.showPageNums !== false;
-  const customHeaderTitle = options.customHeaderTitle || 'PapeRuss';
-  const customSubtitle = options.customSubtitle || 'Professional note record';
-  const documentStyle = options.documentStyle || 'executive';
+  const showHeader = options.showHeader !== undefined ? options.showHeader : note.showHeader !== false;
+  const showMetadata = options.showMetadata !== undefined ? options.showMetadata : note.showMetadata !== false;
+  const showFooter = options.showFooter !== undefined ? options.showFooter : note.showFooter !== false;
+  const showReference = options.showReference !== undefined ? options.showReference : note.showReference !== false;
+  const showPageNums = options.showPageNums !== undefined ? options.showPageNums : note.showPageNums !== false;
+  const hasUnifiedHeader = typeof note.customHeaderContent === 'string';
+  const customHeaderTitle = options.customHeaderTitle !== undefined
+    ? options.customHeaderTitle
+    : (hasUnifiedHeader ? note.customHeaderContent : (note.customHeaderTitle || ''));
+  const customSubtitle = options.customSubtitle !== undefined
+    ? options.customSubtitle
+    : (hasUnifiedHeader ? '' : (note.customSubtitle || ''));
+  const customHeaderHtml = options.customHeaderHtml !== undefined
+    ? options.customHeaderHtml
+    : (typeof note.customHeaderHtml === 'string' ? note.customHeaderHtml : '');
+  const renderedHeader = customHeaderHtml && typeof sanitizeNoteHTML === 'function'
+    ? sanitizeNoteHTML(customHeaderHtml)
+    : esc(customHeaderTitle);
+  const customFooterHtml = typeof note.customFooterHtml === 'string' && typeof sanitizeNoteHTML === 'function'
+    ? sanitizeNoteHTML(note.customFooterHtml)
+    : '';
+  const customFooterText = note.customFooterText || '';
+  const documentStyle = options.documentStyle || note.documentStyle || 'executive';
 
   sheet.setAttribute('data-print-theme', documentStyle);
 
@@ -416,14 +473,22 @@ async function preparePrintSheet(targetNote, options) {
   let marginCss = '16mm 17mm 19mm'; // default auto margins
   if (margin === 'narrow') marginCss = '10mm';
   else if (margin === 'wide') marginCss = '25mm';
+  else if (margin === 'binding') marginCss = '20mm 20mm 20mm 35mm';
 
   let pageCss = pageSize !== 'auto'
     ? `@page { size: ${pageSize} ${orientation}; margin: ${marginCss}; }`
     : `@page { size: auto; margin: ${marginCss}; }`;
+  if (margin === 'binding') {
+    pageCss += `
+      @page :right { margin: 20mm 20mm 20mm 35mm; }
+      @page :left { margin: 20mm 35mm 20mm 20mm; }`;
+  }
 
   let pageNumCssFormat = '"Page " counter(page) " of " counter(pages)';
   let pageNumFontCss = 'font-family: sans-serif; color: #1d4ed8;';
-  if (documentStyle === 'serif') {
+  if (documentStyle === 'standard') {
+    pageNumFontCss = 'font-family: sans-serif; color: #64748b;';
+  } else if (documentStyle === 'serif') {
     pageNumCssFormat = '"— Page " counter(page) " of " counter(pages) " —"';
     pageNumFontCss = 'font-family: Georgia, serif; font-style: italic; color: #b45309;';
   } else if (documentStyle === 'blueprint') {
@@ -449,31 +514,31 @@ async function preparePrintSheet(targetNote, options) {
 
   sheet.innerHTML = `
     <style>${pageCss}</style>
-    ${showHeader ? `
+    ${(showHeader || showMetadata) ? `
     <div class="ps-header">
-      ${headerBannerHtml}
-      <div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
-        <div>
-          <div class="ps-brand">${esc(customHeaderTitle)}</div>
+      ${showHeader ? headerBannerHtml : ''}
+      <div class="ps-header-row">
+        ${showHeader ? `<div class="ps-header-copy">
+          <div class="ps-brand" style="white-space:pre-wrap">${renderedHeader}</div>
           <div style="font-size:10px;color:#64748b;margin-top:3px">${esc(customSubtitle)}</div>
-        </div>
-        <div class="ps-meta">
+        </div>` : '<div></div>'}
+        ${showMetadata ? `<div class="ps-meta">
           Created ${fullDate(note.createdAt)}<br>
           Last edited ${fullDate(note.updatedAt)}<br>
           Printed ${printedAt}
-        </div>
+        </div>` : ''}
       </div>
     </div>` : ''}
-    <h1>${esc(titleOf(note))}</h1>
+    <h1 class="ps-document-title">${esc(titleOf(note))}</h1>
     ${tags ? `<div class="ps-tags">${tags}</div>` : ''}
-    <main class="ps-content" ${(note.lineHeight || note.lineSpacing) ? `style="line-height:${note.lineHeight || note.lineSpacing};"` : ''}>${cleanHtml}</main>
-    ${showFooter ? `
+    <main class="ps-content" ${(note.lineHeight || note.lineSpacing) ? `style="line-height:${note.lineHeight || note.lineSpacing};"` : ''}><article class="ps-document-flow">${cleanHtml}</article></main>
+    ${(showFooter || showReference) ? `
     <footer class="ps-footer">
-      <div class="ps-footer-copy">
-        PapeRuss offline note record<br>
-        Reference ID: ${esc(note.id)}
-      </div>
-      <div id="printQr" aria-label="Note reference QR code"></div>
+      ${showFooter ? `<div class="ps-footer-copy">${customFooterHtml || (customFooterText ? esc(customFooterText) : '')}</div>` : '<div></div>'}
+      ${showReference ? `<div class="ps-footer-reference">
+        <span>Reference ID: ${esc(note.id)}</span>
+        <div id="printQr" aria-label="Note reference QR code"></div>
+      </div>` : ''}
     </footer>` : ''}`;
 
   const qr = document.getElementById('printQr');
@@ -533,15 +598,19 @@ async function openPrintModal() {
   } catch (e) {}
 
   let printScope = 'active'; // 'active', 'all', or 'single:<leafId>'
-  let documentStyle = savedPrefs.documentStyle || 'executive';
-  let pageSize = savedPrefs.pageSize || note.pageSize || 'auto';
-  let orientation = savedPrefs.orientation || note.pageOrientation || 'portrait';
-  let margin = savedPrefs.margin || note.pageMargins || 'normal';
-  let showHeader = savedPrefs.showHeader !== undefined ? savedPrefs.showHeader : true;
-  let showFooter = savedPrefs.showFooter !== undefined ? savedPrefs.showFooter : true;
-  let showPageNums = savedPrefs.showPageNums !== undefined ? savedPrefs.showPageNums : true;
-  let customHeaderTitle = savedPrefs.customHeaderTitle || 'PapeRuss';
-  let customSubtitle = savedPrefs.customSubtitle || 'Professional note record';
+  let documentStyle = note.documentStyle || savedPrefs.documentStyle || 'executive';
+  let pageSize = note.pageSize || savedPrefs.pageSize || 'auto';
+  if (pageSize === 'A4') pageSize = 'a4';
+  let orientation = note.pageOrientation || savedPrefs.orientation || 'portrait';
+  let margin = note.pageMargins || savedPrefs.margin || 'normal';
+  let showHeader = note.showHeader !== undefined ? note.showHeader : (savedPrefs.showHeader !== undefined ? savedPrefs.showHeader : true);
+  let showMetadata = note.showMetadata !== undefined ? note.showMetadata : (savedPrefs.showMetadata !== undefined ? savedPrefs.showMetadata : true);
+  let showFooter = note.showFooter !== undefined ? note.showFooter : (savedPrefs.showFooter !== undefined ? savedPrefs.showFooter : true);
+  let showReference = note.showReference !== undefined ? note.showReference : (savedPrefs.showReference !== undefined ? savedPrefs.showReference : true);
+  let showPageNums = note.showPageNums !== undefined ? note.showPageNums : (savedPrefs.showPageNums !== undefined ? savedPrefs.showPageNums : true);
+  const hasUnifiedHeader = typeof note.customHeaderContent === 'string';
+  let customHeaderTitle = hasUnifiedHeader ? note.customHeaderContent : (note.customHeaderTitle || savedPrefs.customHeaderTitle || '');
+  let customSubtitle = hasUnifiedHeader ? '' : (note.customSubtitle || savedPrefs.customSubtitle || '');
 
   function renderModal() {
     root.innerHTML = `
@@ -570,50 +639,13 @@ async function openPrintModal() {
                 </select>
               </div>
 
-              <!-- Document Aesthetic Style Dropdown -->
-              <div class="pm-field-group">
-                <label class="pm-label" for="pmDocumentStyle">Document Aesthetic Style</label>
-                <select id="pmDocumentStyle" class="pm-select" style="font-weight:600;padding:10px 12px;">
-                  <option value="executive" ${documentStyle === 'executive' ? 'selected' : ''}>🏢 Modern Executive (Royal Indigo Sans)</option>
-                  <option value="serif" ${documentStyle === 'serif' ? 'selected' : ''}>📜 Editorial Serif (Warm Gold Serif)</option>
-                  <option value="blueprint" ${documentStyle === 'blueprint' ? 'selected' : ''}>⚡ Tech Blueprint (Emerald Monospace)</option>
-                  <option value="botanical" ${documentStyle === 'botanical' ? 'selected' : ''}>🌸 Zen Botanical (Sage Minimalist)</option>
-                  <option value="vintage" ${documentStyle === 'vintage' ? 'selected' : ''}>📰 Vintage Press (Newsprint Double-Line)</option>
-                  <option value="cyber" ${documentStyle === 'cyber' ? 'selected' : ''}>🔮 Cyber Codex (Neon Cyan/Magenta)</option>
-                </select>
-              </div>
-
-              <!-- Quick Style Presets -->
-              <div class="pm-field-group">
-                <label class="pm-label">Layout Presets</label>
-                <div class="pm-grid-2">
-                  <button type="button" class="pm-segment-btn" id="pmPresetFormal" style="border:1px solid var(--border, rgba(0,0,0,0.12));padding:6px 10px;">
-                    <i data-lucide="award" class="w-4 h-4 inline mr-1 text-indigo-500"></i>
-                    <span>🏢 Formal Report</span>
-                  </button>
-                  <button type="button" class="pm-segment-btn" id="pmPresetClean" style="border:1px solid var(--border, rgba(0,0,0,0.12));padding:6px 10px;">
-                    <i data-lucide="file-text" class="w-4 h-4 inline mr-1 text-emerald-500"></i>
-                    <span>📄 Clean Minimal</span>
-                  </button>
-                </div>
-              </div>
-
-              <!-- Custom Header Titles -->
-              <div class="pm-field-group">
-                <label class="pm-label">Custom Document Header</label>
-                <div class="pm-grid-2">
-                  <input type="text" id="pmCustomTitle" class="pm-select" value="${esc(customHeaderTitle)}" placeholder="Brand / Company">
-                  <input type="text" id="pmCustomSubtitle" class="pm-select" value="${esc(customSubtitle)}" placeholder="Subtitle">
-                </div>
-              </div>
-
               <!-- Page Size & Orientation -->
               <div class="pm-grid-2">
                 <div class="pm-field-group">
                   <label class="pm-label" for="pmPageSize">Paper Size</label>
                   <select id="pmPageSize" class="pm-select">
                     <option value="auto" ${pageSize === 'auto' ? 'selected' : ''}>Auto / Default</option>
-                    <option value="A4" ${pageSize === 'A4' ? 'selected' : ''}>A4 (210 × 297 mm)</option>
+                    <option value="a4" ${pageSize === 'a4' ? 'selected' : ''}>A4 (210 × 297 mm)</option>
                     <option value="letter" ${pageSize === 'letter' ? 'selected' : ''}>US Letter (8.5 × 11 in)</option>
                     <option value="legal" ${pageSize === 'legal' ? 'selected' : ''}>US Legal (8.5 × 14 in)</option>
                   </select>
@@ -635,6 +667,7 @@ async function openPrintModal() {
                   <option value="normal" ${margin === 'normal' ? 'selected' : ''}>Normal (16mm 17mm 19mm)</option>
                   <option value="narrow" ${margin === 'narrow' ? 'selected' : ''}>Narrow (10mm)</option>
                   <option value="wide" ${margin === 'wide' ? 'selected' : ''}>Wide (25mm)</option>
+                  <option value="binding" ${margin === 'binding' ? 'selected' : ''}>Binding / Thesis (35mm inner)</option>
                 </select>
               </div>
 
@@ -644,15 +677,23 @@ async function openPrintModal() {
                 <div class="pm-toggles-grid">
                   <label class="pm-checkbox-label">
                     <input type="checkbox" id="pmShowHeader" ${showHeader ? 'checked' : ''}>
-                    <span>Header & Metadata</span>
+                    <span><strong>Document header</strong><small>Content formatted in the editor</small></span>
+                  </label>
+                  <label class="pm-checkbox-label">
+                    <input type="checkbox" id="pmShowMetadata" ${showMetadata ? 'checked' : ''}>
+                    <span><strong>Print metadata</strong><small>Created, edited, and printed dates</small></span>
                   </label>
                   <label class="pm-checkbox-label">
                     <input type="checkbox" id="pmShowFooter" ${showFooter ? 'checked' : ''}>
-                    <span>Footer & QR Reference Code</span>
+                    <span><strong>Document footer</strong><small>Content formatted in the editor</small></span>
+                  </label>
+                  <label class="pm-checkbox-label">
+                    <input type="checkbox" id="pmShowReference" ${showReference ? 'checked' : ''}>
+                    <span><strong>Reference mark</strong><small>Reference ID and QR code</small></span>
                   </label>
                   <label class="pm-checkbox-label">
                     <input type="checkbox" id="pmShowPageNums" ${showPageNums ? 'checked' : ''}>
-                    <span>Page Numbers (Page X of Y)</span>
+                    <span><strong>Page numbers</strong><small>Page X of Y</small></span>
                   </label>
                 </div>
               </div>
@@ -662,9 +703,9 @@ async function openPrintModal() {
             <div class="pm-preview-column" style="width:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-secondary, #f8fafc);border:1px solid var(--border, rgba(0,0,0,0.08));border-radius:12px;padding:12px;">
               <span style="font-size:10px;font-weight:700;color:var(--fg-muted,#64748b);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Live Preview</span>
               <div class="pm-paper-thumbnail ${orientation}" id="pmPaperThumb" style="width:${orientation === 'landscape' ? '140px' : '100px'};height:${orientation === 'landscape' ? '100px' : '140px'};background:${documentStyle === 'vintage' ? '#faf7f0' : '#fff'};border:1px solid #cbd5e1;box-shadow:0 4px 12px rgba(0,0,0,0.1);border-radius:4px;padding:8px;display:flex;flex-direction:column;justify-content:space-between;position:relative;transition:all 0.2s ease;font-family:${documentStyle === 'serif' || documentStyle === 'vintage' ? 'Georgia, serif' : (documentStyle === 'blueprint' || documentStyle === 'cyber' ? 'monospace' : 'sans-serif')};">
-                <div id="pmThumbHeader" style="display:${showHeader ? 'flex' : 'none'};justify-content:space-between;border-bottom:${documentStyle === 'vintage' ? '2px double #111827' : (documentStyle === 'cyber' ? '1px dashed #06b6d4' : (documentStyle === 'blueprint' ? '1px dashed #10b981' : '1px solid ' + (documentStyle === 'serif' ? '#d97706' : (documentStyle === 'botanical' ? '#059669' : '#1d4ed8'))))};padding-bottom:2px;margin-bottom:4px;">
-                  <span id="pmThumbBrand" style="font-size:6px;font-weight:700;color:${documentStyle === 'serif' ? '#b45309' : (documentStyle === 'blueprint' ? '#059669' : (documentStyle === 'botanical' ? '#047857' : (documentStyle === 'vintage' ? '#111827' : (documentStyle === 'cyber' ? '#0891b2' : '#1d4ed8'))))};">${esc(customHeaderTitle || 'PapeRuss')}</span>
-                  <span style="font-size:5px;color:#94a3b8;">${fullDate(Date.now())}</span>
+                <div id="pmThumbHeader" style="display:${showHeader || showMetadata ? 'flex' : 'none'};justify-content:space-between;border-bottom:${documentStyle === 'vintage' ? '2px double #111827' : (documentStyle === 'cyber' ? '1px dashed #06b6d4' : (documentStyle === 'blueprint' ? '1px dashed #10b981' : '1px solid ' + (documentStyle === 'standard' ? '#cbd5e1' : (documentStyle === 'serif' ? '#d97706' : (documentStyle === 'botanical' ? '#059669' : '#1d4ed8')))))};padding-bottom:2px;margin-bottom:4px;">
+                  ${showHeader ? `<span id="pmThumbBrand" style="font-size:6px;font-weight:700;color:${documentStyle === 'standard' ? '#475569' : (documentStyle === 'serif' ? '#b45309' : (documentStyle === 'blueprint' ? '#059669' : (documentStyle === 'botanical' ? '#047857' : (documentStyle === 'vintage' ? '#111827' : (documentStyle === 'cyber' ? '#0891b2' : '#1d4ed8')))))};">${esc(customHeaderTitle || 'Header')}</span>` : '<span></span>'}
+                  ${showMetadata ? `<span style="font-size:5px;color:#94a3b8;">${fullDate(Date.now())}</span>` : ''}
                 </div>
                 <div style="flex:1;overflow:hidden;">
                   <div style="font-size:7px;font-weight:700;color:#1e293b;margin-bottom:2px;text-align:${documentStyle === 'serif' || documentStyle === 'vintage' ? 'center' : 'left'};">${esc(titleOf(note))}</div>
@@ -678,9 +719,9 @@ async function openPrintModal() {
                     </div>
                   </div>
                 </div>
-                <div style="display:${showFooter ? 'flex' : 'none'};justify-content:space-between;align-items:center;border-top:1px solid #e2e8f0;padding-top:2px;margin-top:4px;">
-                  <span style="font-size:5px;color:#94a3b8;">Ref ID: ${esc(note.id.substring(0,8))}</span>
-                  <div style="width:10px;height:10px;background:#111827;border-radius:1px;"></div>
+                <div style="display:${showFooter || showReference ? 'flex' : 'none'};justify-content:space-between;align-items:center;border-top:1px solid #e2e8f0;padding-top:2px;margin-top:4px;">
+                  ${showFooter ? '<span style="font-size:5px;color:#94a3b8;">Footer</span>' : '<span></span>'}
+                  ${showReference ? `<span style="display:flex;align-items:center;gap:2px;font-size:5px;color:#94a3b8;">Ref ${esc(note.id.substring(0,4))}<i style="display:block;width:8px;height:8px;background:#111827;border-radius:1px;"></i></span>` : ''}
                 </div>
                 <div style="display:${showPageNums ? 'block' : 'none'};position:absolute;bottom:2px;right:4px;font-size:5px;color:#64748b;">Page 1 of 1</div>
               </div>
@@ -715,27 +756,14 @@ async function openPrintModal() {
       leafSelect.onchange = (e) => { printScope = e.target.value; renderModal(); };
     }
 
-    const docStyleSelect = document.getElementById('pmDocumentStyle');
-    if (docStyleSelect) {
-      docStyleSelect.onchange = (e) => { documentStyle = e.target.value; renderModal(); };
-    }
-
-    document.getElementById('pmPresetFormal').onclick = () => {
-      showHeader = true; showFooter = true; showPageNums = true; renderModal();
-    };
-    document.getElementById('pmPresetClean').onclick = () => {
-      showHeader = false; showFooter = false; showPageNums = false; renderModal();
-    };
-
-    document.getElementById('pmCustomTitle').oninput = (e) => { customHeaderTitle = e.target.value; updateThumbnail(); };
-    document.getElementById('pmCustomSubtitle').oninput = (e) => { customSubtitle = e.target.value; };
-
     document.getElementById('pmPageSize').onchange = (e) => { pageSize = e.target.value; };
     document.getElementById('pmOrientation').onchange = (e) => { orientation = e.target.value; renderModal(); };
     document.getElementById('pmMargins').onchange = (e) => { margin = e.target.value; };
 
     document.getElementById('pmShowHeader').onchange = (e) => { showHeader = e.target.checked; renderModal(); };
+    document.getElementById('pmShowMetadata').onchange = (e) => { showMetadata = e.target.checked; renderModal(); };
     document.getElementById('pmShowFooter').onchange = (e) => { showFooter = e.target.checked; renderModal(); };
+    document.getElementById('pmShowReference').onchange = (e) => { showReference = e.target.checked; renderModal(); };
     document.getElementById('pmShowPageNums').onchange = (e) => { showPageNums = e.target.checked; renderModal(); };
 
     function updateThumbnail() {
@@ -750,23 +778,29 @@ async function openPrintModal() {
       closeModal();
       try {
         localStorage.setItem('paperuss_print_prefs', JSON.stringify({
-          documentStyle, pageSize, orientation, margin, showHeader, showFooter, showPageNums, customHeaderTitle, customSubtitle
+          documentStyle, pageSize, orientation, margin, showHeader, showMetadata, showFooter, showReference, showPageNums, customHeaderTitle, customSubtitle
         }));
       } catch (e) {}
 
-      await preparePrintSheet(note, {
+      const requestedPrintOptions = {
         scope: printScope,
         documentStyle,
         pageSize,
         orientation,
         margin,
         showHeader,
+        showMetadata,
         showFooter,
+        showReference,
         showPageNums,
         customHeaderTitle,
         customSubtitle
-      });
-      setTimeout(() => window.print(), 120);
+      };
+      await preparePrintSheet(note, requestedPrintOptions);
+      setTimeout(() => {
+        preservePreparedPrintSheetOnce = true;
+        window.print();
+      }, 120);
     };
   }
 
@@ -788,10 +822,29 @@ window.printCurrentNote = printCurrentNote;
 
 // Automatically sync printSheet whenever native browser print (Ctrl+P, Cmd+P, or browser menu) is triggered
 window.addEventListener('beforeprint', () => {
+  if (preservePreparedPrintSheetOnce) {
+    preservePreparedPrintSheetOnce = false;
+    return;
+  }
   const note = typeof activeNoteForAction === 'function' ? activeNoteForAction() : null;
   if (note) {
-    preparePrintSheet(note);
+    const prefs = readSavedPrintPreferences();
+    preparePrintSheet(note, {
+      documentStyle: prefs.documentStyle,
+      pageSize: prefs.pageSize,
+      orientation: prefs.orientation,
+      margin: prefs.margin,
+      showHeader: typeof prefs.showHeader === 'boolean' ? prefs.showHeader : undefined,
+      showMetadata: typeof prefs.showMetadata === 'boolean' ? prefs.showMetadata : undefined,
+      showFooter: typeof prefs.showFooter === 'boolean' ? prefs.showFooter : undefined,
+      showReference: typeof prefs.showReference === 'boolean' ? prefs.showReference : undefined,
+      showPageNums: typeof prefs.showPageNums === 'boolean' ? prefs.showPageNums : undefined
+    });
   }
+});
+
+window.addEventListener('afterprint', () => {
+  preservePreparedPrintSheetOnce = false;
 });
 
 function createNote(){
@@ -911,6 +964,12 @@ function sanitizeForStorage(html){
     .replace(/\sdata-blob-url="[^"]*"/g,'');
   const temp=document.createElement('div');
   temp.innerHTML=clean;
+  temp.querySelectorAll('.pv-page-divider,.pv-header-overlay,.pv-footer-overlay,[data-paperuss-page-ui="true"]').forEach(el=>el.remove());
+  temp.querySelectorAll('[data-pv-break-pushed="true"]').forEach(el=>{
+    el.style.marginTop='';
+    el.removeAttribute('data-pv-break-pushed');
+    if(!el.getAttribute('style')) el.removeAttribute('style');
+  });
   temp.querySelectorAll('[data-media-sync-indicator]').forEach(el=>el.remove());
   temp.querySelectorAll('.table-move-placeholder,[data-table-ui]').forEach(el=>el.remove());
   temp.querySelectorAll('.tbl-selected').forEach(cell=>cell.classList.remove('tbl-selected'));
@@ -1133,6 +1192,79 @@ async function createNewLeafAction() {
 }
 window.createNewLeafAction = createNewLeafAction;
 
+function requestLeafRename(currentTitle) {
+  const root = document.getElementById('modalRoot');
+  if (!root) return Promise.resolve(null);
+
+  return new Promise(resolve => {
+    root.innerHTML = `<div class="modal-overlay leaf-rename-overlay">
+      <form class="modal leaf-rename-modal" role="dialog" aria-modal="true" aria-labelledby="leafRenameTitle">
+        <div class="leaf-rename-heading">
+          <span class="leaf-rename-icon" aria-hidden="true"><i data-lucide="file-text"></i></span>
+          <div>
+            <h3 id="leafRenameTitle">Rename leaf</h3>
+            <p>Choose a clear name for this document leaf.</p>
+          </div>
+        </div>
+        <div class="leaf-rename-field">
+          <label class="leaf-rename-label" for="leafRenameInput">Leaf name</label>
+          <input id="leafRenameInput" class="leaf-rename-input" type="text" maxlength="120" autocomplete="off" spellcheck="true" aria-describedby="leafRenameError">
+        </div>
+        <div id="leafRenameError" class="leaf-rename-error" role="alert" aria-live="polite"></div>
+        <div class="modal-actions">
+          <button class="btn" type="button" data-leaf-rename-cancel>Cancel</button>
+          <button class="btn btn-primary" type="submit">Rename</button>
+        </div>
+      </form>
+    </div>`;
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      try { window.lucide.createIcons(); } catch (_) {}
+    }
+
+    const overlay = root.querySelector('.leaf-rename-overlay');
+    const form = root.querySelector('.leaf-rename-modal');
+    const input = root.querySelector('#leafRenameInput');
+    const error = root.querySelector('#leafRenameError');
+    input.value = String(currentTitle || 'Leaf');
+    let settled = false;
+
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      root.replaceChildren();
+      resolve(value);
+    };
+    const submit = event => {
+      event.preventDefault();
+      const title = input.value.trim();
+      if (!title) {
+        input.setAttribute('aria-invalid', 'true');
+        input.classList.add('has-error');
+        error.classList.add('show');
+        error.textContent = 'Enter a leaf name.';
+        input.focus();
+        return;
+      }
+      finish(title === currentTitle ? null : title);
+    };
+
+    form.addEventListener('submit', submit);
+    root.querySelector('[data-leaf-rename-cancel]').addEventListener('click', () => finish(null));
+    overlay.addEventListener('click', event => { if (event.target === overlay) finish(null); });
+    overlay.addEventListener('keydown', event => { if (event.key === 'Escape') finish(null); });
+    input.addEventListener('input', () => {
+      input.removeAttribute('aria-invalid');
+      error.textContent = '';
+    });
+    if (typeof window.lucide?.createIcons === 'function') {
+      try { window.lucide.createIcons(); } catch (_) {}
+    }
+    requestAnimationFrame(() => { input.focus(); input.select(); });
+  });
+}
+window.requestLeafRename = requestLeafRename;
+
 async function renameLeafAction(leafId) {
   const n = getNote(state.currentId);
   if (!n) return;
@@ -1141,11 +1273,11 @@ async function renameLeafAction(leafId) {
     const leafObj = await window.paperussLeaves.leafGet(leafId);
     if (leafObj && leafObj.title) currentTitle = leafObj.title;
   }
-  const newTitle = prompt('Rename leaf:', currentTitle);
-  if (newTitle && newTitle.trim() !== '' && newTitle !== currentTitle) {
-    await window.paperussLeafManager.renameLeaf(n.id, leafId, newTitle.trim());
+  const newTitle = await requestLeafRename(currentTitle);
+  if (newTitle) {
+    await window.paperussLeafManager.renameLeaf(n.id, leafId, newTitle);
     if (window.currentActiveLeaf && window.currentActiveLeaf.id === leafId) {
-      window.currentActiveLeaf.title = newTitle.trim();
+      window.currentActiveLeaf.title = newTitle;
     }
     renderList();
     const contentEl = document.getElementById('leavesDrawerContent');
