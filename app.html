@@ -52,6 +52,74 @@ try {
 <link rel="stylesheet" href="assets/css/settings.css?v=2.6.30">
 </head>
 <body>
+
+<!-- ============ INCOMING SHARE SHEET MODAL ============ -->
+<div id="incomingShareOverlay" role="dialog" aria-modal="true" aria-label="Incoming Share" onclick="if(event.target===this)closeIncomingShareModal()">
+  <div id="incomingShareModal">
+    <div class="share-modal-handle" aria-hidden="true"></div>
+
+    <!-- Header -->
+    <div class="share-modal-header">
+      <div class="share-modal-title">
+        <span class="share-modal-title-icon">📲</span>
+        Content Shared to PapeRuss
+      </div>
+      <button class="share-modal-close" onclick="closeIncomingShareModal()" aria-label="Close">
+        <i data-lucide="x" style="width:14px;height:14px;"></i>
+      </button>
+    </div>
+
+    <!-- Preview Card -->
+    <div class="share-preview-card">
+      <div class="share-preview-url-bar" id="sharePreviewUrlBar">
+        <img class="share-preview-favicon" id="sharePreviewFavicon" src="" alt="" aria-hidden="true">
+        <span class="share-preview-domain" id="sharePreviewDomain"></span>
+      </div>
+      <div class="share-preview-body">
+        <div class="share-preview-title" id="sharePreviewTitle">Shared Content</div>
+        <div class="share-preview-text" id="sharePreviewText"></div>
+      </div>
+      <div class="share-preview-images" id="sharePreviewImages" style="display:none;"></div>
+    </div>
+
+    <!-- Action Targets -->
+    <div class="share-modal-section-label">Save to</div>
+    <div class="share-action-list">
+      <button class="share-action-btn primary" onclick="executeIncomingShareAction('new_note')" id="shareActionNewNote">
+        <div class="share-action-icon">📝</div>
+        <div class="share-action-info">
+          <div class="share-action-label">Create New Note</div>
+          <div class="share-action-desc">Start a brand-new note with this content</div>
+        </div>
+      </button>
+      <button class="share-action-btn" onclick="executeIncomingShareAction('new_leaf')" id="shareActionNewLeaf">
+        <div class="share-action-icon">🍃</div>
+        <div class="share-action-info">
+          <div class="share-action-label">Add as New Leaf</div>
+          <div class="share-action-desc">Append a new tab to your current open note</div>
+        </div>
+      </button>
+      <button class="share-action-btn" onclick="executeIncomingShareAction('append_active')" id="shareActionInsert">
+        <div class="share-action-icon">📌</div>
+        <div class="share-action-info">
+          <div class="share-action-label">Insert into Active Document</div>
+          <div class="share-action-desc">Paste directly at your cursor position</div>
+        </div>
+      </button>
+    </div>
+
+    <div class="share-modal-divider"></div>
+
+    <!-- Branch Selector -->
+    <div class="share-branch-row">
+      <span class="share-branch-label">🌲 Branch</span>
+      <select class="share-branch-select" id="shareBranchSelect" aria-label="Select Branch">
+        <option value="">No Branch (Unassigned)</option>
+      </select>
+    </div>
+  </div>
+</div>
+
 <!-- ============ AUTH LANDING PAGE (sign-in / guest mode) ============ -->
 <div class="auth-landing hidden" id="authLanding">
   <div class="auth-card">

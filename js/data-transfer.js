@@ -464,7 +464,7 @@ async function checkIncomingSharedData(){
     // 1. Direct GET share parameters
     if (title || text || url) {
       window.history.replaceState({}, document.title, window.location.pathname);
-      createNoteFromSharedData({ title, text, url });
+      openIncomingShareModal({ title, text, url, files: [] });
       return;
     }
 
@@ -477,7 +477,7 @@ async function checkIncomingSharedData(){
       if (match) {
         const data = await match.json();
         await cache.delete('./__pending_shared_payload__');
-        createNoteFromSharedData(data);
+        openIncomingShareModal(data);
       }
     }
   } catch (err) {
@@ -485,19 +485,14 @@ async function checkIncomingSharedData(){
   }
 }
 
-function createNoteFromSharedData(payload){
-  if (!payload) return;
-  const now = Date.now();
-  let noteTitle = payload.title || (payload.text ? payload.text.substring(0, 30) : 'Shared Content');
+function buildSharedContentHtml(payload) {
   let body = '';
-
   if (payload.text) {
     body += `<p>${esc(payload.text)}</p>`;
   }
   if (payload.url) {
     body += `<p><a href="${esc(payload.url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 12px;background:var(--hover);border-radius:8px;text-decoration:none;color:var(--accent);margin-top:6px;">🔗 ${esc(payload.url)}</a></p>`;
   }
-
   if (payload.files && payload.files.length > 0) {
     payload.files.forEach(f => {
       try {
@@ -514,6 +509,14 @@ function createNoteFromSharedData(payload){
       }
     });
   }
+  return body;
+}
+
+function createNoteFromSharedData(payload, branchTag){
+  if (!payload) return;
+  const now = Date.now();
+  let noteTitle = payload.title || (payload.text ? payload.text.substring(0, 30) : 'Shared Content');
+  const body = buildSharedContentHtml(payload);
 
   const newNote = {
     id: uid(),
@@ -521,7 +524,7 @@ function createNoteFromSharedData(payload){
     content: body || '<p></p>',
     pinned: false,
     archived: false,
-    tags: ['shared'],
+    tags: ['shared', ...(branchTag ? [branchTag] : [])],
     createdAt: now,
     updatedAt: now
   };
@@ -534,3 +537,159 @@ function createNoteFromSharedData(payload){
     showToast('Saved shared content to new note!');
   }
 }
+
+function openIncomingShareModal(payload) {
+  if (!payload) return;
+  window.__pendingShareData = payload;
+
+  const overlay = document.getElementById('incomingShareOverlay');
+  if (!overlay) {
+    // Fallback: directly create note if modal not in DOM
+    createNoteFromSharedData(payload);
+    return;
+  }
+
+  // Populate preview
+  const titleEl = overlay.querySelector('#sharePreviewTitle');
+  const textEl = overlay.querySelector('#sharePreviewText');
+  const domainEl = overlay.querySelector('#sharePreviewDomain');
+  const urlBarEl = overlay.querySelector('#sharePreviewUrlBar');
+  const faviconEl = overlay.querySelector('#sharePreviewFavicon');
+  const imagesEl = overlay.querySelector('#sharePreviewImages');
+
+  if (titleEl) titleEl.textContent = payload.title || 'Shared Content';
+  if (textEl) {
+    textEl.textContent = payload.text || '';
+    textEl.style.display = payload.text ? '' : 'none';
+  }
+
+  if (payload.url && urlBarEl) {
+    urlBarEl.style.display = '';
+    try {
+      const u = new URL(payload.url);
+      if (domainEl) domainEl.textContent = u.hostname.replace('www.', '');
+      if (faviconEl) {
+        faviconEl.src = `https://www.google.com/s2/favicons?sz=32&domain=${u.hostname}`;
+        faviconEl.onerror = () => { faviconEl.style.display='none'; };
+      }
+    } catch(_) {
+      if (domainEl) domainEl.textContent = payload.url.slice(0, 40);
+    }
+  } else if (urlBarEl) {
+    urlBarEl.style.display = 'none';
+  }
+
+  if (imagesEl) {
+    imagesEl.innerHTML = '';
+    const imgs = (payload.files || []).filter(f => f.type && f.type.startsWith('image/')).slice(0, 4);
+    imgs.forEach(f => {
+      try {
+        const u8 = new Uint8Array(f.buffer);
+        const blob = new Blob([u8], { type: f.type });
+        const blobUrl = URL.createObjectURL(blob);
+        const img = document.createElement('img');
+        img.src = blobUrl;
+        img.className = 'share-preview-thumb';
+        img.alt = f.name;
+        imagesEl.appendChild(img);
+      } catch(_) {}
+    });
+    const otherFiles = (payload.files || []).filter(f => !f.type?.startsWith('image/')).slice(0, 4);
+    otherFiles.forEach(f => {
+      const chip = document.createElement('span');
+      chip.className = 'share-preview-file-chip';
+      chip.textContent = `📎 ${f.name}`;
+      imagesEl.appendChild(chip);
+    });
+    imagesEl.style.display = (imgs.length || otherFiles.length) ? '' : 'none';
+  }
+
+  // Populate branch dropdown
+  const branchSelect = overlay.querySelector('#shareBranchSelect');
+  if (branchSelect && typeof notes !== 'undefined') {
+    const existingTags = [...new Set(notes.flatMap(n => n.tags || []).filter(t => t !== 'shared'))];
+    branchSelect.innerHTML = `<option value="">No Branch (Unassigned)</option>` +
+      existingTags.map(t => `<option value="${t}">${t}</option>`).join('');
+  }
+
+  overlay.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeIncomingShareModal() {
+  const overlay = document.getElementById('incomingShareOverlay');
+  if (overlay) overlay.classList.remove('show');
+  document.body.style.overflow = '';
+  window.__pendingShareData = null;
+}
+
+async function executeIncomingShareAction(action) {
+  const payload = window.__pendingShareData;
+  if (!payload) return;
+
+  const branchTag = document.getElementById('shareBranchSelect')?.value || '';
+  closeIncomingShareModal();
+
+  if (action === 'new_note') {
+    createNoteFromSharedData(payload, branchTag);
+
+  } else if (action === 'new_leaf') {
+    // Add as new Leaf to the currently active note
+    const activeNote = typeof currentNote !== 'undefined' ? currentNote :
+                       (typeof notes !== 'undefined' && notes.length ? notes[0] : null);
+    if (!activeNote) { createNoteFromSharedData(payload, branchTag); return; }
+
+    const now = Date.now();
+    const newLeafId = uid();
+    const leafTitle = payload.title || (payload.text ? payload.text.substring(0, 30) : 'Shared');
+    const newLeaf = {
+      id: newLeafId,
+      noteId: activeNote.id,
+      title: leafTitle,
+      content: buildSharedContentHtml(payload) || '<p></p>',
+      order: (activeNote.leafCount || 1),
+      createdAt: now,
+      updatedAt: now
+    };
+    if (window.paperussLeaves && typeof window.paperussLeaves.leafPut === 'function') {
+      await window.paperussLeaves.leafPut(newLeaf);
+    }
+    if (!Array.isArray(activeNote.leafOrder)) activeNote.leafOrder = [activeNote.defaultLeafId || ('virtual_main_' + activeNote.id)];
+    activeNote.leafOrder.push(newLeafId);
+    activeNote.leafCount = activeNote.leafOrder.length;
+    if (!activeNote.defaultLeafId) activeNote.defaultLeafId = activeNote.leafOrder[0];
+    activeNote.updatedAt = now;
+    if (typeof saveNotesLocally === 'function') saveNotesLocally();
+    if (typeof renderLeafTabs === 'function') renderLeafTabs();
+    if (typeof switchToLeaf === 'function') switchToLeaf(newLeafId);
+    if (typeof showToast === 'function') showToast('Added as new Leaf!');
+
+  } else if (action === 'append_active') {
+    // Insert shared content at cursor in active editor
+    const editor = document.querySelector('.note-editor[contenteditable="true"]') ||
+                   document.getElementById('noteEditor');
+    const html = buildSharedContentHtml(payload);
+    if (editor && html) {
+      editor.focus();
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount) {
+        const range = sel.getRangeAt(0);
+        range.collapse(false);
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        const frag = document.createDocumentFragment();
+        let node;
+        while ((node = temp.firstChild)) frag.appendChild(node);
+        range.insertNode(frag);
+        sel.collapseToEnd();
+      } else {
+        editor.insertAdjacentHTML('beforeend', html);
+      }
+      if (typeof triggerSave === 'function') triggerSave();
+      if (typeof showToast === 'function') showToast('Shared content inserted!');
+    } else {
+      createNoteFromSharedData(payload, branchTag);
+    }
+  }
+}
+
