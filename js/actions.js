@@ -355,6 +355,9 @@ async function preparePrintSheet(targetNote, options) {
   const showPageNums = options.showPageNums !== false;
   const customHeaderTitle = options.customHeaderTitle || 'PapeRuss';
   const customSubtitle = options.customSubtitle || 'Professional note record';
+  const documentStyle = options.documentStyle || 'executive';
+
+  sheet.setAttribute('data-print-theme', documentStyle);
 
   let cleanHtml = '';
 
@@ -418,27 +421,52 @@ async function preparePrintSheet(targetNote, options) {
     ? `@page { size: ${pageSize} ${orientation}; margin: ${marginCss}; }`
     : `@page { size: auto; margin: ${marginCss}; }`;
 
-  if (showPageNums) {
-    pageCss += `\n@page { @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #64748b; font-family: sans-serif; } }`;
+  let pageNumCssFormat = '"Page " counter(page) " of " counter(pages)';
+  let pageNumFontCss = 'font-family: sans-serif; color: #1d4ed8;';
+  if (documentStyle === 'serif') {
+    pageNumCssFormat = '"— Page " counter(page) " of " counter(pages) " —"';
+    pageNumFontCss = 'font-family: Georgia, serif; font-style: italic; color: #b45309;';
+  } else if (documentStyle === 'blueprint') {
+    pageNumCssFormat = '"[ PAGE: " counter(page) " / " counter(pages) " ]"';
+    pageNumFontCss = 'font-family: Consolas, monospace; color: #059669; font-weight: bold;';
+  } else if (documentStyle === 'botanical') {
+    pageNumCssFormat = '"Leaf 1 • Page " counter(page)';
+    pageNumFontCss = 'font-family: sans-serif; color: #047857; font-weight: 600;';
+  } else if (documentStyle === 'vintage') {
+    pageNumCssFormat = '"PAGE " counter(page) "."';
+    pageNumFontCss = 'font-family: Georgia, serif; font-weight: bold; color: #111827;';
+  } else if (documentStyle === 'cyber') {
+    pageNumCssFormat = '"< PAGE // " counter(page) " >"';
+    pageNumFontCss = 'font-family: Consolas, monospace; color: #0891b2; font-weight: bold;';
   }
+
+  if (showPageNums) {
+    pageCss += `\n@page { @bottom-right { content: ${pageNumCssFormat}; font-size: 8pt; ${pageNumFontCss} } }`;
+  }
+
+  const headerImgSrc = note.headerImage || (note.useCoverAsHeader && note.coverImage?.src);
+  const headerBannerHtml = headerImgSrc ? `<div class="ps-header-banner" style="width:100%;height:45px;margin-bottom:8px;overflow:hidden;border-radius:4px;"><img src="${esc(headerImgSrc)}" style="width:100%;height:100%;object-fit:cover;" /></div>` : '';
 
   sheet.innerHTML = `
     <style>${pageCss}</style>
     ${showHeader ? `
     <div class="ps-header">
-      <div>
-        <div class="ps-brand">${esc(customHeaderTitle)}</div>
-        <div style="font-size:10px;color:#64748b;margin-top:3px">${esc(customSubtitle)}</div>
-      </div>
-      <div class="ps-meta">
-        Created ${fullDate(note.createdAt)}<br>
-        Last edited ${fullDate(note.updatedAt)}<br>
-        Printed ${printedAt}
+      ${headerBannerHtml}
+      <div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+        <div>
+          <div class="ps-brand">${esc(customHeaderTitle)}</div>
+          <div style="font-size:10px;color:#64748b;margin-top:3px">${esc(customSubtitle)}</div>
+        </div>
+        <div class="ps-meta">
+          Created ${fullDate(note.createdAt)}<br>
+          Last edited ${fullDate(note.updatedAt)}<br>
+          Printed ${printedAt}
+        </div>
       </div>
     </div>` : ''}
     <h1>${esc(titleOf(note))}</h1>
     ${tags ? `<div class="ps-tags">${tags}</div>` : ''}
-    <main class="ps-content">${cleanHtml}</main>
+    <main class="ps-content" ${(note.lineHeight || note.lineSpacing) ? `style="line-height:${note.lineHeight || note.lineSpacing};"` : ''}>${cleanHtml}</main>
     ${showFooter ? `
     <footer class="ps-footer">
       <div class="ps-footer-copy">
@@ -470,12 +498,27 @@ async function openPrintModal() {
   const root = document.getElementById('modalRoot');
   if (!root) return;
 
+  const leafOrder = (typeof window.getNoteLeafOrder === 'function')
+    ? window.getNoteLeafOrder(note)
+    : (note.leafOrder || ['virtual_main_' + note.id]);
+
   let allLeaves = [];
-  if (window.paperussLeaves && typeof window.paperussLeaves.leafGetByNoteId === 'function') {
-    try {
-      allLeaves = await window.paperussLeaves.leafGetByNoteId(note.id);
-    } catch (e) {}
+  if (window.paperussLeaves && typeof window.paperussLeaves.leafGet === 'function') {
+    for (let i = 0; i < leafOrder.length; i++) {
+      let lObj = await window.paperussLeaves.leafGet(leafOrder[i]);
+      if (!lObj && (leafOrder[i] === 'virtual_main_' + note.id || i === 0)) {
+        lObj = { id: leafOrder[i], title: 'Main', content: note.content };
+      }
+      if (lObj) allLeaves.push(lObj);
+    }
   }
+
+  if (!allLeaves || allLeaves.length === 0) {
+    if (window.paperussLeaves && typeof window.paperussLeaves.leafGetByNoteId === 'function') {
+      try { allLeaves = await window.paperussLeaves.leafGetByNoteId(note.id); } catch (e) {}
+    }
+  }
+
   if (!allLeaves || allLeaves.length === 0) {
     allLeaves = [{ id: 'virtual_main_' + note.id, title: 'Main', content: note.content }];
   }
@@ -483,55 +526,76 @@ async function openPrintModal() {
   const leafCount = allLeaves.length;
   const activeLeafTitle = (window.currentActiveLeaf ? window.currentActiveLeaf.title : '') || (allLeaves[0] ? allLeaves[0].title : 'Active Leaf');
 
+  // Load saved preferences if available
+  let savedPrefs = {};
+  try {
+    savedPrefs = JSON.parse(localStorage.getItem('paperuss_print_prefs') || '{}');
+  } catch (e) {}
+
   let printScope = 'active'; // 'active', 'all', or 'single:<leafId>'
-  let pageSize = note.pageSize || 'auto';
-  let orientation = note.pageOrientation || 'portrait';
-  let margin = note.pageMargins || 'normal';
-  let showHeader = true;
-  let showFooter = true;
-  let showPageNums = true;
-  let customHeaderTitle = 'PapeRuss';
-  let customSubtitle = 'Professional note record';
+  let documentStyle = savedPrefs.documentStyle || 'executive';
+  let pageSize = savedPrefs.pageSize || note.pageSize || 'auto';
+  let orientation = savedPrefs.orientation || note.pageOrientation || 'portrait';
+  let margin = savedPrefs.margin || note.pageMargins || 'normal';
+  let showHeader = savedPrefs.showHeader !== undefined ? savedPrefs.showHeader : true;
+  let showFooter = savedPrefs.showFooter !== undefined ? savedPrefs.showFooter : true;
+  let showPageNums = savedPrefs.showPageNums !== undefined ? savedPrefs.showPageNums : true;
+  let customHeaderTitle = savedPrefs.customHeaderTitle || 'PapeRuss';
+  let customSubtitle = savedPrefs.customSubtitle || 'Professional note record';
 
   function renderModal() {
     root.innerHTML = `
       <div class="modal-overlay" id="printModalOverlay">
         <div class="print-setup-modal" role="dialog" aria-label="Print & PDF Setup">
           <div class="print-modal-header">
-            <div class="pm-header-title">
-              <i data-lucide="printer" class="w-5 h-5 text-indigo-500 inline mr-2"></i>
-              <h3 style="display:inline;font-size:16px;font-weight:700;">Print & PDF Export Setup</h3>
+            <div class="pm-header-title" style="display:flex;align-items:center;gap:8px;">
+              <i data-lucide="printer" style="width:20px;height:20px;color:#6366f1;flex-shrink:0;"></i>
+              <h3 style="margin:0;font-size:16px;font-weight:700;line-height:1.2;white-space:nowrap;">Print & PDF Export Setup</h3>
             </div>
             <button type="button" class="changelog-close" id="printModalClose" aria-label="Close"><i data-lucide="x"></i></button>
           </div>
 
           <div class="print-modal-body-wrapper" style="display:flex;gap:16px;padding:20px;overflow-y:auto;max-height:calc(90vh - 120px);">
             <div class="print-modal-body-fields" style="flex:1;display:flex;flex-direction:column;gap:14px;min-width:260px;">
-              <!-- Print Scope & Specific Leaf Dropdown -->
+              <!-- Single Unified Print Scope & Target Leaf Dropdown -->
               <div class="pm-field-group">
-                <label class="pm-label">Print Scope</label>
-                <div class="pm-segmented-control" style="margin-bottom:${leafCount > 1 ? '8px' : '0'};">
-                  <button type="button" class="pm-segment-btn ${printScope === 'active' ? 'active' : ''}" id="pmScopeActive">
-                    <i data-lucide="file-text" class="w-4 h-4 inline mr-1"></i>
-                    <span>Active Leaf (${esc(activeLeafTitle)})</span>
+                <label class="pm-label" for="pmLeafSelect">Print Scope & Target Leaf</label>
+                <select id="pmLeafSelect" class="pm-select" style="font-weight:600;padding:10px 12px;">
+                  <option value="active" ${printScope === 'active' ? 'selected' : ''}>📍 Currently Active Leaf (${esc(activeLeafTitle)})</option>
+                  <option value="all" ${printScope === 'all' ? 'selected' : ''}>📚 All Leaves (${leafCount} total) + Table of Contents</option>
+                  ${allLeaves.length > 0 ? `
+                  <optgroup label="Select Specific Single Leaf">
+                    ${allLeaves.map((l, idx) => `<option value="single:${l.id}" ${printScope === 'single:' + l.id ? 'selected' : ''}>🍃 Leaf ${idx + 1}: ${esc(l.title || 'Untitled')}</option>`).join('')}
+                  </optgroup>` : ''}
+                </select>
+              </div>
+
+              <!-- Document Aesthetic Style Dropdown -->
+              <div class="pm-field-group">
+                <label class="pm-label" for="pmDocumentStyle">Document Aesthetic Style</label>
+                <select id="pmDocumentStyle" class="pm-select" style="font-weight:600;padding:10px 12px;">
+                  <option value="executive" ${documentStyle === 'executive' ? 'selected' : ''}>🏢 Modern Executive (Royal Indigo Sans)</option>
+                  <option value="serif" ${documentStyle === 'serif' ? 'selected' : ''}>📜 Editorial Serif (Warm Gold Serif)</option>
+                  <option value="blueprint" ${documentStyle === 'blueprint' ? 'selected' : ''}>⚡ Tech Blueprint (Emerald Monospace)</option>
+                  <option value="botanical" ${documentStyle === 'botanical' ? 'selected' : ''}>🌸 Zen Botanical (Sage Minimalist)</option>
+                  <option value="vintage" ${documentStyle === 'vintage' ? 'selected' : ''}>📰 Vintage Press (Newsprint Double-Line)</option>
+                  <option value="cyber" ${documentStyle === 'cyber' ? 'selected' : ''}>🔮 Cyber Codex (Neon Cyan/Magenta)</option>
+                </select>
+              </div>
+
+              <!-- Quick Style Presets -->
+              <div class="pm-field-group">
+                <label class="pm-label">Layout Presets</label>
+                <div class="pm-grid-2">
+                  <button type="button" class="pm-segment-btn" id="pmPresetFormal" style="border:1px solid var(--border, rgba(0,0,0,0.12));padding:6px 10px;">
+                    <i data-lucide="award" class="w-4 h-4 inline mr-1 text-indigo-500"></i>
+                    <span>🏢 Formal Report</span>
                   </button>
-                  <button type="button" class="pm-segment-btn ${printScope === 'all' ? 'active' : ''}" id="pmScopeAll">
-                    <i data-lucide="files" class="w-4 h-4 inline mr-1"></i>
-                    <span>All Leaves (${leafCount}) + TOC</span>
+                  <button type="button" class="pm-segment-btn" id="pmPresetClean" style="border:1px solid var(--border, rgba(0,0,0,0.12));padding:6px 10px;">
+                    <i data-lucide="file-text" class="w-4 h-4 inline mr-1 text-emerald-500"></i>
+                    <span>📄 Clean Minimal</span>
                   </button>
                 </div>
-
-                ${leafCount > 1 ? `
-                <div class="pm-field-group" style="margin-top:4px;">
-                  <label class="pm-label" for="pmLeafSelect" style="font-size:11px;">Or Select Specific Leaf to Print</label>
-                  <select id="pmLeafSelect" class="pm-select">
-                    <option value="active" ${printScope === 'active' ? 'selected' : ''}>📍 Currently Active Leaf (${esc(activeLeafTitle)})</option>
-                    <option value="all" ${printScope === 'all' ? 'selected' : ''}>📚 All Leaves (${leafCount} total) + Table of Contents</option>
-                    <optgroup label="Single Specific Leaf">
-                      ${allLeaves.map((l, idx) => `<option value="single:${l.id}" ${printScope === 'single:' + l.id ? 'selected' : ''}>🍃 Leaf ${idx + 1}: ${esc(l.title || 'Untitled')}</option>`).join('')}
-                    </optgroup>
-                  </select>
-                </div>` : ''}
               </div>
 
               <!-- Custom Header Titles -->
@@ -597,17 +661,22 @@ async function openPrintModal() {
             <!-- Live Mini Preview Thumbnail Column -->
             <div class="pm-preview-column" style="width:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-secondary, #f8fafc);border:1px solid var(--border, rgba(0,0,0,0.08));border-radius:12px;padding:12px;">
               <span style="font-size:10px;font-weight:700;color:var(--fg-muted,#64748b);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Live Preview</span>
-              <div class="pm-paper-thumbnail ${orientation}" id="pmPaperThumb" style="width:${orientation === 'landscape' ? '140px' : '100px'};height:${orientation === 'landscape' ? '100px' : '140px'};background:#fff;border:1px solid #cbd5e1;box-shadow:0 4px 12px rgba(0,0,0,0.1);border-radius:4px;padding:8px;display:flex;flex-direction:column;justify-content:space-between;position:relative;transition:all 0.2s ease;">
-                <div style="display:${showHeader ? 'flex' : 'none'};justify-content:space-between;border-bottom:1px solid #1d4ed8;padding-bottom:2px;margin-bottom:4px;">
-                  <span style="font-size:6px;font-weight:700;color:#1d4ed8;">${esc(customHeaderTitle || 'PapeRuss')}</span>
+              <div class="pm-paper-thumbnail ${orientation}" id="pmPaperThumb" style="width:${orientation === 'landscape' ? '140px' : '100px'};height:${orientation === 'landscape' ? '100px' : '140px'};background:${documentStyle === 'vintage' ? '#faf7f0' : '#fff'};border:1px solid #cbd5e1;box-shadow:0 4px 12px rgba(0,0,0,0.1);border-radius:4px;padding:8px;display:flex;flex-direction:column;justify-content:space-between;position:relative;transition:all 0.2s ease;font-family:${documentStyle === 'serif' || documentStyle === 'vintage' ? 'Georgia, serif' : (documentStyle === 'blueprint' || documentStyle === 'cyber' ? 'monospace' : 'sans-serif')};">
+                <div id="pmThumbHeader" style="display:${showHeader ? 'flex' : 'none'};justify-content:space-between;border-bottom:${documentStyle === 'vintage' ? '2px double #111827' : (documentStyle === 'cyber' ? '1px dashed #06b6d4' : (documentStyle === 'blueprint' ? '1px dashed #10b981' : '1px solid ' + (documentStyle === 'serif' ? '#d97706' : (documentStyle === 'botanical' ? '#059669' : '#1d4ed8'))))};padding-bottom:2px;margin-bottom:4px;">
+                  <span id="pmThumbBrand" style="font-size:6px;font-weight:700;color:${documentStyle === 'serif' ? '#b45309' : (documentStyle === 'blueprint' ? '#059669' : (documentStyle === 'botanical' ? '#047857' : (documentStyle === 'vintage' ? '#111827' : (documentStyle === 'cyber' ? '#0891b2' : '#1d4ed8'))))};">${esc(customHeaderTitle || 'PapeRuss')}</span>
                   <span style="font-size:5px;color:#94a3b8;">${fullDate(Date.now())}</span>
                 </div>
                 <div style="flex:1;overflow:hidden;">
-                  <div style="font-size:7px;font-weight:700;color:#1e293b;margin-bottom:2px;">${esc(titleOf(note))}</div>
-                  ${printScope === 'all' ? '<div style="font-size:5px;background:#eff6ff;color:#1d4ed8;padding:1px 3px;border-radius:2px;margin-bottom:3px;">Table of Contents (All Leaves)</div>' : ''}
-                  <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;"></div>
-                  <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;width:80%;"></div>
-                  <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;width:90%;"></div>
+                  <div style="font-size:7px;font-weight:700;color:#1e293b;margin-bottom:2px;text-align:${documentStyle === 'serif' || documentStyle === 'vintage' ? 'center' : 'left'};">${esc(titleOf(note))}</div>
+                  ${printScope === 'all' ? '<div style="font-size:5px;background:#eff6ff;color:#1d4ed8;padding:1px 3px;border-radius:2px;margin-bottom:3px;">Table of Contents (All Leaves)</div>' : (printScope.startsWith('single:') ? '<div style="font-size:5px;background:#f0fdf4;color:#15803d;padding:1px 3px;border-radius:2px;margin-bottom:3px;">Single Leaf Mode</div>' : '<div style="font-size:5px;background:#f8fafc;color:#475569;padding:1px 3px;border-radius:2px;margin-bottom:3px;">Active Leaf Mode</div>')}
+                  <div style="display:flex;gap:3px;align-items:flex-start;">
+                    ${documentStyle === 'serif' ? '<span style="font-size:12px;font-weight:700;color:#b45309;line-height:1;margin-right:1px;">P</span>' : ''}
+                    <div style="flex:1;">
+                      <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;"></div>
+                      <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;width:80%;"></div>
+                      <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;width:90%;"></div>
+                    </div>
+                  </div>
                 </div>
                 <div style="display:${showFooter ? 'flex' : 'none'};justify-content:space-between;align-items:center;border-top:1px solid #e2e8f0;padding-top:2px;margin-top:4px;">
                   <span style="font-size:5px;color:#94a3b8;">Ref ID: ${esc(note.id.substring(0,8))}</span>
@@ -641,13 +710,22 @@ async function openPrintModal() {
       overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
     }
 
-    document.getElementById('pmScopeActive').onclick = () => { printScope = 'active'; renderModal(); };
-    document.getElementById('pmScopeAll').onclick = () => { printScope = 'all'; renderModal(); };
-
     const leafSelect = document.getElementById('pmLeafSelect');
     if (leafSelect) {
       leafSelect.onchange = (e) => { printScope = e.target.value; renderModal(); };
     }
+
+    const docStyleSelect = document.getElementById('pmDocumentStyle');
+    if (docStyleSelect) {
+      docStyleSelect.onchange = (e) => { documentStyle = e.target.value; renderModal(); };
+    }
+
+    document.getElementById('pmPresetFormal').onclick = () => {
+      showHeader = true; showFooter = true; showPageNums = true; renderModal();
+    };
+    document.getElementById('pmPresetClean').onclick = () => {
+      showHeader = false; showFooter = false; showPageNums = false; renderModal();
+    };
 
     document.getElementById('pmCustomTitle').oninput = (e) => { customHeaderTitle = e.target.value; updateThumbnail(); };
     document.getElementById('pmCustomSubtitle').oninput = (e) => { customSubtitle = e.target.value; };
@@ -670,8 +748,15 @@ async function openPrintModal() {
 
     document.getElementById('printModalSubmit').onclick = async () => {
       closeModal();
+      try {
+        localStorage.setItem('paperuss_print_prefs', JSON.stringify({
+          documentStyle, pageSize, orientation, margin, showHeader, showFooter, showPageNums, customHeaderTitle, customSubtitle
+        }));
+      } catch (e) {}
+
       await preparePrintSheet(note, {
         scope: printScope,
+        documentStyle,
         pageSize,
         orientation,
         margin,

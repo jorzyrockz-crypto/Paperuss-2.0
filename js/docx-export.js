@@ -215,6 +215,14 @@
       return '';
     }
 
+    // Headings (H1 - H6) with OpenXML Heading Styles & keepNext
+    if (tag === 'H1' || tag === 'H2' || tag === 'H3' || tag === 'H4' || tag === 'H5' || tag === 'H6') {
+      const level = tag.substring(1);
+      const runsXml = await convertChildrenToWml(el, { ...ctx, bold: true });
+      if (!runsXml.trim()) return '';
+      return `<w:p><w:pPr><w:pStyle w:val="Heading${level}"/><w:keepNext/><w:spacing w:before="240" w:after="80"/></w:pPr>${runsXml}</w:p>`;
+    }
+
     // Paragraph or Div
     if (tag === 'P' || tag === 'DIV') {
       const runsXml = await convertChildrenToWml(el, ctx);

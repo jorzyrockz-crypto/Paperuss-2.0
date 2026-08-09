@@ -6322,6 +6322,205 @@ a.paperuss-inline-link:hover {
     orphans: 3 !important;
   }
 
+  /* Line Spacing Preservation in Print & Editor */
+  #printSheet [data-line-spacing="0.5"], #printSheet [data-line-height="0.5"], #printSheet .ls-0-5, [data-line-spacing="0.5"] { line-height: 0.5 !important; }
+  #printSheet [data-line-spacing="0.75"], #printSheet [data-line-height="0.75"], #printSheet .ls-0-75, [data-line-spacing="0.75"] { line-height: 0.75 !important; }
+  #printSheet [data-line-spacing="1.0"], #printSheet [data-line-height="1.0"], #printSheet .ls-1-0 { line-height: 1.0 !important; }
+  #printSheet [data-line-spacing="1.15"], #printSheet [data-line-height="1.15"], #printSheet .ls-1-15 { line-height: 1.15 !important; }
+  #printSheet [data-line-spacing="1.25"], #printSheet [data-line-height="1.25"], #printSheet .ls-1-25 { line-height: 1.25 !important; }
+  #printSheet [data-line-spacing="1.5"], #printSheet [data-line-height="1.5"], #printSheet .ls-1-5 { line-height: 1.5 !important; }
+  #printSheet [data-line-spacing="1.75"], #printSheet [data-line-height="1.75"], #printSheet .ls-1-75 { line-height: 1.75 !important; }
+  #printSheet [data-line-spacing="2.0"], #printSheet [data-line-height="2.0"], #printSheet .ls-2-0 { line-height: 2.0 !important; }
+  #printSheet [data-line-spacing="2.5"], #printSheet [data-line-height="2.5"], #printSheet .ls-2-5 { line-height: 2.5 !important; }
+
+/* ============================================================
+   6 CREATIVE QUOTE PRESET STYLES
+   ============================================================ */
+/* 1. Literary Pull-Quote */
+blockquote[data-quote-style="literary"],
+.quote-style-literary {
+  font-family: Georgia, Merriweather, serif !important;
+  font-style: italic !important;
+  text-align: center !important;
+  padding: 16px 24px !important;
+  margin: 18px 0 !important;
+  background: #fefcf6 !important;
+  border-top: 2px solid #d97706 !important;
+  border-bottom: 2px solid #d97706 !important;
+  border-left: none !important;
+  color: #451a03 !important;
+  position: relative !important;
+}
+blockquote[data-quote-style="literary"]::before {
+  content: "“" !important;
+  font-size: 28pt !important;
+  color: #d97706 !important;
+  line-height: 0 !important;
+  vertical-align: -12px !important;
+  margin-right: 6px !important;
+}
+
+/* 2. Executive Callout */
+blockquote[data-quote-style="executive"],
+.quote-style-executive {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  background: #f8fafc !important;
+  border-left: 4px solid #6366f1 !important;
+  padding: 14px 18px !important;
+  margin: 16px 0 !important;
+  border-radius: 6px !important;
+  color: #0f172a !important;
+}
+
+/* 3. Tech Console Quote */
+blockquote[data-quote-style="tech"],
+.quote-style-tech {
+  font-family: Consolas, "Fira Code", monospace !important;
+  background: #0f172a !important;
+  color: #34d399 !important;
+  border-left: 4px solid #10b981 !important;
+  padding: 12px 16px !important;
+  margin: 16px 0 !important;
+  border-radius: 6px !important;
+}
+
+/* 4. Editorial Press Quote */
+blockquote[data-quote-style="vintage"],
+.quote-style-vintage {
+  font-family: Georgia, serif !important;
+  border-top: 2px solid #111827 !important;
+  border-bottom: 2px solid #111827 !important;
+  border-left: none !important;
+  background: #faf7f0 !important;
+  padding: 16px 20px !important;
+  margin: 18px 0 !important;
+  color: #111827 !important;
+}
+
+/* 5. Zen Minimal Quote */
+blockquote[data-quote-style="botanical"],
+.quote-style-botanical {
+  font-family: "Avenir Next", Optima, sans-serif !important;
+  background: #f0fdf4 !important;
+  border-left: 4px solid #059669 !important;
+  padding: 14px 20px !important;
+  margin: 16px 0 !important;
+  border-radius: 12px !important;
+  color: #064e3b !important;
+  line-height: 1.8 !important;
+}
+
+/* 6. Cyber Neon Quote */
+blockquote[data-quote-style="cyber"],
+.quote-style-cyber {
+  font-family: Consolas, monospace !important;
+  background: #ecfeff !important;
+  border-left: 4px dashed #06b6d4 !important;
+  border-right: 2px solid #ec4899 !important;
+  padding: 12px 18px !important;
+  margin: 16px 0 !important;
+  color: #0891b2 !important;
+}
+
+/* ============================================================
+   5 CREATIVE HEADING PRESET STYLES
+   ============================================================ */
+/* 1. Modern Banner Heading */
+h1[data-heading-style="banner"], h2[data-heading-style="banner"], h3[data-heading-style="banner"] {
+  background: #eff6ff !important;
+  border-left: 4px solid #2563eb !important;
+  padding: 8px 14px !important;
+  border-radius: 4px !important;
+  color: #1e40af !important;
+}
+
+/* 2. Serif Flourish Heading */
+h1[data-heading-style="flourish"], h2[data-heading-style="flourish"], h3[data-heading-style="flourish"] {
+  font-family: Georgia, Merriweather, serif !important;
+  text-align: center !important;
+  color: #78350f !important;
+  border-bottom: 2px solid #d97706 !important;
+  padding-bottom: 8px !important;
+}
+
+/* 3. Tech Bracket Heading */
+h1[data-heading-style="bracket"], h2[data-heading-style="bracket"], h3[data-heading-style="bracket"] {
+  font-family: Consolas, "Fira Code", monospace !important;
+  color: #047857 !important;
+  border-bottom: 2px dashed #10b981 !important;
+  padding-bottom: 6px !important;
+}
+h1[data-heading-style="bracket"]::before {
+  content: "// " !important;
+  color: #10b981 !important;
+}
+
+/* 4. Newspaper Press Heading */
+h1[data-heading-style="newspaper"], h2[data-heading-style="newspaper"], h3[data-heading-style="newspaper"] {
+  font-family: Impact, "Trebuchet MS", sans-serif !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1.5px !important;
+  border-bottom: 3px double #111827 !important;
+  padding-bottom: 6px !important;
+  color: #111827 !important;
+}
+
+/* 5. Cyber Neon Heading */
+h1[data-heading-style="cyber"], h2[data-heading-style="cyber"], h3[data-heading-style="cyber"] {
+  font-family: Consolas, monospace !important;
+  color: #0891b2 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 2px !important;
+  border-bottom: 2px dashed #ec4899 !important;
+  padding-bottom: 6px !important;
+}
+
+/* Floating Quote Context Panel */
+.quote-context-panel {
+  position: absolute !important;
+  z-index: 999 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  background: var(--bg-primary, #ffffff) !important;
+  border: 1px solid var(--border, rgba(0,0,0,0.15)) !important;
+  border-radius: 8px !important;
+  padding: 4px 6px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15) !important;
+}
+
+.qcp-btn {
+  border: none !important;
+  background: transparent !important;
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  color: var(--fg, #111827) !important;
+}
+
+.qcp-btn:hover {
+  background: var(--bg-hover, rgba(0,0,0,0.06)) !important;
+  color: var(--accent, #6366f1) !important;
+}
+
+  /* Card Integrity & Border Lockdown in Print */
+  #printSheet .paperuss-embed,
+  #printSheet .paperuss-card,
+  #printSheet .paperuss-card-file,
+  #printSheet .paperuss-card-audio,
+  #printSheet .media-card {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 12px 0 !important;
+    overflow: hidden !important;
+  }
+
   /* Completely Hide ALL App Wrappers, Editor UI Controls, Overlays & Drag Handles */
   .app,
   #modalRoot,
@@ -6581,6 +6780,29 @@ a.paperuss-inline-link:hover {
   border-bottom: 1px solid var(--border, rgba(0,0,0,0.08));
 }
 
+.pm-header-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-direction: row !important;
+}
+
+.pm-header-title svg,
+.pm-header-title i {
+  width: 20px !important;
+  height: 20px !important;
+  flex-shrink: 0 !important;
+  display: inline-block !important;
+}
+
+.pm-header-title h3 {
+  margin: 0 !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
+}
+
 .print-modal-body {
   padding: 20px;
   overflow-y: auto;
@@ -6745,6 +6967,12 @@ a.paperuss-inline-link:hover {
   margin: 0 !important;
 }
 
+.ps-leaf-break:last-child {
+  display: none !important;
+  page-break-before: avoid !important;
+  break-before: avoid !important;
+}
+
 .ps-leaf-title {
   font-size: 20px !important;
   font-weight: 700 !important;
@@ -6771,6 +6999,409 @@ a.paperuss-inline-link:hover {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
+}
+
+/* ============================================================
+   6 CREATIVE DOCUMENT PRINT STYLES
+   ============================================================ */
+/* ============================================================
+   6 CREATIVE DOCUMENT PRINT STYLES (DEEP TYPOGRAPHY & LAYOUT)
+   ============================================================ */
+
+/* 1. Modern Executive (Default Indigo Sans-Serif) */
+#printSheet[data-print-theme="executive"],
+#printSheet[data-print-theme="executive"] *,
+#printSheet:not([data-print-theme]),
+#printSheet:not([data-print-theme]) * {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+#printSheet[data-print-theme="executive"] .ps-brand {
+  color: #6366f1 !important;
+  font-weight: 700 !important;
+}
+#printSheet[data-print-theme="executive"] .ps-header {
+  border-bottom: 2px solid #6366f1 !important;
+}
+#printSheet[data-print-theme="executive"] h1 {
+  color: #0f172a !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  padding-bottom: 6px !important;
+}
+
+/* 2. Editorial Serif (Literary Serif, Warm Gold & Drop Cap) */
+#printSheet[data-print-theme="serif"],
+#printSheet[data-print-theme="serif"] * {
+  font-family: Georgia, Merriweather, "Playfair Display", "Times New Roman", serif !important;
+}
+#printSheet[data-print-theme="serif"] h1 {
+  font-family: Georgia, Merriweather, serif !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+  color: #451a03 !important;
+  margin-top: 18px !important;
+}
+#printSheet[data-print-theme="serif"] .ps-brand {
+  color: #b45309 !important;
+  font-style: italic !important;
+  font-family: Georgia, serif !important;
+  font-size: 16px !important;
+}
+#printSheet[data-print-theme="serif"] .ps-header {
+  border-bottom: 2px solid #d97706 !important;
+  text-align: center !important;
+}
+#printSheet[data-print-theme="serif"] .ps-toc-header {
+  border-bottom-color: #d97706 !important;
+  color: #92400e !important;
+}
+#printSheet[data-print-theme="serif"] .callout {
+  background: #fefcf6 !important;
+  border-left: 4px solid #d97706 !important;
+  font-style: italic !important;
+}
+#printSheet[data-print-theme="serif"] .ps-content p:first-of-type::first-letter {
+  float: left !important;
+  font-size: 3.2em !important;
+  line-height: 0.8 !important;
+  padding-right: 8px !important;
+  padding-top: 4px !important;
+  color: #b45309 !important;
+  font-weight: 700 !important;
+  font-family: Georgia, serif !important;
+}
+
+/* 3. Tech Blueprint (Technical Monospace & Emerald Accent) */
+#printSheet[data-print-theme="blueprint"],
+#printSheet[data-print-theme="blueprint"] * {
+  font-family: Consolas, "Fira Code", "Courier New", monospace !important;
+}
+#printSheet[data-print-theme="blueprint"] h1 {
+  color: #065f46 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1.5px !important;
+  border-bottom: 2px dashed #10b981 !important;
+  padding-bottom: 6px !important;
+}
+#printSheet[data-print-theme="blueprint"] .ps-brand {
+  color: #059669 !important;
+  letter-spacing: 2px !important;
+  text-transform: uppercase !important;
+  font-weight: 700 !important;
+}
+#printSheet[data-print-theme="blueprint"] .ps-header {
+  border-bottom: 2px solid #10b981 !important;
+  background: #f0fdf4 !important;
+  padding: 10px 14px !important;
+  border-radius: 6px !important;
+}
+#printSheet[data-print-theme="blueprint"] .ps-toc-header {
+  border-bottom-color: #10b981 !important;
+  color: #047857 !important;
+}
+#printSheet[data-print-theme="blueprint"] .callout {
+  background: #f1f5f9 !important;
+  border-left: 4px solid #10b981 !important;
+  border-top: 1px solid #cbd5e1 !important;
+  border-right: 1px solid #cbd5e1 !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+}
+
+/* 4. Zen Botanical (Sage Green & Organic Spacing) */
+#printSheet[data-print-theme="botanical"],
+#printSheet[data-print-theme="botanical"] * {
+  font-family: "Avenir Next", Optima, -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+#printSheet[data-print-theme="botanical"] .ps-content {
+  line-height: 1.9 !important;
+}
+#printSheet[data-print-theme="botanical"] h1 {
+  color: #064e3b !important;
+  font-weight: 600 !important;
+  border-bottom: 1px solid #a7f3d0 !important;
+  padding-bottom: 6px !important;
+}
+#printSheet[data-print-theme="botanical"] .ps-brand {
+  color: #047857 !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+}
+#printSheet[data-print-theme="botanical"] .ps-header {
+  border-bottom: 2px solid #059669 !important;
+}
+#printSheet[data-print-theme="botanical"] .callout {
+  background: #f0fdf4 !important;
+  border-left: 4px solid #059669 !important;
+  border-radius: 8px !important;
+}
+
+/* 5. Vintage Press (Newspaper Double Border & Heavy Press Headlines) */
+#printSheet[data-print-theme="vintage"],
+#printSheet[data-print-theme="vintage"] * {
+  font-family: Georgia, "Times New Roman", serif !important;
+}
+#printSheet[data-print-theme="vintage"] h1 {
+  font-family: Impact, "Trebuchet MS", Georgia, sans-serif !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1.5px !important;
+  font-size: 26pt !important;
+  text-align: center !important;
+  color: #000000 !important;
+  border-bottom: 1px solid #000000 !important;
+  padding-bottom: 8px !important;
+  margin-bottom: 16px !important;
+}
+#printSheet[data-print-theme="vintage"] .ps-brand {
+  color: #111827 !important;
+  font-weight: 900 !important;
+  letter-spacing: 3px !important;
+  text-transform: uppercase !important;
+  font-size: 18px !important;
+}
+#printSheet[data-print-theme="vintage"] .ps-header {
+  border-bottom: 3px double #111827 !important;
+  text-align: center !important;
+  padding-bottom: 10px !important;
+}
+#printSheet[data-print-theme="vintage"] .ps-toc-header {
+  border-bottom: 2px double #111827 !important;
+  text-transform: uppercase !important;
+}
+#printSheet[data-print-theme="vintage"] .callout {
+  background: #faf7f0 !important;
+  border: 1px solid #111827 !important;
+  border-left: 5px solid #111827 !important;
+}
+
+/* 6. Cyber Codex (Futuristic Neon Cyan & Magenta Accents) */
+#printSheet[data-print-theme="cyber"],
+#printSheet[data-print-theme="cyber"] * {
+  font-family: Consolas, "Trebuchet MS", sans-serif !important;
+}
+#printSheet[data-print-theme="cyber"] h1 {
+  color: #0891b2 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 2px !important;
+  border-bottom: 2px dashed #ec4899 !important;
+  padding-bottom: 6px !important;
+}
+#printSheet[data-print-theme="cyber"] .ps-brand {
+  color: #0891b2 !important;
+  letter-spacing: 2px !important;
+  font-weight: 700 !important;
+}
+#printSheet[data-print-theme="cyber"] .ps-header {
+  border-bottom: 2px dashed #06b6d4 !important;
+  background: #ecfeff !important;
+  padding: 10px 14px !important;
+  border-radius: 6px !important;
+}
+#printSheet[data-print-theme="cyber"] .ps-toc-header {
+  border-bottom: 2px solid #ec4899 !important;
+  color: #be185d !important;
+}
+#printSheet[data-print-theme="cyber"] .callout {
+  background: #ecfeff !important;
+  border-left: 4px solid #06b6d4 !important;
+  border-right: 2px solid #f472b6 !important;
+}
+
+/* ============================================================
+   REAL-TIME WYSIWYG PAGE VIEW MODE STYLES (PHYSICAL PAGE SPLITS)
+   ============================================================ */
+.wysiwyg-mode {
+  background: var(--bg-tertiary, #e2e8f0) !important;
+  padding: 40px 0 !important;
+}
+
+[data-theme="dark"] .wysiwyg-mode {
+  background: #0b0f19 !important;
+}
+
+.wysiwyg-paper {
+  box-shadow: 0 16px 40px rgba(0,0,0,0.18), 0 2px 10px rgba(0,0,0,0.08) !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--border, rgba(0,0,0,0.14)) !important;
+  transition: width 0.2s ease, min-height 0.2s ease !important;
+  position: relative !important;
+}
+
+/* Physical Page Split Divider */
+.pv-page-divider {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  height: 42px !important;
+  margin-top: 40px !important;
+  margin-bottom: 40px !important;
+  background: var(--bg-tertiary, #e2e8f0) !important;
+  border-top: 1px solid #cbd5e1 !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+  box-shadow: inset 0 10px 10px -6px rgba(0,0,0,0.14), inset 0 -10px 10px -6px rgba(0,0,0,0.14) !important;
+  user-select: none !important;
+  pointer-events: none !important;
+}
+
+[data-theme="dark"] .pv-page-divider {
+  background: #0b0f19 !important;
+  border-top-color: #334155 !important;
+  border-bottom-color: #334155 !important;
+  box-shadow: inset 0 10px 10px -6px rgba(0,0,0,0.5), inset 0 -10px 10px -6px rgba(0,0,0,0.5) !important;
+}
+
+.pv-page-label {
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: 1.5px !important;
+  text-transform: uppercase !important;
+  color: var(--accent, #6366f1) !important;
+  background: var(--bg-primary, #ffffff) !important;
+  padding: 4px 14px !important;
+  border-radius: 99px !important;
+  border: 1px solid var(--border, rgba(0,0,0,0.15)) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
+  z-index: 2 !important;
+}
+
+[data-theme="dark"] .pv-page-label {
+  background: #1e293b !important;
+  color: #818cf8 !important;
+  border-color: #334155 !important;
+}
+
+/* Page View Header & Footer Overlay Rules */
+.pv-header-overlay {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: var(--fg-muted, #64748b) !important;
+  border-bottom: 1px dashed var(--border, rgba(0,0,0,0.14)) !important;
+  padding-bottom: 6px !important;
+  margin-bottom: 24px !important;
+  user-select: none !important;
+  pointer-events: none !important;
+}
+
+.pv-footer-overlay {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: var(--fg-muted, #64748b) !important;
+  border-top: 1px dashed var(--border, rgba(0,0,0,0.14)) !important;
+  padding-top: 6px !important;
+  margin-top: 24px !important;
+  user-select: none !important;
+  pointer-events: none !important;
+}
+
+.pv-header-left, .pv-footer-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.pv-dot {
+  color: var(--accent, #6366f1) !important;
+}
+
+/* Header & Footer Resizer Handles */
+.pv-header-resizer {
+  position: absolute !important;
+  bottom: -4px !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 8px !important;
+  cursor: ns-resize !important;
+  z-index: 10 !important;
+  pointer-events: auto !important;
+}
+
+.pv-header-resizer:hover {
+  background: rgba(99, 102, 241, 0.3) !important;
+  border-bottom: 2px solid #6366f1 !important;
+}
+
+.pv-footer-resizer {
+  position: absolute !important;
+  top: -4px !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 8px !important;
+  cursor: ns-resize !important;
+  z-index: 10 !important;
+  pointer-events: auto !important;
+}
+
+.pv-footer-resizer:hover {
+  background: rgba(99, 102, 241, 0.3) !important;
+  border-top: 2px solid #6366f1 !important;
+}
+
+.pv-resize-tooltip {
+  position: fixed !important;
+  z-index: 9999 !important;
+  display: none;
+  background: #1e293b !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 4px 10px !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.2) !important;
+  pointer-events: none !important;
+}
+
+/* Preset-Matched Page Numbers */
+.pv-pagenum-executive {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  padding: 2px 8px !important;
+  border-radius: 4px !important;
+  font-weight: 700 !important;
+}
+
+.pv-pagenum-serif {
+  font-family: Georgia, Merriweather, serif !important;
+  font-style: italic !important;
+  color: #b45309 !important;
+  font-size: 11px !important;
+}
+
+.pv-pagenum-blueprint {
+  font-family: Consolas, "Fira Code", monospace !important;
+  color: #059669 !important;
+  font-weight: 700 !important;
+  letter-spacing: 1px !important;
+}
+
+.pv-pagenum-botanical {
+  background: #f0fdf4 !important;
+  color: #047857 !important;
+  padding: 2px 10px !important;
+  border-radius: 99px !important;
+  font-weight: 600 !important;
+}
+
+.pv-pagenum-vintage {
+  font-family: Georgia, "Times New Roman", serif !important;
+  font-weight: 900 !important;
+  color: #111827 !important;
+  letter-spacing: 1.5px !important;
+  text-transform: uppercase !important;
+}
+
+.pv-pagenum-cyber {
+  font-family: Consolas, monospace !important;
+  color: #0891b2 !important;
+  background: #ecfeff !important;
+  padding: 2px 8px !important;
+  border-radius: 4px !important;
+  border: 1px dashed #06b6d4 !important;
+  font-weight: 700 !important;
 }
 
 /* ============================================================
