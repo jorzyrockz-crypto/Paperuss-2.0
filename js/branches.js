@@ -37,6 +37,8 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         branchesCache = JSON.parse(raw);
+        branchesCache.forEach((b, idx) => { if (typeof b.order !== "number") b.order = idx; });
+        branchesCache.sort((a, b) => a.order - b.order);
       } else {
         branchesCache = [...DEFAULT_BRANCHES];
         saveBranches(branchesCache);
@@ -336,7 +338,7 @@
   }
 
   function renderSidebarBranchTree() {
-    const container = document.getElementById('sidebarBranchTree');
+    const container = document.getElementById('branchSidebarTree') || document.querySelector('.branch-tree-container');
     if (!container) return;
 
     const branches = loadBranches();
@@ -373,7 +375,10 @@
       const iconName = b.icon || 'folder';
 
       html += `
-        <div class="branch-item ${isSelected ? 'active' : ''}" data-branch-id="${b.id}" data-branch-name="${escHtml(b.name)}">
+        <div class="branch-item ${isSelected ? 'active' : ''}" draggable="true" data-branch-id="${b.id}" data-branch-name="${escHtml(b.name)}">
+          <span class="branch-drag-handle" title="Drag to reorder">
+            <i data-lucide="grip-vertical" class="w-3.5 h-3.5"></i>
+          </span>
           <i data-lucide="${iconName}" class="branch-icon w-4 h-4" style="color:${b.color || '#6366f1'}"></i>
           <span class="branch-name">${escHtml(b.name)}</span>
           <span class="branch-count">${count}</span>
@@ -389,7 +394,10 @@
           const subSelected = currentActive === sub.id || currentActive === sub.name;
           const subIcon = sub.icon || 'folder';
           html += `
-            <div class="branch-item sub-branch-item ${subSelected ? 'active' : ''}" data-branch-id="${sub.id}" data-branch-name="${escHtml(sub.name)}">
+            <div class="branch-item sub-branch-item ${subSelected ? 'active' : ''}" draggable="true" data-branch-id="${sub.id}" data-branch-name="${escHtml(sub.name)}">
+              <span class="branch-drag-handle" title="Drag to reorder">
+                <i data-lucide="grip-vertical" class="w-3 h-3"></i>
+              </span>
               <i data-lucide="${subIcon}" class="branch-icon w-3.5 h-3.5" style="color:${sub.color || '#6366f1'}"></i>
               <span class="branch-name">${escHtml(sub.name)}</span>
               <span class="branch-count">${subCount}</span>
@@ -404,7 +412,7 @@
     html += `</div>`;
     container.innerHTML = html;
 
-    // Refresh Lucide outline icons
+    // Refresh Lucide icons
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
       window.lucide.createIcons({ el: container });
     }
@@ -412,7 +420,7 @@
     // Attach click events
     container.querySelectorAll('.branch-item').forEach(item => {
       item.onclick = (e) => {
-        if (e.target.closest('.branch-opt-btn')) return;
+        if (e.target.closest('.branch-opt-btn') || e.target.closest('.branch-drag-handle')) return;
         const bId = item.dataset.branchId;
         setActiveBranchId(bId);
       };
@@ -427,29 +435,74 @@
       };
     });
 
-    // Dropzone for Note Dragging
-    container.querySelectorAll('.branch-item').forEach(item => {
-      item.ondragover = (e) => {
-        e.preventDefault();
-        item.classList.add('drag-over');
-      };
-      item.ondragleave = () => {
-        item.classList.remove('drag-over');
-      };
-      item.ondrop = (e) => {
-        e.preventDefault();
-        item.classList.remove('drag-over');
-        const bName = item.dataset.branchName;
-        const bId = item.dataset.branchId;
-        if (!bId || bId === 'all') return;
+    // Attach Drag-to-Arrange for Branch Items
+    container.querySelectorAll('.branch-item[draggable="true"]').forEach(item => {
+      const bId = item.dataset.branchId;
 
+      item.addEventListener('dragstart', (e) => {
+        window._draggingBranchId = bId;
+        item.classList.add('dragging-branch');
+        e.dataTransfer.setData('application/x-paperuss-branch-id', bId);
+        e.dataTransfer.effectAllowed = 'move';
+      });
+
+      item.addEventListener('dragend', () => {
+        window._draggingBranchId = null;
+        container.querySelectorAll('.branch-item').forEach(el => {
+          el.classList.remove('dragging-branch', 'drop-above', 'drop-below', 'drag-over');
+        });
+      });
+    });
+
+    // Combined Dragover and Dropzone (Branch Reordering + Note Drag Assignment)
+    container.querySelectorAll('.branch-item').forEach(item => {
+      const bId = item.dataset.branchId;
+
+      item.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const isBranchDrag = window._draggingBranchId || e.dataTransfer?.types?.includes('application/x-paperuss-branch-id');
+        
+        if (isBranchDrag) {
+          if (window._draggingBranchId === bId || bId === 'all' || bId === 'unassigned') return;
+          const rect = item.getBoundingClientRect();
+          const midY = rect.top + rect.height / 2;
+          
+          if (e.clientY < midY) {
+            item.classList.add('drop-above');
+            item.classList.remove('drop-below');
+          } else {
+            item.classList.add('drop-below');
+            item.classList.remove('drop-above');
+          }
+        } else {
+          item.classList.add('drag-over');
+        }
+      });
+
+      item.addEventListener('dragleave', () => {
+        item.classList.remove('drag-over', 'drop-above', 'drop-below');
+      });
+
+      item.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const draggedBranchId = window._draggingBranchId || e.dataTransfer?.getData('application/x-paperuss-branch-id');
+        const insertBefore = item.classList.contains('drop-above');
+        item.classList.remove('drag-over', 'drop-above', 'drop-below');
+
+        if (draggedBranchId && bId && bId !== 'all' && bId !== 'unassigned' && draggedBranchId !== bId) {
+          reorderBranches(draggedBranchId, bId, insertBefore);
+          return;
+        }
+
+        // Note dragging assignment fallback
+        if (!bId || bId === 'all') return;
         const draggedNoteId = e.dataTransfer?.getData('application/x-paperuss-note-id') || e.dataTransfer?.getData('text/plain');
         const activeNoteId = draggedNoteId || window.PaperussNoteStore?.currentId?.();
         const noteList = window.PaperussNoteStore?.list?.() || [];
         if (activeNoteId) {
           if (noteList.some(n => n.id === activeNoteId)) assignNoteToBranch(activeNoteId, bId);
         }
-      };
+      });
     });
 
     // Add Branch Button
@@ -458,8 +511,7 @@
       btnAdd.onclick = () => openBranchModal();
     }
   }
-
-  function escHtml(str) {
+function escHtml(str) {
     if (!str) return '';
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
@@ -591,7 +643,43 @@
   }
 
   // Expose global BranchEngine API
+  
+  function reorderBranches(draggedId, targetId, insertBefore = true) {
+    if (!draggedId || !targetId || draggedId === targetId) return;
+    let branches = [...loadBranches()];
+    const draggedIdx = branches.findIndex(b => b.id === draggedId);
+    const targetIdx = branches.findIndex(b => b.id === targetId);
+
+    if (draggedIdx === -1 || targetIdx === -1) return;
+
+    const draggedBranch = branches[draggedIdx];
+    const targetBranch = branches[targetIdx];
+
+    // Maintain parent context if reordering within parent group
+    if (draggedBranch.parentId !== targetBranch.parentId) {
+      draggedBranch.parentId = targetBranch.parentId || null;
+    }
+
+    // Remove dragged item
+    branches.splice(draggedIdx, 1);
+
+    // Find target new index
+    let newTargetIdx = branches.findIndex(b => b.id === targetId);
+    if (!insertBefore) newTargetIdx += 1;
+
+    // Insert at new position
+    branches.splice(newTargetIdx, 0, draggedBranch);
+
+    // Re-assign order numbers
+    branches.forEach((b, idx) => {
+      b.order = idx;
+    });
+
+    saveBranches(branches);
+  }
+
   window.BranchEngine = {
+    reorderBranches,
     loadBranches,
     saveBranches,
     getActiveBranchId,

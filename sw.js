@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'paperuss-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v262-modern-text-caret`;
+const CACHE_NAME = `${CACHE_PREFIX}v263-drag-arrange-branches`;
 const APP_SHELL = [
   './',
   './index.html',

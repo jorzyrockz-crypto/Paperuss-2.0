@@ -8872,3 +8872,68 @@ h1[data-heading-style="cyber"], h2[data-heading-style="cyber"], h3[data-heading-
   background: #2f6cf6;
 }
 
+
+
+/* Drag and Drop Branch Reordering Styles */
+.branch-item[draggable="true"] {
+  cursor: grab;
+}
+.branch-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+.branch-item.dragging-branch {
+  opacity: 0.35;
+  transform: scale(0.97);
+  background: var(--hover, rgba(0,0,0,0.08)) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.branch-item.drop-above {
+  position: relative;
+}
+.branch-item.drop-above::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: 4px;
+  right: 4px;
+  height: 3px;
+  background: var(--accent, #2f6cf6);
+  border-radius: 2px;
+  box-shadow: 0 0 6px rgba(47, 108, 246, 0.6);
+  z-index: 10;
+}
+.branch-item.drop-below {
+  position: relative;
+}
+.branch-item.drop-below::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 4px;
+  right: 4px;
+  height: 3px;
+  background: var(--accent, #2f6cf6);
+  border-radius: 2px;
+  box-shadow: 0 0 6px rgba(47, 108, 246, 0.6);
+  z-index: 10;
+}
+
+.branch-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.2;
+  cursor: grab;
+  padding: 1px;
+  border-radius: 4px;
+  transition: opacity 0.15s, background 0.15s;
+  margin-left: -4px;
+  margin-right: -2px;
+}
+.branch-item:hover .branch-drag-handle {
+  opacity: 0.65;
+}
+.branch-drag-handle:hover {
+  opacity: 1;
+  background: var(--hover, rgba(0,0,0,0.08));
+}
