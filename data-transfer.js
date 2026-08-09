@@ -487,15 +487,99 @@ function openIncomingShareModal(payload) {
     imagesEl.style.display = (imgs.length || otherFiles.length) ? '' : 'none';
   }
 
-  const branchSelect = overlay.querySelector('#shareBranchSelect');
-  if (branchSelect && typeof notes !== 'undefined') {
-    const existingTags = [...new Set(notes.flatMap(n => n.tags || []).filter(t => t !== 'shared'))];
-    branchSelect.innerHTML = `<option value="">No Branch (Unassigned)</option>` +
-      existingTags.map(t => `<option value="${t}">${t}</option>`).join('');
+  // Populate Note dropdown
+  const noteSelect = overlay.querySelector('#shareNoteSelect');
+  if (noteSelect) {
+    let html = `<option value="">+ Create new note</option>`;
+    if (typeof notes !== 'undefined' && Array.isArray(notes)) {
+      notes.forEach(n => {
+        const title = n.title || 'Untitled Note';
+        html += `<option value="${esc(n.id)}">${esc(title)}</option>`;
+      });
+    }
+    noteSelect.innerHTML = html;
+    noteSelect.value = "";
   }
+
+  // Reset Leaf picker
+  const leafRow = overlay.querySelector('#shareLeafPickerRow');
+  if (leafRow) leafRow.style.display = 'none';
+
+  updateShareSaveHint();
 
   overlay.classList.add('show');
   document.body.style.overflow = 'hidden';
+}
+
+async function onShareNotePickerChange() {
+  const noteSelect = document.getElementById('shareNoteSelect');
+  const leafRow = document.getElementById('shareLeafPickerRow');
+  const leafSelect = document.getElementById('shareLeafSelect');
+
+  if (!noteSelect || !leafRow || !leafSelect) return;
+
+  const noteId = noteSelect.value;
+  if (!noteId) {
+    leafRow.style.display = 'none';
+    leafSelect.innerHTML = `<option value="">+ Add as new leaf</option>`;
+    updateShareSaveHint();
+    return;
+  }
+
+  // Populate leaves for selected note
+  let leafList = [];
+  if (window.paperussLeaves && typeof window.paperussLeaves.leafGetByNote === 'function') {
+    try {
+      leafList = await window.paperussLeaves.leafGetByNote(noteId);
+    } catch(e) { console.error(e); }
+  }
+
+  let html = `<option value="">+ Add as new leaf</option>`;
+  if (Array.isArray(leafList) && leafList.length > 0) {
+    leafList.forEach(l => {
+      html += `<option value="${esc(l.id)}">${esc(l.title || 'Untitled Leaf')}</option>`;
+    });
+  } else {
+    // Check if target note has seedLeaves
+    const targetNote = typeof notes !== 'undefined' ? notes.find(n => n.id === noteId) : null;
+    if (targetNote && Array.isArray(targetNote.seedLeaves)) {
+      targetNote.seedLeaves.forEach(l => {
+        html += `<option value="${esc(l.id)}">${esc(l.title || 'Untitled Leaf')}</option>`;
+      });
+    }
+  }
+
+  leafSelect.innerHTML = html;
+  leafSelect.value = "";
+  leafSelect.onchange = updateShareSaveHint;
+  leafRow.style.display = '';
+
+  updateShareSaveHint();
+}
+
+function updateShareSaveHint() {
+  const noteSelect = document.getElementById('shareNoteSelect');
+  const leafSelect = document.getElementById('shareLeafSelect');
+  const hintEl = document.getElementById('shareSaveHint');
+  if (!hintEl) return;
+
+  const noteId = noteSelect ? noteSelect.value : "";
+  const leafId = leafSelect ? leafSelect.value : "";
+
+  if (!noteId) {
+    hintEl.textContent = "Creates a brand-new note with the shared content.";
+  } else {
+    const selectedNoteOption = noteSelect.options[noteSelect.selectedIndex];
+    const noteTitle = selectedNoteOption ? selectedNoteOption.text : 'selected note';
+
+    if (!leafId) {
+      hintEl.textContent = `Appends a new Leaf tab to "${noteTitle}".`;
+    } else {
+      const selectedLeafOption = leafSelect.options[leafSelect.selectedIndex];
+      const leafTitle = selectedLeafOption ? selectedLeafOption.text : 'selected leaf';
+      hintEl.textContent = `Appends shared content directly into "${leafTitle}" in "${noteTitle}".`;
+    }
+  }
 }
 
 function closeIncomingShareModal() {
@@ -505,71 +589,94 @@ function closeIncomingShareModal() {
   window.__pendingShareData = null;
 }
 
-async function executeIncomingShareAction(action) {
+async function executeIncomingShareAction() {
   const payload = window.__pendingShareData;
   if (!payload) return;
 
-  const branchTag = document.getElementById('shareBranchSelect')?.value || '';
+  const noteSelect = document.getElementById('shareNoteSelect');
+  const leafSelect = document.getElementById('shareLeafSelect');
+
+  const selectedNoteId = noteSelect ? noteSelect.value : "";
+  const selectedLeafId = leafSelect ? leafSelect.value : "";
+
   closeIncomingShareModal();
 
-  if (action === 'new_note') {
-    createNoteFromSharedData(payload, branchTag);
+  const sharedHtml = buildSharedContentHtml(payload);
+  const now = Date.now();
 
-  } else if (action === 'new_leaf') {
-    const activeNote = typeof currentNote !== 'undefined' ? currentNote :
-                       (typeof notes !== 'undefined' && notes.length ? notes[0] : null);
-    if (!activeNote) { createNoteFromSharedData(payload, branchTag); return; }
+  // Case 1: No note selected -> Create new note
+  if (!selectedNoteId) {
+    createNoteFromSharedData(payload);
+    return;
+  }
 
-    const now = Date.now();
+  // Find target note
+  const targetNote = typeof notes !== 'undefined' ? notes.find(n => n.id === selectedNoteId) : null;
+  if (!targetNote) {
+    createNoteFromSharedData(payload);
+    return;
+  }
+
+  // Select target note first
+  if (typeof selectNote === 'function') {
+    selectNote(targetNote.id);
+  }
+
+  // Case 2: Note selected, Leaf left blank -> Add as new Leaf tab to this note
+  if (!selectedLeafId) {
     const newLeafId = uid();
-    const leafTitle = payload.title || (payload.text ? payload.text.substring(0, 30) : 'Shared');
+    const leafTitle = payload.title || (payload.text ? payload.text.substring(0, 30) : 'Shared Content');
     const newLeaf = {
       id: newLeafId,
-      noteId: activeNote.id,
+      noteId: targetNote.id,
       title: leafTitle,
-      content: buildSharedContentHtml(payload) || '<p></p>',
-      order: (activeNote.leafCount || 1),
+      content: sharedHtml || '<p></p>',
+      order: (targetNote.leafCount || 1),
       createdAt: now,
       updatedAt: now
     };
+
     if (window.paperussLeaves && typeof window.paperussLeaves.leafPut === 'function') {
       await window.paperussLeaves.leafPut(newLeaf);
     }
-    if (!Array.isArray(activeNote.leafOrder)) activeNote.leafOrder = [activeNote.defaultLeafId || ('virtual_main_' + activeNote.id)];
-    activeNote.leafOrder.push(newLeafId);
-    activeNote.leafCount = activeNote.leafOrder.length;
-    if (!activeNote.defaultLeafId) activeNote.defaultLeafId = activeNote.leafOrder[0];
-    activeNote.updatedAt = now;
+    if (!Array.isArray(targetNote.leafOrder)) targetNote.leafOrder = [targetNote.defaultLeafId || ('virtual_main_' + targetNote.id)];
+    targetNote.leafOrder.push(newLeafId);
+    targetNote.leafCount = targetNote.leafOrder.length;
+    if (!targetNote.defaultLeafId) targetNote.defaultLeafId = targetNote.leafOrder[0];
+    targetNote.updatedAt = now;
+
     if (typeof saveNotesLocally === 'function') saveNotesLocally();
     if (typeof renderLeafTabs === 'function') renderLeafTabs();
     if (typeof switchToLeaf === 'function') switchToLeaf(newLeafId);
-    if (typeof showToast === 'function') showToast('Added as new Leaf!');
+    if (typeof showToast === 'function') showToast(`Added new Leaf to "${targetNote.title}"!`);
+    return;
+  }
 
-  } else if (action === 'append_active') {
-    const editor = document.querySelector('.note-editor[contenteditable="true"]') ||
-                   document.getElementById('noteEditor');
-    const html = buildSharedContentHtml(payload);
-    if (editor && html) {
-      editor.focus();
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount) {
-        const range = sel.getRangeAt(0);
-        range.collapse(false);
-        const temp = document.createElement('div');
-        temp.innerHTML = html;
-        const frag = document.createDocumentFragment();
-        let node;
-        while ((node = temp.firstChild)) frag.appendChild(node);
-        range.insertNode(frag);
-        sel.collapseToEnd();
-      } else {
-        editor.insertAdjacentHTML('beforeend', html);
+  // Case 3: Existing Leaf selected -> Append content to existing Leaf
+  let targetLeaf = null;
+  if (window.paperussLeaves && typeof window.paperussLeaves.leafGet === 'function') {
+    targetLeaf = await window.paperussLeaves.leafGet(selectedLeafId);
+  }
+
+  if (targetLeaf) {
+    targetLeaf.content = (targetLeaf.content || '') + sharedHtml;
+    targetLeaf.updatedAt = now;
+    await window.paperussLeaves.leafPut(targetLeaf);
+  } else if (targetNote.seedLeaves) {
+    const sl = targetNote.seedLeaves.find(l => l.id === selectedLeafId);
+    if (sl) {
+      sl.content = (sl.content || '') + sharedHtml;
+      sl.updatedAt = now;
+      if (window.paperussLeaves && typeof window.paperussLeaves.leafPut === 'function') {
+        await window.paperussLeaves.leafPut(sl);
       }
-      if (typeof triggerSave === 'function') triggerSave();
-      if (typeof showToast === 'function') showToast('Shared content inserted!');
-    } else {
-      createNoteFromSharedData(payload, branchTag);
     }
   }
+
+  targetNote.updatedAt = now;
+  if (typeof saveNotesLocally === 'function') saveNotesLocally();
+  if (typeof switchToLeaf === 'function') switchToLeaf(selectedLeafId);
+  if (typeof showToast === 'function') showToast(`Updated Leaf in "${targetNote.title}"!`);
 }
+
 

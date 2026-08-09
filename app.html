@@ -82,43 +82,48 @@ try {
       <div class="share-preview-images" id="sharePreviewImages" style="display:none;"></div>
     </div>
 
-    <!-- Action Targets -->
+    <!-- Destination Picker -->
     <div class="share-modal-section-label">Save to</div>
-    <div class="share-action-list">
-      <button class="share-action-btn primary" onclick="executeIncomingShareAction('new_note')" id="shareActionNewNote">
-        <div class="share-action-icon">📝</div>
-        <div class="share-action-info">
-          <div class="share-action-label">Create New Note</div>
-          <div class="share-action-desc">Start a brand-new note with this content</div>
+    <div class="share-dest-pickers">
+
+      <!-- Note picker -->
+      <div class="share-picker-row">
+        <div class="share-picker-icon">📒</div>
+        <div class="share-picker-body">
+          <label class="share-picker-label" for="shareNoteSelect">Note</label>
+          <select class="share-picker-select" id="shareNoteSelect" aria-label="Select Note" onchange="onShareNotePickerChange()">
+            <option value="">+ Create new note</option>
+          </select>
         </div>
-      </button>
-      <button class="share-action-btn" onclick="executeIncomingShareAction('new_leaf')" id="shareActionNewLeaf">
-        <div class="share-action-icon">🍃</div>
-        <div class="share-action-info">
-          <div class="share-action-label">Add as New Leaf</div>
-          <div class="share-action-desc">Append a new tab to your current open note</div>
+      </div>
+
+      <!-- Leaf picker (shown only when a note is selected) -->
+      <div class="share-picker-row" id="shareLeafPickerRow" style="display:none;">
+        <div class="share-picker-icon">🍃</div>
+        <div class="share-picker-body">
+          <label class="share-picker-label" for="shareLeafSelect">Leaf</label>
+          <select class="share-picker-select" id="shareLeafSelect" aria-label="Select Leaf">
+            <option value="">+ Add as new leaf</option>
+          </select>
         </div>
-      </button>
-      <button class="share-action-btn" onclick="executeIncomingShareAction('append_active')" id="shareActionInsert">
-        <div class="share-action-icon">📌</div>
-        <div class="share-action-info">
-          <div class="share-action-label">Insert into Active Document</div>
-          <div class="share-action-desc">Paste directly at your cursor position</div>
-        </div>
-      </button>
+      </div>
+
     </div>
 
     <div class="share-modal-divider"></div>
 
-    <!-- Branch Selector -->
-    <div class="share-branch-row">
-      <span class="share-branch-label">🌲 Branch</span>
-      <select class="share-branch-select" id="shareBranchSelect" aria-label="Select Branch">
-        <option value="">No Branch (Unassigned)</option>
-      </select>
+    <!-- Save Button -->
+    <div class="share-save-row">
+      <div class="share-save-hint" id="shareSaveHint">Creates a new note with the shared content</div>
+      <button class="share-save-btn" id="shareSaveBtn" onclick="executeIncomingShareAction()">
+        Save
+        <i data-lucide="arrow-right" style="width:15px;height:15px;"></i>
+      </button>
     </div>
+
   </div>
 </div>
+
 
 <!-- ============ AUTH LANDING PAGE (sign-in / guest mode) ============ -->
 <div class="auth-landing hidden" id="authLanding">
