@@ -6581,6 +6581,29 @@ a.paperuss-inline-link:hover {
   border-bottom: 1px solid var(--border, rgba(0,0,0,0.08));
 }
 
+.pm-header-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-direction: row !important;
+}
+
+.pm-header-title svg,
+.pm-header-title i {
+  width: 20px !important;
+  height: 20px !important;
+  flex-shrink: 0 !important;
+  display: inline-block !important;
+}
+
+.pm-header-title h3 {
+  margin: 0 !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
+}
+
 .print-modal-body {
   padding: 20px;
   overflow-y: auto;
@@ -6743,6 +6766,12 @@ a.paperuss-inline-link:hover {
   break-before: page !important;
   height: 0 !important;
   margin: 0 !important;
+}
+
+.ps-leaf-break:last-child {
+  display: none !important;
+  page-break-before: avoid !important;
+  break-before: avoid !important;
 }
 
 .ps-leaf-title {

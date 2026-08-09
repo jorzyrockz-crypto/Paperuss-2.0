@@ -470,12 +470,27 @@ async function openPrintModal() {
   const root = document.getElementById('modalRoot');
   if (!root) return;
 
+  const leafOrder = (typeof window.getNoteLeafOrder === 'function')
+    ? window.getNoteLeafOrder(note)
+    : (note.leafOrder || ['virtual_main_' + note.id]);
+
   let allLeaves = [];
-  if (window.paperussLeaves && typeof window.paperussLeaves.leafGetByNoteId === 'function') {
-    try {
-      allLeaves = await window.paperussLeaves.leafGetByNoteId(note.id);
-    } catch (e) {}
+  if (window.paperussLeaves && typeof window.paperussLeaves.leafGet === 'function') {
+    for (let i = 0; i < leafOrder.length; i++) {
+      let lObj = await window.paperussLeaves.leafGet(leafOrder[i]);
+      if (!lObj && (leafOrder[i] === 'virtual_main_' + note.id || i === 0)) {
+        lObj = { id: leafOrder[i], title: 'Main', content: note.content };
+      }
+      if (lObj) allLeaves.push(lObj);
+    }
   }
+
+  if (!allLeaves || allLeaves.length === 0) {
+    if (window.paperussLeaves && typeof window.paperussLeaves.leafGetByNoteId === 'function') {
+      try { allLeaves = await window.paperussLeaves.leafGetByNoteId(note.id); } catch (e) {}
+    }
+  }
+
   if (!allLeaves || allLeaves.length === 0) {
     allLeaves = [{ id: 'virtual_main_' + note.id, title: 'Main', content: note.content }];
   }
@@ -483,55 +498,62 @@ async function openPrintModal() {
   const leafCount = allLeaves.length;
   const activeLeafTitle = (window.currentActiveLeaf ? window.currentActiveLeaf.title : '') || (allLeaves[0] ? allLeaves[0].title : 'Active Leaf');
 
+  // Load saved preferences if available
+  let savedPrefs = {};
+  try {
+    savedPrefs = JSON.parse(localStorage.getItem('paperuss_print_prefs') || '{}');
+  } catch (e) {}
+
   let printScope = 'active'; // 'active', 'all', or 'single:<leafId>'
-  let pageSize = note.pageSize || 'auto';
-  let orientation = note.pageOrientation || 'portrait';
-  let margin = note.pageMargins || 'normal';
-  let showHeader = true;
-  let showFooter = true;
-  let showPageNums = true;
-  let customHeaderTitle = 'PapeRuss';
-  let customSubtitle = 'Professional note record';
+  let pageSize = savedPrefs.pageSize || note.pageSize || 'auto';
+  let orientation = savedPrefs.orientation || note.pageOrientation || 'portrait';
+  let margin = savedPrefs.margin || note.pageMargins || 'normal';
+  let showHeader = savedPrefs.showHeader !== undefined ? savedPrefs.showHeader : true;
+  let showFooter = savedPrefs.showFooter !== undefined ? savedPrefs.showFooter : true;
+  let showPageNums = savedPrefs.showPageNums !== undefined ? savedPrefs.showPageNums : true;
+  let customHeaderTitle = savedPrefs.customHeaderTitle || 'PapeRuss';
+  let customSubtitle = savedPrefs.customSubtitle || 'Professional note record';
 
   function renderModal() {
     root.innerHTML = `
       <div class="modal-overlay" id="printModalOverlay">
         <div class="print-setup-modal" role="dialog" aria-label="Print & PDF Setup">
           <div class="print-modal-header">
-            <div class="pm-header-title">
-              <i data-lucide="printer" class="w-5 h-5 text-indigo-500 inline mr-2"></i>
-              <h3 style="display:inline;font-size:16px;font-weight:700;">Print & PDF Export Setup</h3>
+            <div class="pm-header-title" style="display:flex;align-items:center;gap:8px;">
+              <i data-lucide="printer" style="width:20px;height:20px;color:#6366f1;flex-shrink:0;"></i>
+              <h3 style="margin:0;font-size:16px;font-weight:700;line-height:1.2;white-space:nowrap;">Print & PDF Export Setup</h3>
             </div>
             <button type="button" class="changelog-close" id="printModalClose" aria-label="Close"><i data-lucide="x"></i></button>
           </div>
 
           <div class="print-modal-body-wrapper" style="display:flex;gap:16px;padding:20px;overflow-y:auto;max-height:calc(90vh - 120px);">
             <div class="print-modal-body-fields" style="flex:1;display:flex;flex-direction:column;gap:14px;min-width:260px;">
-              <!-- Print Scope & Specific Leaf Dropdown -->
+              <!-- Single Unified Print Scope & Target Leaf Dropdown -->
               <div class="pm-field-group">
-                <label class="pm-label">Print Scope</label>
-                <div class="pm-segmented-control" style="margin-bottom:${leafCount > 1 ? '8px' : '0'};">
-                  <button type="button" class="pm-segment-btn ${printScope === 'active' ? 'active' : ''}" id="pmScopeActive">
-                    <i data-lucide="file-text" class="w-4 h-4 inline mr-1"></i>
-                    <span>Active Leaf (${esc(activeLeafTitle)})</span>
+                <label class="pm-label" for="pmLeafSelect">Print Scope & Target Leaf</label>
+                <select id="pmLeafSelect" class="pm-select" style="font-weight:600;padding:10px 12px;">
+                  <option value="active" ${printScope === 'active' ? 'selected' : ''}>📍 Currently Active Leaf (${esc(activeLeafTitle)})</option>
+                  <option value="all" ${printScope === 'all' ? 'selected' : ''}>📚 All Leaves (${leafCount} total) + Table of Contents</option>
+                  ${allLeaves.length > 0 ? `
+                  <optgroup label="Select Specific Single Leaf">
+                    ${allLeaves.map((l, idx) => `<option value="single:${l.id}" ${printScope === 'single:' + l.id ? 'selected' : ''}>🍃 Leaf ${idx + 1}: ${esc(l.title || 'Untitled')}</option>`).join('')}
+                  </optgroup>` : ''}
+                </select>
+              </div>
+
+              <!-- Quick Style Presets -->
+              <div class="pm-field-group">
+                <label class="pm-label">Layout Presets</label>
+                <div class="pm-grid-2">
+                  <button type="button" class="pm-segment-btn" id="pmPresetFormal" style="border:1px solid var(--border, rgba(0,0,0,0.12));padding:6px 10px;">
+                    <i data-lucide="award" class="w-4 h-4 inline mr-1 text-indigo-500"></i>
+                    <span>🏢 Formal Report</span>
                   </button>
-                  <button type="button" class="pm-segment-btn ${printScope === 'all' ? 'active' : ''}" id="pmScopeAll">
-                    <i data-lucide="files" class="w-4 h-4 inline mr-1"></i>
-                    <span>All Leaves (${leafCount}) + TOC</span>
+                  <button type="button" class="pm-segment-btn" id="pmPresetClean" style="border:1px solid var(--border, rgba(0,0,0,0.12));padding:6px 10px;">
+                    <i data-lucide="file-text" class="w-4 h-4 inline mr-1 text-emerald-500"></i>
+                    <span>📄 Clean Minimal</span>
                   </button>
                 </div>
-
-                ${leafCount > 1 ? `
-                <div class="pm-field-group" style="margin-top:4px;">
-                  <label class="pm-label" for="pmLeafSelect" style="font-size:11px;">Or Select Specific Leaf to Print</label>
-                  <select id="pmLeafSelect" class="pm-select">
-                    <option value="active" ${printScope === 'active' ? 'selected' : ''}>📍 Currently Active Leaf (${esc(activeLeafTitle)})</option>
-                    <option value="all" ${printScope === 'all' ? 'selected' : ''}>📚 All Leaves (${leafCount} total) + Table of Contents</option>
-                    <optgroup label="Single Specific Leaf">
-                      ${allLeaves.map((l, idx) => `<option value="single:${l.id}" ${printScope === 'single:' + l.id ? 'selected' : ''}>🍃 Leaf ${idx + 1}: ${esc(l.title || 'Untitled')}</option>`).join('')}
-                    </optgroup>
-                  </select>
-                </div>` : ''}
               </div>
 
               <!-- Custom Header Titles -->
@@ -604,7 +626,7 @@ async function openPrintModal() {
                 </div>
                 <div style="flex:1;overflow:hidden;">
                   <div style="font-size:7px;font-weight:700;color:#1e293b;margin-bottom:2px;">${esc(titleOf(note))}</div>
-                  ${printScope === 'all' ? '<div style="font-size:5px;background:#eff6ff;color:#1d4ed8;padding:1px 3px;border-radius:2px;margin-bottom:3px;">Table of Contents (All Leaves)</div>' : ''}
+                  ${printScope === 'all' ? '<div style="font-size:5px;background:#eff6ff;color:#1d4ed8;padding:1px 3px;border-radius:2px;margin-bottom:3px;">Table of Contents (All Leaves)</div>' : (printScope.startsWith('single:') ? '<div style="font-size:5px;background:#f0fdf4;color:#15803d;padding:1px 3px;border-radius:2px;margin-bottom:3px;">Single Leaf Mode</div>' : '<div style="font-size:5px;background:#f8fafc;color:#475569;padding:1px 3px;border-radius:2px;margin-bottom:3px;">Active Leaf Mode</div>')}
                   <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;"></div>
                   <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;width:80%;"></div>
                   <div style="height:3px;background:#e2e8f0;margin-bottom:2px;border-radius:1px;width:90%;"></div>
@@ -641,13 +663,17 @@ async function openPrintModal() {
       overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
     }
 
-    document.getElementById('pmScopeActive').onclick = () => { printScope = 'active'; renderModal(); };
-    document.getElementById('pmScopeAll').onclick = () => { printScope = 'all'; renderModal(); };
-
     const leafSelect = document.getElementById('pmLeafSelect');
     if (leafSelect) {
       leafSelect.onchange = (e) => { printScope = e.target.value; renderModal(); };
     }
+
+    document.getElementById('pmPresetFormal').onclick = () => {
+      showHeader = true; showFooter = true; showPageNums = true; renderModal();
+    };
+    document.getElementById('pmPresetClean').onclick = () => {
+      showHeader = false; showFooter = false; showPageNums = false; renderModal();
+    };
 
     document.getElementById('pmCustomTitle').oninput = (e) => { customHeaderTitle = e.target.value; updateThumbnail(); };
     document.getElementById('pmCustomSubtitle').oninput = (e) => { customSubtitle = e.target.value; };
@@ -670,6 +696,12 @@ async function openPrintModal() {
 
     document.getElementById('printModalSubmit').onclick = async () => {
       closeModal();
+      try {
+        localStorage.setItem('paperuss_print_prefs', JSON.stringify({
+          pageSize, orientation, margin, showHeader, showFooter, showPageNums, customHeaderTitle, customSubtitle
+        }));
+      } catch (e) {}
+
       await preparePrintSheet(note, {
         scope: printScope,
         pageSize,
