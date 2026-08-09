@@ -1163,7 +1163,16 @@ try {
                 <span></span>
               </label>
             </div>
-            <div class="settings-row">
+                        <div class="settings-row">
+              <div class="settings-label">
+                <span>Master Volume</span>
+                <small id="setSoundVolumeVal">Volume: 25%</small>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;width:160px">
+                <input type="range" id="setSoundVolume" min="0" max="1" step="0.05" value="0.25" class="settings-slider" style="flex:1" oninput="if(window.WorkspaceAudio){window.WorkspaceAudio.setVolume(this.value);document.getElementById('setSoundVolumeVal').textContent='Volume: '+Math.round(this.value*100)+'%';}">
+              </div>
+            </div>
+<div class="settings-row">
               <div class="settings-label">
                 <span>Sound Preset</span>
                 <small>Choose tone &amp; frequency signature</small>

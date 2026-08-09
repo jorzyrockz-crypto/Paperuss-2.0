@@ -466,6 +466,13 @@ async function renderSettingsView(){
     if (seEl) seEl.checked = window.WorkspaceAudio.isEnabled();
     const sdEl = document.getElementById('setSoundDragEnabled');
     if (sdEl) sdEl.checked = window.WorkspaceAudio.isDragEnabled();
+    const svEl = document.getElementById('setSoundVolume');
+    const svVal = document.getElementById('setSoundVolumeVal');
+    if (svEl) {
+      const vol = window.WorkspaceAudio.getVolume();
+      svEl.value = vol;
+      if (svVal) svVal.textContent = 'Volume: ' + Math.round(vol * 100) + '%';
+    }
     const spEl = document.getElementById('setSoundPreset');
     if (spEl) spEl.value = window.WorkspaceAudio.getPreset();
   }

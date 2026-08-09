@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'paperuss-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v263-drag-arrange-branches`;
+const CACHE_NAME = `${CACHE_PREFIX}v264-sound-volume-slider`;
 const APP_SHELL = [
   './',
   './index.html',
