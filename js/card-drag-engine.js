@@ -126,6 +126,9 @@ function _updateDropHighlight(targetBlock, clientX, clientY) {
     targetBlock.classList.add(`drop-target-${mode}`);
     _cardDropTargetEl = targetBlock;
     _cardDropMode     = mode;
+    if (window.WorkspaceAudio && typeof window.WorkspaceAudio.playDragHover === 'function') {
+      window.WorkspaceAudio.playDragHover();
+    }
   }
 }
 
@@ -216,6 +219,9 @@ document.addEventListener('pointermove', (e) => {
         } catch (_) {}
       }
       _spawnCardHeroGhost(_cardElement, e.clientX, e.clientY);
+      if (window.WorkspaceAudio && typeof window.WorkspaceAudio.playDragStart === 'function') {
+        window.WorkspaceAudio.playDragStart();
+      }
       if (navigator.vibrate) navigator.vibrate(15);
     }
   }
@@ -258,16 +264,27 @@ document.addEventListener('pointerup', (e) => {
     if (typeof refreshCardComponentsAfterDrop === 'function') refreshCardComponentsAfterDrop(document.getElementById('noteBody'));
     if (typeof handleBodyInput === 'function') handleBodyInput();
     if (typeof save === 'function') save();
+    if (window.WorkspaceAudio && typeof window.WorkspaceAudio.playDragDrop === 'function') {
+      window.WorkspaceAudio.playDragDrop();
+    }
     if (navigator.vibrate) navigator.vibrate(25);
   } else if (_cardElement && (!targetBlock || !document.getElementById('noteBody')?.contains(targetEl))) {
     if (typeof detachCardFromGrid === 'function') detachCardFromGrid(_cardElement);
     if (typeof refreshCardComponentsAfterDrop === 'function') refreshCardComponentsAfterDrop(document.getElementById('noteBody'));
     if (typeof handleBodyInput === 'function') handleBodyInput();
     if (typeof save === 'function') save();
+    if (window.WorkspaceAudio && typeof window.WorkspaceAudio.playDragDrop === 'function') {
+      window.WorkspaceAudio.playDragDrop();
+    }
+  } else {
+    if (window.WorkspaceAudio && typeof window.WorkspaceAudio.playDragCancel === 'function') {
+      window.WorkspaceAudio.playDragCancel();
+    }
   }
 
   _resetCardDrag();
 }, true);
+
 
 // ── 4. abort ─────────────────────────────────────────────────
 document.addEventListener('pointercancel',      _resetCardDrag, true);

@@ -38,6 +38,7 @@ try {
 <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="assets/vendor/mammoth.browser.min.js"></script>
+<script src="js/sound-engine.js"></script>
 <!-- Firebase (optional cloud sync). App works fully offline if these fail to load or are unconfigured. -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" onerror="window.__fbLoadFailed=true"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" onerror="window.__fbLoadFailed=true"></script>
@@ -1025,6 +1026,48 @@ try {
                 <small>Fire a sample alert to verify everything works</small>
               </div>
               <button class="btn" id="setNotifTest"><i data-lucide="bell-ring" class="w-4 h-4"></i> Send test</button>
+            </div>
+          <div class="settings-section">
+            <h3><i data-lucide="volume-2" class="w-4 h-4"></i> Workspace Audio &amp; Haptics</h3>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Interaction Sounds</span>
+                <small>Tactile Web Audio feedback for leaf switching, checks &amp; saving</small>
+              </div>
+              <label class="settings-switch">
+                <input type="checkbox" id="setSoundEnabled" checked onchange="if(window.WorkspaceAudio){window.WorkspaceAudio.setEnabled(this.checked);}">
+                <span></span>
+              </label>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Drag &amp; Drop Haptics</span>
+                <small>Audio feedback when grabbing, hovering &amp; dropping blocks</small>
+              </div>
+              <label class="settings-switch">
+                <input type="checkbox" id="setSoundDragEnabled" checked onchange="if(window.WorkspaceAudio){window.WorkspaceAudio.setDragEnabled(this.checked);}">
+                <span></span>
+              </label>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Sound Preset</span>
+                <small>Choose tone &amp; frequency signature</small>
+              </div>
+              <select id="setSoundPreset" class="settings-control" onchange="if(window.WorkspaceAudio){window.WorkspaceAudio.setPreset(this.value);}">
+                <option value="botanical_paper">Botanical Paper (Default)</option>
+                <option value="warm_wood">Warm Wood</option>
+                <option value="minimal_tone">Minimal Tone</option>
+              </select>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Test Sound</span>
+                <small>Preview interaction sound volume</small>
+              </div>
+              <button class="btn" onclick="if(window.WorkspaceAudio){window.WorkspaceAudio.playTestSound();}">
+                <i data-lucide="volume-1" class="w-4 h-4"></i> Test Tone
+              </button>
             </div>
           </div>
 

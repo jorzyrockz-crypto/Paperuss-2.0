@@ -1164,6 +1164,9 @@ async function switchLeafAction(leafId) {
   if (typeof window.flushActiveLeaf === 'function') {
     await window.flushActiveLeaf();
   }
+  if (window.WorkspaceAudio && typeof window.WorkspaceAudio.playLeafSwitch === 'function') {
+    window.WorkspaceAudio.playLeafSwitch();
+  }
   if (window.paperussLeafManager && typeof window.paperussLeafManager.switchLeaf === 'function') {
     await window.paperussLeafManager.switchLeaf(n.id, leafId);
   } else if (window.paperussLeaves && typeof window.paperussLeaves.setNoteActiveLeafId === 'function') {
@@ -1182,6 +1185,10 @@ async function switchLeafAction(leafId) {
 window.switchLeafAction = switchLeafAction;
 
 async function createNewLeafAction() {
+  if (window.WorkspaceAudio && typeof window.WorkspaceAudio.playBranchCreate === 'function') {
+    window.WorkspaceAudio.playBranchCreate();
+  }
+
   const n = getNote(state.currentId);
   if (!n) return;
   const newLeafId = await window.paperussLeafManager.addLeaf(n.id, 'New Leaf');

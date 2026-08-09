@@ -461,6 +461,16 @@ async function renderSettingsView(){
     if(el) el.checked=appSettings[key]!==false;
   });
 
+  if (window.WorkspaceAudio) {
+    const seEl = document.getElementById('setSoundEnabled');
+    if (seEl) seEl.checked = window.WorkspaceAudio.isEnabled();
+    const sdEl = document.getElementById('setSoundDragEnabled');
+    if (sdEl) sdEl.checked = window.WorkspaceAudio.isDragEnabled();
+    const spEl = document.getElementById('setSoundPreset');
+    if (spEl) spEl.value = window.WorkspaceAudio.getPreset();
+  }
+
+
   // Accent swatches
   if(typeof buildAccentSwatches==='function') buildAccentSwatches();
   if(typeof applyAccent==='function') applyAccent(appSettings.accent||'blue');

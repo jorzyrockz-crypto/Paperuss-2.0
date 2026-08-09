@@ -512,6 +512,10 @@ function openIncomingShareModal(payload) {
 
   updateShareSaveHint();
 
+  if (window.WorkspaceAudio && typeof window.WorkspaceAudio.playModalSlide === 'function') {
+    window.WorkspaceAudio.playModalSlide();
+  }
+
   overlay.classList.add('show');
   document.body.style.overflow = 'hidden';
 }
