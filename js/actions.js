@@ -421,22 +421,47 @@ async function preparePrintSheet(targetNote, options) {
     ? `@page { size: ${pageSize} ${orientation}; margin: ${marginCss}; }`
     : `@page { size: auto; margin: ${marginCss}; }`;
 
-  if (showPageNums) {
-    pageCss += `\n@page { @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #64748b; font-family: sans-serif; } }`;
+  let pageNumCssFormat = '"Page " counter(page) " of " counter(pages)';
+  let pageNumFontCss = 'font-family: sans-serif; color: #1d4ed8;';
+  if (documentStyle === 'serif') {
+    pageNumCssFormat = '"— Page " counter(page) " of " counter(pages) " —"';
+    pageNumFontCss = 'font-family: Georgia, serif; font-style: italic; color: #b45309;';
+  } else if (documentStyle === 'blueprint') {
+    pageNumCssFormat = '"[ PAGE: " counter(page) " / " counter(pages) " ]"';
+    pageNumFontCss = 'font-family: Consolas, monospace; color: #059669; font-weight: bold;';
+  } else if (documentStyle === 'botanical') {
+    pageNumCssFormat = '"Leaf 1 • Page " counter(page)';
+    pageNumFontCss = 'font-family: sans-serif; color: #047857; font-weight: 600;';
+  } else if (documentStyle === 'vintage') {
+    pageNumCssFormat = '"PAGE " counter(page) "."';
+    pageNumFontCss = 'font-family: Georgia, serif; font-weight: bold; color: #111827;';
+  } else if (documentStyle === 'cyber') {
+    pageNumCssFormat = '"< PAGE // " counter(page) " >"';
+    pageNumFontCss = 'font-family: Consolas, monospace; color: #0891b2; font-weight: bold;';
   }
+
+  if (showPageNums) {
+    pageCss += `\n@page { @bottom-right { content: ${pageNumCssFormat}; font-size: 8pt; ${pageNumFontCss} } }`;
+  }
+
+  const headerImgSrc = note.headerImage || (note.useCoverAsHeader && note.coverImage?.src);
+  const headerBannerHtml = headerImgSrc ? `<div class="ps-header-banner" style="width:100%;height:45px;margin-bottom:8px;overflow:hidden;border-radius:4px;"><img src="${esc(headerImgSrc)}" style="width:100%;height:100%;object-fit:cover;" /></div>` : '';
 
   sheet.innerHTML = `
     <style>${pageCss}</style>
     ${showHeader ? `
     <div class="ps-header">
-      <div>
-        <div class="ps-brand">${esc(customHeaderTitle)}</div>
-        <div style="font-size:10px;color:#64748b;margin-top:3px">${esc(customSubtitle)}</div>
-      </div>
-      <div class="ps-meta">
-        Created ${fullDate(note.createdAt)}<br>
-        Last edited ${fullDate(note.updatedAt)}<br>
-        Printed ${printedAt}
+      ${headerBannerHtml}
+      <div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+        <div>
+          <div class="ps-brand">${esc(customHeaderTitle)}</div>
+          <div style="font-size:10px;color:#64748b;margin-top:3px">${esc(customSubtitle)}</div>
+        </div>
+        <div class="ps-meta">
+          Created ${fullDate(note.createdAt)}<br>
+          Last edited ${fullDate(note.updatedAt)}<br>
+          Printed ${printedAt}
+        </div>
       </div>
     </div>` : ''}
     <h1>${esc(titleOf(note))}</h1>

@@ -34,18 +34,106 @@
     });
   }
 
-  function createHeaderHtml(noteTitle, leafTitle) {
-    return `<div class="pv-header-overlay" contenteditable="false">
-      <div class="pv-header-left"><strong style="color:var(--accent,#6366f1);">PapeRuss</strong> <span class="pv-dot">•</span> <span>${esc(noteTitle)}</span></div>
-      <div class="pv-header-right" style="color:var(--fg-muted,#64748b);">${esc(leafTitle)}</div>
+  function formatPresetPageNum(pageNum, totalPages, style) {
+    const pStr = String(pageNum).padStart(2, '0');
+    const tStr = String(totalPages).padStart(2, '0');
+    if (style === 'serif') return `— Page ${pageNum} of ${totalPages} —`;
+    if (style === 'blueprint') return `[ PAGE: ${pStr} / ${tStr} ]`;
+    if (style === 'botanical') return `Leaf 1 • Page ${pageNum}`;
+    if (style === 'vintage') return `PAGE ${pageNum}.`;
+    if (style === 'cyber') return `< PAGE // ${pStr} >`;
+    return `Page ${pageNum} of ${totalPages}`;
+  }
+
+  function getDocumentStyle(note) {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem('paperuss_print_prefs') || '{}'); } catch(e) {}
+    return (note && note.documentStyle) || saved.documentStyle || 'executive';
+  }
+
+  function createHeaderHtml(noteTitle, leafTitle, targetNote) {
+    const style = getDocumentStyle(targetNote);
+    const headerImgSrc = targetNote?.headerImage || (targetNote?.useCoverAsHeader && targetNote?.coverImage?.src);
+    const customHeader = targetNote?.customHeaderTitle || 'PapeRuss';
+    const customSubtitle = targetNote?.customSubtitle || leafTitle;
+
+    let bannerHtml = '';
+    if (headerImgSrc) {
+      bannerHtml = `<div class="pv-header-banner-wrap" style="width:100%;height:38px;margin-bottom:6px;overflow:hidden;border-radius:4px;"><img src="${esc(headerImgSrc)}" style="width:100%;height:100%;object-fit:cover;" /></div>`;
+    }
+
+    return `<div class="pv-header-overlay pv-header-${style}" contenteditable="false">
+      ${bannerHtml}
+      <div class="pv-header-content" style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+        <div class="pv-header-left" contenteditable="true" data-header-field="title"><strong class="pv-brand-${style}">${esc(customHeader)}</strong> <span class="pv-dot">•</span> <span>${esc(noteTitle)}</span></div>
+        <div class="pv-header-right" contenteditable="true" data-header-field="subtitle" style="color:var(--fg-muted,#64748b);">${esc(customSubtitle)}</div>
+      </div>
+      <div class="pv-header-resizer" title="Drag to adjust Header Height"></div>
     </div>`;
   }
 
-  function createFooterHtml(pageNum, totalPages, refId) {
-    return `<div class="pv-footer-overlay" contenteditable="false">
-      <div class="pv-footer-left" style="color:var(--fg-muted,#94a3b8);">Ref ID: ${esc(refId)}</div>
-      <div class="pv-footer-right" style="font-weight:700;color:var(--fg-muted,#64748b);">Page ${pageNum} of ${totalPages}</div>
+  function createFooterHtml(pageNum, totalPages, refId, targetNote) {
+    const style = getDocumentStyle(targetNote);
+    const pagenumText = formatPresetPageNum(pageNum, totalPages, style);
+
+    return `<div class="pv-footer-overlay pv-footer-${style}" contenteditable="false">
+      <div class="pv-footer-resizer" title="Drag to adjust Footer Height"></div>
+      <div class="pv-footer-content" style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+        <div class="pv-footer-left" contenteditable="true" data-footer-field="ref" style="color:var(--fg-muted,#94a3b8);">Ref ID: ${esc(refId)}</div>
+        <div class="pv-footer-right pv-pagenum-${style}">${pagenumText}</div>
+      </div>
     </div>`;
+  }
+
+  function attachResizerDragHandlers(edBody, targetNote) {
+    edBody.querySelectorAll('.pv-header-resizer, .pv-footer-resizer').forEach(resizer => {
+      if (resizer.dataset.dragAttached) return;
+      resizer.dataset.dragAttached = 'true';
+
+      resizer.onpointerdown = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const isHeader = resizer.classList.contains('pv-header-resizer');
+        const startY = e.clientY;
+        const startPad = isHeader
+          ? (parseFloat(window.getComputedStyle(edBody).paddingTop) || 75)
+          : (parseFloat(window.getComputedStyle(edBody).paddingBottom) || 75);
+
+        let tooltip = document.createElement('div');
+        tooltip.className = 'pv-resize-tooltip';
+        document.body.appendChild(tooltip);
+
+        const onMove = (moveEv) => {
+          const deltaY = moveEv.clientY - startY;
+          const newPad = Math.max(30, Math.min(200, Math.round(isHeader ? startPad + deltaY : startPad - deltaY)));
+          const mmVal = Math.round(newPad * 0.264583);
+
+          if (isHeader) edBody.style.paddingTop = `${newPad}px`;
+          else edBody.style.paddingBottom = `${newPad}px`;
+
+          tooltip.style.left = `${moveEv.clientX + 15}px`;
+          tooltip.style.top = `${moveEv.clientY - 10}px`;
+          tooltip.style.display = 'block';
+          tooltip.textContent = `${isHeader ? 'Header Height' : 'Footer Height'}: ${mmVal}mm (${newPad}px)`;
+        };
+
+        const onUp = () => {
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+          tooltip.remove();
+          if (targetNote) {
+            if (isHeader) targetNote.headerHeight = edBody.style.paddingTop;
+            else targetNote.footerHeight = edBody.style.paddingBottom;
+            targetNote.updatedAt = Date.now();
+            if (typeof save === 'function') save();
+          }
+          schedulePagination(targetNote);
+        };
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+      };
+    });
   }
 
   function recalculatePageViewPagination(note) {
@@ -86,7 +174,7 @@
 
       // Inject Page 1 Header at top
       const page1Header = document.createElement('div');
-      page1Header.innerHTML = createHeaderHtml(noteTitle, leafTitle);
+      page1Header.innerHTML = createHeaderHtml(noteTitle, leafTitle, targetNote);
       edBody.insertBefore(page1Header.firstElementChild, edBody.firstChild);
 
       let currentPageNum = 1;
@@ -104,7 +192,7 @@
 
           // Footer for previous page
           const prevFooter = document.createElement('div');
-          prevFooter.innerHTML = createFooterHtml(currentPageNum - 1, totalEstimatedPages, refId);
+          prevFooter.innerHTML = createFooterHtml(currentPageNum - 1, totalEstimatedPages, refId, targetNote);
 
           // Physical page split divider
           const divider = document.createElement('div');
@@ -119,7 +207,7 @@
 
           // Header for next page
           const nextPageHeader = document.createElement('div');
-          nextPageHeader.innerHTML = createHeaderHtml(noteTitle, leafTitle);
+          nextPageHeader.innerHTML = createHeaderHtml(noteTitle, leafTitle, targetNote);
 
           // If block is large (e.g. card, callout, table, image), push it down to next page top
           const isComplexBlock = child.classList.contains('paperuss-card') ||
@@ -154,8 +242,10 @@
 
       // Inject Final Page Footer at bottom of document
       const finalFooter = document.createElement('div');
-      finalFooter.innerHTML = createFooterHtml(currentPageNum, Math.max(currentPageNum, totalEstimatedPages), refId);
+      finalFooter.innerHTML = createFooterHtml(currentPageNum, Math.max(currentPageNum, totalEstimatedPages), refId, targetNote);
       edBody.appendChild(finalFooter.firstElementChild);
+
+      attachResizerDragHandlers(edBody, targetNote);
 
     } catch (e) {
       console.warn('PageView Pagination error:', e);

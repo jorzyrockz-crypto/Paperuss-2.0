@@ -7134,6 +7134,102 @@ a.paperuss-inline-link:hover {
   color: var(--accent, #6366f1) !important;
 }
 
+/* Header & Footer Resizer Handles */
+.pv-header-resizer {
+  position: absolute !important;
+  bottom: -4px !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 8px !important;
+  cursor: ns-resize !important;
+  z-index: 10 !important;
+  pointer-events: auto !important;
+}
+
+.pv-header-resizer:hover {
+  background: rgba(99, 102, 241, 0.3) !important;
+  border-bottom: 2px solid #6366f1 !important;
+}
+
+.pv-footer-resizer {
+  position: absolute !important;
+  top: -4px !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 8px !important;
+  cursor: ns-resize !important;
+  z-index: 10 !important;
+  pointer-events: auto !important;
+}
+
+.pv-footer-resizer:hover {
+  background: rgba(99, 102, 241, 0.3) !important;
+  border-top: 2px solid #6366f1 !important;
+}
+
+.pv-resize-tooltip {
+  position: fixed !important;
+  z-index: 9999 !important;
+  display: none;
+  background: #1e293b !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 4px 10px !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.2) !important;
+  pointer-events: none !important;
+}
+
+/* Preset-Matched Page Numbers */
+.pv-pagenum-executive {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  padding: 2px 8px !important;
+  border-radius: 4px !important;
+  font-weight: 700 !important;
+}
+
+.pv-pagenum-serif {
+  font-family: Georgia, Merriweather, serif !important;
+  font-style: italic !important;
+  color: #b45309 !important;
+  font-size: 11px !important;
+}
+
+.pv-pagenum-blueprint {
+  font-family: Consolas, "Fira Code", monospace !important;
+  color: #059669 !important;
+  font-weight: 700 !important;
+  letter-spacing: 1px !important;
+}
+
+.pv-pagenum-botanical {
+  background: #f0fdf4 !important;
+  color: #047857 !important;
+  padding: 2px 10px !important;
+  border-radius: 99px !important;
+  font-weight: 600 !important;
+}
+
+.pv-pagenum-vintage {
+  font-family: Georgia, "Times New Roman", serif !important;
+  font-weight: 900 !important;
+  color: #111827 !important;
+  letter-spacing: 1.5px !important;
+  text-transform: uppercase !important;
+}
+
+.pv-pagenum-cyber {
+  font-family: Consolas, monospace !important;
+  color: #0891b2 !important;
+  background: #ecfeff !important;
+  padding: 2px 8px !important;
+  border-radius: 4px !important;
+  border: 1px dashed #06b6d4 !important;
+  font-weight: 700 !important;
+}
+
 /* ============================================================
    SIDEBAR BRANCH TREE & CATEGORY STYLES
    ============================================================ */

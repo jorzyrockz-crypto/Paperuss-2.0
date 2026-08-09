@@ -1128,6 +1128,7 @@ function initResponsiveImages(){
       if(btn.id==='imgTbFlipV') return flipImageVertical(selectedImg);
       if(btn.id==='imgTbCaption') return toggleImageCaption(selectedImg);
       if(btn.id==='imgTbCover') return setNotebookCover(selectedImg);
+      if(btn.id==='imgTbHeaderBanner') return setHeaderBannerFromImage(selectedImg);
       if(btn.id==='imgTbReplace') return requestImageReplacement(selectedImg);
       if(btn.id==='imgTbView') return openImageFullscreen(selectedImg);
       if(btn.id==='imgTbDownload'){

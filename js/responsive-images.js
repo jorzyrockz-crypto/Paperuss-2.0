@@ -480,6 +480,10 @@ function syncImageChrome(targetOverride){
               <i data-lucide="layout-template" class="w-3.5 h-3.5"></i>
               <span>Set as Notebook Cover</span>
             </button>
+            <button type="button" class="itb-dd-item" id="imgTbHeaderBanner">
+              <i data-lucide="panel-top" class="w-3.5 h-3.5"></i>
+              <span>Set as Header Banner</span>
+            </button>
             <button type="button" class="itb-dd-item" id="imgTbReplace">
               <i data-lucide="arrow-left-right" class="w-3.5 h-3.5"></i>
               <span>Replace Image</span>
@@ -532,6 +536,20 @@ function syncImageChrome(targetOverride){
   } else {
     handles.forEach(h=>h.classList.remove('show'));
   }
+}
+
+function setHeaderBannerFromImage(imgOrSrc){
+  const n = (typeof activeNoteForAction === 'function' ? activeNoteForAction() : null) || (typeof getNote === 'function' && typeof state !== 'undefined' ? getNote(state.currentId) : null);
+  if(!n) return;
+  const src = (typeof imgOrSrc === 'string') ? imgOrSrc : (imgOrSrc?.getAttribute('data-raw-src') || imgOrSrc?.src || '');
+  n.headerImage = src;
+  n.useCoverAsHeader = true;
+  n.updatedAt = Date.now();
+  if(typeof save === 'function') save();
+  if(window.PageLayoutEngine && typeof window.PageLayoutEngine.recalculate === 'function') {
+    window.PageLayoutEngine.recalculate(n);
+  }
+  if(typeof toast === 'function') toast('Set as Header Banner');
 }
 
 /* ---- Mobile bottom sheet ---- */
