@@ -342,6 +342,7 @@ function getVirtualMainLeaf(note) {
     noteId: note.id,
     title: 'Main',
     content: note.content || '',
+    color: 'emerald',
     order: 0,
     createdAt: note.createdAt || Date.now(),
     updatedAt: note.updatedAt || Date.now(),

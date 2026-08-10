@@ -2010,22 +2010,29 @@ window.paperussLeafManager = {
           // Atomic legacy-Note materialization using a Firestore batch
           try {
             const batch = fireDb.batch();
-            const leafRef = fireDb.collection('paperuss_users').doc(uid).collection('notes').doc(matItem.noteId).collection('leaves').doc(matItem.data.id);
+            // A materialization can be followed immediately by a rename,
+            // color change, or content flush before the sync starts. Use the
+            // latest queued snapshot so the first cloud write is complete.
+            const materializedData = (items[items.length - 1].data && items[items.length - 1].data.id)
+              ? items[items.length - 1].data
+              : matItem.data;
+            const leafRef = fireDb.collection('paperuss_users').doc(uid).collection('notes').doc(matItem.noteId).collection('leaves').doc(materializedData.id);
             const noteRef = fireDb.collection('paperuss_users').doc(uid).collection('notes').doc(matItem.noteId);
             const cleanLeaf = {
-              id: matItem.data.id,
+              id: materializedData.id,
               noteId: matItem.noteId,
-              title: matItem.data.title || 'Main',
-              content: matItem.data.content || '',
-              order: typeof matItem.data.order === 'number' ? matItem.data.order : 0,
-              createdAt: matItem.data.createdAt || Date.now(),
-              updatedAt: matItem.data.updatedAt || Date.now(),
+              title: materializedData.title || 'Main',
+              content: materializedData.content || '',
+              color: materializedData.color || 'slate',
+              order: typeof materializedData.order === 'number' ? materializedData.order : 0,
+              createdAt: materializedData.createdAt || Date.now(),
+              updatedAt: materializedData.updatedAt || Date.now(),
               deletedAt: null
             };
             batch.set(leafRef, cleanLeaf, { merge: true });
             batch.set(noteRef, {
-              defaultLeafId: matItem.data.id,
-              leafOrder: [matItem.data.id],
+              defaultLeafId: materializedData.id,
+              leafOrder: [materializedData.id],
               leafCount: 1,
               updatedAt: matItem.timestamp || Date.now()
             }, { merge: true });
@@ -2064,6 +2071,7 @@ window.paperussLeafManager = {
                 noteId: latest.noteId,
                 title: (latest.data && latest.data.title) || 'Leaf',
                 content: (latest.data && latest.data.content) || '',
+                color: (latest.data && latest.data.color) || 'slate',
                 order: (latest.data && typeof latest.data.order === 'number') ? latest.data.order : 0,
                 createdAt: (latest.data && latest.data.createdAt) || Date.now(),
                 updatedAt: (latest.data && latest.data.updatedAt) || Date.now(),
@@ -2373,6 +2381,13 @@ window.closeLeafContextMenu = closeLeafContextMenu;
 async function setLeafColorAction(leafId, colorName) {
   if (!leafId || !window.paperussLeaves) return;
   const n = getNote(state.currentId);
+  const wasVirtual = typeof leafId === 'string' && leafId.startsWith('virtual_main');
+  if (wasVirtual && n && window.paperussLeafManager && !window.paperussLeaves.isNoteMigratedToLeaves(n)) {
+    // A virtual Main leaf has no standalone cloud document yet. Materialize it
+    // first so its color is synced as a real leaf under this note.
+    const materialized = await window.paperussLeafManager.materializeVirtualNote(n);
+    if (materialized) leafId = n.defaultLeafId || leafId;
+  }
   let leafObj = await window.paperussLeaves.leafGet(leafId);
   if (!leafObj) {
     leafObj = {
@@ -2399,8 +2414,12 @@ async function setLeafColorAction(leafId, colorName) {
   });
   if (typeof queueCloudSync === 'function') queueCloudSync();
 
-  if (window.currentActiveLeaf && window.currentActiveLeaf.id === leafId) {
+  if (window.currentActiveLeaf && (window.currentActiveLeaf.id === leafId || (wasVirtual && window.currentActiveLeaf.isVirtual))) {
     window.currentActiveLeaf.color = colorName;
+  }
+
+  if (wasVirtual && n && state.currentId === n.id && typeof renderEditor === 'function') {
+    renderEditor();
   }
 
   const contentEl = document.getElementById('leavesDrawerContent');

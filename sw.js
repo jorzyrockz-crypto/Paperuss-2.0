@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'paperuss-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v270-named-themes`;
+const CACHE_NAME = `${CACHE_PREFIX}v271-leaf-color-sync`;
 const APP_SHELL = [
   './',
   './index.html',
