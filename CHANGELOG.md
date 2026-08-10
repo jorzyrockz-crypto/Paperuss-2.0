@@ -2,6 +2,19 @@
 
 This file is generated from [GitHub Releases](https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases).
 
+## [v2.7.0-workflow-audio-suite](https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases) — 2026-08-10
+
+**PapeRuss 2.7 Workflow & Audio Suite**
+
+### What's New in PapeRuss v2.7.0
+- **Local File Unlock System:** Implemented a robust IndexedDB hydration and user-prompt flow to re-authorize and unlock local file handles across browser reloads, solving the orphaned asset issue.
+- **Card Spacing & Layout Constraints:** Enhanced CSS for floated media cards, adding precise directional wrapping gaps (`16px 24px 16px 0` for left-float) and ensuring layout constraints.
+- **Image Toolbar Evolution:** Refactored the image toolbar to include a unified "Wrap Text Options" dropdown for alignment.
+- **Text Drag Comet Audio Engine:** Integrated `WorkspaceAudio` directly into the text drag engine, adding haptic clicks for grabbing, hovering over lines, dropping, and cancelling drags.
+- **Master Audio Boost:** Added a 300% internal master volume boost to the audio engine to ensure Web Audio sine/triangle waves hit satisfying loudness levels without distortion.
+- **Table Context Menus:** Added right-click context menu options to table cells for quick row/column insertion, deletion, and cell clearing.
+- **Bug Fixes:** Fixed the text drag engine DOM mutation bug that corrupted the active selection range, and fixed the blast animation permanently baking into saved notes and printouts.
+
 ## [v2.6.0-editor-suite](https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases) — 2026-08-09
 
 **PapeRuss 2.6 Page Layout, Formatting & Editor Suite**
