@@ -742,7 +742,7 @@ function initSlashMenuActions(){
   };
 
   document.addEventListener('click', e=>{
-    if(!e.target.closest('#blockCommandMenu') && !e.target.closest('#blockAddButton')){
+    if(!e.target.closest('#blockCommandMenu') && !e.target.closest('#blockAddButton') && !e.target.closest('#floatingQuickInsertBtn')){
       slashMenu.classList.remove('show');
     }
   });

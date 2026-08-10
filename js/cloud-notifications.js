@@ -27,6 +27,7 @@ const PORTABLE_STATE_UPDATED_KEY='paperuss:portableStateUpdatedAt';
 const PROFILE_PHOTO_KEY='paperuss:profilePhoto';
 const OFFLINE_UPLOAD_QUEUE_KEY='paperuss:offlineUploadQueue'; // persists upload IDs that need retry
 const MAX_UPLOAD_FAILURES=5;   // give up after this many consecutive failed attempts
+const STARTER_SEED_VERSION=1;
 // This deployment keeps attachment data in Firestore. Set to false only after
 // Firebase Storage is intentionally configured and deployed for this project.
 const FIRESTORE_ONLY_MEDIA=true;
@@ -73,7 +74,9 @@ function initFirebase(){
         saveSession({mode:'auth', uid:user.uid, name:user.displayName||user.email||'Account', email:user.email||'', photoURL:user.photoURL||''});
         hideAuthLanding();
         renderProfileMenu();
-        syncNow({silent:true});
+        ensureStarterNotesForAccount(user.uid)
+          .catch(err=>console.warn('PapeRuss starter notes seed warning:',err))
+          .finally(()=>syncNow({silent:true}));
       } else {
         // User signed out or Firebase lost the session
         const sess=loadSession();
@@ -106,6 +109,55 @@ function saveSession(session){
   if(session) localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
   else localStorage.removeItem(AUTH_SESSION_KEY);
 }
+
+async function seedAndSyncAccount(uid, opts){
+  try{
+    await ensureStarterNotesForAccount(uid);
+  }catch(err){
+    console.warn('PapeRuss starter notes seed warning:',err);
+  }
+  return syncNow(opts);
+}
+
+/* Seed the documentation note and its leaves once per signed-in account.
+   The marker is written in the same Firestore transaction as the missing
+   records, so multiple tabs cannot create duplicate starter packs. */
+async function ensureStarterNotesForAccount(uid){
+  if(!uid || !fbDb || typeof seedNotes!=='function') return false;
+  const rootRef=fbDb.collection('paperuss_users').doc(uid);
+  return fbDb.runTransaction(async tx=>{
+    const rootSnap=await tx.get(rootRef);
+    const rootData=rootSnap.exists?(rootSnap.data()||{}):{};
+    if(+rootData.starterSeedVersion>=STARTER_SEED_VERSION) return false;
+
+    const starters=seedNotes();
+    const plans=[];
+    // Read all existing records before issuing transaction writes.
+    for(const starter of starters){
+      const noteRef=rootRef.collection('notes').doc(starter.id);
+      const noteSnap=await tx.get(noteRef);
+      const leafPlans=[];
+      for(const leaf of (starter.seedLeaves||[])){
+        const leafRef=noteRef.collection('leaves').doc(leaf.id);
+        leafPlans.push({leaf,ref:leafRef,snap:await tx.get(leafRef)});
+      }
+      plans.push({starter,noteRef,noteSnap,leafPlans});
+    }
+
+    for(const {starter,noteRef,noteSnap,leafPlans} of plans){
+      if(!noteSnap.exists){
+        const {seedLeaves,...noteRecord}=starter;
+        tx.set(noteRef,noteRecord,{merge:true});
+      }
+      for(const {leaf,ref,snap} of leafPlans){
+        if(!snap.exists) tx.set(ref,leaf,{merge:true});
+      }
+    }
+    tx.set(rootRef,{starterSeedVersion:STARTER_SEED_VERSION,starterSeededAt:Date.now()},{merge:true});
+    return true;
+  });
+}
+window.ensureStarterNotesForAccount=ensureStarterNotesForAccount;
 
 function showAuthLanding(){
   const el=document.getElementById('authLanding');
@@ -170,7 +222,7 @@ async function signInWithGoogle(fromLanding){
     hideAuthLanding();
     renderProfileMenu();
     toast('Signed in as '+(user.displayName||user.email));
-    syncNow();
+    await seedAndSyncAccount(user.uid);
   }catch(err){
     if(err && err.code==='auth/popup-blocked'){
       try{
@@ -239,7 +291,7 @@ async function signInWithEmailPassword(){
     const user=result.user;
     saveSession({mode:'auth',uid:user.uid,name:user.displayName||user.email||'Account',email:user.email||'',photoURL:user.photoURL||''});
     hideAuthLanding(); renderProfileMenu(); toast('Signed in as '+(user.email||'your account'));
-    syncNow();
+    await seedAndSyncAccount(user.uid);
   }catch(error){
     setEmailAuthMessage(authErrorMessage(error),true);
   }finally{
@@ -259,7 +311,7 @@ async function createEmailPasswordAccount(){
     saveSession({mode:'auth',uid:user.uid,name:user.email||'Account',email:user.email||'',photoURL:''});
     hideAuthLanding(); renderProfileMenu();
     toast('Account created — check your inbox to verify your email');
-    syncNow();
+    await seedAndSyncAccount(user.uid);
   }catch(error){
     setEmailAuthMessage(authErrorMessage(error),true);
   }finally{

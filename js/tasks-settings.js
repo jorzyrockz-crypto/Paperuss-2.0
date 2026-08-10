@@ -805,7 +805,10 @@ async function clearLocalAppCacheAndData(){
       new Promise(resolve=>{
         const request=indexedDB.deleteDatabase('firebaseLocalStorageDb');
         request.onsuccess=request.onerror=request.onblocked=()=>resolve();
-      })
+      }),
+      (window.paperussLeaves && typeof window.paperussLeaves.deleteLeavesDB==='function')
+        ? window.paperussLeaves.deleteLeavesDB()
+        : Promise.resolve()
     ]);
 
     // 3. Clear localStorage keys
@@ -828,7 +831,9 @@ async function clearLocalAppCacheAndData(){
   }catch(error){
     console.warn('Could not fully clear local PapeRuss data',error);
   }
-  location.reload();
+  // Return to the public homepage after the local reset instead of reopening
+  // the editor/auth shell with a stale route.
+  window.location.href='index.html';
 }
 
 /* ============================================================
