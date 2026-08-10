@@ -302,12 +302,14 @@
     const overlay = document.getElementById('musicHubModalOverlay');
     if (!overlay) return;
     overlay.classList.remove('hidden');
+    if(window.WorkspaceAudio?.playModalSlide) window.WorkspaceAudio.playModalSlide();
     scanVaultForMusicEmbeds();
   }
 
   function closeMusicHubModal() {
     const overlay = document.getElementById('musicHubModalOverlay');
     if (overlay) overlay.classList.add('hidden');
+    if(window.WorkspaceAudio?.playModalClose) window.WorkspaceAudio.playModalClose();
   }
 
   function playPresetMusic(embedUrl, providerName = 'Spotify') {

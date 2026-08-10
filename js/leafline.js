@@ -154,7 +154,10 @@
   window.openLeaflineEntry = async function(index) {
     const entry=cachedAllEntries[index];
     if (!entry) return;
-    if (window.currentActiveLeaf?.id !== entry.leafId && typeof window.switchLeafAction === 'function') await window.switchLeafAction(entry.leafId);
+    if (window.currentActiveLeaf?.id !== entry.leafId && typeof window.switchLeafAction === 'function') {
+      if(window.WorkspaceAudio?.playLeaflineNav) window.WorkspaceAudio.playLeaflineNav();
+      await window.switchLeafAction(entry.leafId);
+    }
     let attempts=0;
     const locate=()=>{
       const editor=document.getElementById('noteBody');

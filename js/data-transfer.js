@@ -66,6 +66,10 @@ async function importSelectedFile(file) {
   } catch (e) {
     // Ignore read errors
   }
+
+  if (name.endsWith('.md') || name.endsWith('.markdown') || type === 'text/markdown') {
+    return importMarkdownFile(file);
+  }
   
   if (typeof window.toast === 'function') {
     window.toast('Unsupported file type');
@@ -853,6 +857,7 @@ function updateShareSaveHint() {
 function closeIncomingShareModal() {
   const overlay = document.getElementById('incomingShareOverlay');
   if (overlay) overlay.classList.remove('show');
+  if(window.WorkspaceAudio?.playModalClose) window.WorkspaceAudio.playModalClose();
   document.body.style.overflow = '';
   window.__pendingShareData = null;
 }
@@ -948,3 +953,79 @@ async function executeIncomingShareAction() {
 }
 
 
+
+async function importMarkdownFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      const text = reader.result;
+      if (!text) throw new Error('File is empty');
+      
+      let html = '';
+      if (typeof parseMarkdownToPaperussHTML === 'function') {
+        html = parseMarkdownToPaperussHTML(text);
+      } else {
+        throw new Error('Markdown parser not found');
+      }
+
+      if (typeof sanitizeNoteHTML === 'function') {
+        html = sanitizeNoteHTML(html);
+      } else if (typeof global !== 'undefined' && typeof global.sanitizeNoteHTML === 'function') {
+        html = global.sanitizeNoteHTML(html);
+      }
+
+      // Create new Note
+      const noteId = typeof uid === 'function' ? uid() : ('n_' + Date.now());
+      const now = Date.now();
+      
+      let docTitle = (file.name || '').replace(/\.md$/i, '').replace(/\.markdown$/i, '').trim() || 'Imported Markdown';
+
+      // Ensure Document Title becomes h1.editor-title
+      const doc = new DOMParser().parseFromString('<body>' + html + '</body>', 'text/html');
+      const body = doc.body;
+      const existingTitleEl = body.querySelector('h1.editor-title, h1');
+      if (existingTitleEl) {
+        existingTitleEl.classList.add('editor-title');
+        docTitle = (existingTitleEl.textContent || '').trim();
+      } else {
+        const titleEl = document.createElement('h1');
+        titleEl.className = 'editor-title';
+        titleEl.textContent = docTitle;
+        body.insertBefore(titleEl, body.firstChild);
+      }
+      
+      const cleanHtml = body.innerHTML;
+
+      const n = {
+        id: noteId,
+        title: docTitle,
+        content: cleanHtml,
+        tags: [],
+        pinned: false,
+        archived: false,
+        createdAt: now,
+        updatedAt: now,
+        fontStyle: (typeof appSettings !== 'undefined' && appSettings.defaultFont) ? appSettings.defaultFont : 'sans'
+      };
+
+      if (typeof notes !== 'undefined' && Array.isArray(notes)) {
+        notes.unshift(n);
+      }
+      if (typeof state !== 'undefined') {
+        state.currentId = n.id;
+      }
+      
+      if (typeof save === 'function') save();
+      if (typeof renderSidebar === 'function') renderSidebar();
+      if (typeof renderEditor === 'function') renderEditor();
+      if (typeof window.toast === 'function') window.toast('Imported Markdown file');
+      else if (typeof global !== 'undefined' && typeof global.toast === 'function') global.toast('Imported Markdown file');
+
+    } catch (e) {
+      if (typeof window.toast === 'function') window.toast('Failed to import MD: ' + e.message);
+      else if (typeof global !== 'undefined' && typeof global.toast === 'function') global.toast('Failed to import MD: ' + e.message);
+    }
+  };
+  reader.readAsText(file);
+}

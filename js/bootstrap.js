@@ -28,6 +28,9 @@ function bind(){
   }
 
   let leafSearchTimer = null;
+  document.getElementById('searchInput').addEventListener('focus', () => {
+    if(window.WorkspaceAudio?.playSearchPop) window.WorkspaceAudio.playSearchPop();
+  });
   document.getElementById('searchInput').addEventListener('input', e => {
     const q = e.target.value;
     state.query = q;
@@ -125,6 +128,7 @@ function bind(){
     if(e.target && e.target.matches && e.target.matches('input[type=checkbox]')){
       if(e.target.checked) e.target.setAttribute('checked', '');
       else e.target.removeAttribute('checked');
+      if(window.WorkspaceAudio?.playCheckboxToggle) window.WorkspaceAudio.playCheckboxToggle();
       setTimeout(handleBodyInput, 0);
     }
     const badge = e.target.closest('.callout-badge');
@@ -170,9 +174,11 @@ function bind(){
     if(window.HistoryManager) {
       if((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
+        if(window.WorkspaceAudio?.playUndoRedo) window.WorkspaceAudio.playUndoRedo(false);
         window.HistoryManager.undo();
       } else if((e.ctrlKey || e.metaKey) && ((e.shiftKey && e.key.toLowerCase() === 'z') || e.key.toLowerCase() === 'y')) {
         e.preventDefault();
+        if(window.WorkspaceAudio?.playUndoRedo) window.WorkspaceAudio.playUndoRedo(true);
         window.HistoryManager.redo();
       }
     }
@@ -419,9 +425,9 @@ function bind(){
   };
 
   const undoBtn = document.getElementById('undoBtn');
-  if(undoBtn) undoBtn.onclick = () => window.HistoryManager && window.HistoryManager.undo();
+  if(undoBtn) undoBtn.onclick = () => { if(window.WorkspaceAudio?.playUndoRedo) window.WorkspaceAudio.playUndoRedo(false); window.HistoryManager && window.HistoryManager.undo(); };
   const redoBtn = document.getElementById('redoBtn');
-  if(redoBtn) redoBtn.onclick = () => window.HistoryManager && window.HistoryManager.redo();
+  if(redoBtn) redoBtn.onclick = () => { if(window.WorkspaceAudio?.playUndoRedo) window.WorkspaceAudio.playUndoRedo(true); window.HistoryManager && window.HistoryManager.redo(); };
 
   document.getElementById('pinBtn').onclick=togglePin;
   document.getElementById('archiveBtn').onclick=toggleArchive;
@@ -532,7 +538,16 @@ function bind(){
 
   function tsvToPaperussTable(tsv){
     const rows = tsv.trim().split(/\r?\n/).map(r => r.split('\t'));
-    if(rows.length < 1 || !rows[0].length || (rows.length === 1 && rows[0].length <= 1)) return null;
+    if(rows.length < 1) return null;
+    
+    // To be considered a valid TSV, at least some rows must have multiple columns,
+    // and it shouldn't just be a random text block with a single stray tab.
+    const multiColRows = rows.filter(r => r.length > 1);
+    if(multiColRows.length === 0) return null;
+    
+    // Require at least 50% of the lines to be tab-separated if it's a multi-line string
+    if(rows.length > 2 && multiColRows.length < rows.length * 0.5) return null;
+
     let html = '<table class="note-table"><thead><tr>';
     rows[0].forEach(cell => {
       html += `<th>${esc(cell.trim())}</th>`;
@@ -686,6 +701,38 @@ function bind(){
       }
     });
 
+    // 5b. Detect IDE / Preformatted blocks (e.g. from VS Code) that use white-space: pre
+    // instead of semantic <pre> tags, and convert them to clean <pre><code> blocks.
+    doc.querySelectorAll('div, span, p, section').forEach(el => {
+      if (el.closest('pre')) return; // Already inside a pre block
+
+      const ws = el.style ? el.style.whiteSpace : '';
+      const ff = el.style ? (el.style.fontFamily || '').toLowerCase() : '';
+      const isPre = ws.includes('pre') || (ff.includes('monospace') && ff.includes('consolas'));
+
+      if (isPre) {
+        // Extract text while preserving newlines from divs/brs
+        let htmlStr = el.innerHTML;
+        let cleanText = htmlStr
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<\/(div|p|li)>/gi, '\n')
+          .replace(/<[^>]+>/g, ''); // Strip remaining tags
+        
+        // Decode HTML entities
+        const textarea = doc.createElement('textarea');
+        textarea.innerHTML = cleanText;
+        cleanText = textarea.value.trimEnd(); // Remove trailing extra newlines
+
+        if (cleanText) {
+          const pre = doc.createElement('pre');
+          const code = doc.createElement('code');
+          code.textContent = cleanText;
+          pre.appendChild(code);
+          el.replaceWith(pre);
+        }
+      }
+    });
+
     // 6. Clean attributes and theme-breaking inline styles across all elements
     doc.body.querySelectorAll('*').forEach(el => {
       Array.from(el.attributes).forEach(attr => {
@@ -763,6 +810,7 @@ function parseMarkdownInline(text) {
   return str;
 }
 
+window.parseMarkdownToPaperussHTML = parseMarkdownToPaperussHTML;
 function parseMarkdownToPaperussHTML(markdown) {
   if (!markdown || !String(markdown).trim()) return '';
   const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
@@ -979,21 +1027,21 @@ function isSingleStandaloneUrl(str) {
       }
       return;
     }
-    if(text && /\t/.test(text) && /\n/.test(text)){
-      const tableHtml = tsvToPaperussTable(text);
-      if(tableHtml){
-        e.preventDefault();
-        document.execCommand('insertHTML', false, tableHtml);
-        setTimeout(handleBodyInput, 0);
-        return;
-      }
-    }
     if(text && isMarkdownText(text)){
       const markdownHTML = parseMarkdownToPaperussHTML(text);
       if(markdownHTML){
         e.preventDefault();
         document.execCommand('insertHTML', false, markdownHTML);
         showPasteAsPlainTextChip(text);
+        setTimeout(handleBodyInput, 0);
+        return;
+      }
+    }
+    if(text && /\t/.test(text) && /\n/.test(text)){
+      const tableHtml = tsvToPaperussTable(text);
+      if(tableHtml){
+        e.preventDefault();
+        document.execCommand('insertHTML', false, tableHtml);
         setTimeout(handleBodyInput, 0);
         return;
       }
@@ -1342,8 +1390,32 @@ function isSingleStandaloneUrl(str) {
     }
   });
 
+  // Normalize Ctrl+A: select-all only within the editor, never the whole app UI
+  document.addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'a') return;
+    const ed = document.getElementById('noteBody');
+    const active = document.activeElement;
+    // Case 1: focus inside the editor — select all editor content only
+    if (ed && (active === ed || ed.contains(active))) {
+      e.preventDefault();
+      const range = document.createRange();
+      range.selectNodeContents(ed);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
+    // Case 2: focus in a native input / textarea — let browser handle (field text only)
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+      return;
+    }
+    // Case 3: focus on app chrome (sidebar, toolbar, etc.) — block whole-app selection
+    e.preventDefault();
+  }, true); // capture phase — fires before all other handlers
+
   const dfBtn = document.getElementById('distractionFreeBtn');
   if(dfBtn) dfBtn.onclick = toggleDistractionFree;
+
 
   function toggleDistractionFree() {
     const isDf = document.body.classList.toggle('distraction-free');

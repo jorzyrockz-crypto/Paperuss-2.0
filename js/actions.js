@@ -68,6 +68,7 @@ function toggleSidebarRail(){
     refreshIcons();
   }
   toast(collapsed?'Sidebar collapsed':'Sidebar expanded');
+  if(window.WorkspaceAudio?.playSidebarToggle) window.WorkspaceAudio.playSidebarToggle();
   if(typeof window.recalculateToolbarOverflow === 'function') setTimeout(window.recalculateToolbarOverflow, 150);
 }
 
@@ -146,6 +147,7 @@ function toggleSidebarMobile(){
   if(!sidebar || !backdrop) return;
   const isOpen=sidebar.classList.toggle('open');
   backdrop.classList.toggle('active', isOpen);
+  if(window.WorkspaceAudio?.playSidebarToggle) window.WorkspaceAudio.playSidebarToggle();
   if(typeof window.recalculateToolbarOverflow === 'function') setTimeout(window.recalculateToolbarOverflow, 150);
 }
 
@@ -228,6 +230,7 @@ async function shareCurrentNote(){
       return;
     }
     await navigator.clipboard.writeText(text);
+    if(window.WorkspaceAudio?.playCopyPaste) window.WorkspaceAudio.playCopyPaste();
     toast('Share text copied to clipboard');
   }catch(err){
     // AbortError means the native sheet was simply dismissed.
@@ -1165,8 +1168,8 @@ async function switchLeafAction(leafId) {
   if (typeof window.flushActiveLeaf === 'function') {
     await window.flushActiveLeaf();
   }
-  if (window.WorkspaceAudio && typeof window.WorkspaceAudio.playLeafSwitch === 'function') {
-    window.WorkspaceAudio.playLeafSwitch();
+  if (window.WorkspaceAudio && typeof window.WorkspaceAudio.playNoteSwitch === 'function') {
+    window.WorkspaceAudio.playNoteSwitch();
   }
   if (window.paperussLeafManager && typeof window.paperussLeafManager.switchLeaf === 'function') {
     await window.paperussLeafManager.switchLeaf(n.id, leafId);
@@ -1332,6 +1335,7 @@ async function deleteLeafAction(leafId, skipConfirm = false) {
   const doDelete = async () => {
     const res = await window.paperussLeafManager.deleteLeaf(n.id, leafId);
     if (res) {
+      if(window.WorkspaceAudio?.playDeleteTrash) window.WorkspaceAudio.playDeleteTrash();
       const activeLeafId = window.paperussLeaves ? window.paperussLeaves.getNoteActiveLeafId(n) : null;
       if (activeLeafId) {
         await switchLeafAction(activeLeafId);
