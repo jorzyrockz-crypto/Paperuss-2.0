@@ -1348,7 +1348,7 @@ img[data-media-id].img-selected,
 
 
 .block-command-menu{
-  position:fixed;display:none;flex-direction:column;gap:2px;z-index:80;
+  position:fixed;display:none;flex-direction:column;gap:2px;z-index:2000;
   background:var(--overlay);border:1px solid var(--border);border-radius:12px;
   padding:8px;box-shadow:0 12px 36px rgba(0,0,0,.5);min-width:210px;max-width:240px;
   max-height:min(340px,calc(100vh - 24px));overflow-y:auto;
@@ -8154,9 +8154,9 @@ h1[data-heading-style="cyber"], h2[data-heading-style="cyber"], h3[data-heading-
    SIDEBAR BRANCH TREE & CATEGORY STYLES
    ============================================================ */
 .sidebar-branch-tree-wrapper {
-  padding: 12px 14px;
+  padding: 9px 12px;
   border-top: 1px solid var(--border, rgba(0,0,0,0.08));
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .editor-branch-control {
@@ -8203,7 +8203,7 @@ h1[data-heading-style="cyber"], h2[data-heading-style="cyber"], h3[data-heading-
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 5px;
   padding: 0 4px;
 }
 
@@ -8239,17 +8239,17 @@ h1[data-heading-style="cyber"], h2[data-heading-style="cyber"], h3[data-heading-
 .branch-tree-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .branch-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: 7px;
+  padding: 4px 10px;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--fg-secondary, #475569);
   transition: all 0.15s ease;
@@ -8318,10 +8318,10 @@ h1[data-heading-style="cyber"], h2[data-heading-style="cyber"], h3[data-heading-
 }
 
 .sub-branch-group {
-  padding-left: 18px;
+  padding-left: 14px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 /* 3-Dot Floating More Menu Dropdown */
@@ -8918,22 +8918,3 @@ h1[data-heading-style="cyber"], h2[data-heading-style="cyber"], h3[data-heading-
   z-index: 10;
 }
 
-.branch-drag-handle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.2;
-  cursor: grab;
-  padding: 1px;
-  border-radius: 4px;
-  transition: opacity 0.15s, background 0.15s;
-  margin-left: -4px;
-  margin-right: -2px;
-}
-.branch-item:hover .branch-drag-handle {
-  opacity: 0.65;
-}
-.branch-drag-handle:hover {
-  opacity: 1;
-  background: var(--hover, rgba(0,0,0,0.08));
-}

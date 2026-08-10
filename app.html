@@ -142,8 +142,8 @@ try {
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" onerror="window.__fbLoadFailed=true"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js" onerror="window.__fbStorageLoadFailed=true"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js" onerror="window.__fbAnalyticsLoadFailed=true"></script>
-<link rel="stylesheet" href="assets/css/core.css?v=2.6.35">
-<link rel="stylesheet" href="assets/css/features.css?v=2.6.31">
+<link rel="stylesheet" href="assets/css/core.css?v=2.6.37">
+<link rel="stylesheet" href="assets/css/features.css?v=2.6.33">
 <link rel="stylesheet" href="assets/css/text-drag-engine.css?v=2.5.3">
 <link rel="stylesheet" href="assets/css/card-drag-engine.css?v=2.5.3">
 <link rel="stylesheet" href="assets/css/responsive.css?v=2.5.3">
@@ -399,8 +399,8 @@ try {
         </div>
         <div class="mode-selector-wrap" id="listModeSelector" role="tablist" aria-label="List view">
           <button class="mode-btn active" id="modeNotesBtn" data-listmode="notes" role="tab" aria-selected="true" onclick="setListMode('notes')">Notes</button>
-          <button class="mode-btn" id="modeLeavesBtn" data-listmode="leaves" role="tab" aria-selected="false" onclick="setListMode('leaves')">Leaves</button>
-          <button class="mode-btn" id="modeLeaflineBtn" data-listmode="leafline" role="tab" aria-selected="false" onclick="setListMode('leafline')">Leafline</button>
+          <button class="mode-btn" id="modeLeavesBtn" data-listmode="leaves" role="tab" aria-selected="false" onclick="setListMode('leaves')">Leaves <span class="mode-count" id="modeLeavesCount" aria-label="Leaf count">0</span></button>
+          <button class="mode-btn" id="modeLeaflineBtn" data-listmode="leafline" role="tab" aria-selected="false" onclick="setListMode('leafline')">Leafline <span class="mode-count" id="modeLeaflineCount" aria-label="Leafline heading count">0</span></button>
         </div>
       </div>
       <div class="notes" id="notesContainer"></div>
@@ -1426,6 +1426,7 @@ try {
   <button id="tblFmtEur"><i data-lucide="euro" class="w-4 h-4"></i>Currency (€)</button>
   <button id="tblFmtGbp"><i data-lucide="pound-sterling" class="w-4 h-4"></i>Currency (£)</button>
   <button id="tblFmtJpy"><i data-lucide="japanese-yen" class="w-4 h-4"></i>Currency (¥)</button>
+  <button id="tblFmtPhp"><i data-lucide="banknote" class="w-4 h-4"></i>Currency (₱ Philippine Peso)</button>
   <button id="tblFmtPct"><i data-lucide="percent" class="w-4 h-4"></i>Percentage (%)</button>
 </div>
 
@@ -1843,16 +1844,16 @@ try {
 <script src="js/stabilization.js?v=2.6.10"></script>
 <script src="js/history.js?v=2.6.6"></script>
 <script src="js/leaves.js?v=2.6.8"></script>
-<script src="js/core.js?v=2.6.37"></script>
+<script src="js/core.js?v=2.6.39"></script>
 <script src="js/leafline.js?v=2.6.31"></script>
 <script src="js/productivity.js?v=2.6.6"></script>
 <script src="js/page-layout-engine.js?v=2.6.24"></script>
-<script src="js/editor-ui.js?v=2.6.19"></script>
+<script src="js/editor-ui.js?v=2.6.20"></script>
 <script src="js/tasks-settings.js?v=2.6.30"></script>
 <script src="js/data-transfer.js?v=2.6.6"></script>
 <script src="js/cloud-notifications.js?v=2.6.32"></script>
 <script src="js/changelog.js?v=2.6.6"></script>
-<script src="js/actions.js?v=2.6.27"></script>
+<script src="js/actions.js?v=2.6.28"></script>
 <script src="js/link-parser.js?v=2.6.6"></script>
 <script src="js/embeds.js?v=2.6.6"></script>
 <script src="js/media-widget.js?v=2.6.6"></script>
@@ -1864,8 +1865,8 @@ try {
 <script src="assets/vendor/jszip.min.js"></script>
 <script src="js/docx-export.js?v=2.6.6"></script>
 <script src="js/responsive-images.js?v=2.6.6"></script>
-<script src="js/tables.js?v=2.6.6"></script>
-<script src="js/branches.js?v=2.6.21"></script>
+<script src="js/tables.js?v=2.6.7"></script>
+<script src="js/branches.js?v=2.6.23"></script>
 <script src="js/bootstrap.js?v=2.6.29"></script>
 </body>
 </html>

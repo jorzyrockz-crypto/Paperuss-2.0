@@ -841,6 +841,7 @@ function initTableTools(){
     tblFmtEur:()=>setCellFormat('currency','€'),
     tblFmtGbp:()=>setCellFormat('currency','£'),
     tblFmtJpy:()=>setCellFormat('currency','¥'),
+    tblFmtPhp:()=>setCellFormat('currency','₱'),
     tblFmtPct:()=>setCellFormat('percent'),
     tblHeaderRow:tblHeaderRow,
     tblHeaderCol:tblHeaderCol,

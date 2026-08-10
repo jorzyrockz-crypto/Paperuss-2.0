@@ -985,6 +985,7 @@ function handleBodyInput(){
   if(isEditorEmpty(html) || html==='<br>' || html==='<div><br></div>') html='';
   html=sanitizeForStorage(html);
   editField('content', html);
+  if(typeof updateListModeCounts==='function') updateListModeCounts();
   if(window.HistoryManager) window.HistoryManager.queueCapture();
 }
 
@@ -1433,4 +1434,3 @@ function checkAppShortcutLaunchActions() {
   }
 }
 window.checkAppShortcutLaunchActions = checkAppShortcutLaunchActions;
-

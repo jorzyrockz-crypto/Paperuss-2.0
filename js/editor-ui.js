@@ -290,6 +290,8 @@ function initBlockTools(){
   // the anchor near the bottom of a long document and remains scrollable.
   function positionSlashMenu(anchorRect){
     if(!slashMenu || !anchorRect) return;
+    if(slashMenu.parentElement !== document.body) document.body.appendChild(slashMenu);
+    slashMenu.style.zIndex='2000';
     slashMenu.classList.add('show');
     const safe=12;
     const menuW=slashMenu.offsetWidth||230;

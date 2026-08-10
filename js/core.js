@@ -968,6 +968,7 @@ function renderNoteCard(n){
 }
 
 function renderList(){
+  updateListModeCounts();
   if(state.filter==='media'){
     renderMediaList();
     return;
@@ -1007,6 +1008,23 @@ function renderList(){
   c.innerHTML=arr.map(n=>renderNoteCard(n)).join('');
   refreshIcons();
 }
+
+function updateListModeCounts(){
+  const leavesCountEl=document.getElementById('modeLeavesCount');
+  const leaflineCountEl=document.getElementById('modeLeaflineCount');
+  const note=state.currentId ? getNote(state.currentId) : null;
+  let leafCount=0;
+  if(note){
+    const order=window.paperussLeaves?.getNoteLeafOrder?.(note);
+    leafCount=Array.isArray(order) && order.length ? order.length : (note.leafCount || 1);
+  }
+  const headingCount=document.getElementById('noteBody')
+    ? document.getElementById('noteBody').querySelectorAll('h1,h2,h3,h4').length
+    : 0;
+  if(leavesCountEl) leavesCountEl.textContent=String(leafCount);
+  if(leaflineCountEl) leaflineCountEl.textContent=String(headingCount);
+}
+window.updateListModeCounts=updateListModeCounts;
 
 function captureEditorSelection(editor){
   const selection=window.getSelection();
@@ -2588,6 +2606,11 @@ function triggerFloatingQuickInsert(e) {
       menu.classList.remove('show');
       return;
     }
+    // The editor shell clips overflow. Portal the floating menu to the body
+    // before positioning so the FAB menu remains visible above the canvas.
+    if (menu.parentElement !== document.body) document.body.appendChild(menu);
+    menu.hidden = false;
+    menu.style.zIndex = '2000';
     const noteBody = document.getElementById('noteBody');
     if (noteBody) noteBody.focus();
 

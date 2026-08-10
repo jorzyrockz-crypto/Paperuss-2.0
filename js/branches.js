@@ -175,6 +175,19 @@
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
+  function serializeBranches(list) {
+    return (Array.isArray(list) ? list : []).filter(branch => branch && branch.id && branch.name)
+      .map((branch, index) => ({
+        ...branch,
+        id: String(branch.id),
+        name: String(branch.name).trim(),
+        color: branch.color || '#6366f1',
+        icon: branch.icon || 'folder',
+        parentId: branch.parentId || null,
+        order: typeof branch.order === 'number' ? branch.order : index
+      }));
+  }
+
   async function syncBranchesToCloud(uidOverride, dbOverride) {
     const context = getCloudContext();
     const uid = uidOverride || context.session?.uid;
@@ -184,7 +197,9 @@
       const updatedAt = asTimestamp(localStorage.getItem(UPDATED_AT_KEY)) || Date.now();
       localStorage.setItem(UPDATED_AT_KEY, String(updatedAt));
       await db.collection('paperuss_users').doc(uid).set({
-        branches: branchesCache,
+        // Persist the complete branch record so order, name, icon, color and
+        // nesting all travel together across devices.
+        branches: serializeBranches(branchesCache),
         branchesUpdatedAt: updatedAt
       }, { merge: true });
       return true;
@@ -208,13 +223,7 @@
       const remoteUpdatedAt = asTimestamp(remote.branchesUpdatedAt);
       const localUpdatedAt = asTimestamp(localStorage.getItem(UPDATED_AT_KEY));
       if (remoteUpdatedAt > localUpdatedAt || (!localUpdatedAt && remote.branches.length > 0)) {
-        branchesCache = remote.branches
-          .filter(branch => branch && branch.id && branch.name)
-          .map((branch, index) => ({
-            ...branch,
-            parentId: branch.parentId || null,
-            order: typeof branch.order === 'number' ? branch.order : index
-          }))
+        branchesCache = serializeBranches(remote.branches)
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         localStorage.setItem(STORAGE_KEY, JSON.stringify(branchesCache));
         localStorage.setItem(UPDATED_AT_KEY, String(remoteUpdatedAt));
@@ -368,12 +377,18 @@
     document.body.appendChild(menu);
     activeMoreMenu = menu;
 
-    const rect = e.target.getBoundingClientRect();
+    const rect = e.currentTarget?.getBoundingClientRect?.() || e.target.getBoundingClientRect();
+    const safe = 8;
+    const menuWidth = menu.offsetWidth || 210;
+    const menuHeight = menu.offsetHeight || 220;
+    let left = Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - safe);
     let top = rect.bottom + 4;
-    let left = Math.min(rect.left, window.innerWidth - 180);
+    if (top + menuHeight > window.innerHeight - safe) top = rect.top - menuHeight - 4;
+    left = Math.max(safe, left);
+    top = Math.max(safe, Math.min(top, window.innerHeight - menuHeight - safe));
 
-    menu.style.top = `${top}px`;
-    menu.style.left = `${left}px`;
+    menu.style.top = `${Math.round(top)}px`;
+    menu.style.left = `${Math.round(left)}px`;
 
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
       window.lucide.createIcons({ el: menu });
@@ -452,9 +467,6 @@
 
       html += `
         <div class="branch-item ${isSelected ? 'active' : ''}" draggable="true" data-branch-id="${b.id}" data-branch-name="${escHtml(b.name)}">
-          <span class="branch-drag-handle" title="Drag to reorder">
-            <i data-lucide="grip-vertical" class="w-3.5 h-3.5"></i>
-          </span>
           <i data-lucide="${iconName}" class="branch-icon w-4 h-4" style="color:${b.color || '#6366f1'}"></i>
           <span class="branch-name">${escHtml(b.name)}</span>
           <span class="branch-count">${count}</span>
@@ -471,9 +483,6 @@
           const subIcon = sub.icon || 'folder';
           html += `
             <div class="branch-item sub-branch-item ${subSelected ? 'active' : ''}" draggable="true" data-branch-id="${sub.id}" data-branch-name="${escHtml(sub.name)}">
-              <span class="branch-drag-handle" title="Drag to reorder">
-                <i data-lucide="grip-vertical" class="w-3 h-3"></i>
-              </span>
               <i data-lucide="${subIcon}" class="branch-icon w-3.5 h-3.5" style="color:${sub.color || '#6366f1'}"></i>
               <span class="branch-name">${escHtml(sub.name)}</span>
               <span class="branch-count">${subCount}</span>
@@ -496,7 +505,7 @@
     // Attach click events
     container.querySelectorAll('.branch-item').forEach(item => {
       item.onclick = (e) => {
-        if (e.target.closest('.branch-opt-btn') || e.target.closest('.branch-drag-handle')) return;
+        if (e.target.closest('.branch-opt-btn')) return;
         const bId = item.dataset.branchId;
         setActiveBranchId(bId);
       };

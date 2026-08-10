@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'paperuss-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v273-starter-seed-routing`;
+const CACHE_NAME = `${CACHE_PREFIX}v275-floating-block-menu`;
 const APP_SHELL = [
   './',
   './index.html',
