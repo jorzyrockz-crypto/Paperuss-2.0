@@ -9022,3 +9022,96 @@ h1[data-heading-style="cyber"], h2[data-heading-style="cyber"], h3[data-heading-
   margin-bottom: 0.5em;
   padding-left: 1em;
 }
+
+/* ============================================================
+   TABLE CONTEXT MENU & BADGE UI
+   ============================================================ */
+.tbl-dim-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  background: var(--bg-hover);
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-right: 4px;
+  user-select: none;
+  letter-spacing: 0.5px;
+}
+
+.tbl-ctx-menu {
+  position: fixed;
+  z-index: 100000;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.96) translateY(-4px);
+  transform-origin: top left;
+  transition: opacity 0.15s ease, transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tbl-ctx-menu.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1) translateY(0);
+}
+
+.tbl-ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.tbl-ctx-item:hover {
+  background: var(--hover);
+}
+
+.tbl-ctx-item.danger {
+  color: var(--danger);
+}
+
+.tbl-ctx-item.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.tbl-ctx-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+th {
+  position: relative;
+  cursor: pointer;
+}
+th:hover {
+  background: var(--bg-hover);
+}
+.tbl-sort-asc::after {
+  content: ' ?';
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+.tbl-sort-desc::after {
+  content: ' ?';
+  font-size: 0.8em;
+  opacity: 0.7;
+}

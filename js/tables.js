@@ -153,6 +153,18 @@ function positionTableTools(){
     document.getElementById('tblColorDropdown')?.classList.remove('show');
     return;
   }
+  
+  // Calculate dimensions
+  const badge = document.getElementById('tblDimBadge');
+  if (badge) {
+    const rows = tbl.rows.length;
+    let cols = 0;
+    if (rows > 0) {
+      cols = Array.from(tbl.rows[0].cells).reduce((acc, cell) => acc + (cell.colSpan || 1), 0);
+    }
+    badge.textContent = `${rows}×${cols}`;
+  }
+
   tools.classList.add('show');
   const w=tools.offsetWidth||400;
   let top=r.top-tools.offsetHeight-8;
@@ -1846,3 +1858,151 @@ function insertFinancialTemplate(type) {
   normalizeEditorTables();
   handleBodyInput();
 }
+
+/* ============================================================
+   TABLE CONTEXT MENU & SORTING LOGIC
+   ============================================================ */
+
+function initTableContextMenu() {
+  const ctxMenu = document.getElementById('tblCtxMenu');
+  if (!ctxMenu) return;
+
+  // Intercept right click in editor
+  const ed = bodyEl();
+  if (ed) {
+    ed.addEventListener('contextmenu', e => {
+      const cell = e.target.closest('td, th');
+      if (cell) {
+        e.preventDefault();
+        
+        // If the clicked cell isn't in the selection, make it the active cell
+        if (!selectedCells.has(cell)) {
+          clearCellSelection();
+          activeCell = cell;
+          cell.classList.add('tbl-selected');
+        }
+        
+        positionTableTools();
+
+        // Show / hide merge options based on selection
+        const mergeBtn = document.getElementById('tblCtxMerge');
+        const splitBtn = document.getElementById('tblCtxSplit');
+        
+        if (mergeBtn && splitBtn) {
+          if (selectedCells.size > 1) {
+            mergeBtn.style.display = 'flex';
+            splitBtn.style.display = 'none';
+          } else {
+            mergeBtn.style.display = 'none';
+            const cellSpan = Math.max(Number(cell.colSpan)||1, 1) > 1 || Math.max(Number(cell.rowSpan)||1, 1) > 1;
+            splitBtn.style.display = cellSpan ? 'flex' : 'none';
+          }
+        }
+
+        // Position the menu
+        ctxMenu.style.left = `${e.clientX}px`;
+        ctxMenu.style.top = `${e.clientY}px`;
+        ctxMenu.classList.add('show');
+      }
+    });
+  }
+
+  // Hide context menu on outside click
+  document.addEventListener('pointerdown', e => {
+    if (!e.target.closest('.tbl-ctx-menu')) {
+      ctxMenu.classList.remove('show');
+    }
+  });
+
+  // Handle menu clicks
+  ctxMenu.addEventListener('click', e => {
+    const btn = e.target.closest('.tbl-ctx-item');
+    if (!btn) return;
+    const action = btn.getAttribute('data-ctx');
+    
+    switch (action) {
+      case 'tblRowAbove': tblInsertRow('above'); break;
+      case 'tblRowBelow': tblInsertRow('below'); break;
+      case 'tblColLeft': tblInsertCol('left'); break;
+      case 'tblColRight': tblInsertCol('right'); break;
+      case 'tblRowDel': tblDeleteRow(); break;
+      case 'tblColDel': tblDeleteCol(); break;
+      case 'tblClearCell': 
+        onSelected(c => c.innerHTML = '<br>');
+        break;
+      case 'tblMergeCells': tblMergeCells(); break;
+      case 'tblSplitCell': tblSplitCell(); break;
+    }
+    
+    ctxMenu.classList.remove('show');
+    positionTableTools();
+    const ed = bodyEl();
+    if(ed) {
+      const evt = new Event('input', { bubbles: true });
+      ed.dispatchEvent(evt);
+    }
+  });
+}
+
+function initTableSorting() {
+  const ed = bodyEl();
+  if(!ed) return;
+  
+  ed.addEventListener('click', e => {
+    const th = e.target.closest('th');
+    if(!th) return;
+    
+    const table = th.closest('table');
+    if(!table || !table.tBodies || table.tBodies.length === 0) return;
+    
+    const tbody = table.tBodies[0];
+    const row = th.closest('tr');
+    
+    // Ensure we are clicking a header in the thead
+    if(row.parentElement.tagName !== 'THEAD') return;
+    
+    const colIndex = Array.from(row.children).indexOf(th);
+    const isAscending = th.classList.contains('tbl-sort-asc');
+    
+    // Clear existing sort classes on all headers
+    table.querySelectorAll('th').forEach(el => {
+      el.classList.remove('tbl-sort-asc', 'tbl-sort-desc');
+    });
+    
+    // Toggle sort direction
+    const direction = isAscending ? -1 : 1;
+    th.classList.add(isAscending ? 'tbl-sort-desc' : 'tbl-sort-asc');
+    
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    
+    rows.sort((a, b) => {
+      const aCol = a.children[colIndex];
+      const bCol = b.children[colIndex];
+      
+      const aText = aCol ? aCol.textContent.trim() : '';
+      const bText = bCol ? bCol.textContent.trim() : '';
+      
+      // Check for numeric/currency
+      const numA = parseFloat(aText.replace(/[^0-9.-]+/g, ''));
+      const numB = parseFloat(bText.replace(/[^0-9.-]+/g, ''));
+      
+      if (!isNaN(numA) && !isNaN(numB) && aText.match(/\\d/) && bText.match(/\\d/)) {
+        return (numA - numB) * direction;
+      }
+      
+      return aText.localeCompare(bText) * direction;
+    });
+    
+    // Re-append sorted rows
+    rows.forEach(r => tbody.appendChild(r));
+    
+    const evt = new Event('input', { bubbles: true });
+    ed.dispatchEvent(evt);
+  });
+}
+
+// Call on load
+document.addEventListener('DOMContentLoaded', () => {
+  initTableContextMenu();
+  initTableSorting();
+});
