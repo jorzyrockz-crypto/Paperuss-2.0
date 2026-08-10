@@ -22,6 +22,11 @@ function selectFilter(filterName){
 function bind(){
   document.getElementById('newNoteBtn').onclick=()=>contextualNew();
 
+  const quickInsertBtn=document.getElementById('floatingQuickInsertBtn');
+  if(quickInsertBtn && typeof triggerFloatingQuickInsert==='function'){
+    quickInsertBtn.onclick=triggerFloatingQuickInsert;
+  }
+
   let leafSearchTimer = null;
   document.getElementById('searchInput').addEventListener('input', e => {
     const q = e.target.value;

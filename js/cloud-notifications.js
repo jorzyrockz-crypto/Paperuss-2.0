@@ -165,6 +165,9 @@ function showAuthLanding(){
     el.classList.remove('hidden');
     el.classList.remove('leaving');
   }
+  // Guest mode also marks the document as having a session. Clear that
+  // marker before showing the auth surface or the global CSS hides it.
+  document.documentElement.classList.remove('has-session');
   document.documentElement.classList.remove('auth-pending');
   if(typeof closeLeavesDrawer === 'function') closeLeavesDrawer();
   if(typeof updateLeafTitleBar === 'function') updateLeafTitleBar();

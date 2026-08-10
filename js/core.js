@@ -1057,6 +1057,8 @@ _globalScope.getCurrentOpenNote = function() {
 if (typeof window !== 'undefined') window.getCurrentOpenNote = _globalScope.getCurrentOpenNote;
 
 function renderEditor(){
+  const renderToken=(window.__paperussRenderToken||0)+1;
+  window.__paperussRenderToken=renderToken;
   const empty=document.getElementById('editorEmpty');
   const content=document.getElementById('editorContent');
   const mhView=document.getElementById('mediaHubView');
@@ -1161,11 +1163,14 @@ function renderEditor(){
           // Real materialized note: load the active leaf from IDB
           const activeLeafId = window.paperussLeaves.getNoteActiveLeafId(n);
           leafToRender = await window.paperussLeaves.leafGet(activeLeafId);
+          if(renderToken!==window.__paperussRenderToken) return;
           const renderSession = (typeof currentSession !== 'undefined' && currentSession)
             || (typeof loadSession === 'function' ? loadSession() : null);
           if (renderSession && renderSession.uid && window.paperussLeafManager && typeof window.paperussLeafManager.syncNoteLeavesFromCloud === 'function') {
             window.paperussLeafManager.syncNoteLeavesFromCloud(n.id, renderSession.uid).then(() => {
+              if(renderToken!==window.__paperussRenderToken || window.paperussLeaves.getNoteActiveLeafId(n)!==activeLeafId) return;
               window.paperussLeaves.leafGet(activeLeafId).then(updated => {
+                if(renderToken!==window.__paperussRenderToken || window.paperussLeaves.getNoteActiveLeafId(n)!==activeLeafId) return;
                 if (updated && updated.updatedAt > (leafToRender ? leafToRender.updatedAt : 0)) {
                   leafToRender = updated;
                   window.currentActiveLeaf = leafToRender;
@@ -1184,6 +1189,7 @@ function renderEditor(){
         leafToRender = { id: 'virtual_main', title: 'Main', content: n.content, isVirtual: true };
       }
       
+      if(renderToken!==window.__paperussRenderToken) return;
       window.currentActiveLeaf = leafToRender;
       if (window.updateLeafTitleBar) window.updateLeafTitleBar();
       const ed=bodyEl();
