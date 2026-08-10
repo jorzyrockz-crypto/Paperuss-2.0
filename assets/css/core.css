@@ -35,6 +35,121 @@
   --code-bg:#eee8da;
 }
 
+/* Named palette themes.  The supplied design variables are kept as aliases so
+   future components can consume the palette directly, while the existing app
+   tokens below keep the rest of the interface theme-aware. */
+[data-theme="olive-groove"]{
+  color-scheme: light;
+  --primary:#6B8F71; --primary-hover:#5A7A60;
+  --sidebar-bg:#E8E6D9; --sidebar-hover:#D4CFC3; --sidebar-text:#6B6658;
+  --header-bg:#F7F3E9; --canvas-bg:#D4CFC3; --paper-bg:#F7F3E9;
+  --card-bg:#FFFEF9; --card-selected:#E8F5E9; --border:#C9C5B8;
+  --text-1:#2D332F; --text-2:#7A7466;
+  --branch-personal:#6B8F71; --branch-work:#8A9A5B; --branch-ideas:#C2B280;
+  --banner-from:#6B8F71; --banner-to:#A3B18A;
+  --canvas:var(--canvas-bg); --subtle:var(--card-bg); --inset:var(--sidebar-hover); --overlay:var(--card-bg);
+  --border-muted:rgba(107,102,88,.18); --fg:var(--text-1); --fg-secondary:var(--text-2); --fg-muted:#969080;
+  --accent:var(--primary); --accent-emphasis:var(--primary-hover); --accent-fg:#fff;
+  --accent-soft:rgba(107,143,113,.16); --accent-ring:rgba(107,143,113,.3);
+  --success:#6B8F71; --success-emphasis:#5A7A60; --danger:#B84C4C; --attention:#B98527;
+  --hover:var(--sidebar-hover); --selection:rgba(107,143,113,.24); --code-bg:var(--card-selected);
+}
+[data-theme="rose-pine"]{
+  color-scheme: dark;
+  --primary:#EB6F92; --primary-hover:#D4567A;
+  --sidebar-bg:#191724; --sidebar-hover:#1F1D2E; --sidebar-text:#908CAA;
+  --header-bg:#191724; --canvas-bg:#1F1D2E; --paper-bg:#26233A;
+  --card-bg:#26233A; --card-selected:#2A2740; --border:#2A273F;
+  --text-1:#E0DEF4; --text-2:#908CAA;
+  --branch-personal:#9CCFD8; --branch-work:#EB6F92; --branch-ideas:#F6C177;
+  --banner-from:#EB6F92; --banner-to:#C4A7E7;
+  --canvas:var(--canvas-bg); --subtle:var(--card-bg); --inset:var(--sidebar-hover); --overlay:var(--card-bg);
+  --border-muted:rgba(224,222,244,.12); --fg:var(--text-1); --fg-secondary:var(--text-2); --fg-muted:#6E6A86;
+  --accent:var(--primary); --accent-emphasis:var(--primary-hover); --accent-fg:#191724;
+  --accent-soft:rgba(235,111,146,.18); --accent-ring:rgba(235,111,146,.34);
+  --success:#9CCFD8; --success-emphasis:#78B9C4; --danger:#EB6F92; --attention:#F6C177;
+  --hover:var(--sidebar-hover); --selection:rgba(235,111,146,.28); --code-bg:var(--card-selected);
+}
+[data-theme="nord"]{
+  color-scheme: dark;
+  --primary:#88C0D0; --primary-hover:#6BA8BA;
+  --sidebar-bg:#2E3440; --sidebar-hover:#3B4252; --sidebar-text:#D8DEE9;
+  --header-bg:#2E3440; --canvas-bg:#3B4252; --paper-bg:#434C5E;
+  --card-bg:#4C566A; --card-selected:#3B4252; --border:#4C566A;
+  --text-1:#ECEFF4; --text-2:#D8DEE9;
+  --branch-personal:#A3BE8C; --branch-work:#88C0D0; --branch-ideas:#EBCB8B;
+  --banner-from:#5E81AC; --banner-to:#81A1C1;
+  --canvas:var(--canvas-bg); --subtle:var(--card-bg); --inset:var(--sidebar-hover); --overlay:var(--card-bg);
+  --border-muted:rgba(216,222,233,.16); --fg:var(--text-1); --fg-secondary:var(--text-2); --fg-muted:#AAB4C4;
+  --accent:var(--primary); --accent-emphasis:var(--primary-hover); --accent-fg:#2E3440;
+  --accent-soft:rgba(136,192,208,.2); --accent-ring:rgba(136,192,208,.36);
+  --success:#A3BE8C; --success-emphasis:#8FAE75; --danger:#BF616A; --attention:#EBCB8B;
+  --hover:var(--sidebar-hover); --selection:rgba(136,192,208,.28); --code-bg:var(--card-selected);
+}
+[data-theme="ember"]{
+  color-scheme: dark;
+  --primary:#FF6B35; --primary-hover:#E55A2B;
+  --sidebar-bg:#1C1917; --sidebar-hover:#292524; --sidebar-text:#A8A29E;
+  --header-bg:#1C1917; --canvas-bg:#0C0A09; --paper-bg:#292524;
+  --card-bg:#292524; --card-selected:#3A3532; --border:#44403C;
+  --text-1:#F5F5F4; --text-2:#A8A29E;
+  --branch-personal:#FF6B35; --branch-work:#F97316; --branch-ideas:#FBBF24;
+  --banner-from:#FF6B35; --banner-to:#FB923C;
+  --canvas:var(--canvas-bg); --subtle:var(--card-bg); --inset:var(--sidebar-hover); --overlay:var(--card-bg);
+  --border-muted:rgba(245,245,244,.15); --fg:var(--text-1); --fg-secondary:var(--text-2); --fg-muted:#78716C;
+  --accent:var(--primary); --accent-emphasis:var(--primary-hover); --accent-fg:#fff;
+  --accent-soft:rgba(255,107,53,.2); --accent-ring:rgba(255,107,53,.36);
+  --success:#A3E635; --success-emphasis:#84CC16; --danger:#F87171; --attention:#FBBF24;
+  --hover:var(--sidebar-hover); --selection:rgba(255,107,53,.3); --code-bg:var(--card-selected);
+}
+
+/* Apply the named surface variables to the shell surfaces that historically
+   used the generic canvas token. */
+[data-theme="olive-groove"] .sidebar,
+[data-theme="rose-pine"] .sidebar,
+[data-theme="nord"] .sidebar,
+[data-theme="ember"] .sidebar{background:var(--sidebar-bg)}
+[data-theme="olive-groove"] .nav-btn,
+[data-theme="rose-pine"] .nav-btn,
+[data-theme="nord"] .nav-btn,
+[data-theme="ember"] .nav-btn,
+[data-theme="olive-groove"] .tag-btn,
+[data-theme="rose-pine"] .tag-btn,
+[data-theme="nord"] .tag-btn,
+[data-theme="ember"] .tag-btn{color:var(--sidebar-text)}
+[data-theme="olive-groove"] .nav-btn:hover,
+[data-theme="rose-pine"] .nav-btn:hover,
+[data-theme="nord"] .nav-btn:hover,
+[data-theme="ember"] .nav-btn:hover,
+[data-theme="olive-groove"] .tag-btn:hover,
+[data-theme="rose-pine"] .tag-btn:hover,
+[data-theme="nord"] .tag-btn:hover,
+[data-theme="ember"] .tag-btn:hover{background:var(--sidebar-hover);color:var(--fg)}
+[data-theme="olive-groove"] .note-card.active,
+[data-theme="rose-pine"] .note-card.active,
+[data-theme="nord"] .note-card.active,
+[data-theme="ember"] .note-card.active,
+[data-theme="olive-groove"] .note-card.v2.active,
+[data-theme="rose-pine"] .note-card.v2.active,
+[data-theme="nord"] .note-card.v2.active,
+[data-theme="ember"] .note-card.v2.active{background:var(--card-selected)}
+[data-theme="olive-groove"] .note-editor,
+[data-theme="rose-pine"] .note-editor,
+[data-theme="nord"] .note-editor,
+[data-theme="ember"] .note-editor{background:var(--paper-bg)}
+[data-theme="olive-groove"] .btn-primary,
+[data-theme="rose-pine"] .btn-primary,
+[data-theme="nord"] .btn-primary,
+[data-theme="ember"] .btn-primary,
+[data-theme="olive-groove"] .nav-btn.active,
+[data-theme="rose-pine"] .nav-btn.active,
+[data-theme="nord"] .nav-btn.active,
+[data-theme="ember"] .nav-btn.active{color:var(--accent-fg)}
+[data-theme="olive-groove"] .btn-primary:hover,
+[data-theme="rose-pine"] .btn-primary:hover,
+[data-theme="nord"] .btn-primary:hover,
+[data-theme="ember"] .btn-primary:hover{color:var(--accent-fg)}
+
 :root {
   /* Premium Hardware-Accelerated Animation Tokens */
   --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);

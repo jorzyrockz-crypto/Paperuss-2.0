@@ -2482,11 +2482,17 @@ function updateToolbarState(){
    THEME
    ============================================================ */
 function setTheme(theme,trackChange=true){
-  if(!['dark','light','paper'].includes(theme)) theme='dark';
+  const supportedThemes=['dark','light','paper','olive-groove','rose-pine','nord','ember'];
+  if(!supportedThemes.includes(theme)) theme='dark';
+  const darkThemes=new Set(['dark','rose-pine','nord','ember']);
+  const themeMetaColors={
+    dark:'#0b0e14', light:'#ffffff', paper:'#fbf8f0',
+    'olive-groove':'#F7F3E9', 'rose-pine':'#191724', nord:'#2E3440', ember:'#1C1917'
+  };
   document.documentElement.setAttribute('data-theme',theme);
-  document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
+  document.documentElement.style.colorScheme = darkThemes.has(theme) ? 'dark' : 'light';
   const themeMeta = document.querySelector('meta[name="theme-color"]');
-  if(themeMeta) themeMeta.setAttribute('content', theme === 'dark' ? '#0b0e14' : (theme === 'paper' ? '#fbf8f0' : '#ffffff'));
+  if(themeMeta) themeMeta.setAttribute('content', themeMetaColors[theme]||'#0b0e14');
   localStorage.setItem(THEME_KEY,theme);
   if(trackChange && typeof markPortableStateChanged==='function') markPortableStateChanged();
   if(typeof applyAccent==='function') applyAccent((typeof appSettings!=='undefined'&&appSettings.accent)||'blue');

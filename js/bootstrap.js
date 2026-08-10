@@ -999,12 +999,25 @@ function isSingleStandaloneUrl(str) {
       e.preventDefault();
       const doc = new DOMParser().parseFromString(html, 'text/html');
       normalizeAIPasteHTML(doc);
+      if(typeof normalizePastedSpacing === 'function') normalizePastedSpacing(doc.body);
       const cleanHTML = typeof sanitizeNoteHTML==='function'?sanitizeNoteHTML(doc.body.innerHTML):doc.body.innerHTML;
       document.execCommand('insertHTML', false, cleanHTML);
       showPasteAsPlainTextChip(text || doc.body.textContent);
       if(typeof autoCaptureExternalImages==='function') setTimeout(autoCaptureExternalImages, 50);
       setTimeout(handleBodyInput, 0);
       return;
+    }
+
+    // Plain-text clipboard content normally falls back to browser-specific
+    // block markup. Insert a normalized text payload instead so repeated
+    // blank lines and trailing indentation cannot create uneven spacing.
+    if(text){
+      e.preventDefault();
+      const normalized = typeof normalizePastedPlainText === 'function'
+        ? normalizePastedPlainText(text)
+        : text.replace(/\r\n?/g,'\n').replace(/\n{3,}/g,'\n\n');
+      document.execCommand('insertText', false, normalized);
+      setTimeout(handleBodyInput, 0);
     }
   });
 

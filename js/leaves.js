@@ -39,9 +39,10 @@ function openLeavesDB() {
 
     req.onsuccess = () => {
       _leavesDBInstance = req.result;
-      _leavesDBInstance.onversionchange = () => {
-        _leavesDBInstance.close();
-        _leavesDBInstance = null;
+      const openedDb = _leavesDBInstance;
+      openedDb.onversionchange = () => {
+        openedDb.close();
+        if (_leavesDBInstance === openedDb) _leavesDBInstance = null;
       };
       resolve(_leavesDBInstance);
     };

@@ -372,6 +372,42 @@
     return body.innerHTML;
   }
 
+  // Normalize external clipboard formatting before it enters the editor.
+  // Word/Docs exports commonly carry large margins, padding, and line-height
+  // values that otherwise override the editor's consistent document rhythm.
+  function normalizePastedSpacing(root){
+    const scope = root && root.body ? root.body : root;
+    if(!scope || !scope.querySelectorAll) return scope;
+
+    const blockSelector = 'p,h1,h2,h3,h4,h5,h6,div,blockquote,li';
+    scope.querySelectorAll(blockSelector).forEach(el => {
+      if(el.closest('pre,table,td,th')) return;
+      ['margin','margin-top','margin-right','margin-bottom','margin-left',
+       'padding','padding-top','padding-bottom','line-height'].forEach(prop => el.style.removeProperty(prop));
+      if(!el.getAttribute('style') || !el.getAttribute('style').trim()) el.removeAttribute('style');
+    });
+
+    // Empty paragraphs/dividers from copied rich text create accidental blank
+    // rows. Remove them so the editor's normal paragraph margin supplies the
+    // single, predictable separation between blocks.
+    scope.querySelectorAll('p,div,blockquote').forEach(el => {
+      if(el.closest('pre,table,td,th')) return;
+      const hasContent = (el.textContent || '').replace(/\u00a0/g,' ').trim()
+        || el.querySelector('img,table,hr,video,audio,input,svg,.media-card');
+      if(!hasContent) el.remove();
+    });
+    return scope;
+  }
+
+  function normalizePastedPlainText(value){
+    return String(value || '')
+      .replace(/\r\n?/g,'\n')
+      .replace(/\u00a0/g,' ')
+      .replace(/[ \t]+\n/g,'\n')
+      .replace(/\n[ \t]+/g,'\n')
+      .replace(/\n{3,}/g,'\n\n');
+  }
+
   function sanitizeId(value){
     const id=String(value||'').trim();
     return SAFE_ID.test(id)?id:'';
@@ -461,6 +497,8 @@ note.pageMargins=['narrow','normal','wide','binding'].includes(note.pageMargins)
   global.cleanInternalEditorUI=cleanInternalEditorUI;
   global.isLeafContentContaminated=isLeafContentContaminated;
   global.sanitizeNoteHTML=sanitizeNoteHTML;
+  global.normalizePastedSpacing=normalizePastedSpacing;
+  global.normalizePastedPlainText=normalizePastedPlainText;
   global.sanitizeNoteRecord=sanitizeNoteRecord;
   global.sanitizeNoteCollection=sanitizeNoteCollection;
   global.sanitizeTaskRecord=sanitizeTaskRecord;

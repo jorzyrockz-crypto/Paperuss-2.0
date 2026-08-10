@@ -848,16 +848,30 @@ const ACCENT_PRESETS={
 function applyAccent(key){
   const root=document.documentElement;
   const theme=root.getAttribute('data-theme');
+  const themeAccentPresets={
+    'olive-groove':{accent:'#6B8F71',emphasis:'#5A7A60'},
+    'rose-pine':{accent:'#EB6F92',emphasis:'#D4567A'},
+    nord:{accent:'#88C0D0',emphasis:'#6BA8BA'},
+    ember:{accent:'#FF6B35',emphasis:'#E55A2B'}
+  };
+  /* The blue accent is the untouched default. Let named palettes supply their
+     own primary color until the user explicitly chooses another swatch. */
   const preset=theme==='paper' && key==='blue'
     ? {accent:'#2f6cf6', emphasis:'#255ad6'}
-    : (ACCENT_PRESETS[key]||ACCENT_PRESETS.blue);
+    : ((themeAccentPresets[theme] && key==='blue')
+      ? themeAccentPresets[theme]
+      : (ACCENT_PRESETS[key]||ACCENT_PRESETS.blue));
   root.style.setProperty('--accent', preset.accent);
   root.style.setProperty('--accent-emphasis', preset.emphasis);
   root.style.setProperty('--accent-soft', preset.accent+'24');
   root.style.setProperty('--accent-ring', preset.accent+'52');
   root.style.setProperty('--selection', preset.accent+'42');
   const themeMeta=document.querySelector('meta[name="theme-color"]');
-  if(themeMeta) themeMeta.content=theme==='dark'?'#0b0e14':(theme==='paper'?'#fbf8f0':preset.accent);
+  const themeMetaColors={
+    dark:'#0b0e14', light:'#ffffff', paper:'#fbf8f0',
+    'olive-groove':'#F7F3E9', 'rose-pine':'#191724', nord:'#2E3440', ember:'#1C1917'
+  };
+  if(themeMeta) themeMeta.content=themeMetaColors[theme]||preset.accent;
   document.querySelectorAll('#accentSwatchRow .accent-swatch').forEach(el=>{
     el.classList.toggle('active', el.dataset.accent===key);
   });

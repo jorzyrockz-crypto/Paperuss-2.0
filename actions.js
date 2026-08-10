@@ -442,29 +442,32 @@ function editField(field, value){
     const leaf = window.currentActiveLeaf;
     leaf.content = value;
     leaf.updatedAt = Date.now();
-    
+    const isMaterializedLeaf = !!(window.paperussLeaves && leaf.id && !leaf.isVirtual);
+
     // If virtual or default leaf, mirror to Note
     if (leaf.isVirtual || leaf.id === (window.paperussLeaves ? window.paperussLeaves.getNoteDefaultLeafId(n) : '')) {
       n.content = value;
       n.updatedAt = Date.now();
-      persist();
     } else {
-      // Materialized non-default leaf: save only to IndexedDB!
-      n.updatedAt = Date.now(); // Note metadata updated, but NOT content
-      persist();
-      
-      // Async save leaf to IndexedDB
-      if (window.paperussLeaves) {
-        window.paperussLeaves.leafPut(leaf).then(() => {
-          window.paperussLeaves.leafQueuePut({
-            id: 'mut_' + Date.now() + '_' + Math.random().toString(36).substr(2,9),
-            noteId: n.id,
-            action: 'put',
-            data: Object.assign({}, leaf),
-            timestamp: Date.now()
-          });
+      n.updatedAt = Date.now();
+    }
+    persist();
+
+    // Every materialized leaf, including Main/default, must update the
+    // dedicated IndexedDB record and offline cloud queue. Previously Main
+    // only updated the parent Note, leaving the cloud leaf stale.
+    if (isMaterializedLeaf) {
+      window.paperussLeaves.leafPut(leaf).then(() => {
+        return window.paperussLeaves.leafQueuePut({
+          id: 'mut_' + Date.now() + '_' + Math.random().toString(36).substr(2,9),
+          noteId: n.id,
+          action: 'put',
+          data: Object.assign({}, leaf),
+          timestamp: Date.now()
         });
-      }
+      }).then(() => {
+        if (typeof queueCloudSync === 'function') queueCloudSync();
+      }).catch(err => console.warn('Leaf content save failed:', err));
     }
   } else {
     n[field]=value; n.updatedAt=Date.now();
@@ -889,4 +892,3 @@ function checkAppShortcutLaunchActions() {
   }
 }
 window.checkAppShortcutLaunchActions = checkAppShortcutLaunchActions;
-

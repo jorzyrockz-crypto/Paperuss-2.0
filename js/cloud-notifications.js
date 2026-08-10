@@ -487,8 +487,14 @@ function collectPortableState(){
 function applyPortableState(value){
   if(!value || typeof value!=='object') return;
   if(value.theme){
-    localStorage.setItem(THEME_KEY,value.theme);
-    document.documentElement.setAttribute('data-theme',value.theme);
+    /* Route synced themes through the same validator/side effects as a local
+       selection so named palettes update color-scheme, meta theme color, and
+       the theme toggle icon instead of leaving a half-applied DOM attribute. */
+    if(typeof setTheme==='function') setTheme(value.theme,false);
+    else {
+      localStorage.setItem(THEME_KEY,value.theme);
+      document.documentElement.setAttribute('data-theme',value.theme);
+    }
   }
   if(value.calendarView) state.calendarView=value.calendarView;
   if(value.calendarSelectedDate){
@@ -1131,6 +1137,9 @@ async function _syncNowInner(opts){
     }
 
     try {
+      if (window.BranchEngine && typeof window.BranchEngine.syncBranchesFromCloud === 'function') {
+        await window.BranchEngine.syncBranchesFromCloud(session.uid, fbDb);
+      }
       if (window.paperussLeafManager && typeof window.paperussLeafManager.syncLeavesWithCloud === 'function') {
         await window.paperussLeafManager.syncLeavesWithCloud(session.uid);
       }

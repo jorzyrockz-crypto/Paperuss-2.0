@@ -7,6 +7,7 @@
 
   const STORAGE_KEY = 'paperuss_branches_v1';
   const ACTIVE_BRANCH_KEY = 'paperuss_active_branch_v1';
+  const UPDATED_AT_KEY = 'paperuss_branches_updated_at_v1';
 
   const OUTLINE_ICONS = [
     'folder', 'briefcase', 'user', 'lightbulb', 'archive', 
@@ -48,7 +49,14 @@
         branchesCache.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       } else {
         branchesCache = [...DEFAULT_BRANCHES];
-        saveBranches(branchesCache);
+        // Seed defaults locally without marking them as a user edit. This
+        // lets a signed-in device import the user's cloud branches instead
+        // of overwriting them with the built-in defaults.
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(branchesCache));
+        } catch (e) {
+          console.warn('[BranchEngine] Failed to seed default branches:', e);
+        }
       }
     } catch (e) {
       console.warn('[BranchEngine] Failed to load branches:', e);
@@ -61,6 +69,7 @@
     branchesCache = branches;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(branches));
+      localStorage.setItem(UPDATED_AT_KEY, String(Date.now()));
     } catch (e) {
       console.error('[BranchEngine] Failed to save branches:', e);
     }
@@ -148,17 +157,75 @@
     }
   }
 
-  function syncBranchesToCloud() {
-    if (window.auth && window.auth.currentUser && window.db) {
-      const uid = window.auth.currentUser.uid;
-      try {
-        window.db.collection('users').doc(uid).set({
-          branches: branchesCache,
-          branchesUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true }).catch(err => {
-          console.warn('[BranchEngine] Firestore sync suppressed:', err);
-        });
-      } catch (e) {}
+  function getCloudContext() {
+    const session = (typeof currentSession !== 'undefined' && currentSession)
+      || (typeof loadSession === 'function' ? loadSession() : null);
+    let db = (typeof fbDb !== 'undefined' && fbDb) || null;
+    if (!db && typeof firebase !== 'undefined' && firebase.firestore) {
+      try { db = firebase.firestore(); } catch (_) { db = null; }
+    }
+    return { session, db };
+  }
+
+  function asTimestamp(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (value && typeof value.toMillis === 'function') return value.toMillis();
+    if (value && typeof value.seconds === 'number') return value.seconds * 1000;
+    const parsed = Date.parse(value || '');
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  async function syncBranchesToCloud(uidOverride, dbOverride) {
+    const context = getCloudContext();
+    const uid = uidOverride || context.session?.uid;
+    const db = dbOverride || context.db;
+    if (!uid || !db || !Array.isArray(branchesCache)) return false;
+    try {
+      const updatedAt = asTimestamp(localStorage.getItem(UPDATED_AT_KEY)) || Date.now();
+      localStorage.setItem(UPDATED_AT_KEY, String(updatedAt));
+      await db.collection('paperuss_users').doc(uid).set({
+        branches: branchesCache,
+        branchesUpdatedAt: updatedAt
+      }, { merge: true });
+      return true;
+    } catch (e) {
+      console.warn('[BranchEngine] Firestore sync suppressed:', e);
+      return false;
+    }
+  }
+
+  async function syncBranchesFromCloud(uidOverride, dbOverride) {
+    const context = getCloudContext();
+    const uid = uidOverride || context.session?.uid;
+    const db = dbOverride || context.db;
+    if (!uid || !db) return false;
+    try {
+      const snap = await db.collection('paperuss_users').doc(uid).get();
+      if (!snap.exists) return syncBranchesToCloud(uid, db);
+      const remote = snap.data() || {};
+      if (!Array.isArray(remote.branches)) return syncBranchesToCloud(uid, db);
+
+      const remoteUpdatedAt = asTimestamp(remote.branchesUpdatedAt);
+      const localUpdatedAt = asTimestamp(localStorage.getItem(UPDATED_AT_KEY));
+      if (remoteUpdatedAt > localUpdatedAt || (!localUpdatedAt && remote.branches.length > 0)) {
+        branchesCache = remote.branches
+          .filter(branch => branch && branch.id && branch.name)
+          .map((branch, index) => ({
+            ...branch,
+            parentId: branch.parentId || null,
+            order: typeof branch.order === 'number' ? branch.order : index
+          }))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(branchesCache));
+        localStorage.setItem(UPDATED_AT_KEY, String(remoteUpdatedAt));
+        renderSidebarBranchTree();
+        return true;
+      }
+      if (localUpdatedAt > remoteUpdatedAt) return syncBranchesToCloud(uid, db);
+      return false;
+    } catch (e) {
+      console.warn('[BranchEngine] Firestore download suppressed:', e);
+      return false;
     }
   }
 
@@ -691,6 +758,8 @@ function escHtml(str) {
     reorderBranches,
     loadBranches,
     saveBranches,
+    syncBranchesToCloud,
+    syncBranchesFromCloud,
     getActiveBranchId,
     setActiveBranchId,
     createBranch,

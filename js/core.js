@@ -1161,8 +1161,10 @@ function renderEditor(){
           // Real materialized note: load the active leaf from IDB
           const activeLeafId = window.paperussLeaves.getNoteActiveLeafId(n);
           leafToRender = await window.paperussLeaves.leafGet(activeLeafId);
-          if (typeof session !== 'undefined' && session && session.uid && window.paperussLeafManager && typeof window.paperussLeafManager.syncNoteLeavesFromCloud === 'function') {
-            window.paperussLeafManager.syncNoteLeavesFromCloud(n.id, session.uid).then(() => {
+          const renderSession = (typeof currentSession !== 'undefined' && currentSession)
+            || (typeof loadSession === 'function' ? loadSession() : null);
+          if (renderSession && renderSession.uid && window.paperussLeafManager && typeof window.paperussLeafManager.syncNoteLeavesFromCloud === 'function') {
+            window.paperussLeafManager.syncNoteLeavesFromCloud(n.id, renderSession.uid).then(() => {
               window.paperussLeaves.leafGet(activeLeafId).then(updated => {
                 if (updated && updated.updatedAt > (leafToRender ? leafToRender.updatedAt : 0)) {
                   leafToRender = updated;
@@ -2095,6 +2097,7 @@ window.paperussLeafManager = {
       if (!snap || snap.empty) return true;
 
       const n = getNote(noteId);
+      let noteMetadataChanged = false;
       for (const doc of snap.docs) {
         const remoteLeaf = doc.data();
         if (!remoteLeaf || !remoteLeaf.id) continue;
@@ -2111,6 +2114,11 @@ window.paperussLeafManager = {
             if (idx !== -1) {
               n.leafOrder.splice(idx, 1);
               n.leafCount = Math.max(1, n.leafOrder.length);
+              if (n.defaultLeafId === remoteLeaf.id) {
+                n.defaultLeafId = n.leafOrder[0] || null;
+              }
+              n.updatedAt = Date.now();
+              noteMetadataChanged = true;
             }
           }
         } else {
@@ -2139,6 +2147,7 @@ window.paperussLeafManager = {
           }
         }
       }
+      if (noteMetadataChanged && typeof persist === 'function') persist();
       return true;
     } catch (err) {
       console.warn('syncNoteLeavesFromCloud warning:', err);
@@ -2162,6 +2171,14 @@ window.flushActiveLeaf = async function() {
       window.currentActiveLeaf.updatedAt = Date.now();
     }
     await window.paperussLeaves.leafPut(window.currentActiveLeaf);
+    await window.paperussLeaves.leafQueuePut({
+      id: 'mut_flush_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+      noteId: window.currentActiveLeaf.noteId,
+      action: 'put',
+      data: Object.assign({}, window.currentActiveLeaf),
+      timestamp: Date.now()
+    });
+    if (typeof queueCloudSync === 'function') queueCloudSync();
   }
 };
 
@@ -2380,6 +2397,7 @@ async function setLeafColorAction(leafId, colorName) {
     data: Object.assign({}, leafObj),
     timestamp: Date.now()
   });
+  if (typeof queueCloudSync === 'function') queueCloudSync();
 
   if (window.currentActiveLeaf && window.currentActiveLeaf.id === leafId) {
     window.currentActiveLeaf.color = colorName;

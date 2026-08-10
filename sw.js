@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'paperuss-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v267-fix-seed-images-static`;
+const CACHE_NAME = `${CACHE_PREFIX}v270-named-themes`;
 const APP_SHELL = [
   './',
   './index.html',
