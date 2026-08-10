@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'paperuss-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v275-floating-block-menu`;
+const CACHE_NAME = `${CACHE_PREFIX}v277-audio-tables`;
 const APP_SHELL = [
   './',
   './index.html',

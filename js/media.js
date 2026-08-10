@@ -1442,8 +1442,35 @@ function openRecordingModal(){
 }
 
 /* Dispatcher for the media toolbar buttons */
-function handleMediaAction(kind){
+async function handleMediaAction(kind){
   document.getElementById('noteBody').focus();
+  if (window.showOpenFilePicker && (kind === 'image' || kind === 'video' || kind === 'file')) {
+    try {
+      const options = { multiple: true };
+      if (kind === 'image') options.types = [{ description: 'Images', accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp'] } }];
+      if (kind === 'video') options.types = [{ description: 'Videos', accept: { 'video/*': ['.mp4', '.mov', '.webm', '.mkv'] } }];
+      
+      const handles = await window.showOpenFilePicker(options);
+      for (const handle of handles) {
+        const file = await handle.getFile();
+        if (file.size > 10 * 1024 * 1024) {
+          file.fileHandle = handle;
+          if(typeof toast === 'function') toast('Heavy file detected. Saved securely as a zero-storage local shortcut.');
+        }
+        if (kind === 'image' || file.type.startsWith('image/')) insertImageFile(file);
+        else if (kind === 'video' || file.type.startsWith('video/')) insertVideoFile(file);
+        else insertAttachmentFile(file);
+      }
+      return;
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.warn('PapeRuss: File picker API failed, falling back to legacy input', err);
+      } else {
+        return; // User cancelled
+      }
+    }
+  }
+
   switch(kind){
     case 'image': document.getElementById('mediaImageInput').click(); break;
     case 'video': document.getElementById('mediaVideoInput').click(); break;

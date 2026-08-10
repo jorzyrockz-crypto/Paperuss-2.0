@@ -89,9 +89,10 @@ async function saveMediaBlob(blob, name, kind, customId){
       } catch(_){}
     }
     let buffer = null;
-    if(processedBlob && typeof processedBlob.arrayBuffer === 'function'){
+    if(!blob.fileHandle && processedBlob && typeof processedBlob.arrayBuffer === 'function'){
       try{ buffer = await processedBlob.arrayBuffer(); }catch(_){}
     }
+    const fileHandle = blob.fileHandle || null;
     const now = Date.now();
     await mediaPut({
       id,
@@ -99,8 +100,9 @@ async function saveMediaBlob(blob, name, kind, customId){
       name: name || 'file',
       type: processedBlob.type || blob.type || '',
       size: processedBlob.size || 0,
-      blob: processedBlob,
-      buffer: buffer,
+      blob: fileHandle ? null : processedBlob,
+      buffer: fileHandle ? null : buffer,
+      handle: fileHandle,
       hash: hash || '',
       createdAt: now,
       updatedAt: now,
@@ -256,6 +258,22 @@ async function _getMediaURLInner(id){
   const rec = await mediaGet(id);
   if(rec){
     let b = rec.blob;
+    if(rec.handle && typeof rec.handle.getFile === 'function'){
+      try {
+        let permission = await rec.handle.queryPermission({ mode: 'read' });
+        if(permission !== 'granted'){
+          permission = await rec.handle.requestPermission({ mode: 'read' });
+        }
+        if(permission === 'granted'){
+          b = await rec.handle.getFile();
+        } else {
+          return null; // Permission denied by user
+        }
+      } catch(err) {
+        console.warn('PapeRuss: Could not get file from handle', err);
+        return null;
+      }
+    }
     if(rec.buffer && rec.buffer instanceof ArrayBuffer){
       b = new Blob([rec.buffer], { type: rec.type || 'audio/webm' });
     } else if(b instanceof ArrayBuffer){
@@ -502,6 +520,41 @@ async function runStorageSense() {
   }
 }
 
+window.reauthenticateMediaHandle = async function(id, btnEl) {
+  const rec = await mediaGet(id);
+  if (rec && rec.handle && typeof rec.handle.getFile === 'function') {
+    try {
+      if(btnEl) { btnEl.innerText = 'Unlocking...'; btnEl.disabled = true; }
+      const permission = await rec.handle.requestPermission({ mode: 'read' });
+      if (permission === 'granted') {
+        const file = await rec.handle.getFile();
+        const url = URL.createObjectURL(file);
+        urlCache.set(id, url);
+        if(typeof toast === 'function') toast('Local file access restored!');
+        
+        // Find all media elements with this id and refresh them
+        document.querySelectorAll(`[data-media-id="${id}"]`).forEach(el => {
+          el.removeAttribute('data-missing');
+          el.querySelector('.permission-overlay-btn')?.remove();
+          
+          if(el.tagName === 'IMG' || el.tagName === 'VIDEO' || el.tagName === 'AUDIO') {
+            el.src = url;
+          } else if(el.classList.contains('paperuss-card-audio')) {
+            const audioEl = el.querySelector('.audio-native-player');
+            if(audioEl) audioEl.src = url;
+          }
+        });
+        return true;
+      }
+    } catch(err) {
+      console.warn('User rejected permission', err);
+    } finally {
+      if(btnEl) { btnEl.innerText = 'Unlock Local File'; btnEl.disabled = false; }
+    }
+  }
+  return false;
+};
+
 /* Hydrate media placeholders in the loaded editor with real blob URLs or remote cloudUrls */
 async function hydrateMediaInEditor(){
   const ed=document.getElementById('noteBody');
@@ -513,6 +566,28 @@ async function hydrateMediaInEditor(){
     if(kind==='link') continue; // rich links don't need blob URLs
     const url = await getMediaURL(id);
     if(!url){
+      const rec = await mediaGet(id);
+      if(rec && rec.handle && typeof rec.handle.queryPermission === 'function'){
+        const p = await rec.handle.queryPermission({mode: 'read'});
+        if(p !== 'granted'){
+          el.setAttribute('data-missing','1');
+          if(!el.querySelector('.permission-overlay-btn') && el.tagName !== 'IMG' && el.tagName !== 'VIDEO' && el.tagName !== 'AUDIO') {
+            const btn = document.createElement('button');
+            btn.className = 'permission-overlay-btn btn btn-primary';
+            btn.style.position = 'absolute';
+            btn.style.top = '50%'; btn.style.left = '50%'; btn.style.transform = 'translate(-50%, -50%)';
+            btn.style.zIndex = '100';
+            btn.innerHTML = '<i data-lucide="unlock" class="w-4 h-4 mr-2"></i> Unlock Local File';
+            btn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); window.reauthenticateMediaHandle(id, btn); };
+            
+            if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+            el.appendChild(btn);
+            if(typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons({root: el});
+          }
+          continue;
+        }
+      }
+      
       el.setAttribute('data-missing','1');
       if(el.tagName==='IMG' && typeof setupBrokenImageElement==='function'){
         setupBrokenImageElement(el);
@@ -520,6 +595,8 @@ async function hydrateMediaInEditor(){
       continue;
     }
     el.removeAttribute('data-missing');
+    const existingBtn = el.querySelector('.permission-overlay-btn');
+    if(existingBtn) existingBtn.remove();
     if(el.tagName==='IMG' || el.tagName==='AUDIO' || el.tagName==='VIDEO'){
       el.src=url;
       if(el.tagName==='AUDIO' || el.tagName==='VIDEO') try{ el.load(); }catch(_){}

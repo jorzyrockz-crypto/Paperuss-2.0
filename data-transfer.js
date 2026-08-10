@@ -25,6 +25,26 @@ function importNotes(file){
   r.onload=async ()=>{
     try{
       if(file.size>100*1024*1024) throw new Error('Import file is larger than 100 MB');
+      
+      if(file.name.toLowerCase().endsWith('.md') || (file.type && file.type.includes('markdown'))){
+        const text = r.result;
+        let content = typeof parseMarkdownToPaperussHTML === 'function' ? parseMarkdownToPaperussHTML(text) : (typeof mdToHtml === 'function' ? mdToHtml(text) : text);
+        content = typeof sanitizeNoteHTML === 'function' ? sanitizeNoteHTML(content) : content;
+        let title = file.name.replace(/\.md$/i, '');
+        notes.push({
+          id: uid(), title: title, content: content,
+          tags: [], pinned: false, archived: false,
+          fontStyle: 'sans', pageViewEnabled: false,
+          pageSize: 'a4', pageOrientation: 'portrait', pageMargins: 'normal',
+          createdAt: Date.now(), updatedAt: Date.now(),
+          calendarStart: null, calendarEnd: null, calendarRepeat: null, calendarNotify: false, coverImage: null
+        });
+        if(typeof sanitizeNoteCollection === 'function') notes = sanitizeNoteCollection(notes);
+        save(); renderAll();
+        toast('Imported Markdown file as new note');
+        return;
+      }
+
       const data=JSON.parse(r.result);
       // Support both legacy (array) and v2 ({notes, media}) formats
       const importedNotes = Array.isArray(data) ? data : (data.notes||[]);

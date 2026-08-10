@@ -26,6 +26,7 @@ let _txtText        = '';
 let _txtHTML        = '';
 let _txtCaptureEl   = null;
 let _txtCaretMarker = null;
+let _lastCaretTop   = null;
 
 // ── Comet State ──────────────────────────────────────────────
 let _cometOrb       = null;    // the star-head element
@@ -53,12 +54,16 @@ function _removeTxtCaret() {
 }
 
 function _resetTxt() {
+  if (_txtDragging && window.WorkspaceAudio && typeof window.WorkspaceAudio.playDragCancel === 'function') {
+    window.WorkspaceAudio.playDragCancel();
+  }
   _txtDragging    = false;
   _txtPreparing   = false;
   _txtSourceRange = null;
   _txtText        = '';
   _txtHTML        = '';
   _txtCaptureEl   = null;
+  _lastCaretTop   = null;
   _currClientX    = 0;
   _currClientY    = 0;
   _removeComet();
@@ -89,8 +94,16 @@ function _updateCaretMarker(clientX, clientY) {
     document.body.appendChild(_txtCaretMarker);
   }
   _txtCaretMarker.style.left   = `${rect.left + window.scrollX}px`;
-  _txtCaretMarker.style.top    = `${rect.top  + window.scrollY}px`;
+  const currentTop = Math.round(rect.top + window.scrollY);
+  _txtCaretMarker.style.top    = `${currentTop}px`;
   _txtCaretMarker.style.height = `${Math.max(rect.height, 16)}px`;
+
+  if (_lastCaretTop !== null && Math.abs(currentTop - _lastCaretTop) > 2) {
+    if (window.WorkspaceAudio && typeof window.WorkspaceAudio.playDragHover === 'function') {
+      window.WorkspaceAudio.playDragHover();
+    }
+  }
+  _lastCaretTop = currentTop;
 }
 
 // ── Spawn comet ───────────────────────────────────────────────
@@ -254,10 +267,15 @@ function _commitDrop(clientX, clientY) {
   while (tempDiv.firstChild) { lastNode = tempDiv.firstChild; frag.appendChild(lastNode); }
   dropRange.insertNode(frag);
 
+  if (window.WorkspaceAudio && typeof window.WorkspaceAudio.playDragDrop === 'function') {
+    window.WorkspaceAudio.playDragDrop();
+  }
+
   // Drop-release burst
   if (lastNode) {
     const burst = document.createElement('span');
     burst.className = 'text-drop-release-burst';
+    burst.setAttribute('data-paperuss-unwrap', 'true');
     if (lastNode.nodeType === 1) {
       burst.appendChild(lastNode.cloneNode(true));
       lastNode.parentNode && lastNode.parentNode.replaceChild(burst, lastNode);
@@ -267,8 +285,7 @@ function _commitDrop(clientX, clientY) {
     }
     setTimeout(() => {
       if (burst.parentNode) {
-        while (burst.firstChild) burst.parentNode.insertBefore(burst.firstChild, burst);
-        burst.remove();
+        burst.classList.remove('text-drop-release-burst');
       }
     }, 1400); // matches CSS animation duration
   }
@@ -351,6 +368,9 @@ document.addEventListener('pointermove', (e) => {
       _txtDragging  = true;
       _txtPreparing = false;
       document.body.classList.add('is-text-dragging');
+      if (window.WorkspaceAudio && typeof window.WorkspaceAudio.playDragStart === 'function') {
+        window.WorkspaceAudio.playDragStart();
+      }
       try { window.getSelection().removeAllRanges(); } catch (_) {}
       _spawnComet(e.clientX, e.clientY);
     }
@@ -369,6 +389,7 @@ document.addEventListener('pointerup', (e) => {
   if (!_txtDragging) { _resetTxt(); return; }
   e.preventDefault();
   _commitDrop(e.clientX, e.clientY);
+  _txtDragging = false; // Prevents playDragCancel inside _resetTxt
   _resetTxt();
 }, true);
 

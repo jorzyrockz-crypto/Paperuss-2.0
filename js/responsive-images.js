@@ -324,6 +324,17 @@ function initImgToolbarDropdowns(){
     });
   }
 
+  // Align Dropdown
+  const alignToggle=document.getElementById('imgTbAlignToggle');
+  const alignDrop=document.getElementById('imgTbAlignDrop');
+  if(alignToggle && alignDrop){
+    alignToggle.addEventListener('click', e=>{
+      e.stopPropagation();
+      closeAllItbDropdowns(alignDrop);
+      alignDrop.classList.toggle('hidden');
+    });
+  }
+
   // Info button
   const infoBtn = document.getElementById('imgTbInfo');
   if (infoBtn) {

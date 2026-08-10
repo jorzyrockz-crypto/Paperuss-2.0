@@ -139,12 +139,20 @@ function normalizeTableStructure(tbl){
 
 function positionTableTools(){
   const tools=document.getElementById('tblTools');
+  const badge=document.getElementById('tblDimBadge');
   const tbl=currentTable();
   if(!tools) return;
   if(!tbl){
     tools.classList.remove('show');
     document.getElementById('tblColorDropdown')?.classList.remove('show');
+    if(badge) badge.textContent='';
     return;
+  }
+  // Update dimension badge
+  if(badge){
+    const rows=tbl.rows.length;
+    const cols=tbl.rows[0]?tbl.rows[0].cells.length:0;
+    badge.textContent=`${rows}\u00d7${cols}`;
   }
   const r=tbl.getBoundingClientRect();
   const ed=(document.getElementById('editorScroll')||bodyEl()).getBoundingClientRect();
@@ -838,9 +846,10 @@ function initTableTools(){
     tblFmIf:()=>tblInsertFormula('=IF()'),
     tblFmtNone:()=>setCellFormat('number'),
     tblFmtUsd:()=>setCellFormat('currency','$'),
-    tblFmtEur:()=>setCellFormat('currency','€'),
-    tblFmtGbp:()=>setCellFormat('currency','£'),
-    tblFmtJpy:()=>setCellFormat('currency','¥'),
+    tblFmtEur:()=>setCellFormat('currency','\u20ac'),
+    tblFmtGbp:()=>setCellFormat('currency','\u00a3'),
+    tblFmtJpy:()=>setCellFormat('currency','\u00a5'),
+    tblFmtPhp:()=>setCellFormat('currency','\u20b1'),
     tblFmtPct:()=>setCellFormat('percent'),
     tblHeaderRow:tblHeaderRow,
     tblHeaderCol:tblHeaderCol,
@@ -1599,11 +1608,16 @@ document.addEventListener('input', e => {
   }
 });
 
-/* Table Cell Keyboard Navigation (ArrowUp, ArrowDown, Tab, Enter) */
+/* ══════════════════════════════════════════════════════════════
+   Table Cell Keyboard Navigation
+   Tab / Shift+Tab  — next/prev cell, Tab on last cell adds row
+   Arrow keys       — navigate between cells directionally
+   ══════════════════════════════════════════════════════════════ */
 document.addEventListener('keydown', e => {
   const cell = e.target.closest('td,th');
   if (!cell || !cell.isContentEditable) return;
 
+  /* ── Formula autocomplete has priority ── */
   const menuVisible = formulaMenuEl && formulaMenuEl.classList.contains('show');
   if (menuVisible) {
     const opts = formulaMenuEl.querySelectorAll('.formula-opt');
@@ -1628,31 +1642,91 @@ document.addEventListener('keydown', e => {
     }
   }
 
-  // Cell Navigation: ArrowUp & ArrowDown
+  /* Helper: focus a cell and place cursor at start */
+  function focusCell(target) {
+    if (!target) return;
+    target.focus();
+    const sel = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(target);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    activeCell = target;
+    clearCellSelection();
+    positionTableTools();
+  }
+
+  /* Helper: get flat ordered list of cells */
+  function orderedCells(tbl) { return Array.from(tbl.querySelectorAll('td,th')); }
+
+  const tbl = cell.closest('table');
+  if (!tbl) return;
+
+  /* ── Tab / Shift+Tab ── */
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const cells = orderedCells(tbl);
+    const idx = cells.indexOf(cell);
+    if (!e.shiftKey) {
+      if (idx < cells.length - 1) {
+        focusCell(cells[idx + 1]);
+      } else {
+        // Tab on last cell → append new row
+        tblInsertRow('below');
+        // After insertion, focus first cell of new last row
+        requestAnimationFrame(() => {
+          const newCells = orderedCells(tbl);
+          focusCell(newCells[newCells.length - (tbl.rows[tbl.rows.length-1]?.cells.length || 1)]);
+        });
+      }
+    } else {
+      if (idx > 0) focusCell(cells[idx - 1]);
+    }
+    return;
+  }
+
+  /* ── Arrow key cell navigation ── */
+  const sel = window.getSelection();
+  const tr  = cell.parentElement;
+
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-    const tr = cell.parentElement;
-    const tbl = tr ? tr.parentElement : null;
-    if (!tr || !tbl) return;
-
     const colIdx = Array.from(tr.children).indexOf(cell);
-    let targetRow = null;
-
-    if (e.key === 'ArrowUp') targetRow = tr.previousElementSibling;
-    else if (e.key === 'ArrowDown') targetRow = tr.nextElementSibling;
-
+    const targetRow = e.key === 'ArrowUp' ? tr.previousElementSibling : tr.nextElementSibling;
     if (targetRow && targetRow.children.length > 0) {
       e.preventDefault();
-      const targetCell = targetRow.children[Math.min(colIdx, targetRow.children.length - 1)];
-      if (targetCell) {
-        targetCell.focus();
-        const range = document.createRange();
-        const sel = window.getSelection();
-        range.selectNodeContents(targetCell);
-        range.collapse(true);
-        sel.removeAllRanges();
-        sel.addRange(range);
+      focusCell(targetRow.children[Math.min(colIdx, targetRow.children.length - 1)]);
+    }
+    return;
+  }
+
+  if (e.key === 'ArrowLeft') {
+    // Move to previous cell only when cursor is at position 0
+    if (sel && sel.rangeCount > 0 && sel.getRangeAt(0).startOffset === 0
+        && sel.getRangeAt(0).startContainer === (cell.firstChild || cell)) {
+      e.preventDefault();
+      const cells = orderedCells(tbl);
+      const idx = cells.indexOf(cell);
+      if (idx > 0) focusCell(cells[idx - 1]);
+    }
+    return;
+  }
+
+  if (e.key === 'ArrowRight') {
+    // Move to next cell only when cursor is at the end
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      const lastNode = cell.lastChild || cell;
+      const atEnd = range.endContainer === lastNode
+        && range.endOffset === (lastNode.nodeType === Node.TEXT_NODE ? lastNode.length : lastNode.childNodes.length);
+      if (atEnd) {
+        e.preventDefault();
+        const cells = orderedCells(tbl);
+        const idx = cells.indexOf(cell);
+        if (idx < cells.length - 1) focusCell(cells[idx + 1]);
       }
     }
+    return;
   }
 });
 
@@ -1714,3 +1788,177 @@ function insertFinancialTemplate(type) {
   normalizeEditorTables();
   handleBodyInput();
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Right-Click Context Menu
+   ══════════════════════════════════════════════════════════════ */
+(function initTblCtxMenu() {
+  const ctxMenu = document.getElementById('tblCtxMenu');
+  if (!ctxMenu) return;
+
+  const ctxActionMap = {
+    tblRowAbove: () => tblInsertRow('above'),
+    tblRowBelow: () => tblInsertRow('below'),
+    tblColLeft:  () => tblInsertCol('left'),
+    tblColRight: () => tblInsertCol('right'),
+    tblRowDel:   tblDeleteRow,
+    tblColDel:   tblDeleteCol,
+    tblMergeCells: tblMergeCells,
+    tblSplitCell:  tblSplitCell,
+    tblClearCell: () => {
+      onSelected(c => {
+        c.innerHTML = '';
+        c.removeAttribute('data-formula');
+      });
+      const tbl = currentTable();
+      if (tbl) recalculateTableFormulas(tbl);
+    }
+  };
+
+  function closeCtxMenu() {
+    ctxMenu.classList.remove('show');
+  }
+
+  // Wire each button
+  ctxMenu.addEventListener('click', e => {
+    const btn = e.target.closest('[data-ctx]');
+    if (!btn) return;
+    const fn = ctxActionMap[btn.dataset.ctx];
+    if (fn) { closeCtxMenu(); fn(); }
+  });
+
+  // Open on right-click inside a table cell
+  document.addEventListener('contextmenu', e => {
+    const cell = e.target.closest('td,th');
+    if (!cell || !cell.closest('.note-editor')) return;
+    e.preventDefault();
+
+    // Set active cell if not already focused there
+    if (cell !== activeCell) {
+      activeCell = cell;
+      clearCellSelection();
+      positionTableTools();
+    }
+
+    // Show/hide Merge option based on selection size
+    const mergeBtn = document.getElementById('tblCtxMerge');
+    const splitBtn = document.getElementById('tblCtxSplit');
+    if (mergeBtn) mergeBtn.style.display = selectedCells.size > 1 ? '' : 'none';
+    if (splitBtn) {
+      const isMerged = cell.colSpan > 1 || cell.rowSpan > 1;
+      splitBtn.style.display = isMerged ? '' : 'none';
+    }
+
+    // Remove sep before merge/split if both hidden
+    const hasMergeSplit = (selectedCells.size > 1) || (cell.colSpan > 1 || cell.rowSpan > 1);
+    ctxMenu.querySelectorAll('.tbl-ctx-sep').forEach((sep, i) => {
+      if (i === 1) sep.style.display = hasMergeSplit ? '' : 'none';
+    });
+
+    // Position the menu
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const mw = 210, mh = ctxMenu.offsetHeight || 260;
+    let x = e.clientX, y = e.clientY;
+    if (x + mw > vw - 8) x = vw - mw - 8;
+    if (y + mh > vh - 8) y = vh - mh - 8;
+    ctxMenu.style.left = `${Math.max(8, x)}px`;
+    ctxMenu.style.top  = `${Math.max(8, y)}px`;
+    ctxMenu.classList.add('show');
+  });
+
+  // Close on outside click or Escape
+  document.addEventListener('click', e => {
+    if (!ctxMenu.contains(e.target)) closeCtxMenu();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeCtxMenu();
+  });
+})();
+
+/* ══════════════════════════════════════════════════════════════
+   Column Sort — click a <th> to sort that column
+   asc → desc → original order → repeat
+   ══════════════════════════════════════════════════════════════ */
+(function initTblColumnSort() {
+  // Store original row order by table identity
+  const originalOrders = new WeakMap();
+
+  document.addEventListener('click', e => {
+    const th = e.target.closest('th');
+    if (!th) return;
+    const tbl = th.closest('table');
+    if (!tbl || !tbl.closest('.note-editor')) return;
+
+    // Don't trigger if we just finished a drag-resize
+    if (tbl.classList.contains('table-col-resizing')) return;
+
+    const tbody = tbl.querySelector('tbody') || tbl;
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    // Determine header row: if th is in first row, it's the header
+    const headerRow = rows[0]?.querySelector('th') ? rows[0] : null;
+    const dataRows = headerRow ? rows.slice(1) : rows;
+    if (dataRows.length < 2) return;
+
+    // Store original order if not stored
+    if (!originalOrders.has(tbl)) {
+      originalOrders.set(tbl, new Map());
+    }
+    const orderMap = originalOrders.get(tbl);
+
+    // Get column index
+    const allThs = headerRow ? Array.from(headerRow.children) : [];
+    const colIdx = allThs.indexOf(th);
+    if (colIdx < 0) return;
+
+    // Determine next sort state
+    const current = th.dataset.sortState || 'none'; // none | asc | desc
+    let next;
+    if (current === 'none' || current === 'desc') next = 'asc';
+    else next = 'desc';
+
+    // If restoring to original, use stored order
+    if (current === 'asc') {
+      next = 'desc';
+    }
+
+    // Save original order before first sort
+    if (current === 'none') {
+      const key = colIdx;
+      if (!orderMap.has(key)) {
+        orderMap.set(key, dataRows.map(r => r));
+      }
+    }
+
+    // Clear sort indicators on all headers in this table
+    (headerRow ? Array.from(headerRow.children) : []).forEach(h => {
+      h.classList.remove('sort-asc', 'sort-desc');
+      if (h !== th) delete h.dataset.sortState;
+    });
+
+    if (next === 'none') {
+      // Restore original order
+      const orig = orderMap.get(colIdx);
+      if (orig) orig.forEach(r => tbody.appendChild(r));
+      th.classList.remove('sort-asc', 'sort-desc');
+      delete th.dataset.sortState;
+    } else {
+      // Sort rows
+      const getCellVal = row => {
+        const c = row.children[colIdx];
+        return c ? c.textContent.trim() : '';
+      };
+      const sorted = [...dataRows].sort((a, b) => {
+        const va = getCellVal(a), vb = getCellVal(b);
+        const na = parseFloat(va.replace(/[^0-9.\-]/g, '')), nb = parseFloat(vb.replace(/[^0-9.\-]/g, ''));
+        const isNum = !isNaN(na) && !isNaN(nb);
+        if (isNum) return next === 'asc' ? na - nb : nb - na;
+        return next === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      });
+      sorted.forEach(r => tbody.appendChild(r));
+      th.classList.toggle('sort-asc', next === 'asc');
+      th.classList.toggle('sort-desc', next === 'desc');
+      th.dataset.sortState = next;
+    }
+  });
+})();

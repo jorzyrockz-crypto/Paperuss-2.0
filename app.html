@@ -135,7 +135,7 @@ try {
 <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="assets/vendor/mammoth.browser.min.js"></script>
-<script src="js/sound-engine.js"></script>
+<script src="js/sound-engine.js?v=2.6.7"></script>
 <!-- Firebase (optional cloud sync). App works fully offline if these fail to load or are unconfigured. -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" onerror="window.__fbLoadFailed=true"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" onerror="window.__fbLoadFailed=true"></script>
@@ -1379,6 +1379,7 @@ try {
 <!-- Grouped table toolbar: primary 6 buttons + submenus -->
 <div class="tbl-tools" id="tblTools">
   <button id="tblMoveHandle" class="tbl-move-handle" title="Move table" aria-label="Move table"><i data-lucide="grip-vertical" class="w-4 h-4"></i></button>
+  <span class="tbl-dim-badge" id="tblDimBadge"></span>
   <span class="tbl-sep"></span>
   <button id="tblBtnInsert"  title="Insert…"><i data-lucide="plus" class="w-4 h-4"></i></button>
   <button id="tblBtnMerge"   title="Merge / Split"><i data-lucide="combine" class="w-4 h-4"></i></button>
@@ -1484,6 +1485,21 @@ try {
   <button class="tbl-color-swatch" style="background:#18181b" data-color="#18181b" title="Dark Gray"></button>
 </div>
 
+<!-- Right-click context menu for table cells -->
+<div class="tbl-ctx-menu" id="tblCtxMenu">
+  <button class="tbl-ctx-item" data-ctx="tblRowAbove"><i data-lucide="arrow-up-to-line" class="w-4 h-4"></i>Insert Row Above</button>
+  <button class="tbl-ctx-item" data-ctx="tblRowBelow"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>Insert Row Below</button>
+  <button class="tbl-ctx-item" data-ctx="tblColLeft"><i data-lucide="arrow-left-to-line" class="w-4 h-4"></i>Insert Column Left</button>
+  <button class="tbl-ctx-item" data-ctx="tblColRight"><i data-lucide="arrow-right-to-line" class="w-4 h-4"></i>Insert Column Right</button>
+  <div class="tbl-ctx-sep"></div>
+  <button class="tbl-ctx-item danger" data-ctx="tblRowDel"><i data-lucide="rows-3" class="w-4 h-4"></i>Delete Row</button>
+  <button class="tbl-ctx-item danger" data-ctx="tblColDel"><i data-lucide="columns-3" class="w-4 h-4"></i>Delete Column</button>
+  <div class="tbl-ctx-sep"></div>
+  <button class="tbl-ctx-item" id="tblCtxMerge" data-ctx="tblMergeCells" style="display:none"><i data-lucide="combine" class="w-4 h-4"></i>Merge Selected Cells</button>
+  <button class="tbl-ctx-item" id="tblCtxSplit" data-ctx="tblSplitCell" style="display:none"><i data-lucide="split" class="w-4 h-4"></i>Split Cell</button>
+  <button class="tbl-ctx-item" data-ctx="tblClearCell"><i data-lucide="eraser" class="w-4 h-4"></i>Clear Cell Content</button>
+</div>
+
 <!-- Table mobile bottom sheet -->
 <div class="tbl-sheet-backdrop" id="tblSheetBackdrop"></div>
 <div class="tbl-sheet" id="tblSheet">
@@ -1544,6 +1560,24 @@ try {
     </div>
   </div>
 
+  <!-- Slot 1.2: Text Wrap / Align Dropdown -->
+  <div class="itb-segment" style="position:relative">
+    <button class="itb-btn" id="imgTbAlignToggle" title="Wrap Text Options">
+      <i data-lucide="wrap-text" class="w-4 h-4"></i>
+    </button>
+    <div class="itb-dropdown hidden" id="imgTbAlignDrop">
+      <button class="itb-drop-item" id="imgTbAlignLeft">
+        <i data-lucide="panel-left" class="w-4 h-4"></i> Wrap Text Right (Float Left)
+      </button>
+      <button class="itb-drop-item" id="imgTbAlignRight">
+        <i data-lucide="panel-right" class="w-4 h-4"></i> Wrap Text Left (Float Right)
+      </button>
+      <button class="itb-drop-item" id="imgTbAlignCenter">
+        <i data-lucide="rows-2" class="w-4 h-4"></i> Inline with Text
+      </button>
+    </div>
+  </div>
+
   <!-- Slot 1.5: Info (i) Helper -->
   <button class="itb-btn" id="imgTbInfo" data-action="open-media-info" title="Asset Specs & Media Hub Info">
     <i data-lucide="info" class="w-4 h-4"></i>
@@ -1588,10 +1622,6 @@ try {
       <button class="itb-drop-item" id="imgTbDownload">
         <i data-lucide="download" class="w-4 h-4"></i> Download
       </button>
-      <!-- Hidden align buttons kept for tables.js dispatcher compatibility -->
-      <button class="itb-drop-item" id="imgTbAlignLeft" style="display:none">Float Left</button>
-      <button class="itb-drop-item" id="imgTbAlignCenter" style="display:none">Center</button>
-      <button class="itb-drop-item" id="imgTbAlignRight" style="display:none">Float Right</button>
     </div>
   </div>
 
@@ -1858,9 +1888,9 @@ try {
 <script src="js/embeds.js?v=2.6.6"></script>
 <script src="js/media-widget.js?v=2.6.6"></script>
 <script src="js/formatting.js?v=2.6.16"></script>
-<script src="js/text-drag-engine.js?v=2.6.6"></script>
+<script src="js/text-drag-engine.js?v=2.6.7"></script>
 <script src="js/media.js?v=2.6.29"></script>
-<script src="js/card-drag-engine.js?v=2.6.6"></script>
+<script src="js/card-drag-engine.js?v=2.6.7"></script>
 <script src="js/docx-import.js?v=2.6.6"></script>
 <script src="assets/vendor/jszip.min.js"></script>
 <script src="js/docx-export.js?v=2.6.6"></script>

@@ -722,7 +722,7 @@ function parseMarkdownInline(text) {
     const title = rawTitle.replace(/\\([\[\]])/g, '$1').replace(/^\[|\]$/g, '');
     const idx = linkSpans.length;
     const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(url) : { valid: true, url: url, isExternal: true };
-    const targetAttr = (res.isExternal || !res.url.startsWith('#')) ? ' target="_blank" rel="noopener noreferrer"' : '';
+    const targetAttr = (res.isExternal || !(res.url || '').startsWith('#')) ? ' target="_blank" rel="noopener noreferrer"' : '';
     const href = res.valid ? res.url : url;
     const renderedTitle = parseMarkdownInline(title);
     linkSpans.push(`<a href="${esc(href)}"${targetAttr}>${renderedTitle}</a>`);

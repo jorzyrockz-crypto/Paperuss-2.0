@@ -636,11 +636,7 @@ function initBlockTools(){
   });
 
   ed.addEventListener('dragstart', e=>{
-    const mediaEl=e.target.closest('[data-media-id], .media-card, figure');
-    // If element is a Paperuss card, let js/media.js handle side-by-side grid snapping
-    if(mediaEl && mediaEl.matches('.paperuss-embed, .paperuss-card-file, .paperuss-card-audio, .paperuss-card')){
-      return;
-    }
+    const mediaEl=e.target.closest('[data-media-id], .media-card, figure, .paperuss-embed, .paperuss-card-file, .paperuss-card-audio, .paperuss-card, [data-paperuss-embed="true"]');
     if(mediaEl && ed.contains(mediaEl)){
       activeDragBlock = mediaEl;
       e.dataTransfer.clearData();
@@ -655,7 +651,12 @@ function initBlockTools(){
 
   ed.addEventListener('dragover', e=>{
     if(!activeDragBlock) return;
-    if(activeDragBlock.matches('.paperuss-embed, .paperuss-card-file, .paperuss-card-audio, .paperuss-card')){
+    const isCard = activeDragBlock.matches('.paperuss-embed, .paperuss-card-file, .paperuss-card-audio, .paperuss-card, .media-card, [data-paperuss-embed="true"]');
+    const targetCard = e.target.closest('.paperuss-embed, .paperuss-card-file, .paperuss-card-audio, .paperuss-card, .media-card, [data-paperuss-embed="true"]');
+    
+    // If we are dragging a card OVER another card, let js/media.js handle the 4-way drop grid
+    if(isCard && targetCard){
+      if(dropIndicator && dropIndicator.parentElement) dropIndicator.remove();
       return;
     }
     e.preventDefault();
@@ -680,6 +681,14 @@ function initBlockTools(){
 
   ed.addEventListener('drop', e=>{
     if(!activeDragBlock) return;
+    const isCard = activeDragBlock.matches('.paperuss-embed, .paperuss-card-file, .paperuss-card-audio, .paperuss-card, .media-card, [data-paperuss-embed="true"]');
+    const targetCard = e.target.closest('.paperuss-embed, .paperuss-card-file, .paperuss-card-audio, .paperuss-card, .media-card, [data-paperuss-embed="true"]');
+
+    if(isCard && targetCard && targetCard !== activeDragBlock) {
+      cleanupDragState();
+      return; 
+    }
+
     e.preventDefault();
     e.stopPropagation();
     stopAutoScroll();

@@ -14,7 +14,11 @@
   let audioCtx = null;
   let enabled = localStorage.getItem(STORAGE_KEY_ENABLED) !== 'false'; // Default: enabled
   let dragEnabled = localStorage.getItem(STORAGE_KEY_DRAG_ENABLED) !== 'false'; // Default: enabled
-  let volume = parseFloat(localStorage.getItem(STORAGE_KEY_VOLUME) || '0.25'); // Default: 25%
+  
+  // Apply a 3x master boost because raw Web Audio sine/triangle waves at 0.2 amplitude are too quiet
+  const MASTER_BOOST = 3.0;
+  let rawVolume = parseFloat(localStorage.getItem(STORAGE_KEY_VOLUME) || '0.25'); // Default: 25%
+  let volume = rawVolume * MASTER_BOOST;
   let preset = localStorage.getItem(STORAGE_KEY_PRESET) || 'botanical_paper';
 
   function getAudioContext() {
@@ -69,8 +73,9 @@
     },
 
     setVolume(val) {
-      volume = Math.max(0, Math.min(1, parseFloat(val) || 0));
-      localStorage.setItem(STORAGE_KEY_VOLUME, volume.toString());
+      rawVolume = Math.max(0, Math.min(1, parseFloat(val) || 0));
+      volume = rawVolume * MASTER_BOOST;
+      localStorage.setItem(STORAGE_KEY_VOLUME, rawVolume.toString());
     },
 
     setPreset(name) {

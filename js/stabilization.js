@@ -315,6 +315,10 @@
       el.classList.remove('drop-target-top', 'drop-target-bottom', 'drop-target-left', 'drop-target-right', 'drop-target', 'is-dragging-card-source', 'is-dragging');
     });
 
+    clone.querySelectorAll('.text-drop-release-burst, [data-paperuss-unwrap="true"]').forEach(el => {
+      el.replaceWith(...Array.from(el.childNodes));
+    });
+
     const FORBIDDEN_IDS = ['noteBody', 'editorContent', 'editorScroll', 'formatBar', 'noteTitle', 'editorEmpty', 'findPanel'];
     clone.querySelectorAll('[id], [data-paperuss-content-root], [data-paperuss-ui]').forEach(el => {
       if (FORBIDDEN_IDS.includes(el.id)) {

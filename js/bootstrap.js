@@ -524,11 +524,29 @@ function bind(){
   const edEl=bodyEl();
   edEl.addEventListener('dragover', e=>{ if(e.dataTransfer && e.dataTransfer.types.includes('Files')){ e.preventDefault(); edEl.classList.add('drop-target'); }});
   edEl.addEventListener('dragleave', ()=>edEl.classList.remove('drop-target'));
-  edEl.addEventListener('drop', e=>{
+  edEl.addEventListener('drop', async e=>{
     if(!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
     e.preventDefault();
     edEl.classList.remove('drop-target');
-    for(const f of e.dataTransfer.files){
+    
+    // Process items to capture FileSystemFileHandle for heavy files
+    const files = Array.from(e.dataTransfer.files);
+    if (e.dataTransfer.items) {
+      for (let i = 0; i < e.dataTransfer.items.length; i++) {
+        const item = e.dataTransfer.items[i];
+        if (item.kind === 'file' && typeof item.getAsFileSystemHandle === 'function') {
+          try {
+            const handle = await item.getAsFileSystemHandle();
+            if (handle && handle.kind === 'file' && files[i].size > 10 * 1024 * 1024) {
+              files[i].fileHandle = handle;
+              if (typeof toast === 'function') toast('Heavy file detected. Saved securely as a zero-storage local shortcut.');
+            }
+          } catch(err) {}
+        }
+      }
+    }
+
+    for(const f of files){
       if(f.type.startsWith('image/')) insertImageFile(f);
       else if(f.type.startsWith('video/')) insertVideoFile(f);
       else if(f.type.startsWith('audio/')) insertAudioFile(f);
@@ -760,18 +778,18 @@ function bind(){
   }
 
 
-function parseMarkdownInline(text) {
+function parseMarkdownInline(text, sharedCodeSpans, sharedImageSpans, sharedLinkSpans) {
   if (!text) return '';
   let str = String(text);
 
-  const codeSpans = [];
+  const codeSpans = sharedCodeSpans || [];
   str = str.replace(/`([^`]+)`/g, (_, code) => {
     const idx = codeSpans.length;
     codeSpans.push(`<code>${esc(code)}</code>`);
     return `\uE000C${idx}\uE000`;
   });
 
-  const imageSpans = [];
+  const imageSpans = sharedImageSpans || [];
   str = str.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
     const idx = imageSpans.length;
     const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(url) : { valid: true, url: url };
@@ -780,14 +798,14 @@ function parseMarkdownInline(text) {
     return `\uE000I${idx}\uE000`;
   });
 
-  const linkSpans = [];
+  const linkSpans = sharedLinkSpans || [];
   str = str.replace(/\[((?:\\[\[\]]|[^\]])+)\]?\(([^)]+)\)/g, (_, rawTitle, url) => {
     const title = rawTitle.replace(/\\([\[\]])/g, '$1').replace(/^\[|\]$/g, '');
     const idx = linkSpans.length;
     const res = window.LinkParser ? window.LinkParser.parseAndValidateUrl(url) : { valid: true, url: url, isExternal: true };
-    const targetAttr = (res.isExternal || !res.url.startsWith('#')) ? ' target="_blank" rel="noopener noreferrer"' : '';
+    const targetAttr = (res.isExternal || !(res.url || '').startsWith('#')) ? ' target="_blank" rel="noopener noreferrer"' : '';
     const href = res.valid ? res.url : url;
-    const renderedTitle = parseMarkdownInline(title);
+    const renderedTitle = parseMarkdownInline(title, codeSpans, imageSpans, linkSpans);
     linkSpans.push(`<a href="${esc(href)}"${targetAttr}>${renderedTitle}</a>`);
     return `\uE000L${idx}\uE000`;
   });
