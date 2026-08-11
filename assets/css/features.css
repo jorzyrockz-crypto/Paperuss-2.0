@@ -1329,7 +1329,7 @@ img[data-media-id].img-selected,
   animation:tblCtxIn .12s ease;
 }
 .tbl-ctx-menu.show{display:flex}
-@keyframes tblCtxIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+@keyframes tblCtxIn{from{opacity:0;scale:.95}to{opacity:1;scale:1}}
 .tbl-ctx-item{
   display:flex;align-items:center;gap:8px;padding:7px 10px;border:none;
   background:transparent;color:var(--fg);cursor:pointer;border-radius:7px;
@@ -1421,9 +1421,9 @@ img[data-media-id].img-selected,
   animation:gutterPulse 0.6s ease forwards;
 }
 @keyframes gutterPulse{
-  0%{transform:scale(1)}
+  0%{scale:1}
   35%{transform:scale(1.08)}
-  100%{transform:scale(1)}
+  100%{scale:1}
 }
 
 
@@ -1604,7 +1604,7 @@ img[data-media-id].img-selected,
   background:var(--overlay);border:1px solid var(--border);border-radius:16px;padding:24px;
   max-width:380px;width:90%;box-shadow:0 20px 48px rgba(0,0,0,.5);animation:pop .15s ease;
 }
-@keyframes pop{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes pop{from{transform:scale(.96);opacity:0}to{scale:1;opacity:1}}
 .modal h3{font-size:16px;margin-bottom:8px;font-weight:600;letter-spacing:-.2px}
 .modal p{font-size:13.5px;color:var(--fg-secondary);margin-bottom:20px;line-height:1.5}
 .modal-actions{display:flex;justify-content:flex-end;gap:8px}
@@ -6932,4 +6932,50 @@ a.paperuss-inline-link:hover {
 html[data-theme="dark"] .tbl-ctx-menu, html[data-theme="dark"] .tbl-ctx-submenu,
 html[data-theme-mode="dark"] .tbl-ctx-menu, html[data-theme-mode="dark"] .tbl-ctx-submenu {
   background: #1b2130 !important;
+}
+
+
+/* ==========================================================================
+   PAGE SETUP MODAL / DROPDOWN RESPONSIVE COLUMNS
+   ========================================================================== */
+
+.page-layout-dropdown.show {
+  display: block !important;
+  column-count: 3;
+  column-gap: 16px;
+  min-width: 650px;
+}
+
+.page-layout-dropdown .pl-opt, 
+.page-layout-dropdown .pl-section-title {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  display: block;
+}
+
+/* Ensure buttons act properly in block layout */
+.page-layout-dropdown .pl-opt {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .page-layout-dropdown.show {
+    column-count: 2;
+    min-width: 450px;
+  }
+}
+
+@media (max-width: 600px) {
+  .page-layout-dropdown.show {
+    column-count: 1;
+    min-width: 240px;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+}
+
+/* Fix context menu fixed positioning overlay */
+.tbl-ctx-menu, .tbl-ctx-submenu {
+  position: fixed !important;
+  z-index: 999999 !important;
 }

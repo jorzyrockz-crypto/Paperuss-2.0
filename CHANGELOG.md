@@ -1,79 +1,19 @@
 # Changelog
 
-This file is generated from [GitHub Releases](https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases).
+## [2.7.0] - 2026-08-11
 
-## [v2.7.0-workflow-audio-suite](https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases) — 2026-08-10
+### ✨ New Features & Enhancements
+*   **Table Themes System**: Implemented a comprehensive theming engine with 7+ beautiful, print-ready table styles (Grayscale, Ocean, Sunset, Forest, Corporate, Minimal, Accent). 
+*   **CalcuLeaf Powered Templates**: Overhauled the Insert Templates menu (Invoice, Timesheet, Budget, Lending Tracker, etc.) to showcase dynamic CalcuLeaf mathematical rules, cascading cross-cell formulas, and real-time conditional variance logic.
+*   **Immersive Music Hub Lightbox**: Replaced the bulky "Music Player" text button with a dynamic, spinning, RGB rainbow-cycling DJ disk `💿` icon. When clicked during active playback, it triggers a stunning full-screen glassmorphic lightbox that centers your playlist while blurring your workspace.
+*   **Canvas Light Mode**: Added a `force-light-canvas` user setting that forces the paper canvas to become white for easier readability, especially useful when working with print-ready tables.
+*   **Table Toolbar Optimization**: Streamlined the table floating toolbar by reducing clutter and consolidating essential controls into a clean 4-button layout.
 
-**PapeRuss 2.7 Workflow & Audio Suite**
+### 🐛 Bug Fixes
+*   **Global Viewport Awareness**: Built a robust `MutationObserver` engine that calculates viewport coordinates for fixed/absolute elements like context menus and the Page Setup modal, forcing them to elegantly bump into view instead of clipping off the edges of the screen.
+*   **CSS Animation Conflicts**: Resolved a bug where CSS `transform` entry animations were overriding JavaScript coordinate calculations by switching the animations to the modern independent `scale` CSS property.
+*   **Responsive Modal Columns**: Restored the beautiful masonry layout grid for the Page Setup modal (3 columns on ultra-wide screens, 2 on laptops, 1 on mobile) which had been accidentally overridden.
+*   **Template Insertion Trigger**: Fixed the broken event-wiring that was preventing the Template selection modal from appearing.
 
-### What's New in PapeRuss v2.7.0
-- **Local File Unlock System:** Implemented a robust IndexedDB hydration and user-prompt flow to re-authorize and unlock local file handles across browser reloads, solving the orphaned asset issue.
-- **Card Spacing & Layout Constraints:** Enhanced CSS for floated media cards, adding precise directional wrapping gaps (`16px 24px 16px 0` for left-float) and ensuring layout constraints.
-- **Image Toolbar Evolution:** Refactored the image toolbar to include a unified "Wrap Text Options" dropdown for alignment.
-- **Text Drag Comet Audio Engine:** Integrated `WorkspaceAudio` directly into the text drag engine, adding haptic clicks for grabbing, hovering over lines, dropping, and cancelling drags.
-- **Master Audio Boost:** Added a 300% internal master volume boost to the audio engine to ensure Web Audio sine/triangle waves hit satisfying loudness levels without distortion.
-- **Table Context Menus:** Added right-click context menu options to table cells for quick row/column insertion, deletion, and cell clearing.
-- **Bug Fixes:** Fixed the text drag engine DOM mutation bug that corrupted the active selection range, and fixed the blast animation permanently baking into saved notes and printouts.
-
-## [v2.6.0-editor-suite](https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases) — 2026-08-09
-
-**PapeRuss 2.6 Page Layout, Formatting & Editor Suite**
-
-### What's New in PapeRuss v2.6.0
-- **6-Leaf Preseeded Master Note**: Refactored seed data into 1 comprehensive parent Note ("Welcome to PapeRuss 👋") containing 6 distinct Leaf tabs (Primary System Documentation, Formatting Suite, Spreadsheet & Formulas, Print Layout & PDF Engine, Music Hub & Media Studio, Leafline & Branch Tree) using official PNG artwork assets.
-- **Homepage & Editor Route Separation**: Declared `index.html` as the public marketing landing page and `app.html` as the editor application/PWA entry point, wired via `firebase.json` hosting rewrites, `sw.js` offline caching, PWA `manifest.webmanifest`, and automated regression test assertions.
-- **Print & Page Layout Engine**: Integrated Print Layout with Formal/Clean presets, binding margins, document aesthetic styles (Executive, Serif, Clean, Vintage, Paper), unified editable Header/Footer overlays, repeating table headers (`thead`), and Word-style curved page gaps.
-- **Creative Headings & Typography Suite**: Added 5 creative heading options (Banner, Ribbon, Accent-Left, Underlined, Floating), enhanced selection font fallbacks, and Quote Style Context Panel with Literary, Tech, and Modern preset themes.
-- **Leafline Timeline Outline**: Interactive document outline palette integrated into the Leaves drawer with a 3-segment list view switch (Notes, Leaves, Leafline) and note-level leafline entry navigation.
-- **Custom Cursor & Accent Theme**: Custom SVG cursor asset engine (`paperuss-caret.svg`, `paperuss-text-caret.svg`, `paperuss-pointer.svg`, `paperuss-cursor.svg`) with accent-tinted typing insertion carets and Paper theme palette.
-- **Auth Overlay & Rename Modal UI**: Elevated Auth landing overlay isolation (`z-index: 99999`), redesigned Editorial Glassmorphism "Rename Leaf" modal, and universal Image Toolbar support with automatic drop-target highlight line cleanup.
-
-## [v2.4.0-branches-engine](https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases) — 2026-08-09
-
-**Branch Engine, Sidebar Categories & Notebooks, Leafline Integration & Print Suite**
-
-### What's New in PapeRuss v2.4.0
-- **Branch Engine & Sidebar Category Tree**: Collapsible sidebar tree (`#sidebarBranchTree`) displaying root branches and nested sub-branches with ChatGPT-style Lucide outline icons, custom accent colors, real-time note count badges, drag & drop note dropzones, and 3-dot More Menu dropdowns.
-- **Full-Screen Frosted Glass Overlay Modal**: Re-architected Edit Branch into a full-screen frosted glass overlay backdrop (`.branch-modal-backdrop`).
-- **Leafline Breadcrumb Path Navigation**: Dynamic topbar header displaying `🌿 Branch Name ▸ 📝 Note Title ▸ 🍃 Leaf Tab`.
-- **Automatic Branch Category Note Creation**: New notes automatically inherit the active branch category with toast feedback.
-- **Print & PDF Setup Suite**: Enhanced Print Modal featuring a Live Paper Thumbnail Preview column, Custom Header Title & Subtitle inputs, Paper Size (A4, Letter, Legal), Orientation (Portrait/Landscape), and Margin controls.
-- **Text Wrap Clipping Resolution**: Fixed heading text clipping under floated cards by disabling BFC overflow clipping and enforcing 42% max-width for floated cards.
-- **Floating 6-Dot Handle Cleanup**: Completely removed redundant floating 6-dot drag handles (`#blockDragHandle`) in favor of custom 100% direct Card & Text Drag Engines.
-- **Botanical Architecture Documentation**: Added `ROADMAP.md` documenting the complete botanical hierarchy (`Branch ➔ Stem ➔ Leafline ➔ Leaves ➔ Leaf ➔ Veins ➔ Twig`) and future release schedule through v3.2.0.
-
-## [v2.3.0-word-engine-hotfix](https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases) — 2026-08-09
-
-**Maximum Word Import/Export System, Typography Suite & Line Spacing Tool**
-
-### What's New in PapeRuss v2.3.0
-- **Maximum DOCX Import & Export Engine**: High-fidelity Word (.docx) import/export with `fontTable.xml` generation, preformatted code shading, blockquote accents, strikethrough/highlight WML runs, superscript/subscript, multi-level list numbering (levels 0-8), table header repetition (`w:tblHeader`), table row split prevention (`w:cantSplit`), table cell shading/alignment, storage quota pre-checks, responsive table containers, section length safeguards, and 1-click Leaf merging (`mergeAllLeavesAction`).
-- **Expanded Native Typography Suite**: Added 9 native font choices across the editor and Word export pipeline (**Calibri**, **Segoe UI**, **Georgia**, **Consolas**, **Arial**, **Inter**, **Rounded**, **Bookman Old Style**, and **Old English Text MT**).
-- **Line Spacing Tool & Dropdown**: Dedicated toolbar picker with 1.0, 1.15, 1.5, 2.0, 2.5, and 3.0 options, glassmorphism backdrop-filter blur, option badges, and fixed portal positioning (`z-index: 100000`).
-- **Highlighted Text Selection Isolation**: Re-architected formatting execution so font styles, sizes, highlights, colors, and inline tags apply strictly to the user's active highlighted selection range.
-
-## [v2.1.0-music-hub](https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases) — 2026-08-07
-
-**System Music Player Hub & Link Embed Enhancements**
-
-### What's New in PapeRuss v2.1.0
-- **System Music Player Hub Modal**: Centralized Music Player accessible via bottom bar `[ 🎵 Music Player ]` pill button and sidebar navigation menu.
-- **Draggable Floating Background Media Player Widget**: Continuous, uninterrupted audio playback across note switches, tab navigation, and document editing.
-- **Vault Media Embed Scanner**: Scans active editor, memory store, IndexedDB leaves, and localStorage to populate saved music cards instantly.
-- **1-Click Starter Ambient Presets**: Pre-configured, verified Spotify study playlists (*Lofi Beats*, *Chill Acoustic*, *Synthwave Focus*).
-- **Quick Embed Paste Tool**: Instant playback tool supporting Spotify/YouTube URLs and raw `<iframe>` embed codes.
-- **Elevated Micro-Pill Toolbar**: 1-row glass floating toolbar with top-center positioning, 8px radius, tight card content hugging, and 100% setting persistence.
-- **Adaptive Light & Dark Mode**: Dynamic theme design tokens ensuring seamless visual adaptation in both Light and Dark modes.
-
-## [v2.0.0](https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases) — 2026-07-30
-
-**Major Feature Release & Improvements**
-
-### What's New in PapeRuss 2.0
-- **Block & Rich Text Editor**: Enhanced formatting, table insertion, drag-and-drop media, slash commands, and block handles.
-- **Cloud Sync & Firebase Auth**: Cross-device synchronization with complete offline fallback and local IndexedDB media storage.
-- **Attachment & Scroll Fixes**: Smooth note navigation, auto-scroll containment, and resilient offline attachment caching.
-- **Task & Activity Hub**: Centralized notifications, due-task alert banners, completion chimes, and reminder scheduling.
-- **Theme & Accent Customization**: Vibrant dark/light modes and customizable accent themes.
-- **Data Backup & Clearing**: Portability tools to export/import backups and clear local offline cache safely.
-
+### 🧹 Refactoring
+*   **Fallback Music Widget**: Added intelligent UI fallback logic that detects if a music embed is active—triggering the Full-Screen DJ Lightbox if true, or gracefully popping open the original widget linker modal if false.

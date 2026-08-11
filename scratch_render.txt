@@ -1,0 +1,178 @@
+function renderFormulaMenu() {
+  if (window.formulaMode.phase === 'idle') return;
+  const menu = ensureFormulaMenu();
+  const isEdit = window.formulaMode.phase === 'edit';
+  
+  if (isEdit && window.formulaMode.guidedView === undefined) {
+      window.formulaMode.guidedView = 'pick';
+      if (window.formulaMode.tokens.length > 0) initGuidedDraftFromTokens();
+  }
+  
+  let html = '<div class="formula-bar-ui calculeaf-formula-panel-inner" style="padding:12px; background:var(--bg); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">';
+  
+  const view = window.formulaMode.guidedView;
+  
+  if (view === 'pick') {
+      html += '<div style="font-weight:bold; margin-bottom: 8px;">Choose a calculation</div>';
+      html += '<div class="formula-suggestions-list calculeaf-formula-content">';
+      FORMULA_MENU_CATEGORIES.forEach(cat => {
+          html += '<div style="padding:4px 8px; font-size:0.75em; text-transform:uppercase; color:var(--subtle-text); font-weight:bold; margin-top:4px;">' + cat.name + '</div>';
+          cat.items.forEach(f => {
+              const kind = f.op ? (f.op === '+' ? 'ADD' : f.op === '-' ? 'SUBTRACT' : f.op === '*' ? 'MULTIPLY' : 'DIVIDE') : f.name;
+              html += '<button class="formula-opt calculeaf-formula-choice" onclick="window.setGuidedView(\'edit\', \'' + kind + '\')"><span class="formula-sig" style="pointer-events:none;">' + f.label + '</span><span class="formula-desc" style="pointer-events:none;">' + (f.desc || '') + '</span></button>';
+          });
+      });
+      html += '</div>';
+  } else if (view === 'edit' && window.formulaMode.guidedKind) {
+      const kind = window.formulaMode.guidedKind;
+      const def = CALCULEAF_FUNCTION_DEFS[kind];
+      const draft = window.formulaMode.guidedDraft || {};
+      
+      html += '<div style="display:flex; align-items:center; gap: 8px; font-weight:bold;">';
+      if (window.formulaMode.originalTokens.length === 0) {
+          html += '<button onclick="window.setGuidedView(\'pick\')" style="border:none; background:none; cursor:pointer; color:var(--subtle-text);">&larr;</button>';
+      }
+      html += '<span>' + def.label + '</span>';
+      html += '<button onclick="window.cancelFormulaEdit()" style="margin-left:auto; border:none; background:none; cursor:pointer; color:var(--subtle-text);">&times;</button>';
+      html += '</div>';
+      
+      if (def.description) {
+          html += '<div style="font-size:0.85em; color:var(--subtle-text); margin-bottom:8px;">' + escapeFormulaText(def.description) + '</div>';
+      }
+      
+      const renderField = (argDef) => {
+          const valTok = draft[argDef.key];
+          const isActive = window.formulaMode.guidedActiveKey === argDef.key;
+          const activeStyle = isActive ? 'box-shadow: 0 0 0 2px var(--accent);' : '';
+          
+          let fieldHtml = '<div style="display:flex; flex-direction:column; gap:2px; margin-bottom:8px;">';
+          fieldHtml += '<label style="font-size:0.8em; font-weight:500;">' + argDef.label + '</label>';
+          
+          if (argDef.type === 'comparison') {
+              const selVal = valTok ? valTok.value : '=';
+              fieldHtml += '<select onchange="window.updateGuidedField(\'' + argDef.key + '\', this.value, \'comparison\')" style="padding:4px; border-radius:4px; border:1px solid var(--border); background:var(--bg); color:var(--fg); font-size:0.9em; ' + activeStyle + '">';
+              fieldHtml += '<option value="=" ' + (selVal==='='?'selected':'') + '>is equal to</option>';
+              fieldHtml += '<option value="!=" ' + (selVal==='!='?'selected':'') + '>is not equal to</option>';
+              fieldHtml += '<option value=">" ' + (selVal==='>'?'selected':'') + '>is greater than</option>';
+              fieldHtml += '<option value="<" ' + (selVal==='<'?'selected':'') + '>is less than</option>';
+              fieldHtml += '<option value=">=" ' + (selVal==='>='?'selected':'') + '>is at least</option>';
+              fieldHtml += '<option value="<=" ' + (selVal==='<='?'selected':'') + '>is at most</option>';
+              fieldHtml += '</select>';
+          } else if (argDef.type === 'range' || argDef.type === 'source') {
+              if (valTok && (valTok.type === 'cell' || valTok.type === 'range')) {
+                  const tbl = window.formulaMode.destinationCell?.closest('table');
+                  const disp = getFormulaSourceDisplay(valTok, tbl);
+                  let colorIdx = 1;
+                  if (def.args) {
+                     let idx = def.args.findIndex(a=>a.key===argDef.key);
+                     if (idx !== -1) colorIdx = (idx % 6) + 1;
+                  }
+                  fieldHtml += '<button onclick="window.activateGuidedSource(\'' + argDef.key + '\')" class="calculeaf-formula-source-' + colorIdx + '" style="text-align:left; padding:4px 8px; border-radius:4px; border:1px solid var(--border); font-size:0.9em; cursor:pointer; ' + activeStyle + '">' + escapeFormulaText(disp) + '</button>';
+              } else {
+                  fieldHtml += '<button onclick="window.activateGuidedSource(\'' + argDef.key + '\')" style="text-align:left; padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--bg); color:var(--subtle-text); font-size:0.9em; font-style:italic; cursor:pointer; ' + activeStyle + '">[Select cells...]</button>';
+              }
+          } else if (argDef.type === 'number') {
+              const numVal = valTok ? valTok.value : (argDef.default !== undefined ? argDef.default : '');
+              fieldHtml += '<input type="number" value="' + escapeFormulaText(numVal) + '" onchange="window.updateGuidedField(\'' + argDef.key + '\', this.value, \'number\')" oninput="event.stopPropagation()" onkeydown="event.stopPropagation()" style="padding:4px; border-radius:4px; border:1px solid var(--border); background:var(--bg); color:var(--fg); font-size:0.9em; ' + activeStyle + '">';
+          } else {
+              if (valTok && (valTok.type === 'cell' || valTok.type === 'range')) {
+                  const tbl = window.formulaMode.destinationCell?.closest('table');
+                  const disp = getFormulaSourceDisplay(valTok, tbl);
+                  let colorIdx = 1;
+                  if (def.args) {
+                     let idx = def.args.findIndex(a=>a.key===argDef.key);
+                     if (idx !== -1) colorIdx = (idx % 6) + 1;
+                  }
+                  fieldHtml += '<div style="display:flex; gap:4px;"><button onclick="window.activateGuidedSource(\'' + argDef.key + '\')" class="calculeaf-formula-source-' + colorIdx + '" style="flex:1; text-align:left; padding:4px 8px; border-radius:4px; border:1px solid var(--border); font-size:0.9em; cursor:pointer; ' + activeStyle + '">' + escapeFormulaText(disp) + '</button><button onclick="window.updateGuidedField(\'' + argDef.key + '\', \'\', \'text\')" style="padding:2px 4px; font-size:0.7em; cursor:pointer;">&times;</button></div>';
+              } else {
+                  const txtVal = valTok ? valTok.value : '';
+                  fieldHtml += '<div style="display:flex; gap:4px;"><input type="text" placeholder="Select or type..." value="' + escapeFormulaText(txtVal) + '" onchange="window.updateGuidedField(\'' + argDef.key + '\', this.value, \'text\')" onfocus="window.activateGuidedSource(\'' + argDef.key + '\')" oninput="event.stopPropagation()" onkeydown="event.stopPropagation()" style="flex:1; padding:4px; border-radius:4px; border:1px solid var(--border); background:var(--bg); color:var(--fg); font-size:0.9em; ' + activeStyle + '"></div>';
+              }
+          }
+          fieldHtml += '</div>';
+          return fieldHtml;
+      };
+      
+      def.args.forEach(argDef => {
+          html += renderField(argDef);
+      });
+      
+  } else if (view === 'custom') {
+      html += '<div style="display:flex; align-items:center; gap: 8px; font-weight:bold;">';
+      html += '<span>Custom calculation</span>';
+      html += '<button onclick="window.cancelFormulaEdit()" style="margin-left:auto; border:none; background:none; cursor:pointer; color:var(--subtle-text);">×</button>';
+      html += '</div>';
+      html += '<div style="font-size:0.85em; color:var(--subtle-text); margin-bottom:8px;">This calculation uses several steps.</div>';
+      html += '<button onclick="window.setGuidedView(\'pick\')" style="margin-bottom:8px; padding:4px 8px; border-radius:4px; background:var(--subtle); color:var(--fg); border:1px solid var(--border); cursor:pointer;">Replace calculation</button>';
+  }
+  
+  if (view !== 'pick') {
+      const tbl = window.formulaMode.destinationCell?.closest('table');
+      const validation = validateFormulaState(window.formulaMode.tokens, false);
+      let resDisplay = '&mdash;';
+      let resColor = 'var(--fg)';
+      
+      if (window.formulaMode.tokens.length > 0 && !window.formulaMode.tokens.some(t => t.type === 'placeholder')) {
+         const evalRes = evaluateFormulaTokens(tbl, window.formulaMode.tokens, tableCellLayout(tbl));
+         if (typeof evalRes === 'string' && evalRes.startsWith('#')) {
+             if (evalRes === '#DIV/0!') resDisplay = "Can't divide by zero.";
+             else resDisplay = "Error";
+             resColor = 'var(--danger, red)';
+         } else if (evalRes !== null) {
+             resDisplay = escapeFormulaText(evalRes);
+         }
+      }
+      
+      html += '<div style="margin-top:8px; border-top:1px solid var(--border); padding-top:8px;">';
+      html += '<div style="font-size:0.8em; font-weight:bold; color:var(--subtle-text);">Result</div>';
+      html += '<div style="font-size:1.1em; color:' + resColor + '; margin-top:2px;">' + resDisplay + '</div>';
+      html += '</div>';
+      
+      html += '<div style="display:flex; justify-content:space-between; margin-top:12px; align-items:center;">';
+      if (window.formulaMode.destinationCell?.hasAttribute('data-formula-tokens')) {
+          html += '<button onclick="window.clearFormulaCell(window.formulaMode.destinationCell); event.stopPropagation();" style="padding:4px 8px; font-size:0.85em; background:none; color:var(--danger, red); border:none; cursor:pointer; text-decoration:underline;">Clear formula</button>';
+      } else {
+          html += '<div></div>';
+      }
+      
+      html += '<div style="display:flex; gap:8px;">';
+      html += '<button onclick="window.cancelFormulaEdit()" style="padding:6px 12px; border-radius:4px; background:var(--subtle); border:1px solid var(--border); color:var(--fg); cursor:pointer;">Cancel</button>';
+      html += '<button onclick="window.commitGuidedFormula()" ' + (window.formulaMode.tokens.some(t=>t.type==='placeholder') || window.formulaMode.tokens.length===0 ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : 'style="cursor:pointer;"') + ' class="btn-primary" style="padding:6px 12px; border-radius:4px; background:var(--accent); color:var(--bg); border:none; font-weight:bold;">Done</button>';
+      html += '</div></div>';
+  }
+  
+  html += '</div>';
+  menu.innerHTML = html;
+
+  const rect = window.formulaMode.destinationCell?.getBoundingClientRect();
+  if (rect) {
+      const margin = 12;
+      let left = rect.left;
+      let top = rect.bottom + 6;
+      
+      menu.style.top = `${top}px`;
+      menu.style.left = `${left}px`;
+      menu.classList.add('show');
+      
+      const modalRect = menu.getBoundingClientRect();
+      
+      if (left + modalRect.width > window.innerWidth - margin) {
+          left = window.innerWidth - modalRect.width - margin;
+      }
+      left = Math.max(margin, left);
+      
+      if (top + modalRect.height > window.innerHeight - margin) {
+          const above = rect.top - modalRect.height - 6;
+          if (above >= margin) {
+              top = above;
+          } else {
+              top = margin;
+          }
+      }
+      
+      menu.style.left = `${left}px`;
+      menu.style.top = `${top}px`;
+  } else {
+      menu.classList.add('show');
+  }
+}

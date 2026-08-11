@@ -1,0 +1,89 @@
+function renderFormulaMenu() {
+  if (window.formulaMode.phase === 'idle') return;
+  const menu = ensureFormulaMenu();
+  const isEdit = window.formulaMode.phase === 'edit';
+  
+  let html = '<div class="formula-bar-ui" style="padding:8px; border-bottom:1px solid var(--border); background:var(--bg); display:flex; gap:4px; flex-wrap:wrap; align-items:center;">';
+  html += '<span style="font-weight:bold; color:var(--subtle-text)">ƒ</span>';
+  
+  const tbl = window.formulaMode.destinationCell?.closest('table');
+  window.formulaMode.tokens.forEach((tok, idx) => {
+    const colorIdx = window.formulaMode.sourceVisualMap.get(idx);
+    const colorClass = colorIdx ? `calculeaf-formula-source-${colorIdx}` : '';
+    
+    const isEditing = isEdit && idx === window.formulaMode.activeSourceIndex;
+    const activeClass = isEditing ? 'formula-token-active' : '';
+    
+    if (tok.type === 'cell' || tok.type === 'range') {
+      const displayTxt = getFormulaSourceDisplay(tok, tbl);
+      let titleTxt = "";
+      if (tok.type === 'range' && tok.ids && tok.ids.length > 4) {
+         titleTxt = ` title="${escapeFormulaDisplay(tok.ids.map(id => getCellById(tbl, id)?.textContent.trim()).join(', '))}"`;
+      }
+      html += `<span class="formula-token-chip ${colorClass} ${activeClass}" style="padding:2px 6px; border-radius:4px; font-size:0.85em; cursor:pointer;" data-token-index="${idx}" onmouseenter="window.handleTokenHover(this,true)" onmouseleave="window.handleTokenHover(this,false)" onclick="window.setFormulaActiveToken(${idx}, event)"${titleTxt}>${displayTxt}</span>`;
+    } else {
+      let label = tok.value;
+      if (tok.type === 'function' && tok.value === 'SUM') label = 'SUM';
+      html += `<span class="formula-token-text ${activeClass}" style="font-family:monospace; font-size:1.1em; padding:2px; cursor:pointer;" onclick="window.setFormulaActiveToken(${idx}, event)">${label}</span>`;
+    }
+  });
+  
+  if (isEdit && window.formulaMode.activeSourceIndex === window.formulaMode.tokens.length) {
+    html += `<span class="formula-token-cursor" style="border-right: 2px solid var(--accent); height:1.2em; animation: blink 1s step-end infinite;">&nbsp;</span>`;
+  }
+  
+  const hasCommittedFormula = window.formulaMode.destinationCell?.hasAttribute('data-formula-tokens');
+  if (hasCommittedFormula) {
+    html += `<div style="margin-left:auto; display:flex; gap:4px;">`;
+    html += `<button onclick="window.clearFormulaCell(window.formulaMode.destinationCell); event.stopPropagation();" title="Clear formula" style="padding:2px 6px; font-size:0.85em; background:var(--subtle); color:var(--fg); border-radius:4px; cursor:pointer; border:none; display:flex; align-items:center; justify-content:center;">`;
+    html += `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>`;
+    html += `</button>`;
+    html += `</div>`;
+  }
+  
+  html += '</div>';
+  
+  if (isEdit) {
+    const validation = validateFormulaState(window.formulaMode.tokens, false);
+    const color = (validation.status === 'error' || validation.status === 'invalid') ? 'var(--danger, red)' : 'var(--subtle-text)';
+    html += `<div style="padding: 4px 8px; font-size: 0.9em; color: ${color};">${validation.msg}</div>`;
+    
+    const query = window.formulaMode.menuQuery;
+    const showMenu = window.formulaMode.tokens.length === 0 || query.length > 0;
+    if (showMenu) {
+      html += '<div class="formula-suggestions-list" style="max-height:200px; overflow-y:auto; border-top:1px solid var(--border); padding-top:4px;">';
+      if (query) {
+        const matches = FORMULA_LIST_FLAT.filter(f => f.name.startsWith(query.toUpperCase()) && f.sig);
+        html += matches.map(f => `<button class="formula-opt" data-func="${f.name}"><span class="formula-sig" style="pointer-events:none;">${f.sig}</span><span class="formula-desc" style="pointer-events:none;">${f.desc}</span></button>`).join('');
+      } else {
+        FORMULA_MENU_CATEGORIES.forEach(cat => {
+          html += `<div style="padding:4px 8px; font-size:0.75em; text-transform:uppercase; color:var(--subtle-text); font-weight:bold; margin-top:4px;">${cat.name}</div>`;
+          cat.items.forEach(f => {
+            if (f.op) html += `<button class="formula-opt" data-op="${f.op}" data-name="${f.name}"><span class="formula-sig" style="pointer-events:none;">${f.label}</span></button>`;
+            else html += `<button class="formula-opt" data-func="${f.name}"><span class="formula-sig" style="pointer-events:none;">${f.label}</span></button>`;
+          });
+        });
+      }
+      html += '</div>';
+    }
+  }
+  
+  menu.innerHTML = html;
+  
+  const rect = window.formulaMode.destinationCell.getBoundingClientRect();
+  menu.style.top = `${rect.bottom + window.scrollY + 4}px`;
+  menu.style.left = `${rect.left + window.scrollX}px`;
+  menu.classList.add('show');
+  
+  menu.querySelectorAll('.formula-opt').forEach(btn => {
+    btn.onclick = e => {
+      e.stopPropagation();
+      if (btn.getAttribute('data-func')) applyFormulaFunction(btn.getAttribute('data-func'));
+      else if (btn.getAttribute('data-op')) applyFormulaBinaryOp(btn.getAttribute('data-op'));
+    };
+  });
+  
+  if (!isEdit) {
+    // Menu click no longer edits
+  }
+}

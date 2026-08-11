@@ -1,0 +1,35 @@
+function startFormulaMode(cell, initialTokens = [], isEdit = true) {
+  if (!cell) return;
+  exitCalcuLeafEditMode(false);
+  
+  window.formulaMode.phase = isEdit ? 'edit' : 'inspect';
+  window.formulaMode.destinationCell = cell;
+  window.formulaMode.originalHTML = cell.innerHTML;
+  
+  if (isEdit) {
+    clearCellSelection();
+    if (initialTokens.length === 0 && !cell.hasAttribute('data-formula-tokens')) {
+       cell.removeAttribute('data-formula');
+       cell.innerHTML = '&nbsp;';
+    }
+  }
+  
+  window.formulaMode.originalTokens = JSON.parse(JSON.stringify(initialTokens));
+  window.formulaMode.tokens = JSON.parse(JSON.stringify(initialTokens));
+  window.formulaMode.activeSourceIndex = isEdit ? window.formulaMode.tokens.length : null;
+  window.formulaMode.sourceVisualMap.clear();
+  window.formulaMode.sourceTargetIndex = null;
+  
+  if (isEdit && window.formulaMode.tokens.length > 0) {
+    const primary = findPrimaryFormulaSourceIndex(window.formulaMode.tokens);
+    if (primary !== -1) window.formulaMode.sourceTargetIndex = primary;
+  }
+  window.formulaMode.selectingRange = false;
+  window.formulaMode.dragAnchor = null;
+  window.formulaMode.dragCurrent = null;
+  window.formulaMode.menuQuery = '';
+  window.formulaMode.pendingBinaryOperator = null;
+  
+  highlightFormulaSources();
+  renderFormulaMenu();
+}

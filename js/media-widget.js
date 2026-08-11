@@ -660,3 +660,83 @@
   });
 
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : global));
+
+
+
+/* ==========================================================================
+   FULLSCREEN MUSIC LIGHTBOX LOGIC & TEMPLATE FIX
+   ========================================================================== */window.openMusicHubModal = function() {
+  const editor = document.querySelector('.note-editor');
+  let activeEmbed = null;
+  if (editor) {
+    activeEmbed = editor.querySelector('iframe[src*="spotify"], iframe[src*="soundcloud"], iframe[src*="youtube"]');
+  }
+  
+  if (activeEmbed) {
+    const overlay = document.getElementById('musicLightboxOverlay');
+    if (!overlay) return;
+    overlay.classList.remove('hidden');
+    activeEmbed.classList.add('lightbox-active-embed');
+    overlay.activeEmbed = activeEmbed;
+    const placeholder = document.getElementById('musicLightboxPlaceholder');
+    if (placeholder) placeholder.style.display = 'none';
+  } else {
+    // Fallback: Open the original widget modal so the user can paste a link!
+    const originalModal = document.getElementById('musicHubModalOverlay');
+    if (originalModal) originalModal.classList.remove('hidden');
+  }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  const closeBtn = document.getElementById('musicLightboxCloseBtn');
+  const overlay = document.getElementById('musicLightboxOverlay');
+  
+  if (closeBtn && overlay) {
+    closeBtn.addEventListener('click', () => {
+      overlay.classList.add('hidden');
+      if (overlay.activeEmbed) {
+        overlay.activeEmbed.classList.remove('lightbox-active-embed');
+        overlay.activeEmbed = null;
+      }
+    });
+  }
+});
+
+// FIX FOR TEMPLATES BUTTON
+// If DOMContentLoaded already fired before tables.js loaded, bind immediately
+(function fixTemplateBtn() {
+  const mainTplBtn = document.getElementById('mainTemplateBtn');
+  if(mainTplBtn) {
+    mainTplBtn.onclick = function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.getElementById('tblTemplateModal')?.classList.add('show');
+      if (typeof renderTemplatesGrid === 'function') renderTemplatesGrid();
+    };
+  }
+})();
+
+
+
+// Observe editor for music embeds to toggle DJ disk spinning
+document.addEventListener('DOMContentLoaded', () => {
+  const editor = document.querySelector('.note-editor');
+  const btn = document.getElementById('musicHubBtn');
+  if (!editor || !btn) return;
+  
+  const checkEmbeds = () => {
+    const hasEmbed = !!editor.querySelector('iframe[src*="spotify"], iframe[src*="soundcloud"], iframe[src*="youtube"]');
+    if (hasEmbed) {
+      btn.classList.add('has-music');
+      document.getElementById('musicHubDot')?.classList.remove('hidden');
+    } else {
+      btn.classList.remove('has-music');
+      document.getElementById('musicHubDot')?.classList.add('hidden');
+    }
+  };
+  
+  checkEmbeds();
+  
+  const observer = new MutationObserver(checkEmbeds);
+  observer.observe(editor, { childList: true, subtree: true });
+});

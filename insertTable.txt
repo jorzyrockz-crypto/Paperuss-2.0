@@ -1,0 +1,30 @@
+function insertTable(rows, cols){
+  let html='<div class="table-wrapper" data-table-wrapper="1" contenteditable="false"><table contenteditable="true"><thead><tr>';
+  for(let c=0;c<cols;c++) html+=`<th>Header ${c+1}</th>`;
+  html+='</tr></thead><tbody>';
+  for(let r=0;r<rows-1;r++){
+    html+='<tr>';
+    for(let c=0;c<cols;c++) html+='<td>&nbsp;</td>';
+    html+='</tr>';
+  }
+  html+='</tbody></table></div><p><br></p>';
+  insertHTMLAtCaret(html);
+  toast(`${rows}×${cols} table inserted`);
+}
+
+function buildTablePicker(){
+  const grid=document.getElementById('tgpGrid');
+  const label=document.getElementById('tgpLabel');
+  const picker=document.getElementById('tableGridPicker');
+  if(!grid || grid.dataset.built) return;
+  grid.dataset.built='1';
+  const MAXR=6, MAXC=6;
+  let html='';
+  for(let r=1;r<=MAXR;r++)
+    for(let c=1;c<=MAXC;c++)
+      html+=`<div class="tgp-cell" data-r="${r}" data-c="${c}"></div>`;
+  grid.innerHTML=html;
+
+  grid.addEventListener('mouseover', e=>{
+    const cell=e.target.closest('.tgp-cell'); if(!cell) return;
+    const R=+cell.dataset.r, C=+cell.dataset.c;

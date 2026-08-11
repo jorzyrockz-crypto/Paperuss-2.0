@@ -2524,7 +2524,22 @@ function getThemeMode(){
   return THEME_MODE_DEFAULTS[theme]||'light';
 }
 
+
+const CANVAS_LIGHT_KEY = 'paperuss:forceLightCanvas';
+function setCanvasLightMode(enabled, trackChange=true) {
+  if (enabled) {
+    document.documentElement.classList.add('force-light-canvas');
+  } else {
+    document.documentElement.classList.remove('force-light-canvas');
+  }
+  localStorage.setItem(CANVAS_LIGHT_KEY, enabled ? '1' : '0');
+  const chk = document.getElementById('setCanvasLight');
+  if (chk) chk.checked = enabled;
+  if(trackChange && typeof markPortableStateChanged==='function') markPortableStateChanged();
+}
+
 function syncThemePresentation(theme,mode){
+
   const root=document.documentElement;
   root.style.colorScheme=mode;
   const themeMeta=document.querySelector('meta[name="theme-color"]');
@@ -2557,7 +2572,10 @@ function setTheme(theme,trackChange=true){
   syncThemePresentation(theme,mode);
   if(trackChange && typeof markPortableStateChanged==='function') markPortableStateChanged();
   if(typeof applyAccent==='function') applyAccent((typeof appSettings!=='undefined'&&appSettings.accent)||'blue');
+  const canvasLight = localStorage.getItem(CANVAS_LIGHT_KEY) === '1';
+  setCanvasLightMode(canvasLight, false);
 }
+
 
 function setThemeMode(mode,trackChange=true){
   mode=normalizeThemeMode(mode);
@@ -2567,7 +2585,10 @@ function setThemeMode(mode,trackChange=true){
   syncThemePresentation(theme,mode);
   if(trackChange && typeof markPortableStateChanged==='function') markPortableStateChanged();
   if(typeof applyAccent==='function') applyAccent((typeof appSettings!=='undefined'&&appSettings.accent)||'blue');
+  const canvasLight = localStorage.getItem(CANVAS_LIGHT_KEY) === '1';
+  setCanvasLightMode(canvasLight, false);
 }
+
 
 /* ============================================================
    REMOTE & EXPIRED IMAGE AUTO-CAPTURE AND RECOVERY

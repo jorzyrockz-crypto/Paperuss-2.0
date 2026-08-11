@@ -1,0 +1,16 @@
+window.formulaMode = {
+  phase: 'idle',
+  destinationCell: null,
+  originalHTML: '',
+  originalTokens: [],
+  tokens: [],
+  activeSourceIndex: null,
+  sourceTargetIndex: null,
+  rangeTokenIndex: null,
+  sourceVisualMap: new Map(),
+  selectingRange: false,
+  dragAnchor: null,
+  dragCurrent: null,
+  menuQuery: '',
+  pendingBinaryOperator: null
+};

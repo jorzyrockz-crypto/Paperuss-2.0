@@ -1072,7 +1072,7 @@ function tblCellValign(val){
 }
 
 /* Open/close a submenu anchored to a toolbar button, closing others first */
-const tblMenuIds=['tblMenuInsert','tblMenuMerge','tblMenuFit','tblMenuAlign','tblMenuFormula','tblMenuFormat','tblMenuMore'];
+const tblMenuIds=['tblMenuMerge','tblMenuLayout','tblMenuThemes'];
 function openTblMenu(id,triggerEl){
   const menu=document.getElementById(id); if(!menu) return;
   const isOpen=menu.classList.contains('show');
@@ -1793,13 +1793,9 @@ function initTableTools(){
   moveHandle?.addEventListener('pointercancel',()=>finishTableMove(false));
 
   const menuBtnMap={
-    tblBtnInsert:'tblMenuInsert',
     tblBtnMerge:'tblMenuMerge',
-    tblBtnFit:'tblMenuFit',
-    tblBtnAlign:'tblMenuAlign',
-    tblBtnFormula:'tblMenuFormula',
-    tblBtnFormat:'tblMenuFormat',
-    tblBtnMore:'tblMenuMore'
+    tblBtnLayout:'tblMenuLayout',
+    tblBtnThemes:'tblMenuThemes'
   };
   Object.entries(menuBtnMap).forEach(([btnId,menuId])=>{
     const btn=document.getElementById(btnId);
@@ -3999,3 +3995,273 @@ document.addEventListener('scroll', (e) => {
   if (e.target && e.target.closest && e.target.closest('.formula-autocomplete-menu')) return;
   if (window.positionFormulaMenu) window.positionFormulaMenu();
 }, true);
+
+
+const TABLE_TEMPLATES = {
+  invoice: `
+    <h2>Invoice</h2>
+    <p>Date: _____ | Invoice #: _____</p>
+    <div class="table-wrapper" data-table-wrapper="1" contenteditable="false">
+      <table class="calculeaf-table tbl-theme-grayscale" contenteditable="true">
+        <thead>
+          <tr>
+            <th style="width:40%">Description</th>
+            <th style="width:15%">Qty</th>
+            <th style="width:20%">Unit Price</th>
+            <th style="width:25%">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Consulting Hours</td><td data-value-type="number">10</td><td data-value-type="currency">150.00</td><td data-value-type="currency">=B1*C1</td></tr>
+          <tr><td>Software License</td><td data-value-type="number">1</td><td data-value-type="currency">499.00</td><td data-value-type="currency">=B2*C2</td></tr>
+          <tr><td>Server Setup</td><td data-value-type="number">2</td><td data-value-type="currency">250.00</td><td data-value-type="currency">=B3*C3</td></tr>
+          <tr><td colspan="3" style="text-align:right"><b>Subtotal</b></td><td data-value-type="currency">=SUM(D1:D3)</td></tr>
+          <tr><td colspan="3" style="text-align:right"><b>Tax (8%)</b></td><td data-value-type="currency">=D4*0.08</td></tr>
+          <tr><td colspan="3" style="text-align:right"><b>Grand Total</b></td><td data-value-type="currency" style="font-weight:bold">=D4+D5</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Authorized by: ________________________</p><p><br></p>
+  `,
+  budget: `
+    <h2>Monthly Budget</h2>
+    <p>Month: _____</p>
+    <div class="table-wrapper" data-table-wrapper="1" contenteditable="false">
+      <table class="calculeaf-table tbl-theme-grayscale" contenteditable="true">
+        <thead>
+          <tr>
+            <th style="width:30%">Category</th>
+            <th style="width:20%">Planned</th>
+            <th style="width:20%">Actual</th>
+            <th style="width:30%">Variance</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Housing</td><td data-value-type="currency">1500</td><td data-value-type="currency">1500</td><td data-value-type="currency">=B1-C1</td></tr>
+          <tr><td>Groceries</td><td data-value-type="currency">400</td><td data-value-type="currency">520</td><td data-value-type="currency">=B2-C2</td></tr>
+          <tr><td>Transport</td><td data-value-type="currency">200</td><td data-value-type="currency">150</td><td data-value-type="currency">=B3-C3</td></tr>
+          <tr><td><b>Totals</b></td><td data-value-type="currency">=SUM(B1:B3)</td><td data-value-type="currency">=SUM(C1:C3)</td><td data-value-type="currency">=B4-C4</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Notes: ________________________</p><p><br></p>
+  `,
+  timesheet: `
+    <h2>Weekly Timesheet</h2>
+    <p>Employee: _____ | Week Ending: _____</p>
+    <div class="table-wrapper" data-table-wrapper="1" contenteditable="false">
+      <table class="calculeaf-table tbl-theme-grayscale" contenteditable="true">
+        <thead>
+          <tr>
+            <th style="width:25%">Day</th>
+            <th style="width:20%">Regular Hrs</th>
+            <th style="width:20%">Overtime Hrs</th>
+            <th style="width:35%">Daily Pay ($25/hr, 1.5x OT)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Monday</td><td data-value-type="number">8</td><td data-value-type="number">0</td><td data-value-type="currency">=(B1*25)+(C1*37.5)</td></tr>
+          <tr><td>Tuesday</td><td data-value-type="number">8</td><td data-value-type="number">2.5</td><td data-value-type="currency">=(B2*25)+(C2*37.5)</td></tr>
+          <tr><td>Wednesday</td><td data-value-type="number">8</td><td data-value-type="number">1</td><td data-value-type="currency">=(B3*25)+(C3*37.5)</td></tr>
+          <tr><td><b>Total</b></td><td data-value-type="number">=SUM(B1:B3)</td><td data-value-type="number">=SUM(C1:C3)</td><td data-value-type="currency">=SUM(D1:D3)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Signature: ________________________</p><p><br></p>
+  `,
+  inventory: `
+    <h2>Inventory Status</h2>
+    <p>Date Checked: _____ | Location: _____</p>
+    <div class="table-wrapper" data-table-wrapper="1" contenteditable="false">
+      <table class="calculeaf-table tbl-theme-grayscale" contenteditable="true">
+        <thead>
+          <tr>
+            <th style="width:40%">Item Name</th>
+            <th style="width:15%">In Stock</th>
+            <th style="width:15%">Unit Cost</th>
+            <th style="width:30%">Total Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Wireless Mouse</td><td data-value-type="number">45</td><td data-value-type="currency">15.50</td><td data-value-type="currency">=B1*C1</td></tr>
+          <tr><td>Mechanical Keyboard</td><td data-value-type="number">12</td><td data-value-type="currency">85.00</td><td data-value-type="currency">=B2*C2</td></tr>
+          <tr><td>USB-C Hub</td><td data-value-type="number">8</td><td data-value-type="currency">24.99</td><td data-value-type="currency">=B3*C3</td></tr>
+          <tr><td><b>Total Assets</b></td><td></td><td></td><td data-value-type="currency">=SUM(D1:D3)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Checked by: ________________________</p><p><br></p>
+  `,
+  schools: `
+    <h2>Target Schools Planner</h2>
+    <p>Student: _____ | Term: _____</p>
+    <div class="table-wrapper" data-table-wrapper="1" contenteditable="false">
+      <table class="calculeaf-table tbl-theme-grayscale" contenteditable="true">
+        <thead>
+          <tr>
+            <th style="width:30%">University</th>
+            <th style="width:20%">App Fee</th>
+            <th style="width:20%">Tuition</th>
+            <th style="width:30%">Total Cost 1st Yr</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>State College</td><td data-value-type="currency">50</td><td data-value-type="currency">12000</td><td data-value-type="currency">=B1+C1</td></tr>
+          <tr><td>Tech Institute</td><td data-value-type="currency">75</td><td data-value-type="currency">34000</td><td data-value-type="currency">=B2+C2</td></tr>
+          <tr><td>Ivy League U</td><td data-value-type="currency">90</td><td data-value-type="currency">58000</td><td data-value-type="currency">=B3+C3</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Notes: ________________________</p><p><br></p>
+  `,
+  home: `
+    <h2>Home Project Estimator</h2>
+    <p>Project: _____ | Year: _____</p>
+    <div class="table-wrapper" data-table-wrapper="1" contenteditable="false">
+      <table class="calculeaf-table tbl-theme-grayscale" contenteditable="true">
+        <thead>
+          <tr>
+            <th style="width:40%">Material/Labor</th>
+            <th style="width:20%">Est. Cost</th>
+            <th style="width:20%">Actual Cost</th>
+            <th style="width:20%">Over/Under</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Lumber</td><td data-value-type="currency">400</td><td data-value-type="currency">450</td><td data-value-type="currency">=B1-C1</td></tr>
+          <tr><td>Paint & Primer</td><td data-value-type="currency">120</td><td data-value-type="currency">110</td><td data-value-type="currency">=B2-C2</td></tr>
+          <tr><td>Labor (20hrs)</td><td data-value-type="currency">1000</td><td data-value-type="currency">1250</td><td data-value-type="currency">=B3-C3</td></tr>
+          <tr><td><b>Totals</b></td><td data-value-type="currency">=SUM(B1:B3)</td><td data-value-type="currency">=SUM(C1:C3)</td><td data-value-type="currency">=SUM(D1:D3)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Owner: ________________________</p><p><br></p>
+  `,
+  lending: `
+    <h2>Lending Tracker (Amortization)</h2>
+    <p>Borrower: _____ | Start Date: _____</p>
+    <div class="table-wrapper" data-table-wrapper="1" contenteditable="false">
+      <table class="calculeaf-table tbl-theme-grayscale" contenteditable="true">
+        <thead>
+          <tr>
+            <th style="width:25%">Month</th>
+            <th style="width:25%">Starting Bal</th>
+            <th style="width:25%">Repayment</th>
+            <th style="width:25%">Ending Bal (+5% Int)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Jan</td><td data-value-type="currency">5000</td><td data-value-type="currency">500</td><td data-value-type="currency">=(B1-C1)*1.05</td></tr>
+          <tr><td>Feb</td><td data-value-type="currency">=D1</td><td data-value-type="currency">500</td><td data-value-type="currency">=(B2-C2)*1.05</td></tr>
+          <tr><td>Mar</td><td data-value-type="currency">=D2</td><td data-value-type="currency">500</td><td data-value-type="currency">=(B3-C3)*1.05</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Signatures: ________________________</p><p><br></p>
+  `,
+  recipe: `
+    <h2>Recipe Cost Scaler</h2>
+    <p>Dish: _____ | Prep Time: _____</p>
+    <div class="table-wrapper" data-table-wrapper="1" contenteditable="false">
+      <table class="calculeaf-table tbl-theme-grayscale" contenteditable="true">
+        <thead>
+          <tr>
+            <th style="width:40%">Ingredient</th>
+            <th style="width:20%">Base Qty (1x)</th>
+            <th style="width:20%">Scale Factor</th>
+            <th style="width:20%">New Qty</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Flour (cups)</td><td data-value-type="number">2.5</td><td data-value-type="number">3</td><td data-value-type="number">=B1*C1</td></tr>
+          <tr><td>Sugar (cups)</td><td data-value-type="number">1</td><td data-value-type="number">=C1</td><td data-value-type="number">=B2*C2</td></tr>
+          <tr><td>Butter (tbsp)</td><td data-value-type="number">8</td><td data-value-type="number">=C1</td><td data-value-type="number">=B3*C3</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Instructions: ________________________</p><p><br></p>
+  `,
+  agenda: `
+    <h2>Event Catering Budget</h2>
+    <p>Event: _____ | Date: _____</p>
+    <div class="table-wrapper" data-table-wrapper="1" contenteditable="false">
+      <table class="calculeaf-table tbl-theme-grayscale" contenteditable="true">
+        <thead>
+          <tr>
+            <th style="width:40%">Expense Type</th>
+            <th style="width:20%">Guests</th>
+            <th style="width:20%">Cost/Head</th>
+            <th style="width:20%">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Appetizers</td><td data-value-type="number">150</td><td data-value-type="currency">12.50</td><td data-value-type="currency">=B1*C1</td></tr>
+          <tr><td>Main Course</td><td data-value-type="number">150</td><td data-value-type="currency">35.00</td><td data-value-type="currency">=B2*C2</td></tr>
+          <tr><td>Drinks & Bar</td><td data-value-type="number">150</td><td data-value-type="currency">22.00</td><td data-value-type="currency">=B3*C3</td></tr>
+          <tr><td><b>Grand Total</b></td><td></td><td></td><td data-value-type="currency">=SUM(D1:D3)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Approved by: ________________________</p><p><br></p>
+  `
+};
+
+
+window.insertTableTemplate = function(tplId) {
+  const html = TABLE_TEMPLATES[tplId];
+  if (!html) return;
+  insertHTMLAtCaret(html);
+  toast(`Inserted ${tplId} template`);
+  document.getElementById('tblTemplateModal')?.classList.remove('show');
+  
+  if(typeof window.refreshCalcuLeaf === 'function'){
+    window.refreshCalcuLeaf();
+  }
+};
+
+
+window.renderTemplatesGrid = function() {
+  const grid = document.getElementById('templateGrid');
+  if (!grid || grid.dataset.built === '1') return;
+  
+  const templatesInfo = [
+    { id: 'invoice', name: 'Invoice', icon: 'file-spreadsheet', desc: 'Billed items & total' },
+    { id: 'budget', name: 'Budget', icon: 'wallet', desc: 'Planned vs Actual' },
+    { id: 'timesheet', name: 'Timesheet', icon: 'clock', desc: 'Weekly hours tracking' },
+    { id: 'inventory', name: 'Inventory', icon: 'package', desc: 'Stock levels' },
+    { id: 'schools', name: 'Schools', icon: 'graduation-cap', desc: 'College tracker' },
+    { id: 'home', name: 'Home Log', icon: 'home', desc: 'Maintenance schedule' },
+    { id: 'lending', name: 'Lending', icon: 'hand-coins', desc: 'Loan repayments' },
+    { id: 'recipe', name: 'Recipe', icon: 'utensils', desc: 'Ingredients list' },
+    { id: 'agenda', name: 'Agenda', icon: 'calendar', desc: 'Meeting itinerary' }
+  ];
+  
+  let html = '';
+  for (const t of templatesInfo) {
+    html += `
+      <button class="template-card" onclick="insertTableTemplate('${t.id}')">
+        <div class="tc-icon"><i data-lucide="${t.icon}"></i></div>
+        <div class="tc-info">
+          <span class="tc-name">${t.name}</span>
+          <span class="tc-desc">${t.desc}</span>
+        </div>
+      </button>
+    `;
+  }
+  
+  grid.innerHTML = html;
+  grid.dataset.built = '1';
+  if (typeof refreshIcons === 'function') refreshIcons();
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  const mainTplBtn = document.getElementById('mainTemplateBtn');
+  if(mainTplBtn) {
+    mainTplBtn.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      document.getElementById('tblTemplateModal')?.classList.add('show');
+      renderTemplatesGrid();
+    });
+  }
+});

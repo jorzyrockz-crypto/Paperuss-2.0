@@ -1807,3 +1807,102 @@ function isSingleStandaloneUrl(str) {
     btn.setAttribute('aria-label', 'Checklist');
   });
 })();
+
+document.addEventListener('DOMContentLoaded', () => {
+  const canvasToggle = document.getElementById('setCanvasLight');
+  if(canvasToggle) {
+    canvasToggle.addEventListener('change', (e) => {
+      if(typeof setCanvasLightMode === 'function') {
+        setCanvasLightMode(e.target.checked);
+      }
+    });
+  }
+});
+
+
+
+/* ============================================================
+   GLOBAL VIEWPORT AWARENESS (ANTI-CLIPPING)
+   ============================================================ */
+window.enforceViewportBounds = function(el) {
+  if (!el || el.nodeType !== 1) return;
+  
+  // Only process if it's positioned (absolute or fixed)
+  const style = window.getComputedStyle(el);
+  if (style.position !== 'absolute' && style.position !== 'fixed') return;
+  if (style.display === 'none' || style.visibility === 'hidden') return;
+
+  // Reset any previous boundary translations
+  el.style.transform = el.style.transform.replace(/translate\([^)]+\)\s*/g, '');
+  
+  // Small delay to allow any flex/grid layouts inside the modal to settle
+  setTimeout(() => {
+    const rect = el.getBoundingClientRect();
+    const pad = 12; // 12px safe margin from edge
+    let offsetX = 0;
+    let offsetY = 0;
+
+    // Check right edge
+    if (rect.right > window.innerWidth - pad) {
+      offsetX = (window.innerWidth - pad) - rect.right;
+    } 
+    // Check left edge (prioritize keeping left edge on screen over right edge if it's wider than screen)
+    if (rect.left + offsetX < pad) {
+      offsetX = pad - rect.left;
+    }
+
+    // Check bottom edge
+    if (rect.bottom > window.innerHeight - pad) {
+      offsetY = (window.innerHeight - pad) - rect.bottom;
+    }
+    // Check top edge
+    if (rect.top + offsetY < pad) {
+      offsetY = pad - rect.top;
+    }
+
+    if (offsetX !== 0 || offsetY !== 0) {
+      // Append our corrective translation to any existing transform (like scale animations)
+      const currentTransform = el.style.transform === 'none' ? '' : el.style.transform;
+      el.style.transform = `${currentTransform} translate(${offsetX}px, ${offsetY}px)`.trim();
+    }
+  }, 10);
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Global MutationObserver to automatically catch any panel that gets revealed
+  const observer = new MutationObserver(mutations => {
+    for (const mutation of mutations) {
+      if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+        const el = mutation.target;
+        const currentClass = el.className || '';
+        const oldClass = mutation.oldValue || '';
+        
+        // If an element just gained a visibility class
+        if (
+          (currentClass.includes('show') && !oldClass.includes('show')) ||
+          (currentClass.includes('open') && !oldClass.includes('open')) ||
+          (currentClass.includes('active') && !oldClass.includes('active'))
+        ) {
+          // Check if it's likely a panel/dropdown/modal
+          if (
+            currentClass.includes('dropdown') || 
+            currentClass.includes('modal') || 
+            currentClass.includes('picker') || 
+            currentClass.includes('menu') ||
+            currentClass.includes('submenu') ||
+            currentClass.includes('toolbar')
+          ) {
+            window.enforceViewportBounds(el);
+          }
+        }
+      }
+    }
+  });
+
+  observer.observe(document.body, {
+    attributes: true,
+    attributeFilter: ['class'],
+    attributeOldValue: true,
+    subtree: true
+  });
+});

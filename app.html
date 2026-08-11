@@ -148,6 +148,7 @@ try {
 <link rel="stylesheet" href="assets/css/card-drag-engine.css?v=2.5.4">
 <link rel="stylesheet" href="assets/css/responsive.css?v=2.5.3">
 <link rel="stylesheet" href="assets/css/settings.css?v=2.6.31">
+<link rel="stylesheet" href="css/themes.css">
 </head>
 <body>
 
@@ -784,6 +785,9 @@ try {
               <div class="tgp-label" id="tgpLabel">Pick size</div>
             </div>
           </div>
+          <button class="tool-btn" id="mainTemplateBtn" title="Insert Template" aria-label="Insert Template">
+            <i data-lucide="layout-template" class="w-4 h-4"></i>
+          </button>
           <button class="tool-btn" data-cmd="code" title="Inline code">
             <i data-lucide="code" class="w-4 h-4"></i>
           </button>
@@ -794,19 +798,6 @@ try {
             <i data-lucide="minus" class="w-4 h-4"></i>
           </button>
 
-          <div class="template-picker" id="templatePicker" style="position:relative;display:inline-flex">
-            <button class="tool-btn" id="templateBtn" title="Insert Template" style="gap:4px;font-size:12px">
-              <i data-lucide="square" class="w-4 h-4"></i>
-              <span>Templates</span>
-              <i data-lucide="chevron-down" class="w-3 h-3"></i>
-            </button>
-            <div class="template-dropdown" id="templateDropdown">
-              <div class="pl-section-title">Finance & Tables</div>
-              <button class="tpl-opt" data-tpl="expense"><i data-lucide="receipt" class="w-3.5 h-3.5"></i> Expense Tracker</button>
-              <button class="tpl-opt" data-tpl="budget"><i data-lucide="calculator" class="w-3.5 h-3.5"></i> Budget Summary</button>
-              <button class="tpl-opt" data-tpl="variance"><i data-lucide="trending-up" class="w-3.5 h-3.5"></i> Variance Analysis</button>
-            </div>
-          </div>
 
           <span class="tool-sep"></span>
 
@@ -916,11 +907,10 @@ try {
             </div>
           </div>
           <div class="stats">
-            <button class="music-hub-pill-btn" id="musicHubBtn" onclick="if(typeof openMusicHubModal==='function')openMusicHubModal();else if(window.PaperussMediaWidget)PaperussMediaWidget.openMusicHubModal();" title="Paperuss Dedicated Music Player Hub" aria-label="Paperuss Music Player">
-              <i data-lucide="disc-3" class="w-3.5 h-3.5 text-emerald-400"></i>
-              <span>Music Player</span>
-              <span class="music-hub-dot hidden" id="musicHubDot"></span>
-            </button>
+            <button class="music-hub-disk-btn" id="musicHubBtn" onclick="if(typeof openMusicHubModal==='function')openMusicHubModal();else if(window.PaperussMediaWidget)PaperussMediaWidget.openMusicHubModal();" title="Fullscreen Music Player" aria-label="Paperuss Music Player">
+<i data-lucide="disc-3" class="dj-disk-icon"></i>
+<span class="music-hub-dot hidden" id="musicHubDot"></span>
+</button>
             <span id="wordCount">0 words</span>
             <span id="charCount">0 chars</span>
             <span id="updatedTime"></span>
@@ -1042,6 +1032,13 @@ try {
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
               </select>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Canvas Light Mode</span>
+                <small>Keep editor sheet light while using a dark workspace</small>
+              </div>
+              <label class="settings-switch"><input type="checkbox" id="setCanvasLight"><span></span></label>
             </div>
             <div class="settings-row">
               <div class="settings-label">
@@ -1388,12 +1385,10 @@ try {
 <!-- ============ TABLE QUICK TOOLBAR ============ -->
 <div class="tbl-tools" id="tblTools">
   <button id="tblMoveHandle" class="tbl-move-handle" title="Move table" aria-label="Move table"><i data-lucide="grip-vertical" class="w-4 h-4"></i></button>
-  <span class="tbl-dim-badge" id="tblDimBadge"></span>
-  <span class="tbl-sep"></span>
+  
   <button id="tblBtnMerge" title="Merge / Split"><i data-lucide="combine" class="w-4 h-4"></i></button>
   <button id="tblBtnLayout" title="Layout &amp; Margins"><i data-lucide="layout-grid" class="w-4 h-4"></i></button>
   <button id="tblBtnThemes" title="Table Themes"><i data-lucide="palette" class="w-4 h-4"></i></button>
-  <button id="tblBtnTemplates" title="Templates"><i data-lucide="layout-template" class="w-4 h-4"></i></button>
   <span class="tbl-sep"></span>
   <button id="tblDel" class="danger" title="Delete table"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
   <button id="tblBtnMobileSheet" class="tbl-mobile-only" title="Table options" style="display:none"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i></button>
@@ -1963,5 +1958,18 @@ try {
 <script src="js/tables.js?v=2.6.42"></script>
 <script src="js/branches.js?v=2.6.23"></script>
 <script src="js/bootstrap.js?v=2.6.31"></script>
+
+<!-- Fullscreen Music Lightbox -->
+<div class="music-lightbox hidden" id="musicLightboxOverlay">
+  <div class="music-lightbox-glass"></div>
+  <button class="music-lightbox-close" id="musicLightboxCloseBtn" title="Minimize Player"><i data-lucide="x"></i></button>
+  <div class="music-lightbox-content" id="musicLightboxContent">
+    <div class="music-lightbox-placeholder" id="musicLightboxPlaceholder">
+      <i data-lucide="music" class="w-12 h-12 text-muted mb-4"></i>
+      <p>No active music embed found.</p>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
