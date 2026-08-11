@@ -531,7 +531,7 @@ function markPortableStateChanged(){
 
 function collectPortableState(){
   return {
-    theme:localStorage.getItem(THEME_KEY)||'dark',
+    theme:localStorage.getItem(THEME_KEY)||'olive-groove',
     calendarView:state.calendarView||'month',
     calendarSelectedDate:+state.calendarSelectedDate||Date.now(),
     notifications:(appNotifications||[]).slice(0,200),

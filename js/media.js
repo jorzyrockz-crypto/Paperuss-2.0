@@ -2510,7 +2510,7 @@ function updateToolbarState(){
    ============================================================ */
 function setTheme(theme,trackChange=true){
   const supportedThemes=['dark','light','paper','olive-groove','rose-pine','nord','ember'];
-  if(!supportedThemes.includes(theme)) theme='dark';
+  if(!supportedThemes.includes(theme)) theme='olive-groove';
   const darkThemes=new Set(['dark','rose-pine','nord','ember']);
   const themeMetaColors={
     dark:'#0b0e14', light:'#ffffff', paper:'#fbf8f0',

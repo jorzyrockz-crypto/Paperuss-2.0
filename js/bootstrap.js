@@ -1751,7 +1751,7 @@ function isSingleStandaloneUrl(str) {
 }
 
 (function init(){
-  const savedTheme = localStorage.getItem(THEME_KEY) || (window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');
+  const savedTheme = localStorage.getItem(THEME_KEY) || 'olive-groove';
   setTheme(savedTheme,false);
   load();
   loadTasks();

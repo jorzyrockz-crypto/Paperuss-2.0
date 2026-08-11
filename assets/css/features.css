@@ -2499,6 +2499,17 @@ blockquote.note-callout.callout-info {
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.14);
 }
 
+/* Olive Groove keeps the palette widget on the same warm paper surface as the
+   editor.  The base widget predates the named themes and is intentionally
+   dark, so this scoped treatment prevents a dark island from appearing over
+   the light Olive Groove canvas. */
+[data-theme="olive-groove"] .leaves-palette-widget {
+  background: rgba(247, 243, 233, 0.97);
+  border-color: rgba(107, 143, 113, 0.36);
+  box-shadow: 0 16px 48px rgba(45, 51, 47, 0.24);
+  color: var(--fg);
+}
+
 .leaves-drawer-overlay.show .leaves-palette-widget {
   opacity: 1;
   transform: scale(1) translateY(0);
@@ -2573,6 +2584,11 @@ blockquote.note-callout.callout-info {
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 
+[data-theme="olive-groove"] .leaves-drawer-header {
+  border-bottom-color: rgba(107, 143, 113, 0.28);
+  background: rgba(107, 143, 113, 0.09);
+}
+
 .leaves-drag-handle {
   display: flex;
   align-items: center;
@@ -2621,6 +2637,14 @@ blockquote.note-callout.callout-info {
   background: var(--hover, rgba(255, 255, 255, 0.1));
 }
 
+[data-theme="olive-groove"] .leaves-palette-widget .leaf-row {
+  color: var(--fg);
+}
+
+[data-theme="olive-groove"] .leaves-palette-widget .leaf-row:hover {
+  background: rgba(107, 143, 113, 0.16);
+}
+
 /* Color Accent Variants (Uniform Background Tint, Left Border, & Icon Color) */
 .leaf-row.color-emerald { background: rgba(16, 185, 129, 0.08); border-left-color: #10b981; }
 .leaf-row.color-amber { background: rgba(245, 158, 11, 0.08); border-left-color: #f59e0b; }
@@ -2640,6 +2664,10 @@ blockquote.note-callout.callout-info {
 .leaf-row.active {
   font-weight: 600;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="olive-groove"] .leaves-palette-widget .leaf-row.active {
+  box-shadow: inset 0 0 0 1px rgba(107, 143, 113, 0.46), 0 2px 6px rgba(107, 143, 113, 0.12);
 }
 .leaf-row.active.color-emerald { background: rgba(16, 185, 129, 0.18); border-left-color: #10b981; }
 .leaf-row.active.color-amber { background: rgba(245, 158, 11, 0.18); border-left-color: #f59e0b; }
@@ -2668,6 +2696,18 @@ blockquote.note-callout.callout-info {
   color: var(--fg);
 }
 
+[data-theme="olive-groove"] .leaves-palette-widget .leaf-more-btn {
+  background: rgba(255, 254, 249, 0.84);
+  border: 1px solid rgba(107, 143, 113, 0.24);
+  color: var(--fg-secondary);
+}
+
+[data-theme="olive-groove"] .leaves-palette-widget .leaf-more-btn:hover {
+  background: rgba(107, 143, 113, 0.16);
+  border-color: rgba(107, 143, 113, 0.42);
+  color: var(--fg);
+}
+
 /* Glassmorphic 3-Dot Context Menu Popover */
 .leaf-context-menu {
   position: fixed !important;
@@ -2689,6 +2729,13 @@ blockquote.note-callout.callout-info {
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
   color: #f1f5f9 !important;
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6) !important;
+}
+
+[data-theme="olive-groove"] .leaf-context-menu {
+  background: rgba(255, 254, 249, 0.98);
+  border-color: rgba(107, 143, 113, 0.34);
+  color: var(--fg);
+  box-shadow: 0 14px 40px rgba(45, 51, 47, 0.2);
 }
 
 .leaf-context-menu.hidden {
@@ -2720,6 +2767,10 @@ blockquote.note-callout.callout-info {
   color: #f1f5f9 !important;
 }
 
+[data-theme="olive-groove"] .leaf-menu-item {
+  color: var(--fg);
+}
+
 .leaf-menu-item:hover {
   background: rgba(0, 0, 0, 0.05);
 }
@@ -2734,6 +2785,10 @@ blockquote.note-callout.callout-info {
 
 [data-theme="dark"] .leaf-menu-item:hover {
   background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="olive-groove"] .leaf-menu-item:hover {
+  background: rgba(107, 143, 113, 0.14);
 }
 
 .leaf-menu-item.danger {

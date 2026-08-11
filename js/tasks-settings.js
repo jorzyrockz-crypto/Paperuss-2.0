@@ -560,7 +560,7 @@ function applySettingsEffects(){
 async function renderSettingsView(){
   // Sync control values with stored settings
   const themeSel=document.getElementById('setTheme');
-  if(themeSel) themeSel.value=document.documentElement.getAttribute('data-theme')||'dark';
+  if(themeSel) themeSel.value=document.documentElement.getAttribute('data-theme')||'olive-groove';
   const fontSel=document.getElementById('setDefaultFont');
   if(fontSel) fontSel.value=appSettings.defaultFont||'sans';
   const intSel=document.getElementById('setReminderInterval');
