@@ -1271,6 +1271,8 @@ function renderEditor(){
                   window.currentActiveLeaf = leafToRender;
                   const ed = bodyEl();
                   if (ed && document.activeElement !== ed) ed.innerHTML = leafToRender.content || '';
+                  if (typeof normalizeEditorTables === 'function') normalizeEditorTables();
+                  if (typeof hydrateCalcuLeafFormulas === 'function') hydrateCalcuLeafFormulas(ed);
                 }
               });
             }).catch(e => {});
@@ -1329,6 +1331,7 @@ function renderEditor(){
         if(editorScroll) editorScroll.scrollTop = savedScroll;
       }
       if(typeof normalizeEditorTables==='function') normalizeEditorTables();
+      if(typeof hydrateCalcuLeafFormulas === 'function') hydrateCalcuLeafFormulas(ed);
       if(trashMode){
         ed.querySelectorAll('input,button,select,textarea').forEach(control=>{ control.disabled=true; });
         ed.querySelectorAll('table').forEach(table=>table.setAttribute('contenteditable','false'));

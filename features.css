@@ -6369,3 +6369,182 @@ a.paperuss-inline-link:hover {
   padding-left: 1em;
 }
 
+
+
+.formula-opt:hover .formula-picker-icon, .formula-opt.selected .formula-picker-icon {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+
+/* --- Excel Context Menu Extensions --- */
+.tbl-ctx-quick-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  background: var(--subtle);
+  border-radius: 8px;
+  margin-bottom: 4px;
+}
+.tbl-ctx-quick-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+}
+.tbl-ctx-quick-wrap {
+  position: relative;
+  display: flex;
+}
+.tbl-ctx-quick-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  border-radius: 4px;
+  position: relative;
+}
+.tbl-ctx-quick-btn.txt-icon {
+  font-family: inherit;
+}
+.tbl-ctx-quick-btn.split-icon {
+  width: auto;
+  padding: 0 4px;
+  gap: 2px;
+}
+.tbl-ctx-quick-btn:hover {
+  background: var(--hover);
+}
+.tbl-ctx-quick-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.tbl-ctx-quick-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Submenus */
+.tbl-ctx-item.has-submenu {
+  position: relative;
+  justify-content: space-between;
+}
+.tbl-ctx-quick-wrap.has-submenu {
+  position: relative;
+}
+.tbl-ctx-submenu {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: 0;
+  background: var(--overlay);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 1000;
+  flex-direction: column;
+  min-width: 180px;
+  margin-left: 2px;
+}
+.tbl-ctx-quick-wrap .tbl-ctx-submenu {
+  left: 0;
+  top: 100%;
+  margin-top: 4px;
+  margin-left: 0;
+}
+.tbl-ctx-item.has-submenu:hover .tbl-ctx-submenu,
+.tbl-ctx-quick-wrap.has-submenu:hover .tbl-ctx-submenu {
+  display: flex;
+  animation: submenuFadeIn 0.15s ease;
+}
+@keyframes submenuFadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.tbl-ctx-submenu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  border-radius: 4px;
+  text-align: left;
+  font-size: 13px;
+  width: 100%;
+}
+.tbl-ctx-submenu button:hover {
+  background: var(--hover);
+}
+.ctx-submenu-arrow {
+  opacity: 0.5;
+}
+.ctx-shortcut {
+  margin-left: auto;
+  opacity: 0.5;
+  font-size: 11px;
+}
+.item-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+
+.tbl-ctx-menu {
+  background: var(--bg) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.ctx-text {
+  flex-grow: 1;
+  text-align: left;
+}
+
+
+.tbl-ctx-item.has-submenu:focus-within .tbl-ctx-submenu,
+.tbl-ctx-quick-wrap.has-submenu:focus-within .tbl-ctx-submenu,
+.tbl-ctx-item.has-submenu:focus .tbl-ctx-submenu,
+.tbl-ctx-quick-wrap.has-submenu:focus .tbl-ctx-submenu {
+  display: flex;
+  animation: submenuFadeIn 0.15s ease;
+}
+
+.tbl-ctx-item.has-submenu:hover .tbl-ctx-submenu,
+.tbl-ctx-quick-wrap.has-submenu:hover .tbl-ctx-submenu {
+  display: none; /* Disable hover so it only opens on click/focus */
+}
+
+.ctx-shortcut {
+  opacity: 1 !important;
+  color: var(--fg-muted, #888);
+}
+.ctx-submenu-arrow {
+  opacity: 1 !important;
+  color: var(--fg-muted, #888);
+}
+
+
+.tbl-ctx-item.has-submenu:focus-within .tbl-ctx-submenu,
+.tbl-ctx-quick-wrap.has-submenu:focus-within .tbl-ctx-submenu,
+.tbl-ctx-item.has-submenu:focus .tbl-ctx-submenu,
+.tbl-ctx-quick-wrap.has-submenu:focus .tbl-ctx-submenu {
+  display: flex !important;
+}
+
+.tbl-ctx-menu, .tbl-ctx-submenu {
+  background: #ffffff !important;
+  backdrop-filter: none !important;
+}
+html[data-theme="dark"] .tbl-ctx-menu, html[data-theme="dark"] .tbl-ctx-submenu {
+  background: #1b2130 !important;
+}

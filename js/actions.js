@@ -318,10 +318,25 @@ function fallbackReferenceMark(target,text){
   target.innerHTML=`<div style="display:grid;grid-template-columns:repeat(9,6px);border:2px solid #111827;width:58px;height:58px">${cells}</div>`;
 }
 
-function sanitizeContentForPrint(rawHtml, noteTitle) {
+function sanitizeContentForPrint(rawHtml, noteTitle, options) {
   if (!rawHtml) return '';
+  options = options || {};
   const temp = document.createElement('div');
   temp.innerHTML = rawHtml;
+  const preserveColors = options.preserveColors === true;
+
+  // Keep legacy HTML color attributes usable in print when the user opts in.
+  // The editor normally stores inline styles, but imported notes may still
+  // contain <font color="..."> or color attributes on spans.
+  if (preserveColors) {
+    temp.querySelectorAll('[color]').forEach(el => {
+      const color = String(el.getAttribute('color') || '').trim();
+      if (!color || /[;{}]|url\s*\(|javascript\s*:/i.test(color)) return;
+      const existing = el.getAttribute('style') || '';
+      el.setAttribute('style', `${existing}${existing && !existing.trim().endsWith(';') ? ';' : ''}color:${color}`);
+      el.removeAttribute('color');
+    });
+  }
 
   // Find first child heading and check if it duplicates the note title
   const firstEl = temp.firstElementChild;
@@ -336,6 +351,7 @@ function sanitizeContentForPrint(rawHtml, noteTitle) {
   // Remove ALL transient editor UI elements, block handles, card controls, toolbars, docks, sheets, and drop indicators
   temp.querySelectorAll(
     '.block-drop-indicator, .block-gutter, .block-hero-ghost, .ghost-drag-avatar, ' +
+    '[data-paperuss-ui="true"], .editor-only, .editor-topbar, .editor-toolbar, .editor-meta, ' +
     '.pv-header-overlay, .pv-footer-overlay, .pv-page-divider, .pv-page-gap, .pv-page-label, [data-paperuss-page-ui="true"], ' +
     '.leafline-ui, .resize-handle, .card-resize-handle, .image-resize-handle, .itb-container, .itb-dropdown, ' +
     '.embed-tb-container, .embed-tb-segment, .embed-tb-btn, .embed-tb-dropdown, .embed-wrap-dropdown, .embed-mode-dropdown, .embed-more-menu, .embed-editor-toolbar, .embed-context-panel, ' +
@@ -343,6 +359,8 @@ function sanitizeContentForPrint(rawHtml, noteTitle) {
     '.checklist-controls, .checklist-drag-handle, ' +
     '.paperuss-card-controls, .card-header-actions, .delete-card-btn, .card-options-btn, ' +
     '.image-context-menu, .img-sheet, .img-sheet-backdrop, .img-toolbar, .img-batch-bar, .img-handle, .img-fullscreen, ' +
+    '#imageContextMenu, #imgSheet, #imgSheetBackdrop, #imgToolbar, #imgBatchBar, #imgFullscreen, ' +
+    '#tblCtxMenu, #tblSheet, #tblSheetBackdrop, #hfContextPanel, .tbl-ctx-menu, .tbl-sheet, .tbl-sheet-backdrop, .hf-context-panel, ' +
     '.floating-fab-dock, .floating-quick-insert-fab, .leaf-toggle-fab, .leaves-drawer-overlay, .leaf-context-menu, .music-hub-modal-overlay, .notif-panel, .profile-panel, ' +
     '.broken-card-retry, .broken-card-actions, .ui-control, .editor-only'
   ).forEach(el => el.remove());
@@ -383,6 +401,83 @@ function sanitizeContentForPrint(rawHtml, noteTitle) {
   return temp.innerHTML;
 }
 
+function sanitizeHeaderFooterForPrint(rawHtml, options) {
+  if (!rawHtml) return '';
+  options = options || {};
+  const temp = document.createElement('div');
+  const preserveColors = options.preserveColors === true;
+  const source = document.createElement('div');
+  source.innerHTML = String(rawHtml);
+
+  // Convert legacy presentational color attributes into safe inline styles
+  // before the shared HTML sanitizer removes unsupported attributes.
+  if (preserveColors) {
+    source.querySelectorAll('[color]').forEach(el => {
+      const color = String(el.getAttribute('color') || '').trim();
+      if (!color || /[;{}]|url\s*\(|javascript\s*:/i.test(color)) return;
+      const existing = el.getAttribute('style') || '';
+      el.setAttribute('style', `${existing}${existing && !existing.trim().endsWith(';') ? ';' : ''}color:${color}`);
+      el.removeAttribute('color');
+    });
+  }
+
+  temp.innerHTML = typeof sanitizeNoteHTML === 'function'
+    ? sanitizeNoteHTML(source.innerHTML)
+    : source.innerHTML;
+
+  temp.querySelectorAll('script,style,iframe,object,embed,link,meta').forEach(el => el.remove());
+
+  const allowedTextStyles = new Set([
+    'color',
+    'font-family',
+    'font-size',
+    'font-style',
+    'font-weight',
+    'letter-spacing',
+    'text-align',
+    'text-decoration',
+    'text-transform'
+  ]);
+  if (preserveColors) {
+    [
+      'background', 'background-color', 'border', 'border-color',
+      'border-top', 'border-right', 'border-bottom', 'border-left',
+      'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+      'box-shadow', 'text-shadow', 'opacity'
+    ].forEach(prop => allowedTextStyles.add(prop));
+  }
+
+  temp.querySelectorAll('*').forEach(el => {
+    el.removeAttribute('class');
+    el.removeAttribute('id');
+    Array.from(el.attributes).forEach(attr => {
+      const name = attr.name.toLowerCase();
+      if (name.startsWith('data-') || name.startsWith('aria-')) {
+        el.removeAttribute(attr.name);
+      }
+    });
+
+    const rawStyle = el.getAttribute('style');
+    if (!rawStyle) return;
+
+    const probe = document.createElement('span');
+    probe.setAttribute('style', rawStyle);
+    const safeStyle = [];
+    for (let i = 0; i < probe.style.length; i++) {
+      const prop = probe.style[i];
+      if (!allowedTextStyles.has(prop)) continue;
+      const value = probe.style.getPropertyValue(prop);
+      if (/expression\s*\(|javascript\s*:|vbscript\s*:|@import|url\s*\(/i.test(value)) continue;
+      const priority = probe.style.getPropertyPriority(prop);
+      safeStyle.push(`${prop}:${value}${priority ? ' !important' : ''}`);
+    }
+    if (safeStyle.length) el.setAttribute('style', safeStyle.join(';'));
+    else el.removeAttribute('style');
+  });
+
+  return temp.innerHTML;
+}
+
 async function preparePrintSheet(targetNote, options) {
   const note = targetNote || activeNoteForAction();
   if (!note) return null;
@@ -390,14 +485,27 @@ async function preparePrintSheet(targetNote, options) {
 
   options = options || {};
   const scope = options.scope || 'active';
-  const pageSize = options.pageSize || note.pageSize || 'auto';
+  const requestedPageSize = options.pageSize || note.pageSize || 'a4';
   const orientation = options.orientation || note.pageOrientation || 'portrait';
   const margin = options.margin || note.pageMargins || 'normal';
+  const sharedPageLayout = typeof window.getPaperussPageLayoutConfig === 'function'
+    ? window.getPaperussPageLayoutConfig({
+        pageSize: requestedPageSize,
+        pageOrientation: orientation,
+        pageMargins: margin
+      })
+    : null;
+  // WYSIWYG normalizes legacy/auto notes to A4, so print must use that same
+  // fallback instead of silently reverting to the browser's default paper.
+  const pageSize = sharedPageLayout?.sizeKey || requestedPageSize;
   const showHeader = options.showHeader !== undefined ? options.showHeader : note.showHeader !== false;
   const showMetadata = options.showMetadata !== undefined ? options.showMetadata : note.showMetadata !== false;
   const showFooter = options.showFooter !== undefined ? options.showFooter : note.showFooter !== false;
   const showReference = options.showReference !== undefined ? options.showReference : note.showReference !== false;
   const showPageNums = options.showPageNums !== undefined ? options.showPageNums : note.showPageNums !== false;
+  const preserveColors = options.preserveColors !== undefined
+    ? options.preserveColors === true
+    : note.preservePrintColors === true;
   const hasUnifiedHeader = typeof note.customHeaderContent === 'string';
   const customHeaderTitle = options.customHeaderTitle !== undefined
     ? options.customHeaderTitle
@@ -408,16 +516,25 @@ async function preparePrintSheet(targetNote, options) {
   const customHeaderHtml = options.customHeaderHtml !== undefined
     ? options.customHeaderHtml
     : (typeof note.customHeaderHtml === 'string' ? note.customHeaderHtml : '');
-  const renderedHeader = customHeaderHtml && typeof sanitizeNoteHTML === 'function'
-    ? sanitizeNoteHTML(customHeaderHtml)
+  const renderedHeader = customHeaderHtml
+    ? sanitizeHeaderFooterForPrint(customHeaderHtml, { preserveColors })
     : esc(customHeaderTitle);
-  const customFooterHtml = typeof note.customFooterHtml === 'string' && typeof sanitizeNoteHTML === 'function'
-    ? sanitizeNoteHTML(note.customFooterHtml)
+  const customFooterHtml = typeof note.customFooterHtml === 'string'
+    ? sanitizeHeaderFooterForPrint(note.customFooterHtml, { preserveColors })
     : '';
   const customFooterText = note.customFooterText || '';
   const documentStyle = options.documentStyle || note.documentStyle || 'executive';
 
+  // The editor surface is the source of truth for the document's base
+  // typography. Capture its resolved values so a font/size/line-spacing
+  // choice made in the WYSIWYG is carried into the print surface as well.
+  const editorSurface = typeof bodyEl === 'function' ? bodyEl() : document.getElementById('noteBody');
+  const editorComputed = editorSurface && typeof window.getComputedStyle === 'function'
+    ? window.getComputedStyle(editorSurface)
+    : null;
+
   sheet.setAttribute('data-print-theme', documentStyle);
+  sheet.setAttribute('data-preserve-colors', preserveColors ? 'true' : 'false');
 
   let cleanHtml = '';
 
@@ -429,10 +546,10 @@ async function preparePrintSheet(targetNote, options) {
     }
     if (lObj) {
       cleanHtml = `<h2 class="ps-leaf-title" style="margin-top:0!important;">${esc(lObj.title || 'Leaf')}</h2>`;
-      cleanHtml += sanitizeContentForPrint(lObj.content || '', lObj.title);
+      cleanHtml += sanitizeContentForPrint(lObj.content || '', lObj.title, { preserveColors });
     } else {
       let currentHtml = (typeof bodyEl === 'function' && bodyEl() ? bodyEl().innerHTML : '') || note.content || '';
-      cleanHtml = sanitizeContentForPrint(currentHtml, titleOf(note));
+      cleanHtml = sanitizeContentForPrint(currentHtml, titleOf(note), { preserveColors });
     }
   } else if (scope === 'all' && window.paperussLeaves && window.paperussLeaves.leafGet) {
     const leafOrder = (typeof window.getNoteLeafOrder === 'function')
@@ -461,25 +578,23 @@ async function preparePrintSheet(targetNote, options) {
       const l = leafObjects[i];
       if (i > 0) cleanHtml += `<div class="ps-leaf-break"></div>`;
       cleanHtml += `<h2 class="ps-leaf-title">${esc(l.title || `Leaf ${i + 1}`)}</h2>`;
-      cleanHtml += sanitizeContentForPrint(l.content || '', l.title);
+      cleanHtml += sanitizeContentForPrint(l.content || '', l.title, { preserveColors });
     }
   } else {
     // Single active leaf
     let currentHtml = (typeof bodyEl === 'function' && bodyEl() ? bodyEl().innerHTML : '') || note.content || '';
-    cleanHtml = sanitizeContentForPrint(currentHtml, titleOf(note));
+    cleanHtml = sanitizeContentForPrint(currentHtml, titleOf(note), { preserveColors });
   }
 
   const tags = (note.tags || []).map(t => `<span class="ps-tag">${esc(t)}</span>`).join('');
   const printedAt = new Date().toLocaleString();
   const reference = `paperuss://note/${note.id}?updated=${note.updatedAt}`;
 
-  let marginCss = '16mm 17mm 19mm'; // default auto margins
-  if (margin === 'narrow') marginCss = '10mm';
-  else if (margin === 'wide') marginCss = '25mm';
-  else if (margin === 'binding') marginCss = '20mm 20mm 20mm 35mm';
+  // Keep print margins identical to the live WYSIWYG paper surface.
+  let marginCss = sharedPageLayout?.marginCss || '20mm 20mm 20mm 20mm';
 
   let pageCss = pageSize !== 'auto'
-    ? `@page { size: ${pageSize} ${orientation}; margin: ${marginCss}; }`
+    ? `@page { size: ${sharedPageLayout?.sizeCss || pageSize} ${orientation}; margin: ${marginCss}; }`
     : `@page { size: auto; margin: ${marginCss}; }`;
   if (margin === 'binding') {
     pageCss += `
@@ -522,8 +637,8 @@ async function preparePrintSheet(targetNote, options) {
       ${showHeader ? headerBannerHtml : ''}
       <div class="ps-header-row">
         ${showHeader ? `<div class="ps-header-copy">
-          <div class="ps-brand" style="white-space:pre-wrap">${renderedHeader}</div>
-          <div style="font-size:10px;color:#64748b;margin-top:3px">${esc(customSubtitle)}</div>
+          <div class="ps-brand">${renderedHeader}</div>
+          <div class="ps-header-subtitle">${esc(customSubtitle)}</div>
         </div>` : '<div></div>'}
         ${showMetadata ? `<div class="ps-meta">
           Created ${fullDate(note.createdAt)}<br>
@@ -543,6 +658,15 @@ async function preparePrintSheet(targetNote, options) {
         <div id="printQr" aria-label="Note reference QR code"></div>
       </div>` : ''}
     </footer>` : ''}`;
+
+  const printContent = sheet.querySelector('.ps-content');
+  if (printContent && editorComputed) {
+    printContent.style.fontFamily = editorComputed.fontFamily;
+    printContent.style.fontSize = editorComputed.fontSize;
+    printContent.style.lineHeight = note.lineHeight || note.lineSpacing || editorComputed.lineHeight;
+    printContent.style.color = editorComputed.color;
+    printContent.style.letterSpacing = editorComputed.letterSpacing;
+  }
 
   const qr = document.getElementById('printQr');
   if (qr) {
@@ -611,6 +735,9 @@ async function openPrintModal() {
   let showFooter = note.showFooter !== undefined ? note.showFooter : (savedPrefs.showFooter !== undefined ? savedPrefs.showFooter : true);
   let showReference = note.showReference !== undefined ? note.showReference : (savedPrefs.showReference !== undefined ? savedPrefs.showReference : true);
   let showPageNums = note.showPageNums !== undefined ? note.showPageNums : (savedPrefs.showPageNums !== undefined ? savedPrefs.showPageNums : true);
+  let preserveColors = note.preservePrintColors !== undefined
+    ? note.preservePrintColors === true
+    : savedPrefs.preserveColors === true;
   const hasUnifiedHeader = typeof note.customHeaderContent === 'string';
   let customHeaderTitle = hasUnifiedHeader ? note.customHeaderContent : (note.customHeaderTitle || savedPrefs.customHeaderTitle || '');
   let customSubtitle = hasUnifiedHeader ? '' : (note.customSubtitle || savedPrefs.customSubtitle || '');
@@ -698,6 +825,10 @@ async function openPrintModal() {
                     <input type="checkbox" id="pmShowPageNums" ${showPageNums ? 'checked' : ''}>
                     <span><strong>Page numbers</strong><small>Page X of Y</small></span>
                   </label>
+                  <label class="pm-checkbox-label">
+                    <input type="checkbox" id="pmPreserveColors" ${preserveColors ? 'checked' : ''}>
+                    <span><strong>Preserve editor colors</strong><small>Keep text, highlights, and colored borders</small></span>
+                  </label>
                 </div>
               </div>
             </div>
@@ -768,6 +899,7 @@ async function openPrintModal() {
     document.getElementById('pmShowFooter').onchange = (e) => { showFooter = e.target.checked; renderModal(); };
     document.getElementById('pmShowReference').onchange = (e) => { showReference = e.target.checked; renderModal(); };
     document.getElementById('pmShowPageNums').onchange = (e) => { showPageNums = e.target.checked; renderModal(); };
+    document.getElementById('pmPreserveColors').onchange = (e) => { preserveColors = e.target.checked; };
 
     function updateThumbnail() {
       const thumb = document.getElementById('pmPaperThumb');
@@ -781,7 +913,7 @@ async function openPrintModal() {
       closeModal();
       try {
         localStorage.setItem('paperuss_print_prefs', JSON.stringify({
-          documentStyle, pageSize, orientation, margin, showHeader, showMetadata, showFooter, showReference, showPageNums, customHeaderTitle, customSubtitle
+          documentStyle, pageSize, orientation, margin, showHeader, showMetadata, showFooter, showReference, showPageNums, preserveColors, customHeaderTitle, customSubtitle
         }));
       } catch (e) {}
 
@@ -796,6 +928,7 @@ async function openPrintModal() {
         showFooter,
         showReference,
         showPageNums,
+        preserveColors,
         customHeaderTitle,
         customSubtitle
       };
@@ -841,7 +974,8 @@ window.addEventListener('beforeprint', () => {
       showMetadata: typeof prefs.showMetadata === 'boolean' ? prefs.showMetadata : undefined,
       showFooter: typeof prefs.showFooter === 'boolean' ? prefs.showFooter : undefined,
       showReference: typeof prefs.showReference === 'boolean' ? prefs.showReference : undefined,
-      showPageNums: typeof prefs.showPageNums === 'boolean' ? prefs.showPageNums : undefined
+      showPageNums: typeof prefs.showPageNums === 'boolean' ? prefs.showPageNums : undefined,
+      preserveColors: typeof prefs.preserveColors === 'boolean' ? prefs.preserveColors : undefined
     });
   }
 });

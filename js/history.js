@@ -103,6 +103,8 @@ window.HistoryManager = {
     const ed = document.getElementById('noteBody');
     if(!ed) return;
     ed.innerHTML = state.content;
+    if (typeof normalizeEditorTables === 'function') normalizeEditorTables();
+    if (typeof hydrateCalcuLeafFormulas === 'function') hydrateCalcuLeafFormulas(ed);
 
     if (typeof window.hydrateProductivityReferences === 'function') {
       window.hydrateProductivityReferences(ed);

@@ -142,8 +142,8 @@ try {
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" onerror="window.__fbLoadFailed=true"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js" onerror="window.__fbStorageLoadFailed=true"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js" onerror="window.__fbAnalyticsLoadFailed=true"></script>
-<link rel="stylesheet" href="assets/css/core.css?v=2.6.37">
-<link rel="stylesheet" href="assets/css/features.css?v=2.6.33">
+<link rel="stylesheet" href="assets/css/core.css?v=2.6.42">
+<link rel="stylesheet" href="assets/css/features.css?v=2.6.43">
 <link rel="stylesheet" href="assets/css/text-drag-engine.css?v=2.5.3">
 <link rel="stylesheet" href="assets/css/card-drag-engine.css?v=2.5.3">
 <link rel="stylesheet" href="assets/css/responsive.css?v=2.5.3">
@@ -796,7 +796,7 @@ try {
 
           <div class="template-picker" id="templatePicker" style="position:relative;display:inline-flex">
             <button class="tool-btn" id="templateBtn" title="Insert Template" style="gap:4px;font-size:12px">
-              <i data-lucide="layout-grid" class="w-4 h-4"></i>
+              <i data-lucide="square" class="w-4 h-4"></i>
               <span>Templates</span>
               <i data-lucide="chevron-down" class="w-3 h-3"></i>
             </button>
@@ -1375,60 +1375,18 @@ try {
 <div id="modalRoot"></div>
 <div id="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<!-- ============ TABLE QUICK TOOLBAR (fix #7) ============ -->
-<!-- Grouped table toolbar: primary 6 buttons + submenus -->
+<!-- ============ TABLE QUICK TOOLBAR ============ -->
 <div class="tbl-tools" id="tblTools">
   <button id="tblMoveHandle" class="tbl-move-handle" title="Move table" aria-label="Move table"><i data-lucide="grip-vertical" class="w-4 h-4"></i></button>
   <span class="tbl-dim-badge" id="tblDimBadge"></span>
   <span class="tbl-sep"></span>
-  <button id="tblBtnInsert"  title="Insert…"><i data-lucide="plus" class="w-4 h-4"></i></button>
-  <button id="tblBtnMerge"   title="Merge / Split"><i data-lucide="combine" class="w-4 h-4"></i></button>
-  <button id="tblBtnFit"     title="Auto Fit"><i data-lucide="maximize-2" class="w-4 h-4"></i></button>
-  <button id="tblBtnAlign"   title="Alignment"><i data-lucide="align-left" class="w-4 h-4"></i></button>
-  <button id="tblBtnFormula" title="Formulas"><i data-lucide="function-square" class="w-4 h-4"></i></button>
-  <button id="tblBtnFormat"  title="Format Cell"><i data-lucide="dollar-sign" class="w-4 h-4"></i></button>
-  <button id="tblBtnMore"    title="More"><i data-lucide="more-horizontal" class="w-4 h-4"></i></button>
+  <button id="tblBtnMerge" title="Merge / Split"><i data-lucide="combine" class="w-4 h-4"></i></button>
+  <button id="tblBtnLayout" title="Layout &amp; Margins"><i data-lucide="layout-grid" class="w-4 h-4"></i></button>
+  <button id="tblBtnThemes" title="Table Themes"><i data-lucide="palette" class="w-4 h-4"></i></button>
+  <button id="tblBtnTemplates" title="Templates"><i data-lucide="layout-template" class="w-4 h-4"></i></button>
   <span class="tbl-sep"></span>
   <button id="tblDel" class="danger" title="Delete table"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-  <!-- Mobile button (hidden on desktop/tablet via CSS) -->
   <button id="tblBtnMobileSheet" class="tbl-mobile-only" title="Table options" style="display:none"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i></button>
-</div>
-
-<!-- ── Insert submenu ── -->
-<div class="tbl-submenu" id="tblMenuInsert">
-  <button id="tblRowAbove"><i data-lucide="arrow-up-to-line" class="w-4 h-4"></i>Insert Row Above</button>
-  <button id="tblRowBelow"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>Insert Row Below</button>
-  <div class="tbl-sep"></div>
-  <button id="tblColLeft"><i data-lucide="arrow-left-to-line" class="w-4 h-4"></i>Insert Column Left</button>
-  <button id="tblColRight"><i data-lucide="arrow-right-to-line" class="w-4 h-4"></i>Insert Column Right</button>
-  <div class="tbl-sep"></div>
-  <button id="tblTplExpense"><i data-lucide="receipt" class="w-4 h-4"></i>Expense Tracker</button>
-  <button id="tblTplBudget"><i data-lucide="briefcase" class="w-4 h-4"></i>Project Budget</button>
-  <button id="tblTplVariance"><i data-lucide="bar-chart" class="w-4 h-4"></i>Budget Variance</button>
-  <div class="tbl-sep"></div>
-  <button id="tblRowDel" class="danger"><i data-lucide="rows-3" class="w-4 h-4"></i>Delete Row</button>
-  <button id="tblColDel" class="danger"><i data-lucide="columns-3" class="w-4 h-4"></i>Delete Column</button>
-</div>
-
-<!-- ── Formula submenu ── -->
-<div class="tbl-submenu" id="tblMenuFormula">
-  <button id="tblFmSum"><i data-lucide="sigma" class="w-4 h-4"></i>SUM(range)</button>
-  <button id="tblFmAvg"><i data-lucide="percent" class="w-4 h-4"></i>AVERAGE(range)</button>
-  <button id="tblFmCount"><i data-lucide="hash" class="w-4 h-4"></i>COUNT(range)</button>
-  <button id="tblFmMin"><i data-lucide="arrow-down" class="w-4 h-4"></i>MIN(range)</button>
-  <button id="tblFmMax"><i data-lucide="arrow-up" class="w-4 h-4"></i>MAX(range)</button>
-  <button id="tblFmIf"><i data-lucide="help-circle" class="w-4 h-4"></i>IF(cond, t, f)</button>
-</div>
-
-<!-- ── Format submenu ── -->
-<div class="tbl-submenu" id="tblMenuFormat">
-  <button id="tblFmtNone"><i data-lucide="type" class="w-4 h-4"></i>Plain Number</button>
-  <button id="tblFmtUsd"><i data-lucide="dollar-sign" class="w-4 h-4"></i>Currency ($)</button>
-  <button id="tblFmtEur"><i data-lucide="euro" class="w-4 h-4"></i>Currency (€)</button>
-  <button id="tblFmtGbp"><i data-lucide="pound-sterling" class="w-4 h-4"></i>Currency (£)</button>
-  <button id="tblFmtJpy"><i data-lucide="japanese-yen" class="w-4 h-4"></i>Currency (¥)</button>
-  <button id="tblFmtPhp"><i data-lucide="banknote" class="w-4 h-4"></i>Currency (₱)</button>
-  <button id="tblFmtPct"><i data-lucide="percent" class="w-4 h-4"></i>Percentage (%)</button>
 </div>
 
 <!-- ── Merge / Split submenu ── -->
@@ -1440,35 +1398,49 @@ try {
   <button id="tblMergeCol"><i data-lucide="chevrons-down" class="w-4 h-4"></i>Merge Down Column</button>
 </div>
 
-<!-- ── Auto Fit submenu ── -->
-<div class="tbl-submenu" id="tblMenuFit">
+<!-- ── Layout submenu ── -->
+<div class="tbl-submenu" id="tblMenuLayout">
   <button id="tblFitWindow"><i data-lucide="stretch-horizontal" class="w-4 h-4"></i>Fit to Window</button>
   <button id="tblFitContent"><i data-lucide="shrink" class="w-4 h-4"></i>Fit to Content</button>
   <button id="tblDistribute"><i data-lucide="columns" class="w-4 h-4"></i>Distribute Evenly</button>
   <button id="tblEqualRowH"><i data-lucide="align-vertical-distribute-center" class="w-4 h-4"></i>Equal Row Heights</button>
-</div>
-
-<!-- ── Alignment submenu ── -->
-<div class="tbl-submenu" id="tblMenuAlign">
-  <button id="tblAlignLeft"><i data-lucide="align-left" class="w-4 h-4"></i>Align Left</button>
-  <button id="tblAlignCenter"><i data-lucide="align-center" class="w-4 h-4"></i>Align Center</button>
-  <button id="tblAlignRight"><i data-lucide="align-right" class="w-4 h-4"></i>Align Right</button>
   <div class="tbl-sep"></div>
   <button id="tblValignTop"><i data-lucide="align-vertical-space-around" class="w-4 h-4"></i>Vertical Top</button>
   <button id="tblValignMiddle"><i data-lucide="align-vertical-justify-center" class="w-4 h-4"></i>Vertical Middle</button>
   <button id="tblValignBottom"><i data-lucide="align-vertical-justify-end" class="w-4 h-4"></i>Vertical Bottom</button>
+  <div class="tbl-sep"></div>
+  <div style="padding: 8px 12px; font-size: 13px; color: var(--fg-muted); display:flex; align-items:center; gap:8px;">
+    <i data-lucide="maximize" class="w-4 h-4"></i> Cell Padding
+    <input type="range" id="tblMarginSlider" min="0" max="24" value="8" style="width: 80px;">
+  </div>
 </div>
 
-<!-- ── More submenu ── -->
-<div class="tbl-submenu" id="tblMenuMore">
-  <button id="tblHeaderRow"><i data-lucide="type" class="w-4 h-4"></i>Toggle Header Row</button>
-  <button id="tblHeaderCol"><i data-lucide="italic" class="w-4 h-4"></i>Toggle Header Column</button>
-  <button id="tblAltRowShading"><i data-lucide="layers" class="w-4 h-4"></i>Alternate Row Shading</button>
+<!-- ── Themes submenu ── -->
+<div class="tbl-submenu" id="tblMenuThemes">
+  <div style="padding: 4px 12px; font-size: 11px; font-weight:600; text-transform:uppercase; color: var(--fg-muted);">Print Friendly</div>
+  <button data-theme="default"><i data-lucide="printer" class="w-4 h-4"></i>Default (Ink Saver)</button>
+  <button data-theme="grayscale"><i data-lucide="printer" class="w-4 h-4"></i>Grayscale Headers</button>
+  
   <div class="tbl-sep"></div>
-  <button id="tblCellBg"><i data-lucide="paint-bucket" class="w-4 h-4"></i>Cell Background</button>
-  <button id="tblCellBorder"><i data-lucide="border-all" class="w-4 h-4"></i>Toggle Borders</button>
-  <div class="tbl-sep"></div>
-  <button id="tblMobileWrap"><i data-lucide="smartphone" class="w-4 h-4"></i>Mobile Scroll Mode</button>
+  <div style="padding: 4px 12px; font-size: 11px; font-weight:600; text-transform:uppercase; color: var(--fg-muted);">Aesthetic</div>
+  <button data-theme="modern"><i data-lucide="monitor" class="w-4 h-4"></i>Modern Minimalist</button>
+  <button data-theme="zebra"><i data-lucide="list" class="w-4 h-4"></i>Zebra Striped</button>
+  <button data-theme="elegant"><i data-lucide="pen-tool" class="w-4 h-4"></i>Elegant Serif</button>
+  <button data-theme="accent"><i data-lucide="paintbrush" class="w-4 h-4"></i>Accent Header</button>
+  <button data-theme="dark"><i data-lucide="moon" class="w-4 h-4"></i>Dark Mode Pro</button>
+</div>
+
+<!-- ── Templates Modal ── -->
+<div id="tblTemplateModal" role="dialog" aria-modal="true" aria-label="Table Templates" onclick="if(event.target===this)this.classList.remove('show')" class="template-modal-overlay">
+  <div class="template-modal">
+    <div class="template-modal-header">
+      <h3 style="margin:0;font-size:16px;display:flex;align-items:center;gap:8px;"><i data-lucide="layout-template"></i> Insert Table Template</h3>
+      <button onclick="document.getElementById('tblTemplateModal').classList.remove('show')" style="background:none;border:none;cursor:pointer;color:var(--fg-muted);"><i data-lucide="x"></i></button>
+    </div>
+    <div class="template-grid" id="templateGrid">
+      <!-- Injected via JS -->
+    </div>
+  </div>
 </div>
 
 <!-- Cell Background Color Dropdown -->
@@ -1487,18 +1459,101 @@ try {
 
 <!-- Right-click context menu for table cells -->
 <div class="tbl-ctx-menu" id="tblCtxMenu">
-  <button class="tbl-ctx-item" data-ctx="tblRowAbove"><i data-lucide="arrow-up-to-line" class="w-4 h-4"></i>Insert Row Above</button>
-  <button class="tbl-ctx-item" data-ctx="tblRowBelow"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>Insert Row Below</button>
-  <button class="tbl-ctx-item" data-ctx="tblColLeft"><i data-lucide="arrow-left-to-line" class="w-4 h-4"></i>Insert Column Left</button>
-  <button class="tbl-ctx-item" data-ctx="tblColRight"><i data-lucide="arrow-right-to-line" class="w-4 h-4"></i>Insert Column Right</button>
-  <div class="tbl-ctx-sep"></div>
-  <button class="tbl-ctx-item danger" data-ctx="tblRowDel"><i data-lucide="rows-3" class="w-4 h-4"></i>Delete Row</button>
-  <button class="tbl-ctx-item danger" data-ctx="tblColDel"><i data-lucide="columns-3" class="w-4 h-4"></i>Delete Column</button>
-  <div class="tbl-ctx-sep"></div>
-  <button class="tbl-ctx-item" id="tblCtxMerge" data-ctx="tblMergeCells" style="display:none"><i data-lucide="combine" class="w-4 h-4"></i>Merge Selected Cells</button>
-  <button class="tbl-ctx-item" id="tblCtxSplit" data-ctx="tblSplitCell" style="display:none"><i data-lucide="split" class="w-4 h-4"></i>Split Cell</button>
-  <button class="tbl-ctx-item" data-ctx="tblClearCell"><i data-lucide="eraser" class="w-4 h-4"></i>Clear Cell Content</button>
+  
+  <div class="tbl-ctx-quick-bar">
+    <div class="tbl-ctx-quick-row">
+      <button class="tbl-ctx-quick-btn" data-ctx="tblBold" title="Bold (Ctrl+B)"><i data-lucide="bold"></i></button>
+      <button class="tbl-ctx-quick-btn" data-ctx="tblItalic" title="Italic (Ctrl+I)"><i data-lucide="italic"></i></button>
+      <button class="tbl-ctx-quick-btn" data-ctx="tblAlign" title="Align"><i data-lucide="align-left"></i></button>
+      <button class="tbl-ctx-quick-btn" data-ctx="tblWrap" title="Wrap Text"><i data-lucide="wrap-text"></i></button>
+      
+      <div class="tbl-ctx-quick-wrap has-submenu" tabindex="0">
+        <button class="tbl-ctx-quick-btn" title="Border Style"><i data-lucide="table"></i></button>
+        <div class="tbl-ctx-submenu">
+          <button data-ctx="tblBorderAll"><i data-lucide="border-all" class="w-4 h-4"></i><span class="ctx-text">All Borders</span></button>
+          <button data-ctx="tblBorderOutline"><i data-lucide="square" class="w-4 h-4"></i><span class="ctx-text">Outer Borders</span></button>
+          <button data-ctx="tblBorderTop"><i data-lucide="panel-top" class="w-4 h-4"></i><span class="ctx-text">Top Border</span></button>
+          <button data-ctx="tblBorderBottom"><i data-lucide="panel-bottom" class="w-4 h-4"></i><span class="ctx-text">Bottom Border</span></button>
+          <button data-ctx="tblBorderLeft"><i data-lucide="panel-left" class="w-4 h-4"></i><span class="ctx-text">Left Border</span></button>
+          <button data-ctx="tblBorderRight"><i data-lucide="panel-right" class="w-4 h-4"></i><span class="ctx-text">Right Border</span></button>
+          <button data-ctx="tblBorderNone"><i data-lucide="x-square" class="w-4 h-4"></i><span class="ctx-text">No Border</span></button>
+        </div>
+      </div>
+
+      <button class="tbl-ctx-quick-btn" data-ctx="tblFillColor" title="Fill Color"><i data-lucide="paint-bucket"></i></button>
+    </div>
+    <div class="tbl-ctx-quick-row">
+      
+      <div class="tbl-ctx-quick-wrap has-submenu" tabindex="0">
+        <button class="tbl-ctx-quick-btn" title="Currency Format"><i data-lucide="dollar-sign"></i></button>
+        <div class="tbl-ctx-submenu">
+          <button data-ctx="tblFmtPlain"><i data-lucide="type" class="w-4 h-4"></i><span class="ctx-text">Plain Number</span></button>
+          <button data-ctx="tblFmtCurUSD"><i data-lucide="dollar-sign" class="w-4 h-4"></i><span class="ctx-text">Currency ($)</span></button>
+          <button data-ctx="tblFmtCurEUR"><i data-lucide="euro" class="w-4 h-4"></i><span class="ctx-text">Currency (€)</span></button>
+          <button data-ctx="tblFmtCurGBP"><i data-lucide="pound-sterling" class="w-4 h-4"></i><span class="ctx-text">Currency (£)</span></button>
+          <button data-ctx="tblFmtCurJPY"><i data-lucide="japanese-yen" class="w-4 h-4"></i><span class="ctx-text">Currency (¥)</span></button>
+          <button data-ctx="tblFmtCurPHP"><i data-lucide="banknote" class="w-4 h
 </div>
+</div>
+</div>
+</div>
+</div>-4"></i><span class="ctx-text">Currency (₱)</span></button>
+          <button data-ctx="tblFmtPercent"><i data-lucide="percent" class="w-4 h-4"></i><span class="ctx-text">Percentage (%)</span></button>
+        </div>
+      </div>
+      
+      <button class="tbl-ctx-quick-btn" data-ctx="tblFmtPercent" title="Percent Format"><i data-lucide="percent"></i></button>
+      <button class="tbl-ctx-quick-btn txt-icon" data-ctx="tblFmtComma" title="Comma Format">,</button>
+      <button class="tbl-ctx-quick-btn txt-icon split-icon" data-ctx="tblFmtDecInc" title="Increase Decimal"><i data-lucide="arrow-left-to-line"></i><span>.0</span></button>
+      <button class="tbl-ctx-quick-btn txt-icon split-icon" data-ctx="tblFmtDecDec" title="Decrease Decimal"><span>.0</span><i data-lucide="arrow-right-to-line"></i></button>
+    </div>
+  </div>
+
+  <div class="tbl-ctx-sep"></div>
+
+  <button class="tbl-ctx-item" data-ctx="tblCut"><i data-lucide="scissors" class="w-4 h-4"></i><span class="ctx-text">Cut</span><span class="ctx-shortcut">Ctrl+X</span></button>
+  <button class="tbl-ctx-item" data-ctx="tblCopy"><i data-lucide="copy" class="w-4 h-4"></i><span class="ctx-text">Copy</span><span class="ctx-shortcut">Ctrl+C</span></button>
+  <button class="tbl-ctx-item" data-ctx="tblPaste"><i data-lucide="clipboard" class="w-4 h-4"></i><span class="ctx-text">Paste</span><span class="ctx-shortcut">Ctrl+V</span></button>
+  <button class="tbl-ctx-item" data-ctx="tblPasteVal"><i data-lucide="clipboard-paste" class="w-4 h-4"></i><span class="ctx-text">Paste Values Only</span></button>
+  <button class="tbl-ctx-item" data-ctx="tblFmtPaint"><i data-lucide="paintbrush" class="w-4 h-4"></i><span class="ctx-text">Format Painter</span></button>
+
+  <div class="tbl-ctx-sep"></div>
+
+  <button class="tbl-ctx-item danger" data-ctx="tblClearCell"><i data-lucide="eraser" class="w-4 h-4"></i><span class="ctx-text">Clear Contents</span><span class="ctx-shortcut">Del</span></button>
+  <button class="tbl-ctx-item" data-ctx="tblClearFmt"><i data-lucide="remove-formatting" class="w-4 h-4"></i><span class="ctx-text">Clear Formatting</span></button>
+
+  <div class="tbl-ctx-sep" id="tblCtxMergeSep" style="display:none"></div>
+
+  <button class="tbl-ctx-item" id="tblCtxMerge" data-ctx="tblMergeCells" style="display:none"><i data-lucide="combine" class="w-4 h-4"></i><span class="ctx-text">Merge Selected Cells</span></button>
+  <button class="tbl-ctx-item" id="tblCtxSplit" data-ctx="tblSplitCell" style="display:none"><i data-lucide="split" class="w-4 h-4"></i><span class="ctx-text">Split Cell</span></button>
+
+  <div class="tbl-ctx-sep"></div>
+
+  <div class="tbl-ctx-item has-submenu" tabindex="0">
+    <i data-lucide="calendar" class="w-4 h-4"></i><span class="ctx-text">Date Format</span>
+    <i data-lucide="chevron-right" class="w-4 h-4 ctx-submenu-arrow"></i>
+    <div class="tbl-ctx-submenu right-submenu">
+      <button data-ctx="tblDateMDY"><span class="ctx-text">08/11/2026</span></button>
+      <button data-ctx="tblDateDMY"><span class="ctx-text">11/08/2026</span></button>
+      <button data-ctx="tblDateISO"><span class="ctx-text">2026-08-11</span></button>
+      <button data-ctx="tblDateLong"><span class="ctx-text">August 11, 2026</span></button>
+      <button data-ctx="tblDateShortTxt"><span class="ctx-text">11-Aug-26</span></button>
+    </div>
+  </div>
+
+  <div class="tbl-ctx-item has-submenu" tabindex="0">
+    <i data-lucide="list-filter" class="w-4 h-4"></i><span class="ctx-text">Filter and Sort</span>
+    <i data-lucide="chevron-right" class="w-4 h-4 ctx-submenu-arrow"></i>
+    <div class="tbl-ctx-submenu right-submenu">
+      <button data-ctx="tblSortSheetAsc"><i data-lucide="arrow-down-a-z" class="w-4 h-4"></i><span class="ctx-text">Sort Sheet (A to Z)</span></button>
+      <button data-ctx="tblSortSheetDesc"><i data-lucide="arrow-up-z-a" class="w-4 h-4"></i><span class="ctx-text">Sort Sheet (Z to A)</span></button>
+      <button data-ctx="tblSortAsc"><i data-lucide="arrow-down-a-z" class="w-4 h-4"></i><span class="ctx-text">Sort Range (A to Z)</span></button>
+      <button data-ctx="tblSortDesc"><i data-lucide="arrow-up-z-a" class="w-4 h-4"></i><span class="ctx-text">Sort Range (Z to A)</span></button>
+    </div>
+  </div>
+
+</div>
+
 
 <!-- Table mobile bottom sheet -->
 <div class="tbl-sheet-backdrop" id="tblSheetBackdrop"></div>
@@ -1529,7 +1584,7 @@ try {
   <button id="ibbResizeFull" title="Resize all to Full">Full</button>
   <span class="ibb-sep"></span>
   <button id="ibbEqualWidth" title="Set equal width"><i data-lucide="align-justify" class="w-4 h-4"></i></button>
-  <button id="ibbGallery" title="Convert to gallery"><i data-lucide="layout-grid" class="w-4 h-4"></i></button>
+  <button id="ibbGallery" title="Convert to gallery"><i data-lucide="square" class="w-4 h-4"></i></button>
   <button id="ibbAlignLeft" title="Float left"><i data-lucide="align-left" class="w-4 h-4"></i></button>
   <button id="ibbAlignRight" title="Float right"><i data-lucide="align-right" class="w-4 h-4"></i></button>
   <button id="ibbAlignCenter" title="Center / clear float"><i data-lucide="align-center" class="w-4 h-4"></i></button>
@@ -1877,13 +1932,13 @@ try {
 <script src="js/core.js?v=2.6.39"></script>
 <script src="js/leafline.js?v=2.6.31"></script>
 <script src="js/productivity.js?v=2.6.6"></script>
-<script src="js/page-layout-engine.js?v=2.6.24"></script>
-<script src="js/editor-ui.js?v=2.6.20"></script>
+<script src="js/page-layout-engine.js?v=2.6.43"></script>
+<script src="js/editor-ui.js?v=2.6.43"></script>
 <script src="js/tasks-settings.js?v=2.6.30"></script>
 <script src="js/data-transfer.js?v=2.6.6"></script>
 <script src="js/cloud-notifications.js?v=2.6.32"></script>
 <script src="js/changelog.js?v=2.6.6"></script>
-<script src="js/actions.js?v=2.6.28"></script>
+<script src="js/actions.js?v=2.6.43"></script>
 <script src="js/link-parser.js?v=2.6.6"></script>
 <script src="js/embeds.js?v=2.6.6"></script>
 <script src="js/media-widget.js?v=2.6.6"></script>
@@ -1895,7 +1950,7 @@ try {
 <script src="assets/vendor/jszip.min.js"></script>
 <script src="js/docx-export.js?v=2.6.6"></script>
 <script src="js/responsive-images.js?v=2.6.6"></script>
-<script src="js/tables.js?v=2.6.7"></script>
+<script src="js/tables.js?v=2.6.42"></script>
 <script src="js/branches.js?v=2.6.23"></script>
 <script src="js/bootstrap.js?v=2.6.29"></script>
 </body>

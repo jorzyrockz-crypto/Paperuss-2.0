@@ -573,6 +573,26 @@ function bind(){
         node.innerHTML = parsed;
       }
     });
+
+    // 1d. Split multiline paragraphs/divs separated by <br> into distinct elements
+    doc.querySelectorAll('p, div').forEach(blk => {
+      if(blk.querySelector('p, div, ul, ol, table, pre, blockquote')) return;
+      const html = blk.innerHTML;
+      if (/<br\s*\/?>/i.test(html)) {
+        const parts = html.split(/<br\s*\/?>/i);
+        const validParts = parts.filter(p => p.trim().length > 0);
+        if(validParts.length > 1) {
+          const frag = doc.createDocumentFragment();
+          validParts.forEach(part => {
+            const newEl = doc.createElement(blk.tagName);
+            newEl.innerHTML = part.trim();
+            frag.appendChild(newEl);
+          });
+          blk.replaceWith(frag);
+        }
+      }
+    });
+
     // 2. Remove dangerous or non-semantic tags
     doc.querySelectorAll('script, style, meta, link, iframe, object, embed, o\\:p').forEach(el => el.remove());
 

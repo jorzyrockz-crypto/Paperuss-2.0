@@ -1153,6 +1153,46 @@ function syncPageLayoutDropdown(note) {
   });
 }
 
+/*
+ * Keep the live WYSIWYG page and the print surface on one source of truth.
+ * The editor uses CSS pixels at 96 DPI, while print uses physical CSS units;
+ * exposing both forms here prevents the two surfaces from drifting apart.
+ */
+function getPaperussPageLayoutConfig(note) {
+  const sizes = {
+    a4: { w: 794, h: 1123, css: 'a4' },
+    letter: { w: 816, h: 1056, css: 'letter' },
+    legal: { w: 816, h: 1344, css: 'legal' }
+  };
+  const sizeKey = Object.prototype.hasOwnProperty.call(sizes, note?.pageSize) ? note.pageSize : 'a4';
+  const orientation = note?.pageOrientation === 'landscape' ? 'landscape' : 'portrait';
+  const marginType = ['narrow', 'normal', 'wide', 'binding'].includes(note?.pageMargins)
+    ? note.pageMargins
+    : 'normal';
+  const dim = sizes[sizeKey];
+  const pageWidth = orientation === 'landscape' ? dim.h : dim.w;
+  const pageHeight = orientation === 'landscape' ? dim.w : dim.h;
+  const pad = marginType === 'narrow' ? '12mm' : (marginType === 'wide' ? '30mm' : '20mm');
+  const paddingLeft = marginType === 'binding' ? '35mm' : pad;
+  const paddingRight = marginType === 'binding' ? '20mm' : pad;
+  const marginCss = `20mm ${paddingRight} 20mm ${paddingLeft}`;
+
+  return {
+    sizeKey,
+    sizeCss: dim.css,
+    orientation,
+    marginType,
+    pageWidth,
+    pageHeight,
+    paddingLeft,
+    paddingRight,
+    paddingTop: '74px',
+    paddingBottom: '74px',
+    marginCss
+  };
+}
+window.getPaperussPageLayoutConfig = getPaperussPageLayoutConfig;
+
 function applyPageLayoutToEditor(note) {
   const edScroll = document.getElementById('editorScroll');
   const edBody = document.getElementById('noteBody');
@@ -1166,34 +1206,14 @@ function applyPageLayoutToEditor(note) {
     edBody.classList.add('wysiwyg-paper');
     if(zoomControls) zoomControls.style.display = 'flex';
     
-    // Dimensions map (at 96 DPI approximation for web)
-    const sizes = {
-      'a4': { w: 794, h: 1123 },
-      'letter': { w: 816, h: 1056 },
-      'legal': { w: 816, h: 1344 }
-    };
-    
-    const size = note.pageSize || 'a4';
-    const orient = note.pageOrientation || 'portrait';
-    const marginType = note.pageMargins || 'normal';
-    
-    let dim = sizes[size] || sizes['a4'];
-    let w = orient === 'landscape' ? dim.h : dim.w;
-    
-    let pad = '20mm'; // normal
-    if(marginType === 'narrow') pad = '12mm';
-    if(marginType === 'wide') pad = '30mm';
-    const leftPad = marginType === 'binding' ? '35mm' : pad;
-    const rightPad = marginType === 'binding' ? '20mm' : pad;
-
-    edBody.style.width = w + 'px';
+    const layout = getPaperussPageLayoutConfig(note);
+    edBody.style.width = layout.pageWidth + 'px';
     edBody.style.maxWidth = '100%';
-    const pageH = (orient === 'landscape' ? dim.w : dim.h);
-    edBody.style.minHeight = pageH + 'px';
-    edBody.style.paddingLeft = leftPad;
-    edBody.style.paddingRight = rightPad;
-    edBody.style.paddingTop = '74px';
-    edBody.style.paddingBottom = '74px';
+    edBody.style.minHeight = layout.pageHeight + 'px';
+    edBody.style.paddingLeft = layout.paddingLeft;
+    edBody.style.paddingRight = layout.paddingRight;
+    edBody.style.paddingTop = layout.paddingTop;
+    edBody.style.paddingBottom = layout.paddingBottom;
     edBody.style.margin = '0 auto';
     // Page boundaries are real editor chrome supplied by PageLayoutEngine.
     // Do not paint a repeating line through document content.

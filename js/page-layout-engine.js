@@ -13,6 +13,10 @@
   const PAGE_GAP_HEIGHT = 42;
 
   function getPageDimensions(note) {
+    if (typeof window.getPaperussPageLayoutConfig === 'function') {
+      const shared = window.getPaperussPageLayoutConfig(note || {});
+      return { w: shared.pageWidth, h: shared.pageHeight };
+    }
     const sizeKey = (note && note.pageSize && PAGE_SIZES[note.pageSize]) ? note.pageSize : 'a4';
     const dim = PAGE_SIZES[sizeKey];
     const isLandscape = note && note.pageOrientation === 'landscape';

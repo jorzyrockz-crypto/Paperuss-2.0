@@ -760,9 +760,30 @@ function _selectedBlocks(){
  *
  * All paths preserve nested lists, indentation, inline formatting, and content.
  */
+function _selectedListItems(list){
+  const sel=window.getSelection();
+  const ed=typeof bodyEl==='function'?bodyEl():document.getElementById('noteContent');
+  if(!sel || !sel.rangeCount || !ed) return [];
+  const range=sel.getRangeAt(0);
+  const items=[];
+  Array.from(list.children).forEach(li => {
+    if(li.tagName!=='LI') return;
+    if(range.intersectsNode(li)){
+      items.push(li);
+    }
+  });
+  if(items.length===0 && sel.isCollapsed){
+    let node=sel.anchorNode;
+    if(node.nodeType===3) node=node.parentElement;
+    const closest=node.closest&&node.closest('li');
+    if(closest && closest.parentElement===list) items.push(closest);
+  }
+  return items;
+}
+
 function toggleList(targetType){
   const sel = window.getSelection();
-  const ed = bodyEl();
+  const ed = typeof bodyEl==='function'?bodyEl():document.getElementById('noteContent');
   if(!sel || !ed) return;
   if(sel.anchorNode && !ed.contains(sel.anchorNode) && sel.anchorNode !== ed) return;
   focusEditor();
@@ -773,24 +794,51 @@ function toggleList(targetType){
   /* ---------- CASE 2: already in the same type → toggle OFF ---------- */
   if(ctx && ctx.type === targetType){
     const list = ctx.list;
+    const selectedLIs = _selectedListItems(list);
+    if(selectedLIs.length === 0 && ctx.li) selectedLIs.push(ctx.li);
+    
     if(targetType === 'task'){
-      list.querySelectorAll(':scope > li').forEach(_stripTask);
-    }
-    const frag = document.createDocumentFragment();
-    Array.from(list.children).forEach(li => {
-      if(li.tagName !== 'LI'){ frag.appendChild(li); return; }
-      const nested = []; const contentFrag = document.createDocumentFragment();
-      Array.from(li.childNodes).forEach(child => {
-        if(child.nodeType === 1 && (child.tagName === 'UL' || child.tagName === 'OL'))
-          nested.push(child);
-        else contentFrag.appendChild(child.cloneNode(true));
+      selectedLIs.forEach(li => {
+        if(typeof _stripTask==='function') _stripTask(li);
       });
-      const p = document.createElement('p');
-      p.appendChild(contentFrag);
-      frag.appendChild(p);
-      nested.forEach(sub => frag.appendChild(sub));
+    }
+    
+    const topList = document.createElement(list.tagName);
+    if(list.className) topList.className = list.className;
+    const bottomList = document.createElement(list.tagName);
+    if(list.className) bottomList.className = list.className;
+    
+    const frag = document.createDocumentFragment();
+    let target = topList;
+    
+    Array.from(list.children).forEach(li => {
+      if(li.tagName !== 'LI') { target.appendChild(li); return; }
+      
+      if(selectedLIs.includes(li)){
+        target = bottomList; // subsequent unselected go to bottom list
+        const contentFrag = document.createDocumentFragment();
+        const nested = [];
+        Array.from(li.childNodes).forEach(child => {
+          if(child.nodeType === 1 && (child.tagName === 'UL' || child.tagName === 'OL'))
+            nested.push(child);
+          else contentFrag.appendChild(child.cloneNode(true));
+        });
+        const p = document.createElement('p');
+        p.appendChild(contentFrag);
+        frag.appendChild(p);
+        nested.forEach(sub => frag.appendChild(sub));
+      } else {
+        target.appendChild(li);
+      }
     });
-    list.replaceWith(frag);
+    
+    const finalFrag = document.createDocumentFragment();
+    if(topList.children.length > 0) finalFrag.appendChild(topList);
+    if(frag.childNodes.length > 0) finalFrag.appendChild(frag);
+    if(bottomList.children.length > 0) finalFrag.appendChild(bottomList);
+    
+    list.replaceWith(finalFrag);
+    
     handleBodyInput(); updateToolbarState();
     return;
   }
@@ -798,29 +846,55 @@ function toggleList(targetType){
   /* ---------- CASE 3: in a different list type → convert ---------- */
   if(ctx){
     const list = ctx.list;
+    const selectedLIs = _selectedListItems(list);
+    if(selectedLIs.length === 0 && ctx.li) selectedLIs.push(ctx.li);
+    
     if(ctx.type === 'task'){
-      list.querySelectorAll(':scope > li').forEach(_stripTask);
+      selectedLIs.forEach(li => {
+        if(typeof _stripTask==='function') _stripTask(li);
+      });
     }
-    if(list.tagName !== wantTag){
-      const newList = document.createElement(wantTag);
-      if(targetType === 'task') newList.className = 'task-list';
-      while(list.firstChild) newList.appendChild(list.firstChild);
-      list.replaceWith(newList);
-      if(targetType === 'task'){
-        newList.querySelectorAll(':scope > li').forEach(li => _addTask(li, false));
+    
+    const topList = document.createElement(list.tagName);
+    if(list.className) topList.className = list.className;
+    const bottomList = document.createElement(list.tagName);
+    if(list.className) bottomList.className = list.className;
+    
+    const newList = document.createElement(wantTag);
+    if(targetType === 'task') newList.className = 'task-list';
+    
+    let target = topList;
+    Array.from(list.children).forEach(li => {
+      if(li.tagName !== 'LI') { target.appendChild(li); return; }
+      
+      if(selectedLIs.includes(li)){
+        target = bottomList;
+        newList.appendChild(li);
+      } else {
+        target.appendChild(li);
       }
-      const caretLi = newList.querySelector('li');
-      if(caretLi){
-        const r = document.createRange();
-        r.selectNodeContents(caretLi); r.collapse(false);
-        sel.removeAllRanges(); sel.addRange(r);
-      }
-    } else {
-      if(targetType === 'task'){
-        list.classList.add('task-list');
-        list.querySelectorAll(':scope > li').forEach(li => _addTask(li, false));
-      }
+    });
+    
+    if(targetType === 'task'){
+      newList.querySelectorAll(':scope > li').forEach(li => {
+        if(typeof _addTask==='function') _addTask(li, false);
+      });
     }
+    
+    const finalFrag = document.createDocumentFragment();
+    if(topList.children.length > 0) finalFrag.appendChild(topList);
+    if(newList.children.length > 0) finalFrag.appendChild(newList);
+    if(bottomList.children.length > 0) finalFrag.appendChild(bottomList);
+    
+    list.replaceWith(finalFrag);
+    
+    const caretLi = newList.querySelector('li');
+    if(caretLi){
+      const r = document.createRange();
+      r.selectNodeContents(caretLi); r.collapse(false);
+      sel.removeAllRanges(); sel.addRange(r);
+    }
+    
     handleBodyInput(); updateToolbarState();
     return;
   }
@@ -864,8 +938,16 @@ function toggleList(targetType){
     ed.appendChild(list);
   }
   const r = document.createRange();
-  r.selectNodeContents(li); r.collapse(false);
+  const focusNode = targetType === 'task' ? li.childNodes[1] : li.firstChild;
+  if(focusNode){
+    r.setStart(focusNode, 1);
+    r.collapse(true);
+  }else{
+    r.selectNodeContents(li);
+    r.collapse(false);
+  }
   sel.removeAllRanges(); sel.addRange(r);
+  
   handleBodyInput(); updateToolbarState();
 }
 

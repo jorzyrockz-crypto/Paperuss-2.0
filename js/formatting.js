@@ -240,10 +240,14 @@ window.styleQuotePresetMenu = styleQuotePresetMenu;
 styleQuotePresetMenu();
 
 function applyCommand(cmd, val){
+  if(!window.__tableRangeFormattingInProgress && typeof window.applyFormattingToSelectedTableCells === 'function'){
+    if(window.applyFormattingToSelectedTableCells(cmd,val)) return;
+  }
+  const tableRangePass=!!window.__tableRangeFormattingInProgress;
   const headerFooterField = getHeaderFooterFormattingField();
   if (headerFooterField && applyHeaderFooterFormattingCommand(cmd, val, headerFooterField)) return;
-  focusEditor();
-  if(window.HistoryManager) window.HistoryManager.capture(true);
+  if(!tableRangePass) focusEditor();
+  if(window.HistoryManager&&!tableRangePass) window.HistoryManager.capture(true);
   if(cmd==='createLink' || cmd==='embedTool'){
     const sel=window.getSelection();
     const selText=sel ? sel.toString().trim() : '';
