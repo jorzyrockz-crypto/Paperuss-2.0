@@ -155,7 +155,8 @@
   animation:authFadeIn .48s cubic-bezier(0.16, 1, 0.3, 1) both;
   transition:opacity 0.42s cubic-bezier(0.4, 0, 0.2, 1), filter 0.42s ease, transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
 }
-[data-theme="dark"] .auth-landing{
+[data-theme="dark"] .auth-landing,
+[data-theme-mode="dark"] .auth-landing{
   --auth-canvas:#0a0f1c;--auth-surface:#111c36;--auth-subtle:#162042;
   --auth-ink:#f8fafc;--auth-muted:#a6b0c3;--auth-border:rgba(255,255,255,.11);
   --auth-blue-soft:rgba(47,108,246,.24);--auth-amber-soft:rgba(245,158,11,.10);

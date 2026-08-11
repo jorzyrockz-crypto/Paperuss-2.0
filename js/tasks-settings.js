@@ -561,6 +561,8 @@ async function renderSettingsView(){
   // Sync control values with stored settings
   const themeSel=document.getElementById('setTheme');
   if(themeSel) themeSel.value=document.documentElement.getAttribute('data-theme')||'olive-groove';
+  const modeSel=document.getElementById('setThemeMode');
+  if(modeSel) modeSel.value=typeof getThemeMode==='function' ? getThemeMode() : (document.documentElement.getAttribute('data-theme-mode')||'light');
   const fontSel=document.getElementById('setDefaultFont');
   if(fontSel) fontSel.value=appSettings.defaultFont||'sans';
   const intSel=document.getElementById('setReminderInterval');
@@ -635,6 +637,9 @@ async function renderSettingsView(){
 function bindSettings(){
   const themeSel=document.getElementById('setTheme');
   if(themeSel) themeSel.onchange=e=>{ setTheme(e.target.value); toast('Theme updated'); };
+
+  const modeSel=document.getElementById('setThemeMode');
+  if(modeSel) modeSel.onchange=e=>{ setThemeMode(e.target.value); toast('Color mode updated'); };
 
   const fontSel=document.getElementById('setDefaultFont');
   if(fontSel) fontSel.onchange=e=>{ appSettings.defaultFont=e.target.value; saveSettings(); toast('App font updated'); };
@@ -765,6 +770,7 @@ function bindSettings(){
       localStorage.removeItem(NOTIF_KEY);
       localStorage.removeItem(SETTINGS_KEY);
       localStorage.removeItem(THEME_KEY);
+      localStorage.removeItem(THEME_MODE_KEY);
       localStorage.removeItem('octonotes:session');
       localStorage.removeItem('octonotes:calendarView');
       localStorage.removeItem('octonotes:calendarSelectedDate');
@@ -853,30 +859,50 @@ const ACCENT_PRESETS={
 function applyAccent(key){
   const root=document.documentElement;
   const theme=root.getAttribute('data-theme');
+  const mode=typeof getThemeMode==='function' ? getThemeMode() : (root.getAttribute('data-theme-mode')||'light');
   const themeAccentPresets={
-    'olive-groove':{accent:'#6B8F71',emphasis:'#5A7A60'},
-    'rose-pine':{accent:'#EB6F92',emphasis:'#D4567A'},
-    nord:{accent:'#88C0D0',emphasis:'#6BA8BA'},
-    ember:{accent:'#FF6B35',emphasis:'#E55A2B'}
+    'olive-groove':{
+      light:{accent:'#6B8F71',emphasis:'#5A7A60'},
+      dark:{accent:'#8FBF95',emphasis:'#A5D3AA'}
+    },
+    'rose-pine':{
+      light:{accent:'#B4637A',emphasis:'#A34D65'},
+      dark:{accent:'#EB6F92',emphasis:'#D4567A'}
+    },
+    nord:{
+      light:{accent:'#5E81AC',emphasis:'#4C6D95'},
+      dark:{accent:'#88C0D0',emphasis:'#6BA8BA'}
+    },
+    ember:{
+      light:{accent:'#C94F2D',emphasis:'#AD3E21'},
+      dark:{accent:'#FF6B35',emphasis:'#E55A2B'}
+    },
+    paper:{
+      light:{accent:'#2F6CF6',emphasis:'#255AD6'},
+      dark:{accent:'#7AA2F7',emphasis:'#9AB7FF'}
+    },
+    dark:{
+      light:{accent:'#2563EB',emphasis:'#1D4ED8'},
+      dark:{accent:'#3B82F6',emphasis:'#2563EB'}
+    },
+    light:{
+      light:{accent:'#2563EB',emphasis:'#1D4ED8'},
+      dark:{accent:'#60A5FA',emphasis:'#3B82F6'}
+    }
   };
   /* The blue accent is the untouched default. Let named palettes supply their
      own primary color until the user explicitly chooses another swatch. */
-  const preset=theme==='paper' && key==='blue'
-    ? {accent:'#2f6cf6', emphasis:'#255ad6'}
-    : ((themeAccentPresets[theme] && key==='blue')
-      ? themeAccentPresets[theme]
-      : (ACCENT_PRESETS[key]||ACCENT_PRESETS.blue));
+  const preset=(themeAccentPresets[theme] && key==='blue')
+    ? (themeAccentPresets[theme][mode]||themeAccentPresets[theme].light)
+      : (ACCENT_PRESETS[key]||ACCENT_PRESETS.blue);
   root.style.setProperty('--accent', preset.accent);
   root.style.setProperty('--accent-emphasis', preset.emphasis);
   root.style.setProperty('--accent-soft', preset.accent+'24');
   root.style.setProperty('--accent-ring', preset.accent+'52');
   root.style.setProperty('--selection', preset.accent+'42');
   const themeMeta=document.querySelector('meta[name="theme-color"]');
-  const themeMetaColors={
-    dark:'#0b0e14', light:'#ffffff', paper:'#fbf8f0',
-    'olive-groove':'#F7F3E9', 'rose-pine':'#191724', nord:'#2E3440', ember:'#1C1917'
-  };
-  if(themeMeta) themeMeta.content=themeMetaColors[theme]||preset.accent;
+  const surface=getComputedStyle(root).getPropertyValue('--header-bg').trim();
+  if(themeMeta) themeMeta.content=surface||preset.accent;
   document.querySelectorAll('#accentSwatchRow .accent-swatch').forEach(el=>{
     el.classList.toggle('active', el.dataset.accent===key);
   });

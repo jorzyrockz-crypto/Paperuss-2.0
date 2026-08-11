@@ -532,6 +532,7 @@ function markPortableStateChanged(){
 function collectPortableState(){
   return {
     theme:localStorage.getItem(THEME_KEY)||'olive-groove',
+    themeMode:localStorage.getItem(THEME_MODE_KEY)||(typeof getThemeMode==='function' ? getThemeMode() : 'light'),
     calendarView:state.calendarView||'month',
     calendarSelectedDate:+state.calendarSelectedDate||Date.now(),
     notifications:(appNotifications||[]).slice(0,200),
@@ -549,8 +550,12 @@ function applyPortableState(value){
     else {
       localStorage.setItem(THEME_KEY,value.theme);
       document.documentElement.setAttribute('data-theme',value.theme);
+      const fallbackMode=value.themeMode==='dark' ? 'dark' : 'light';
+      localStorage.setItem(THEME_MODE_KEY,fallbackMode);
+      document.documentElement.setAttribute('data-theme-mode',fallbackMode);
     }
   }
+  if(value.themeMode && typeof setThemeMode==='function') setThemeMode(value.themeMode,false);
   if(value.calendarView) state.calendarView=value.calendarView;
   if(value.calendarSelectedDate){
     state.calendarSelectedDate=+value.calendarSelectedDate;

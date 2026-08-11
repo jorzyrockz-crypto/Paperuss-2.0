@@ -3,6 +3,7 @@
    ============================================================ */
 const STORAGE_KEY = 'octonotes:v2';
 const THEME_KEY = 'octonotes:theme';
+const THEME_MODE_KEY = 'octonotes:theme-mode';
 
 /* ============================================================
    MEDIA STORAGE (IndexedDB blobs) + URL cache

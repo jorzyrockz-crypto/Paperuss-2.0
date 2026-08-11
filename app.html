@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="olive-groove" class="auth-pending">
+<html lang="en" data-theme="olive-groove" data-theme-mode="light" class="auth-pending">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
@@ -142,12 +142,12 @@ try {
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" onerror="window.__fbLoadFailed=true"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js" onerror="window.__fbStorageLoadFailed=true"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js" onerror="window.__fbAnalyticsLoadFailed=true"></script>
-<link rel="stylesheet" href="assets/css/core.css?v=2.6.42">
-<link rel="stylesheet" href="assets/css/features.css?v=2.6.44">
+<link rel="stylesheet" href="assets/css/core.css?v=2.6.43">
+<link rel="stylesheet" href="assets/css/features.css?v=2.6.45">
 <link rel="stylesheet" href="assets/css/text-drag-engine.css?v=2.5.3">
-<link rel="stylesheet" href="assets/css/card-drag-engine.css?v=2.5.3">
+<link rel="stylesheet" href="assets/css/card-drag-engine.css?v=2.5.4">
 <link rel="stylesheet" href="assets/css/responsive.css?v=2.5.3">
-<link rel="stylesheet" href="assets/css/settings.css?v=2.6.30">
+<link rel="stylesheet" href="assets/css/settings.css?v=2.6.31">
 </head>
 <body>
 
@@ -302,7 +302,7 @@ try {
       <button class="btn btn-icon" id="exportBtn" title="Export all notes (JSON)">
         <i data-lucide="folder-output" class="w-4 h-4"></i>
       </button>
-      <button class="btn btn-icon" id="themeToggle" title="Toggle theme">
+      <button class="btn btn-icon" id="themeToggle" title="Toggle color mode">
         <i data-lucide="sun" id="themeIcon" class="w-4 h-4"></i>
       </button>
       <button class="btn btn-icon" id="installBtn" title="Install PapeRuss 2.0">
@@ -1021,7 +1021,7 @@ try {
             <div class="settings-row">
               <div class="settings-label">
                 <span>Theme</span>
-                <small>Choose a base theme or one of the named editorial palettes</small>
+                <small>Choose a named editorial palette</small>
               </div>
               <select id="setTheme" class="settings-control">
                 <option value="olive-groove">Olive Groove</option>
@@ -1031,6 +1031,16 @@ try {
                 <option value="paper">Paper — homepage palette</option>
                 <option value="dark">🌙 Dark</option>
                 <option value="light">☀️ Light</option>
+              </select>
+            </div>
+            <div class="settings-row">
+              <div class="settings-label">
+                <span>Color mode</span>
+                <small>Every palette has a tuned light and dark version</small>
+              </div>
+              <select id="setThemeMode" class="settings-control">
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
               </select>
             </div>
             <div class="settings-row">
@@ -1786,7 +1796,7 @@ try {
         <i data-lucide="files" class="w-4 h-4"></i> Export All Leaves (Word)
       </button>
       <button class="profile-menu-item" id="profileThemeBtn">
-        <i data-lucide="sun-moon" class="w-4 h-4"></i> Toggle theme
+        <i data-lucide="sun-moon" class="w-4 h-4"></i> Toggle color mode
       </button>
       <button class="profile-menu-item" id="profileInstallBtn">
         <i data-lucide="download" class="w-4 h-4"></i> Install PapeRuss
@@ -1929,14 +1939,14 @@ try {
 <script src="js/stabilization.js?v=2.6.10"></script>
 <script src="js/history.js?v=2.6.6"></script>
 <script src="js/leaves.js?v=2.6.8"></script>
-<script src="js/core.js?v=2.6.39"></script>
+<script src="js/core.js?v=2.6.40"></script>
 <script src="js/leafline.js?v=2.6.31"></script>
 <script src="js/productivity.js?v=2.6.6"></script>
 <script src="js/page-layout-engine.js?v=2.6.43"></script>
 <script src="js/editor-ui.js?v=2.6.43"></script>
-<script src="js/tasks-settings.js?v=2.6.31"></script>
+<script src="js/tasks-settings.js?v=2.6.32"></script>
 <script src="js/data-transfer.js?v=2.6.6"></script>
-<script src="js/cloud-notifications.js?v=2.6.33"></script>
+<script src="js/cloud-notifications.js?v=2.6.34"></script>
 <script src="js/changelog.js?v=2.6.6"></script>
 <script src="js/actions.js?v=2.6.43"></script>
 <script src="js/link-parser.js?v=2.6.6"></script>
@@ -1944,7 +1954,7 @@ try {
 <script src="js/media-widget.js?v=2.6.6"></script>
 <script src="js/formatting.js?v=2.6.16"></script>
 <script src="js/text-drag-engine.js?v=2.6.7"></script>
-<script src="js/media.js?v=2.6.30"></script>
+<script src="js/media.js?v=2.6.31"></script>
 <script src="js/card-drag-engine.js?v=2.6.7"></script>
 <script src="js/docx-import.js?v=2.6.6"></script>
 <script src="assets/vendor/jszip.min.js"></script>
@@ -1952,6 +1962,6 @@ try {
 <script src="js/responsive-images.js?v=2.6.6"></script>
 <script src="js/tables.js?v=2.6.42"></script>
 <script src="js/branches.js?v=2.6.23"></script>
-<script src="js/bootstrap.js?v=2.6.30"></script>
+<script src="js/bootstrap.js?v=2.6.31"></script>
 </body>
 </html>

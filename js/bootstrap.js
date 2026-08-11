@@ -1101,8 +1101,8 @@ function isSingleStandaloneUrl(str) {
   });
 
   document.getElementById('themeToggle').onclick=()=>{
-    const cur=document.documentElement.getAttribute('data-theme');
-    setTheme(cur==='dark'?'light':'dark');
+    const cur=typeof getThemeMode==='function' ? getThemeMode() : (document.documentElement.getAttribute('data-theme-mode')||'light');
+    setThemeMode(cur==='dark'?'light':'dark');
   };
 
   const shareBtn=document.getElementById('shareBtn');
@@ -1151,8 +1151,8 @@ function isSingleStandaloneUrl(str) {
     if(typeof window.exportDocx==='function') window.exportDocx('all');
   };
   if(profileThemeBtn) profileThemeBtn.onclick=()=>{
-    const cur=document.documentElement.getAttribute('data-theme');
-    setTheme(cur==='dark'?'light':'dark');
+    const cur=typeof getThemeMode==='function' ? getThemeMode() : (document.documentElement.getAttribute('data-theme-mode')||'light');
+    setThemeMode(cur==='dark'?'light':'dark');
     closeProfilePanel();
   };
   if(profileInstallBtn) profileInstallBtn.onclick=()=>{
