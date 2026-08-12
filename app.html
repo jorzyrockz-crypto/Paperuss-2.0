@@ -149,6 +149,10 @@ try {
 <link rel="stylesheet" href="assets/css/responsive.css?v=2.5.3">
 <link rel="stylesheet" href="assets/css/settings.css?v=2.6.31">
 <link rel="stylesheet" href="css/themes.css">
+
+    <!-- Paperuss Modules -->
+    <link rel="stylesheet" href="modules/paperuss-leaves/leaves.css?v=1786552393">
+    <link rel="stylesheet" href="modules/paperuss-sync/sync.css?v=1786552393">
 </head>
 <body>
 
@@ -385,6 +389,7 @@ try {
       </div>
     </aside>
 
+    <div class="app-views-wrapper swipe-container">
     <section class="note-list" id="noteList">
       <div class="list-header" data-mode="notes">
         <div class="list-header-main">
@@ -1371,6 +1376,7 @@ try {
         <button class="icm-item text-danger" id="icmDelete"><i data-lucide="trash-2" class="w-4 h-4"></i><span>Delete</span></button>
       </div>
     </section>
+    </div>
   </div>
   <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
   <button class="mobile-fab" id="mobileFab" title="Create new note">
@@ -1933,16 +1939,12 @@ try {
 
 <script src="js/stabilization.js?v=2.8.0-sync-repair"></script>
 <script src="js/history.js?v=2.8.0-sync-repair"></script>
-<script src="js/leaves.js?v=2.8.0-sync-repair"></script>
 <script src="js/core.js?v=2.8.0-sync-repair"></script>
-<script src="js/leafline.js?v=2.8.0-sync-repair"></script>
 <script src="js/productivity.js?v=2.8.0-sync-repair"></script>
 <script src="js/page-layout-engine.js?v=2.8.0-sync-repair"></script>
 <script src="js/editor-ui.js?v=2.8.0-sync-repair"></script>
 <script src="js/tasks-settings.js?v=2.8.0-sync-repair"></script>
 <script src="js/data-transfer.js?v=2.8.0-sync-repair"></script>
-<script src="js/sync-engine.js?v=2.8.0-sync-repair"></script>
-<script src="js/cloud-notifications.js?v=2.8.0-sync-repair"></script>
 <script src="js/changelog.js?v=2.8.0-sync-repair"></script>
 <script src="js/actions.js?v=2.8.0-sync-repair"></script>
 <script src="js/link-parser.js?v=2.8.0-sync-repair"></script>
@@ -1957,7 +1959,15 @@ try {
 <script src="js/docx-export.js?v=2.8.0-sync-repair"></script>
 <script src="js/responsive-images.js?v=2.8.0-sync-repair"></script>
 <script src="js/tables.js?v=2.8.0-sync-repair"></script>
-<script src="js/branches.js?v=2.8.0-sync-repair"></script>
+<!-- Paperuss Sync Module (Loaded FIRST to avoid global collisions) -->
+<script src="modules/paperuss-sync/sync-engine.js?v=1786552393"></script>
+<script src="modules/paperuss-sync/cloud-notifications.js?v=1786552393"></script>
+
+<!-- Paperuss Leaves Module -->
+<script src="modules/paperuss-leaves/branches.js?v=1786552393"></script>
+<script src="modules/paperuss-leaves/leaves.js?v=1786552393"></script>
+<script src="modules/paperuss-leaves/leafline.js?v=1786552393"></script>
+<script src="modules/paperuss-leaves/swipe-nav.js?v=1786552393"></script>
 <script src="js/bootstrap.js?v=2.8.0-sync-repair"></script>
 
 <!-- Fullscreen Music Lightbox -->
@@ -1971,6 +1981,9 @@ try {
     </div>
   </div>
 </div>
+
+
+
 
 </body>
 </html>

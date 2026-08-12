@@ -3,16 +3,16 @@
    ============================================================ */
 
 function updateSyncStatusForRun(runId, newState, customText) {
-  if (runId !== syncGeneration || !syncInFlight) return;
+  if (runId !== window.syncGeneration || !window.syncInFlight) return;
   updateSyncStatus(newState, customText);
 }
 
 function updateSyncStatus(newState, customText){
-  syncState=newState;
+  window.syncState=newState;
   const pill=document.getElementById('syncStatusPill');
   const text=document.getElementById('syncStatusText');
   const detail=document.getElementById('setSyncDetail');
-  const session=currentSession||loadSession()||{mode:'guest'};
+  const session=window.currentSession||loadSession()||{mode:'guest'};
   const labels={
     offline: customText||(session.mode==='auth'?'Offline · will sync when online':'Offline · local only'),
     synced: customText||('Synced · '+(getLastSyncLabel())),
@@ -27,13 +27,13 @@ function updateSyncStatus(newState, customText){
 }
 
 function getLastSyncLabel(){
-  const ts=+localStorage.getItem(LAST_SYNC_KEY)||0;
+  const ts=+localStorage.getItem(window.LAST_SYNC_KEY)||0;
   return ts?timeAgo(ts):'never';
 }
 
 function readCloudDeletions(){
   try{
-    const value=JSON.parse(localStorage.getItem(CLOUD_DELETIONS_KEY));
+    const value=JSON.parse(localStorage.getItem(window.CLOUD_DELETIONS_KEY));
     return value && typeof value==='object'
       ? {notes:value.notes||{},tasks:value.tasks||{},media:value.media||{}}
       : {notes:{},tasks:{},media:{}};
@@ -43,11 +43,11 @@ function readCloudDeletions(){
 }
 
 function writeCloudDeletions(value){
-  localStorage.setItem(CLOUD_DELETIONS_KEY,JSON.stringify(value));
+  localStorage.setItem(window.CLOUD_DELETIONS_KEY,JSON.stringify(value));
 }
 
 function recordCloudDeletion(kind,id){
-  if(cloudSyncApplyingRemote || !id) return;
+  if(window.cloudSyncApplyingRemote || !id) return;
   const value=readCloudDeletions();
   if(!value[kind]) value[kind]={};
   value[kind][id]=Date.now();
@@ -100,7 +100,7 @@ function mergeById(localArr,remoteArr,tsField,deletions){
 }
 
 function markPortableStateChanged(){
-  if(cloudSyncApplyingRemote) return;
+  if(window.cloudSyncApplyingRemote) return;
   localStorage.setItem(PORTABLE_STATE_UPDATED_KEY,String(Date.now()));
   queueCloudSync();
 }
@@ -153,18 +153,18 @@ function applyPortableState(value){
 }
 
 function mediaStorageRef(uid,id){
-  return fbStorage.ref().child(`paperuss_users/${uid}/media/${id}`);
+  return window.fbStorage.ref().child(`paperuss_users/${uid}/media/${id}`);
 }
 
 async function fetchFirestoreMediaDataUrl(uid, id){
-  if(!fbDb) return null;
-  const docSnap = await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id).get();
+  if(!window.fbDb) return null;
+  const docSnap = await window.fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id).get();
   if(!docSnap || !docSnap.exists) return null;
   const data = docSnap.data();
   if(data.chunked === true && data.totalChunks > 0){
     const chunkPromises = [];
     for(let c = 0; c < data.totalChunks; c++){
-      chunkPromises.push(fbDb.collection('paperuss_users').doc(uid).collection('media').doc(`${id}_chunk_${c}`).get());
+      chunkPromises.push(window.fbDb.collection('paperuss_users').doc(uid).collection('media').doc(`${id}_chunk_${c}`).get());
     }
     const chunkSnaps = await Promise.all(chunkPromises);
     return chunkSnaps.map(snap => (snap && snap.exists && snap.data().data) || '').join('');
@@ -231,8 +231,8 @@ function drainOfflineQueue(){
 }
 
 function schedulePendingMediaRetry(){
-  clearTimeout(mediaRetryTimer);
-  mediaRetryTimer=null;
+  clearTimeout(window.mediaRetryTimer);
+  window.mediaRetryTimer=null;
   mediaAll().then(records=>{
     const retryAt=records
       .filter(record=>record.pendingUpload && (record.uploadFailures||0) > 0 && (record.uploadFailures||0) < MAX_UPLOAD_FAILURES)
@@ -243,7 +243,7 @@ function schedulePendingMediaRetry(){
       });
     if(!retryAt.length) return;
     const delay=Math.max(0,Math.min(...retryAt)-Date.now());
-    mediaRetryTimer=setTimeout(()=>syncNow({silent:true}),delay);
+    window.mediaRetryTimer=setTimeout(()=>syncNow({silent:true}),delay);
   }).catch(()=>{});
 }
 
@@ -259,27 +259,27 @@ async function syncMedia(uid, deletions, requiredMediaIds, runId) {
   };
   const localRecords = await mediaAll();
   const storageConsecutiveFailures = window.__fbStorageFailCount || 0;
-  const useStorage = !FIRESTORE_ONLY_MEDIA && !!(fbStorage && storageConsecutiveFailures < 3);
+  const useStorage = !FIRESTORE_ONLY_MEDIA && !!(window.fbStorage && storageConsecutiveFailures < 3);
 
   const localMap = new Map(localRecords.map(record => [record.id, record]));
 
   for (const [id, deletedAt] of Object.entries(deletions || {})) {
     const local = localMap.get(id);
     if ((+deletedAt || 0) < (local?.updatedAt || local?.createdAt || 0)) continue;
-    cloudSyncApplyingRemote = true;
-    try { await mediaDel(id); } catch (_) {} finally { cloudSyncApplyingRemote = false; }
+    window.cloudSyncApplyingRemote = true;
+    try { await mediaDel(id); } catch (_) {} finally { window.cloudSyncApplyingRemote = false; }
     localMap.delete(id);
     
     try {
-      const metaSnap = await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id).get();
+      const metaSnap = await window.fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id).get();
       if (metaSnap.exists) {
         const remote = metaSnap.data();
         if (remote.chunked && remote.totalChunks) {
           for (let c = 0; c < remote.totalChunks; c++) {
-            try { await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id + "_chunk_" + c).delete(); } catch (_) {}
+            try { await window.fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id + "_chunk_" + c).delete(); } catch (_) {}
           }
         }
-        await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id).delete();
+        await window.fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id).delete();
       }
     } catch (_) {}
     if (useStorage) {
@@ -363,7 +363,7 @@ async function syncMedia(uid, deletions, requiredMediaIds, runId) {
           uploadedToStorage = true;
           window.__fbStorageFailCount = 0;
 
-          await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id).set({
+          await window.fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id).set({
             id: record.id, type: record.type || record.blob?.type || 'application/octet-stream', size: fileBytes,
             name: label, uploadedToStorage: true, updatedAt: Date.now()
           }, { merge: true });
@@ -378,7 +378,7 @@ async function syncMedia(uid, deletions, requiredMediaIds, runId) {
       }
 
       if (!uploadedToStorage) {
-        if (!fbAuth || !fbAuth.currentUser || fbAuth.currentUser.uid !== uid) {
+        if (!window.fbAuth || !window.fbAuth.currentUser || window.fbAuth.currentUser.uid !== uid) {
           throw new Error('permission-denied: Please sign in to sync media with your account');
         }
         let workingBlob = record.blob;
@@ -395,7 +395,7 @@ async function syncMedia(uid, deletions, requiredMediaIds, runId) {
         let chunked = false;
         let totalChunks = 1;
         if (dataUrl.length <= 900000) {
-          await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id).set({
+          await window.fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id).set({
             id: record.id, dataUrl: dataUrl, type: mimeType, size: workingBytes, name: label, chunked: false, totalChunks: 1, updatedAt: Date.now()
           }, { merge: true });
         } else {
@@ -405,13 +405,13 @@ async function syncMedia(uid, deletions, requiredMediaIds, runId) {
           for (let c = 0; c < totalChunks; c++) {
             const sliceData = dataUrl.slice(c * CHUNK_CHAR_SIZE, (c + 1) * CHUNK_CHAR_SIZE);
             chunkPromises.push(
-              fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id + "_chunk_" + c).set({
+              window.fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id + "_chunk_" + c).set({
                 parentId: record.id, chunkIndex: c, data: sliceData, updatedAt: Date.now()
               })
             );
           }
           await Promise.all(chunkPromises);
-          await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id).set({
+          await window.fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id).set({
             id: record.id, type: mimeType, size: workingBytes, name: label, chunked: true, totalChunks: totalChunks, updatedAt: Date.now()
           }, { merge: true });
         }
@@ -440,7 +440,7 @@ async function syncMedia(uid, deletions, requiredMediaIds, runId) {
       const errMsg = uploadErr?.message || uploadErr?.code || String(uploadErr);
       console.error('PapeRuss: Media upload failed for ' + record.id + ':', uploadErr);
       const isPermDenied = String(errMsg).includes('permission-denied');
-      const isAuthExpired = isPermDenied && (!fbAuth || !fbAuth.currentUser);
+      const isAuthExpired = isPermDenied && (!window.fbAuth || !window.fbAuth.currentUser);
       if (isPermDenied && !isAuthExpired) {
         toast('⚠️ Access denied by Firestore security rules. Please check your sign-in session.');
       }
@@ -471,7 +471,7 @@ async function syncMedia(uid, deletions, requiredMediaIds, runId) {
     try {
       res.stats.attempted++;
       let blob = null, cloudUrl = null, size = 0, name = 'file', type = 'application/octet-stream', updatedAt = Date.now();
-      const metaSnap = await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id).get();
+      const metaSnap = await window.fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id).get();
       if (!metaSnap.exists) { res.stats.failed++; res.errors.push({ id, code: 'not_found', retryable: false }); continue; }
       
       const meta = metaSnap.data();
@@ -512,14 +512,14 @@ async function syncMedia(uid, deletions, requiredMediaIds, runId) {
 }
 
 async function resetCloudWorkspace(){
-  const session=currentSession||loadSession();
+  const session=window.currentSession||loadSession();
   if(!session || session.mode!=='auth') return true;
-  if(!firebaseReady || !navigator.onLine){
+  if(!window.firebaseReady || !navigator.onLine){
     toast('Connect to the internet before resetting your synced workspace');
     return false;
   }
   try{
-    const docRef=fbDb.collection('paperuss_users').doc(session.uid);
+    const docRef=window.fbDb.collection('paperuss_users').doc(session.uid);
 
     // Delete all documents in Firestore subcollections (notes, tasks, media)
     try {
@@ -537,7 +537,7 @@ async function resetCloudWorkspace(){
 
     const snap=await docRef.get();
     const manifest=snap.exists?(snap.data().mediaManifest||[]):[];
-    if(fbStorage){
+    if(window.fbStorage){
       await Promise.all(manifest.map(async item=>{
         try{ await mediaStorageRef(session.uid,item.id).delete(); }
         catch(err){ if(!String(err?.code||'').includes('object-not-found')) throw err; }
@@ -554,7 +554,7 @@ async function resetCloudWorkspace(){
 
 async function syncNow(opts){
   opts=opts||{};
-  if(syncInFlight){ syncRequestedWhileBusy=true; return; }
+  if(window.syncInFlight){ window.syncRequestedWhileBusy=true; return; }
   // Multi-tab safety: only one tab syncs at a time
   if(typeof navigator.locks !== 'undefined'){
     try {
@@ -600,15 +600,15 @@ function aggregateSyncResults(results) {
 }
 
 async function _syncNowInner(opts){
-  const session=currentSession||loadSession();
+  const session=window.currentSession||loadSession();
   if(!session || session.mode!=='auth') return;
-  if(syncInFlight){
-    syncRequestedWhileBusy=true;
+  if(window.syncInFlight){
+    window.syncRequestedWhileBusy=true;
     return;
   }
   
-  syncInFlight = true;
-  const runId = ++syncGeneration;
+  window.syncInFlight = true;
+  const runId = ++window.syncGeneration;
   
   try {
     if(!navigator.onLine){
@@ -634,7 +634,7 @@ async function _syncNowInner(opts){
       new Promise((_, rej) => setTimeout(() => rej(new Error(name + ' timed out')), ms))
     ]);
 
-    const docRef=fbDb.collection('paperuss_users').doc(session.uid);
+    const docRef=window.fbDb.collection('paperuss_users').doc(session.uid);
     let snap, notesSnap, tasksSnap;
     try {
       snap      = await withSyncTimeout(docRef.get(), 15000, 'docRef.get');
@@ -693,7 +693,7 @@ async function _syncNowInner(opts){
     // Snapshot pre-merge state so we can diff what actually changed
     const preMergeMap = new Map(notes.map(n=>[n.id, n.updatedAt||0]));
 
-    cloudSyncApplyingRemote=true;
+    window.cloudSyncApplyingRemote=true;
     try{
       notes=mergedNotes; standaloneTasks=mergedTasks; appSettings=mergedSettings;
       localStorage.setItem(STORAGE_KEY,JSON.stringify(notes));
@@ -752,7 +752,7 @@ async function _syncNowInner(opts){
       renderStorageStats();
       if(typeof rescheduleAllEventNotifications==='function') rescheduleAllEventNotifications();
     }finally{
-      cloudSyncApplyingRemote=false;
+      window.cloudSyncApplyingRemote=false;
     }
 
     const writePromises = [];
@@ -810,7 +810,7 @@ async function _syncNowInner(opts){
 
     if (window.BranchEngine && typeof window.BranchEngine.syncBranchesFromCloud === 'function') {
       try {
-        finalResults.branches = await withSyncTimeout(window.BranchEngine.syncBranchesFromCloud(session.uid, fbDb), 25000, 'syncBranches');
+        finalResults.branches = await withSyncTimeout(window.BranchEngine.syncBranchesFromCloud(session.uid, window.fbDb), 25000, 'syncBranches');
       } catch (e) { finalResults.branches = { ok: false, status: 'partial', reason: 'timeout', stats: { retryable: 1 } }; }
     }
     
@@ -832,7 +832,7 @@ async function _syncNowInner(opts){
       } catch (e) { finalResults.activeNote = { ok: false, status: 'partial', reason: 'timeout', stats: { retryable: 1 } }; }
     }
 
-    localStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
+    localStorage.setItem(window.LAST_SYNC_KEY, String(Date.now()));
     
     const summary = aggregateSyncResults(finalResults);
     
@@ -855,20 +855,20 @@ async function _syncNowInner(opts){
     if(!opts.silent) toast('Sync failed - changes saved locally');
   } finally {
 
-    syncInFlight = false;
-    if(syncRequestedWhileBusy){ 
-      syncRequestedWhileBusy=false; 
+    window.syncInFlight = false;
+    if(window.syncRequestedWhileBusy){ 
+      window.syncRequestedWhileBusy=false; 
       queueCloudSync(); 
     }
   }
 }
 
 function queueCloudSync(){
-  const session=currentSession||loadSession();
-  if(cloudSyncApplyingRemote || !session || session.mode!=='auth') return;
-  if(syncInFlight){ syncRequestedWhileBusy=true; return; }
-  clearTimeout(syncDebounceTimer);
-  syncDebounceTimer=setTimeout(()=>syncNow({silent:true}), 2500);
+  const session=window.currentSession||loadSession();
+  if(window.cloudSyncApplyingRemote || !session || session.mode!=='auth') return;
+  if(window.syncInFlight){ window.syncRequestedWhileBusy=true; return; }
+  clearTimeout(window.syncDebounceTimer);
+  window.syncDebounceTimer=setTimeout(()=>syncNow({silent:true}), 2500);
 }
 
 
@@ -898,7 +898,7 @@ function initSyncEngine() {
 async function syncLeavesWithCloud(uid, db) {
     const res = { ok: true, status: 'success', reason: null, stats: { attempted: 0, succeeded: 0, failed: 0, skipped: 0, retryable: 0 }, errors: [] };
     if (!uid || !window.paperussLeaves) return { ...res, ok: false, status: 'failed', reason: 'unauthenticated' };
-    const fireDb = db || (typeof fbDb !== 'undefined' ? fbDb : (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null));
+    const fireDb = db || (typeof window.fbDb !== 'undefined' ? window.fbDb : (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null));
     if (!fireDb) return { ...res, ok: false, status: 'failed', reason: 'network', stats: { ...res.stats, retryable: 1 } };
 
     try {
@@ -992,4 +992,17 @@ async function syncLeavesWithCloud(uid, db) {
 
 
 
-
+// ============================================================
+// Export public API to window so cloud-notifications.js
+// and other scripts can call these across <script> boundaries.
+// ============================================================
+window.syncNow               = syncNow;
+window.queueCloudSync        = queueCloudSync;
+window.initSyncEngine        = initSyncEngine;
+window.updateSyncStatus      = updateSyncStatus;
+window.updateSyncStatusForRun= updateSyncStatusForRun;
+window.getLastSyncLabel      = getLastSyncLabel;
+window.recordCloudDeletion   = recordCloudDeletion;
+window.clearCloudDeletion    = clearCloudDeletion;
+window.syncLeavesWithCloud   = syncLeavesWithCloud;
+window.collectPortableState  = collectPortableState;

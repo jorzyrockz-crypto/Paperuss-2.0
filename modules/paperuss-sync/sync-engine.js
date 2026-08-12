@@ -1,454 +1,10 @@
-/* ============================================================
-   FIREBASE AUTH + CLOUD SYNC (with full offline fallback)
+﻿/* ============================================================
+   SYNC ENGINE - Handles all Firebase/Firestore communication
    ============================================================ */
-// Fill these with your own Firebase project credentials to enable real
-// cross-device sign-in/sync. Left blank, PapeRuss runs fully offline —
-// the landing page will still appear but cloud sign-in gracefully
-// falls back to Guest mode with a friendly notice.
-const getEnvVar = (key) => {
-  if (typeof window !== 'undefined' && window[key]) return window[key];
-  if (typeof process !== 'undefined' && process.env && process.env[key]) return process.env[key];
-  return null;
-};
-
-const FIREBASE_CONFIG={
-  apiKey: getEnvVar('VITE_FIREBASE_API_KEY') || "AIzaSyCGPLY38o2Mym1Q2aeKuDdp5gigN36Wg-I",
-  authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN') || "my-paperuss-database-2.firebaseapp.com",
-  projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID') || "my-paperuss-database-2",
-  storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET') || "my-paperuss-database-2.firebasestorage.app",
-  messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID') || "506884695642",
-  appId: getEnvVar('VITE_FIREBASE_APP_ID') || "1:506884695642:web:afef991984b581d06b9a63",
-  measurementId: getEnvVar('VITE_FIREBASE_MEASUREMENT_ID') || "G-V2SFSNKGZK"
-};
-const AUTH_SESSION_KEY='octonotes:session';
-const LAST_SYNC_KEY='octonotes:lastSyncAt';
-const CLOUD_DELETIONS_KEY='paperuss:cloudDeletions';
-const PORTABLE_STATE_UPDATED_KEY='paperuss:portableStateUpdatedAt';
-const PROFILE_PHOTO_KEY='paperuss:profilePhoto';
-const OFFLINE_UPLOAD_QUEUE_KEY='paperuss:offlineUploadQueue'; // persists upload IDs that need retry
-const MAX_UPLOAD_FAILURES=5;   // give up after this many consecutive failed attempts
-const STARTER_SEED_VERSION=1;
-// This deployment keeps attachment data in Firestore. Set to false only after
-// Firebase Storage is intentionally configured and deployed for this project.
-const FIRESTORE_ONLY_MEDIA=true;
-const UPLOAD_RETRY_BASE_MS=30000; // 30s base; doubles each failure: 30s→1m→2m→4m→8m
-
-let fbApp=null, fbAuth=null, fbDb=null, fbStorage=null, fbAnalytics=null, firebaseReady=false;
-let currentSession=null; // {mode:'guest'} | {mode:'auth', uid, name, email, photoURL}
-let syncState='offline'; // offline | synced | syncing | error
-let syncGeneration=0;
-let syncInFlight=false;
-let syncDebounceTimer=null;
-let mediaRetryTimer=null;
-let cloudSyncApplyingRemote=false;
-let syncRequestedWhileBusy=false;
 
 function updateSyncStatusForRun(runId, newState, customText) {
   if (runId !== syncGeneration || !syncInFlight) return;
   updateSyncStatus(newState, customText);
-}
-
-function firebaseConfigured(){
-  return !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId && FIREBASE_CONFIG.appId);
-}
-
-function initFirebase(){
-  try{
-    if(window.__fbLoadFailed || typeof firebase==='undefined' || !firebaseConfigured()) return false;
-    fbApp = firebase.apps && firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(FIREBASE_CONFIG);
-    fbAuth = firebase.auth();
-    fbDb = firebase.firestore();
-    fbStorage = !window.__fbStorageLoadFailed && typeof firebase.storage==='function' ? firebase.storage() : null;
-    if(!window.__fbAnalyticsLoadFailed && typeof firebase.analytics==='function' && FIREBASE_CONFIG.measurementId){
-      try{ fbAnalytics=firebase.analytics(); }catch(_){ fbAnalytics=null; }
-    }
-    firebaseReady=true;
-    // Handle redirect sign-in result first (mobile/PWA fallback)
-    fbAuth.getRedirectResult().then(result=>{
-      if(result && result.user){
-        const u=result.user;
-        saveSession({mode:'auth', uid:u.uid, name:u.displayName||u.email||'Account', email:u.email||'', photoURL:u.photoURL||''});
-        hideAuthLanding();
-        renderProfileMenu();
-        toast('Signed in as '+(u.displayName||u.email));
-        syncNow();
-      }
-    }).catch(err=>{
-      if(err && err.code) toast(authErrorMessage(err));
-    });
-      fbAuth.onAuthStateChanged(user=>{
-      if(user){
-        saveSession({mode:'auth', uid:user.uid, name:user.displayName||user.email||'Account', email:user.email||'', photoURL:user.photoURL||''});
-        hideAuthLanding();
-        renderProfileMenu();
-        // Queue normal sync immediately so it's not blocked by starter notes
-        syncNow({silent:true});
-        ensureStarterNotesForAccount(user.uid)
-          .then(didSeed => { if (didSeed) syncNow({silent:true}); })
-          .catch(err=>console.warn('PapeRuss starter notes seed warning:',err));
-      } else {
-        // User signed out or Firebase lost the session
-        const sess=loadSession();
-        if(!sess){
-          // They are a new user, no session at all
-          showAuthLanding();
-        } else if (sess.mode==='auth') {
-          // Firebase token dropped (e.g. third-party cookie blocked or token expired),
-          // but they previously signed in. Do NOT kick them out of their notes.
-          // Let them continue offline. syncNow() will abort safely.
-          console.warn('Firebase session dropped, but local auth session remains. Pausing sync.');
-          updateSyncStatus('error', 'Cloud disconnected (please sign in again later)');
-        }
-        // If sess.mode === 'guest', do nothing. They are intentionally offline.
-      }
-    });
-    return true;
-  }catch(e){
-    firebaseReady=false;
-    return false;
-  }
-}
-
-function loadSession(){
-  try{ currentSession=JSON.parse(localStorage.getItem(AUTH_SESSION_KEY)); }catch(e){ currentSession=null; }
-  return currentSession;
-}
-function saveSession(session){
-  currentSession=session;
-  if(session) localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
-  else localStorage.removeItem(AUTH_SESSION_KEY);
-}
-
-async function seedAndSyncAccount(uid, opts){
-  try{
-    await ensureStarterNotesForAccount(uid);
-  }catch(err){
-    console.warn('PapeRuss starter notes seed warning:',err);
-  }
-  return syncNow(opts);
-}
-
-/* Seed the documentation note and its leaves once per signed-in account.
-   The marker is written in the same Firestore transaction as the missing
-   records, so multiple tabs cannot create duplicate starter packs. */
-async function ensureStarterNotesForAccount(uid){
-  if(!uid || !fbDb || typeof seedNotes!=='function') return false;
-  const rootRef=fbDb.collection('paperuss_users').doc(uid);
-  return fbDb.runTransaction(async tx=>{
-    const rootSnap=await tx.get(rootRef);
-    const rootData=rootSnap.exists?(rootSnap.data()||{}):{};
-    if(+rootData.starterSeedVersion>=STARTER_SEED_VERSION) return false;
-
-    const starters=seedNotes();
-    const plans=[];
-    // Read all existing records before issuing transaction writes.
-    for(const starter of starters){
-      const noteRef=rootRef.collection('notes').doc(starter.id);
-      const noteSnap=await tx.get(noteRef);
-      const leafPlans=[];
-      for(const leaf of (starter.seedLeaves||[])){
-        const leafRef=noteRef.collection('leaves').doc(leaf.id);
-        leafPlans.push({leaf,ref:leafRef,snap:await tx.get(leafRef)});
-      }
-      plans.push({starter,noteRef,noteSnap,leafPlans});
-    }
-
-    for(const {starter,noteRef,noteSnap,leafPlans} of plans){
-      if(!noteSnap.exists){
-        const {seedLeaves,...noteRecord}=starter;
-        tx.set(noteRef,noteRecord,{merge:true});
-      }
-      for(const {leaf,ref,snap} of leafPlans){
-        if(!snap.exists) tx.set(ref,leaf,{merge:true});
-      }
-    }
-    tx.set(rootRef,{starterSeedVersion:STARTER_SEED_VERSION,starterSeededAt:Date.now()},{merge:true});
-    return true;
-  });
-}
-window.ensureStarterNotesForAccount=ensureStarterNotesForAccount;
-
-function showAuthLanding(){
-  const el=document.getElementById('authLanding');
-  if(el) {
-    el.classList.remove('hidden');
-    el.classList.remove('leaving');
-  }
-  // Guest mode also marks the document as having a session. Clear that
-  // marker before showing the auth surface or the global CSS hides it.
-  document.documentElement.classList.remove('has-session');
-  document.documentElement.classList.remove('auth-pending');
-  if(typeof closeLeavesDrawer === 'function') closeLeavesDrawer();
-  if(typeof updateLeafTitleBar === 'function') updateLeafTitleBar();
-}
-function hideAuthLanding(){
-  const el=document.getElementById('authLanding');
-  if(el && !el.classList.contains('hidden')){
-    el.classList.add('leaving');
-    document.documentElement.classList.add('has-session');
-    setTimeout(()=>{
-      el.classList.add('hidden');
-      el.classList.remove('leaving');
-    }, 420);
-  } else if(el) {
-    el.classList.add('hidden');
-    document.documentElement.classList.add('has-session');
-  }
-  document.documentElement.classList.remove('auth-pending');
-  if(typeof updateLeafTitleBar === 'function') updateLeafTitleBar();
-}
-
-
-async function continueAsGuest(){
-  // Explicit guest choice also clears any persisted Firebase session so auth
-  // state cannot immediately override local-only mode.
-  try{ if(firebaseReady && fbAuth && fbAuth.currentUser) await fbAuth.signOut(); }catch(e){}
-  saveSession({mode:'guest'});
-  hideAuthLanding();
-  renderProfileMenu();
-  updateSyncStatus('offline','Offline · local only');
-  toast('Continuing in guest mode — everything stays on this device');
-}
-
-function isMobileOrPWA(){
-  return window.matchMedia('(display-mode: standalone)').matches
-    || (window.navigator.standalone === true)
-    || /android|iphone|ipad|ipod/i.test(navigator.userAgent);
-}
-
-async function signInWithGoogle(fromLanding){
-  if(!firebaseReady){
-    toast('Cloud sign-in is not configured — continuing offline');
-    if(fromLanding) continueAsGuest();
-    return;
-  }
-  try{
-    const provider=new firebase.auth.GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
-    
-
-    
-    const result=await fbAuth.signInWithPopup(provider);
-    const user=result.user;
-    saveSession({mode:'auth', uid:user.uid, name:user.displayName||user.email||'Account', email:user.email||'', photoURL:user.photoURL||''});
-    hideAuthLanding();
-    renderProfileMenu();
-    toast('Signed in as '+(user.displayName||user.email));
-    await seedAndSyncAccount(user.uid);
-  }catch(err){
-    if(err && err.code==='auth/popup-blocked'){
-      try{
-        const provider2=new firebase.auth.GoogleAuthProvider();
-        provider2.setCustomParameters({ prompt: 'select_account' });
-        await fbAuth.signInWithRedirect(provider2);
-      }catch(e2){
-        const message=authErrorMessage(e2);
-        toast(message);
-        setEmailAuthMessage(message,true);
-      }
-      return;
-    }
-    const message=authErrorMessage(err);
-    toast(message);
-    setEmailAuthMessage(message,true);
-  }
-}
-
-function authErrorMessage(error){
-  const code=String(error?.code||'');
-  const messages={
-    'auth/invalid-email':'Enter a valid email address.',
-    'auth/missing-password':'Enter your password.',
-    'auth/weak-password':'Use a password with at least 6 characters.',
-    'auth/email-already-in-use':'That email already has an account. Sign in instead.',
-    'auth/invalid-credential':'Email or password is incorrect. If you registered with Google, use Google sign-in.',
-    'auth/user-not-found':'Email or password is incorrect.',
-    'auth/wrong-password':'Email or password is incorrect.',
-    'auth/account-exists-with-different-credential':'This email already uses another sign-in method. Use the method you originally chose.',
-    'auth/too-many-requests':'Too many attempts. Wait a little and try again.',
-    'auth/network-request-failed':'Network unavailable. Check your connection and try again.',
-    'auth/operation-not-allowed':'Email/password sign-in is not enabled for this Firebase project.'
-  };
-  return messages[code]||`Authentication failed. Please try again. (${code})`;
-}
-
-function setEmailAuthMessage(message,isError){
-  const el=document.getElementById('authFormMessage');
-  if(!el) return;
-  el.textContent=message||'';
-  el.classList.toggle('error',!!isError);
-}
-
-function setEmailAuthBusy(busy){
-  ['authEmailSignInBtn','authEmailCreateBtn','authResetPasswordBtn'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el) el.disabled=!!busy;
-  });
-}
-
-function readEmailCredentials(){
-  return {
-    email:(document.getElementById('authEmail')?.value||'').trim(),
-    password:document.getElementById('authPassword')?.value||''
-  };
-}
-
-async function signInWithEmailPassword(){
-  if(!firebaseReady){ setEmailAuthMessage('Cloud sign-in is unavailable right now.',true); return; }
-  const {email,password}=readEmailCredentials();
-  if(!email || !password){ setEmailAuthMessage('Enter your email and password.',true); return; }
-  setEmailAuthBusy(true); setEmailAuthMessage('Signing in…');
-  try{
-    const result=await fbAuth.signInWithEmailAndPassword(email,password);
-    const user=result.user;
-    saveSession({mode:'auth',uid:user.uid,name:user.displayName||user.email||'Account',email:user.email||'',photoURL:user.photoURL||''});
-    hideAuthLanding(); renderProfileMenu(); toast('Signed in as '+(user.email||'your account'));
-    await seedAndSyncAccount(user.uid);
-  }catch(error){
-    setEmailAuthMessage(authErrorMessage(error),true);
-  }finally{
-    setEmailAuthBusy(false);
-  }
-}
-
-async function createEmailPasswordAccount(){
-  if(!firebaseReady){ setEmailAuthMessage('Cloud sign-up is unavailable right now.',true); return; }
-  const {email,password}=readEmailCredentials();
-  if(!email || !password){ setEmailAuthMessage('Enter an email and password.',true); return; }
-  setEmailAuthBusy(true); setEmailAuthMessage('Creating account…');
-  try{
-    const result=await fbAuth.createUserWithEmailAndPassword(email,password);
-    const user=result.user;
-    try{ await user.sendEmailVerification(); }catch(_){}
-    saveSession({mode:'auth',uid:user.uid,name:user.email||'Account',email:user.email||'',photoURL:''});
-    hideAuthLanding(); renderProfileMenu();
-    toast('Account created — check your inbox to verify your email');
-    await seedAndSyncAccount(user.uid);
-  }catch(error){
-    setEmailAuthMessage(authErrorMessage(error),true);
-  }finally{
-    setEmailAuthBusy(false);
-  }
-}
-
-async function sendPasswordReset(){
-  if(!firebaseReady){ setEmailAuthMessage('Password reset is unavailable right now.',true); return; }
-  const email=(document.getElementById('authEmail')?.value||'').trim();
-  if(!email){ setEmailAuthMessage('Enter your email address first.',true); return; }
-  setEmailAuthBusy(true); setEmailAuthMessage('Sending reset link…');
-  try{
-    await fbAuth.sendPasswordResetEmail(email);
-    setEmailAuthMessage('If an account uses that email, a reset link has been sent.');
-  }catch(error){
-    setEmailAuthMessage(authErrorMessage(error),true);
-  }finally{
-    setEmailAuthBusy(false);
-  }
-}
-
-function signOutUser(){
-  const session=currentSession||loadSession()||{mode:'guest'};
-  const isAuth=session.mode==='auth';
-  const title=isAuth?'Sign out?':'Exit guest mode?';
-  const copy=isAuth
-    ?'Your notes stay on this device. Cloud sync will pause until you sign in again.'
-    :'Your local notes stay on this device. You will return to the welcome page.';
-  confirmDialog(title,copy,isAuth?'Sign out':'Exit',async ()=>{
-    try{ if(firebaseReady && isAuth) await fbAuth.signOut(); }catch(e){}
-    saveSession(null);
-    renderProfileMenu();
-    updateSyncStatus('offline','Offline · local only');
-    document.getElementById('profilePanel')?.classList.remove('show');
-    showAuthLanding();
-    refreshIcons();
-  });
-}
-
-function initials(name){
-  const s=(name||'G').trim();
-  const parts=s.split(/\s+/);
-  return ((parts[0]?.[0]||'G')+(parts[1]?.[0]||'')).toUpperCase();
-}
-
-function renderProfileMenu(){
-  const session=currentSession||loadSession()||{mode:'guest'};
-  const isAuth=session.mode==='auth';
-  const name=isAuth?(session.name||session.email||'Account'):'Guest';
-  const email=isAuth?(session.email||''):'Local-only mode';
-  const initial=initials(isAuth?name:'Guest');
-
-  const avatarBtn=document.getElementById('profileAvatarInitial');
-  const panelInitial=document.getElementById('profilePanelInitial');
-  const panelAvatar=document.getElementById('profilePanelAvatar');
-  const avatarWrap=document.getElementById('profileAvatarBtn');
-  const profilePhoto=localStorage.getItem(PROFILE_PHOTO_KEY)||(isAuth?session.photoURL:'');
-  if(profilePhoto){
-    if(avatarWrap) avatarWrap.innerHTML=`<img src="${esc(profilePhoto)}" alt="">`;
-    if(panelAvatar) panelAvatar.innerHTML=`<img src="${esc(profilePhoto)}" alt=""><button class="profile-avatar-upload" id="profilePictureBtn" title="Upload profile picture" aria-label="Upload profile picture"><i data-lucide="camera" class="w-2.5 h-2.5"></i></button>`;
-  }else{
-    if(avatarBtn) avatarBtn.textContent=initial;
-    else if(avatarWrap) avatarWrap.innerHTML=`<span id="profileAvatarInitial">${initial}</span>`;
-    if(panelInitial) panelInitial.textContent=initial;
-    else if(panelAvatar) panelAvatar.innerHTML=`<span id="profilePanelInitial">${initial}</span><button class="profile-avatar-upload" id="profilePictureBtn" title="Upload profile picture" aria-label="Upload profile picture"><i data-lucide="camera" class="w-2.5 h-2.5"></i></button>`;
-  }
-  document.getElementById('profilePanelName').textContent=name;
-  document.getElementById('profilePanelEmail').textContent=email;
-
-  const signInBtn=document.getElementById('profileSignInBtn');
-  const signOutBtn=document.getElementById('profileSignOutBtn');
-  if(signInBtn) signInBtn.style.display=isAuth?'none':'flex';
-  if(signOutBtn){
-    signOutBtn.style.display='flex';
-    signOutBtn.innerHTML=isAuth
-      ?'<i data-lucide="log-out" class="w-4 h-4"></i> Sign out'
-      :'<i data-lucide="log-out" class="w-4 h-4"></i> Exit guest mode';
-  }
-
-  // Mirror into Settings > Account & Sync
-  const setName=document.getElementById('setAccountName');
-  const setEmail=document.getElementById('setAccountEmail');
-  const setAuthBtn=document.getElementById('setAuthBtn');
-  if(setName) setName.textContent=name;
-  if(setEmail) setEmail.textContent=isAuth?email:'Signed out · local-only mode';
-  if(setAuthBtn){
-    setAuthBtn.textContent=isAuth?'Sign out':'Sign in or create account';
-    setAuthBtn.onclick=isAuth?signOutUser:showAuthLanding;
-  }
-
-  updateSyncStatus(syncState);
-  refreshIcons();
-}
-
-function handleProfilePictureUpload(file){
-  if(!file || !file.type.startsWith('image/')){ toast('Choose an image file'); return; }
-  const reader=new FileReader();
-  reader.onload=()=>{
-    const image=new Image();
-    image.onload=()=>{
-      // Keep the local session small enough for reliable offline storage.
-      const size=256;
-      const scale=Math.min(1,size/Math.max(image.width,image.height));
-      const canvas=document.createElement('canvas');
-      canvas.width=Math.max(1,Math.round(image.width*scale));
-      canvas.height=Math.max(1,Math.round(image.height*scale));
-      canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);
-      const photoURL=canvas.toDataURL('image/jpeg',.82);
-      const session=currentSession||loadSession()||{mode:'guest'};
-      saveSession({...session,photoURL});
-      localStorage.setItem(PROFILE_PHOTO_KEY,photoURL);
-      markPortableStateChanged();
-      // Update both avatar buttons immediately
-      const avatarWrap=document.getElementById('profileAvatarBtn');
-      const panelAvatar=document.getElementById('profilePanelAvatar');
-      if(avatarWrap) avatarWrap.innerHTML=`<img src="${esc(photoURL)}" alt="">`;
-      if(panelAvatar) panelAvatar.innerHTML=`<img src="${esc(photoURL)}" alt=""><button class="profile-avatar-upload" id="profilePictureBtn" title="Upload profile picture" aria-label="Upload profile picture"><i data-lucide="camera" class="w-2.5 h-2.5"></i></button>`;
-      refreshIcons();
-      toast('Profile picture updated');
-    };
-    image.onerror=()=>toast('Could not read that image');
-    image.src=reader.result;
-  };
-  reader.readAsDataURL(file);
 }
 
 function updateSyncStatus(newState, customText){
@@ -458,11 +14,11 @@ function updateSyncStatus(newState, customText){
   const detail=document.getElementById('setSyncDetail');
   const session=currentSession||loadSession()||{mode:'guest'};
   const labels={
-    offline: customText||(session.mode==='auth'?'Offline · will sync when online':'Offline · local only'),
-    synced: customText||('Synced · '+(getLastSyncLabel())),
-    partial: customText||('Synced (Partial) · '+(getLastSyncLabel())),
-    syncing: customText||'Syncing…',
-    error: customText||'Sync error · retry later'
+    offline: customText||(session.mode==='auth'?'Offline ┬╖ will sync when online':'Offline ┬╖ local only'),
+    synced: customText||('Synced ┬╖ '+(getLastSyncLabel())),
+    partial: customText||('Synced (Partial) ┬╖ '+(getLastSyncLabel())),
+    syncing: customText||'SyncingΓÇª',
+    error: customText||'Sync error ┬╖ retry later'
   };
   const msg=labels[newState]||labels.offline;
   if(pill){ pill.className='sync-status-pill '+newState; }
@@ -517,17 +73,28 @@ function mergeDeletionSets(localValue,remoteValue){
   return merged;
 }
 
-/* Merge records by id, then apply deletion markers so removed data stays removed. */
 function mergeById(localArr,remoteArr,tsField,deletions){
   const map=new Map();
-  (remoteArr||[]).forEach(r=>map.set(r.id, r));
+  (remoteArr||[]).forEach(r=>{
+    const existing = map.get(r.id);
+    if (!existing || (r[tsField]||0) >= (existing[tsField]||0)) {
+      map.set(r.id, r);
+    }
+  });
   (localArr||[]).forEach(l=>{
     const r=map.get(l.id);
     if(!r || (l[tsField]||0) >= (r[tsField]||0)) map.set(l.id, l);
   });
-  Object.entries(deletions||{}).forEach(([id,deletedAt])=>{
-    const record=map.get(id);
-    if(record && (+deletedAt||0) > (record[tsField]||record.createdAt||0)) map.delete(id);
+  Object.keys(deletions||{}).forEach(id=>{
+    const deletedAt = deletions[id];
+    const record = map.get(id);
+    if(record) {
+      if ((+deletedAt||0) > (record[tsField]||record.createdAt||0)) {
+        map.delete(id);
+      } else {
+        deletions[id] = 0; // Neutralize stale tombstone
+      }
+    }
   });
   return Array.from(map.values());
 }
@@ -627,7 +194,7 @@ function withTimeout(promise, ms, errmsg){
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
-// Cancellable version for Firebase uploadTask objects
+
 function withCancellableTimeout(uploadTask, ms, errmsg){
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -639,22 +206,22 @@ function withCancellableTimeout(uploadTask, ms, errmsg){
   return Promise.race([uploadTask, timeout]).finally(() => clearTimeout(timer));
 }
 
-/* ============================================================
-   OFFLINE UPLOAD QUEUE — persists upload IDs across reloads
-   ============================================================ */
 function readOfflineUploadQueue(){
   try{ return JSON.parse(localStorage.getItem(OFFLINE_UPLOAD_QUEUE_KEY))||{}; }catch(_){ return {}; }
 }
+
 function addToOfflineUploadQueue(id){
   const q=readOfflineUploadQueue();
   q[id]={id, queuedAt:Date.now()};
   localStorage.setItem(OFFLINE_UPLOAD_QUEUE_KEY,JSON.stringify(q));
 }
+
 function removeFromOfflineUploadQueue(id){
   const q=readOfflineUploadQueue();
   delete q[id];
   localStorage.setItem(OFFLINE_UPLOAD_QUEUE_KEY,JSON.stringify(q));
 }
+
 function drainOfflineQueue(){
   const q=readOfflineUploadQueue();
   if(Object.keys(q).length>0){
@@ -663,8 +230,6 @@ function drainOfflineQueue(){
   }
 }
 
-// Retry failed media while the browser remains online.  The per-record
-// backoff still lives in syncMedia(), so this only wakes the next attempt.
 function schedulePendingMediaRetry(){
   clearTimeout(mediaRetryTimer);
   mediaRetryTimer=null;
@@ -682,7 +247,6 @@ function schedulePendingMediaRetry(){
   }).catch(()=>{});
 }
 
-/* Dynamic upload timeout — 1 byte/ms minimum, floor at 20s, ceiling at 15min */
 function timeoutForSize(bytes){
   return Math.min(Math.max(20000, Math.round(bytes * 1.5)), 15*60*1000);
 }
@@ -878,7 +442,7 @@ async function syncMedia(uid, deletions, requiredMediaIds, runId) {
       const isPermDenied = String(errMsg).includes('permission-denied');
       const isAuthExpired = isPermDenied && (!fbAuth || !fbAuth.currentUser);
       if (isPermDenied && !isAuthExpired) {
-        toast('⚠️ Access denied by Firestore security rules. Please check your sign-in session.');
+        toast('ΓÜá∩╕Å Access denied by Firestore security rules. Please check your sign-in session.');
       }
       const failures = (record.uploadFailures || 0) + 1;
       const failedRecord = { ...record, pendingUpload: true, uploadFailures: failures, lastUploadAttempt: Date.now() };
@@ -892,8 +456,8 @@ async function syncMedia(uid, deletions, requiredMediaIds, runId) {
       document.dispatchEvent(new CustomEvent('media-upload-progress', {
         detail: { id: record.id, percent: 0, error: true, failures }
       }));
-      if (failures === 1) toast('⚠️ Media upload failed: ' + errMsg + ' — will retry automatically');
-      else if (failures >= MAX_UPLOAD_FAILURES) toast('❌ "' + label + '" could not be uploaded after ' + failures + ' attempts.', () => { if (typeof syncNow === 'function') syncNow(); }, 'Retry Now');
+      if (failures === 1) toast('ΓÜá∩╕Å Media upload failed: ' + errMsg + ' ΓÇö will retry automatically');
+      else if (failures >= MAX_UPLOAD_FAILURES) toast('Γ¥î "' + label + '" could not be uploaded after ' + failures + ' attempts.', () => { if (typeof syncNow === 'function') syncNow(); }, 'Retry Now');
       
       res.stats.failed++;
       res.errors.push({ id: record.id, code: 'network', retryable });
@@ -947,8 +511,6 @@ async function syncMedia(uid, deletions, requiredMediaIds, runId) {
   return res;
 }
 
-
-
 async function resetCloudWorkspace(){
   const session=currentSession||loadSession();
   if(!session || session.mode!=='auth') return true;
@@ -985,7 +547,7 @@ async function resetCloudWorkspace(){
     return true;
   }catch(err){
     console.error('PapeRuss cloud reset failed',err);
-    toast('Cloud reset failed — nothing was erased');
+    toast('Cloud reset failed ΓÇö nothing was erased');
     return false;
   }
 }
@@ -1036,6 +598,7 @@ function aggregateSyncResults(results) {
 
   return { status: 'synced', retryable };
 }
+
 async function _syncNowInner(opts){
   const session=currentSession||loadSession();
   if(!session || session.mode!=='auth') return;
@@ -1049,7 +612,7 @@ async function _syncNowInner(opts){
   
   try {
     if(!navigator.onLine){
-      updateSyncStatusForRun(runId, 'offline','Offline · changes saved locally');
+      updateSyncStatusForRun(runId, 'offline','Offline ┬╖ changes saved locally');
       return;
     }
     updateSyncStatusForRun(runId, 'syncing');
@@ -1081,9 +644,9 @@ async function _syncNowInner(opts){
       console.warn('PapeRuss: Initial Firestore read failed during sync', readErr);
       const isOffline = !navigator.onLine || String(readErr?.message || '').toLowerCase().includes('offline');
       if (isOffline) {
-        updateSyncStatusForRun(runId, 'offline', 'Offline · changes saved locally');
+        updateSyncStatusForRun(runId, 'offline', 'Offline ┬╖ changes saved locally');
       } else {
-        updateSyncStatusForRun(runId, 'partial', 'Sync incomplete – could not reach cloud');
+        updateSyncStatusForRun(runId, 'partial', 'Sync incomplete ΓÇô could not reach cloud');
       }
       return;
     }
@@ -1102,7 +665,15 @@ async function _syncNowInner(opts){
     if(remoteNotes.length){
       try{
         const seedIds=new Set(JSON.parse(localStorage.getItem('paperuss:seedNoteIds'))||[]);
-        if(seedIds.size) localNotes=notes.filter(note=>!seedIds.has(note.id));
+        if(seedIds.size) {
+          localNotes=notes.filter(note=>{
+            if (seedIds.has(note.id)) {
+              // Only discard if unedited. If updated, keep it.
+              return (note.updatedAt || 0) > (note.createdAt || 0);
+            }
+            return true;
+          });
+        }
       }catch(_){}
     }
     const mergedNotes=sanitizeNoteCollection(mergeById(localNotes,remoteNotes,'updatedAt',mergedDeletions.notes));
@@ -1164,13 +735,13 @@ async function _syncNowInner(opts){
         }
 
         if(changedRemoteNote && typeof scheduleActiveNoteRefresh==='function'){
-          // Active note got a newer remote version — defer/apply safely
+          // Active note got a newer remote version ΓÇö defer/apply safely
           scheduleActiveNoteRefresh(changedRemoteNote);
           // Refresh the list and sidebar but NOT the editor (handled above)
           renderList();
           renderSidebar();
         } else {
-          // Notes changed but not the active one — rebuild list/sidebar only.
+          // Notes changed but not the active one ΓÇö rebuild list/sidebar only.
           // renderEditor() is skipped because the editor content is unchanged.
           renderList();
           renderSidebar();
@@ -1300,247 +871,132 @@ function queueCloudSync(){
   syncDebounceTimer=setTimeout(()=>syncNow({silent:true}), 2500);
 }
 
-function initAuthAndSync(){
-  initFirebase();
-  const session=loadSession();
-  if(!session){
-    showAuthLanding();
-  }else{
-    hideAuthLanding();
-  }
-  renderProfileMenu();
-  updateSyncStatus(session && session.mode==='auth' ? 'offline' : 'offline');
 
+function initSyncEngine() {
   window.addEventListener('online', ()=>{
-    if((currentSession||{}).mode!=='auth') return;
-    drainOfflineQueue(); // flush any uploads queued while offline
+    if((window.currentSession||{}).mode!=='auth') return;
+    drainOfflineQueue();
     syncNow({silent:true});
   });
   window.addEventListener('offline', ()=>updateSyncStatus('offline'));
-  // Background retry polling every 60 seconds
   setInterval(() => {
-    if((currentSession||{}).mode==='auth' && navigator.onLine){
+    if((window.currentSession||{}).mode==='auth' && navigator.onLine){
       drainOfflineQueue();
       syncNow({silent:true});
     }
   }, 60000);
-
-  // Re-sync on tab focus or screen unlock if last sync was more than 60 seconds ago
   const RESYNC_STALE_MS = 60 * 1000;
-  function resyncIfStale(){
-    if((currentSession||{}).mode!=='auth') return;
+  window.resyncIfStale = function(){
+    if((window.currentSession||{}).mode!=='auth') return;
     if(!navigator.onLine) return;
-    const lastSync = +localStorage.getItem(LAST_SYNC_KEY)||0;
+    const lastSync = +localStorage.getItem('paperuss:lastSync')||0;
     if(Date.now() - lastSync > RESYNC_STALE_MS) queueCloudSync();
   }
-  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') resyncIfStale(); });
-  window.addEventListener('focus', resyncIfStale);
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') window.resyncIfStale(); });
+  window.addEventListener('focus', window.resyncIfStale);
+}
+async function syncLeavesWithCloud(uid, db) {
+    const res = { ok: true, status: 'success', reason: null, stats: { attempted: 0, succeeded: 0, failed: 0, skipped: 0, retryable: 0 }, errors: [] };
+    if (!uid || !window.paperussLeaves) return { ...res, ok: false, status: 'failed', reason: 'unauthenticated' };
+    const fireDb = db || (typeof fbDb !== 'undefined' ? fbDb : (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null));
+    if (!fireDb) return { ...res, ok: false, status: 'failed', reason: 'network', stats: { ...res.stats, retryable: 1 } };
 
-  const googleBtn=document.getElementById('authGoogleBtn');
-  if(googleBtn) googleBtn.onclick=()=>signInWithGoogle(true);
-  const emailForm=document.getElementById('authEmailForm');
-  if(emailForm) emailForm.onsubmit=e=>{ e.preventDefault(); signInWithEmailPassword(); };
-  const emailCreateBtn=document.getElementById('authEmailCreateBtn');
-  if(emailCreateBtn) emailCreateBtn.onclick=createEmailPasswordAccount;
-  const resetPasswordBtn=document.getElementById('authResetPasswordBtn');
-  if(resetPasswordBtn) resetPasswordBtn.onclick=sendPasswordReset;
-  const guestBtn=document.getElementById('authGuestBtn');
-  if(guestBtn) guestBtn.onclick=continueAsGuest;
-  const homeBtn=document.getElementById('authHomeBtn');
-  if(homeBtn) homeBtn.onclick=()=>{ window.location.href='index.html'; };
+    try {
+      const queue = await window.paperussLeaves.leafQueueGetAll();
+      if (!queue || queue.length === 0) return { ...res, status: 'skipped', reason: 'nothing_to_do' };
 
-  const avatarBtn=document.getElementById('profileAvatarBtn');
-  const profilePanel=document.getElementById('profilePanel');
-  if(avatarBtn) avatarBtn.onclick=e=>{ e.stopPropagation(); profilePanel.classList.toggle('show'); };
-  const profilePictureInput=document.getElementById('profilePictureInput');
-  // Use event delegation on the panel for the upload button
-  if(profilePanel){
-    profilePanel.addEventListener('click',e=>{
-      const upload=e.target.closest('.profile-avatar-upload');
-      if(upload){
-        e.preventDefault();
-        e.stopPropagation();
-        profilePictureInput?.click();
+      const coalesced = new Map();
+      for (const item of queue) {
+        const key = (item.data && item.data.id) ? item.data.id : item.id;
+        if (!coalesced.has(key)) coalesced.set(key, []);
+        coalesced.get(key).push(item);
       }
-    },true);
-  }
-  if(profilePictureInput) profilePictureInput.onchange=e=>{
-    const file=e.target.files && e.target.files[0];
-    if(file) handleProfilePictureUpload(file);
-    e.target.value='';
-  };
-  const syncNowBtn=document.getElementById('profileSyncNowBtn');
-  if(syncNowBtn) syncNowBtn.onclick=()=>syncNow();
-  const settingsBtn=document.getElementById('profileSettingsBtn');
-  if(settingsBtn) settingsBtn.onclick=()=>{
-    document.getElementById('profilePanel')?.classList.remove('show');
-    if(typeof selectFilter==='function') selectFilter('settings');
-  };
-  const whatsNewBtn=document.getElementById('profileWhatsNewBtn');
-  if(whatsNewBtn) whatsNewBtn.onclick=()=>{
-    document.getElementById('profilePanel')?.classList.remove('show');
-    if(typeof openChangelogModal==='function') openChangelogModal();
-  };
 
-  const signInBtn=document.getElementById('profileSignInBtn');
-  if(signInBtn) signInBtn.onclick=()=>{
-    document.getElementById('profilePanel')?.classList.remove('show');
-    showAuthLanding();
-  };
-  const signOutBtn=document.getElementById('profileSignOutBtn');
-  if(signOutBtn) signOutBtn.onclick=signOutUser;
-  const setSyncNowBtn=document.getElementById('setSyncNowBtn');
-  if(setSyncNowBtn) setSyncNowBtn.onclick=()=>syncNow();
+      for (const [leafId, items] of coalesced.entries()) {
+        items.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        const matItem = items.find(x => x.action === 'materialize');
+        res.stats.attempted++;
 
-  document.addEventListener('click', e=>{
-    if(profilePanel && !e.target.closest('#profileMenuWrap') && !e.target.closest('#profilePanel')) profilePanel.classList.remove('show');
-  });
+        if (matItem) {
+          try {
+            const materializedData = (items[items.length - 1].data && items[items.length - 1].data.id)
+              ? items[items.length - 1].data : matItem.data;
+            const leafRef = fireDb.collection('paperuss_users').doc(uid).collection('notes').doc(matItem.noteId).collection('leaves').doc(materializedData.id);
+            const noteRef = fireDb.collection('paperuss_users').doc(uid).collection('notes').doc(matItem.noteId);
+            const cleanLeaf = {
+              id: materializedData.id, noteId: matItem.noteId, title: materializedData.title || 'Main',
+              content: materializedData.content || '', color: materializedData.color || 'slate',
+              order: typeof materializedData.order === 'number' ? materializedData.order : 0,
+              createdAt: materializedData.createdAt || Date.now(), updatedAt: materializedData.updatedAt || Date.now(), deletedAt: null
+            };
+            await fireDb.runTransaction(async (transaction) => {
+              const noteSnap = await transaction.get(noteRef);
+              const noteData = noteSnap.exists ? noteSnap.data() : {};
+              let leafOrder = noteData.leafOrder || [];
+              if (!Array.isArray(leafOrder)) leafOrder = [];
+              if (!leafOrder.includes(materializedData.id)) leafOrder.unshift(materializedData.id);
+              transaction.set(leafRef, cleanLeaf, { merge: true });
+              transaction.set(noteRef, {
+                defaultLeafId: noteData.defaultLeafId || materializedData.id,
+                leafOrder: leafOrder, leafCount: leafOrder.length, updatedAt: matItem.timestamp || Date.now()
+              }, { merge: true });
+            });
+            for (const i of items) await window.paperussLeaves.leafQueueDel(i.id);
+            res.stats.succeeded++;
+          } catch (e) {
+            console.warn('Transaction materialization failed, leaving local note/leaf intact for retry:', e);
+            res.stats.failed++; res.stats.retryable++; res.errors.push({ id: leafId, code: e.code || 'network', retryable: true });
+          }
+        } else {
+          const latest = items[items.length - 1];
+          const targetLeafId = (latest.data && latest.data.id) ? latest.data.id : leafId;
+          const leafRef = fireDb.collection('paperuss_users').doc(uid).collection('notes').doc(latest.noteId).collection('leaves').doc(targetLeafId);
 
-  buildAccentSwatches();
-  applyAccent(appSettings.accent||'blue');
-  const accentSel=document.getElementById('setTheme');
-  if(accentSel){ /* theme select already bound in bindSettings */ }
-}
-
-/* ============================================================
-   CENTRALIZED NOTIFICATION STORE & PANEL
-   ============================================================ */
-const NOTIF_KEY='octonotes:notifications';
-let appNotifications=[];
-
-const NOTIF_TYPES=new Set(['task','note','media','system','edit','reminder','calendar','export','import','pin','delete','tag','archive']);
-function normalizeNotification(item){
-  if(!item || typeof item!=='object') return null;
-  const id=typeof paperussSafeId==='function'?paperussSafeId(item.id):String(item.id||'');
-  if(!id) return null;
-  const action=String(item.action||'').slice(0,5000);
-  return {
-    id,
-    type:NOTIF_TYPES.has(item.type)?item.type:'system',
-    title:String(item.title||'').slice(0,500),
-    body:String(item.body||'').slice(0,2000),
-    icon:String(item.icon||'bell').replace(/[^A-Za-z0-9-]/g,'').slice(0,50)||'bell',
-    action:action && (typeof paperussSafeUrl!=='function'||paperussSafeUrl(action,'href','A'))?action:null,
-    actionLabel:String(item.actionLabel||'').slice(0,100)||null,
-    read:item.read===true,
-    createdAt:Number.isFinite(+item.createdAt)?+item.createdAt:Date.now()
-  };
-}
-function loadNotifications(){
-  try{
-    const parsed=JSON.parse(localStorage.getItem(NOTIF_KEY))||[];
-    appNotifications=Array.isArray(parsed)?parsed.map(normalizeNotification).filter(Boolean).slice(0,200):[];
-  }catch(e){ appNotifications=[]; }
-}
-function saveNotifications(){
-  appNotifications=appNotifications.map(normalizeNotification).filter(Boolean).slice(0,200);
-  localStorage.setItem(NOTIF_KEY, JSON.stringify(appNotifications));
-  markPortableStateChanged();
-}
-
-function addNotification({type,title,body,icon,action,actionLabel,activity=false}){
-  if(!title) return;
-  if(activity && typeof appSettings==='object' && appSettings.notifActivity===false) return;
-  const n=normalizeNotification({
-    id:'n_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
-    type:type||'system',
-    title, body:body||'',
-    icon:icon||'bell',
-    action:action||null,
-    actionLabel:actionLabel||null,
-    read:false,
-    createdAt:Date.now()
-  });
-  if(!n) return;
-  appNotifications.unshift(n);
-  saveNotifications();
-  updateNotifBadge();
-}
-
-function markNotifRead(id){
-  const n=appNotifications.find(x=>x.id===id);
-  if(n){ n.read=true; saveNotifications(); updateNotifBadge(); }
-}
-function markAllNotifRead(){
-  appNotifications.forEach(n=>n.read=true);
-  saveNotifications(); updateNotifBadge(); renderNotifPanel();
-  toast('All notifications marked as read');
-}
-function clearAllNotifs(){
-  appNotifications=[]; saveNotifications(); updateNotifBadge(); renderNotifPanel();
-  toast('All notifications cleared');
-}
-function removeNotif(id){
-  appNotifications=appNotifications.filter(n=>n.id!==id);
-  saveNotifications(); updateNotifBadge(); renderNotifPanel();
-}
-
-function unreadCount(){ return appNotifications.filter(n=>!n.read).length; }
-
-function updateNotifBadge(){
-  const badge=document.getElementById('notifBadge');
-  const c=unreadCount();
-  if(!badge) return;
-  badge.textContent=c>99?'99+':c;
-  badge.classList.toggle('show', c>0);
-}
-
-function renderNotifPanel(){
-  const body=document.getElementById('notifPanelBody');
-  if(!body) return;
-  if(!appNotifications.length){
-    body.innerHTML=`<div class="np-empty">
-      <i data-lucide="bell-off" style="width:32px;height:32px"></i>
-      No notifications yet<br><span style="font-size:11.5px">Reminders, edits & activity will appear here.</span>
-    </div>`;
-    refreshIcons(); return;
-  }
-
-  const now=Date.now();
-  const DAY=86400000;
-  const startOfToday=new Date(); startOfToday.setHours(0,0,0,0);
-  const todayTs=startOfToday.getTime();
-  const yesterdayTs=todayTs-DAY;
-  const sevenDaysAgo=todayTs-7*DAY;
-
-  function groupLabel(ts){
-    if(ts>=todayTs) return 'Today';
-    if(ts>=yesterdayTs) return 'Yesterday';
-    if(ts>=sevenDaysAgo) return 'Earlier this week';
-    return 'Older';
-  }
-  function fmtShort(ts){
-    const d=new Date(ts);
-    return d.toLocaleString(undefined,{hour:'2-digit',minute:'2-digit'});
-  }
-  function iconSvg(icon){
-    const map={task:'check-square',note:'file-text',media:'image',system:'bell',edit:'pencil',reminder:'alarm-clock',export:'download',import:'upload',pin:'pin',delete:'trash-2',tag:'tag',archive:'archive'};
-    return map[icon]||'bell';
-  }
-
-  let html='';
-  let lastGroup='';
-  appNotifications.forEach(n=>{
-    const grp=groupLabel(n.createdAt);
-    if(grp!==lastGroup){
-      html+=`<div class="np-group-label">${grp}</div>`;
-      lastGroup=grp;
+          if (latest.action === 'delete') {
+            try {
+              await leafRef.set({
+                id: targetLeafId, noteId: latest.noteId, deletedAt: latest.timestamp || Date.now(), updatedAt: latest.timestamp || Date.now()
+              }, { merge: true });
+              for (const i of items) await window.paperussLeaves.leafQueueDel(i.id);
+              res.stats.succeeded++;
+            } catch (e) {
+              console.warn('Leaf tombstone upload failed, keeping queue for retry:', e);
+              res.stats.failed++; res.stats.retryable++; res.errors.push({ id: targetLeafId, code: e.code || 'network', retryable: true });
+            }
+          } else {
+            try {
+              const cleanLeaf = {
+                id: targetLeafId, noteId: latest.noteId, title: (latest.data && latest.data.title) || 'Leaf',
+                content: (latest.data && latest.data.content) || '', color: (latest.data && latest.data.color) || 'slate',
+                order: (latest.data && typeof latest.data.order === 'number') ? latest.data.order : 0,
+                createdAt: (latest.data && latest.data.createdAt) || Date.now(), updatedAt: (latest.data && latest.data.updatedAt) || Date.now(),
+                deletedAt: null
+              };
+              await leafRef.set(cleanLeaf, { merge: true });
+              for (const i of items) await window.paperussLeaves.leafQueueDel(i.id);
+              res.stats.succeeded++;
+            } catch (e) {
+              console.warn('Leaf put upload failed, keeping queue for retry:', e);
+              res.stats.failed++; res.stats.retryable++; res.errors.push({ id: targetLeafId, code: e.code || 'network', retryable: true });
+            }
+          }
+        }
+      }
+      if (res.stats.failed > 0) { res.ok = false; res.status = 'partial'; }
+      return res;
+    } catch (err) {
+      console.error('syncLeavesWithCloud error:', err);
+      return { ...res, ok: false, status: 'partial', reason: 'network', stats: { ...res.stats, retryable: 1 }, errors: [{ code: err.code || 'network', retryable: true }] };
     }
-    const actionHtml=n.action && n.actionLabel
-      ?`<div class="np-item-action" data-notif-action="${n.id}" data-notif-url="${esc(n.action)}">${esc(n.actionLabel)}</div>`:'';
-    html+=`<div class="np-item ${n.read?'':'unread'}" data-notif-read="${n.id}">
-      <div class="np-item-icon ${n.type}">
-        <i data-lucide="${iconSvg(n.icon)}" style="width:16px;height:16px"></i>
-      </div>
-      <div class="np-item-body">
-        <div class="np-item-title">${esc(n.title)}</div>
-        ${n.body?`<div class="np-item-text">${esc(n.body)}</div>`:''}
-        <div class="np-item-time">${fmtShort(n.createdAt)}</div>
-        ${actionHtml}
-      </div>
-      <button class="np-item-dismiss" data-notif-dismiss="${n.id}" title="Dismiss">&times;</button>
-    </div>`;
-  });
-  body.innerHTML=html;
-  refreshIcons();
 }
+
+
+
+
+
+
+window.syncNow = syncNow;
+window.enableSync = enableSync;
+window.disableSync = disableSync;
+window.initAuthAndSync = initAuthAndSync;
+window.updateSyncStatus = updateSyncStatus;

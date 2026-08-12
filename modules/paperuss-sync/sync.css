@@ -1,0 +1,305 @@
+
+
+/* ============ MEDIA EMBEDS ============ */
+/* ============ RESPONSIVE IMAGE SYSTEM ============
+   Size is stored as data-img-size so it syncs across devices via the note HTML.
+   Aspect ratio is always preserved (height:auto) and images never exceed the editor. */
+.note-editor img[data-media-id]{
+  max-width:100%;height:auto;border-radius:10px;border:1px solid var(--border);
+  margin:12px 0;display:block;cursor:pointer;position:relative;
+  transition:width .18s ease,outline-color .15s ease;
+}
+
+
+
+/* Multi-select count pill attached to the toolbar */
+.img-toolbar .itb-count{
+  font-size:12px;font-weight:700;padding:0 8px;color:var(--accent);
+  border-right:1px solid var(--border);margin-right:2px;white-space:nowrap;
+}
+
+
+/* Size badge pill inside dropdown */
+.itb-sz-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:20px;height:20px;padding:0 5px;
+  border-radius:5px;font-size:10px;font-weight:700;
+  background:rgba(255,255,255,0.08);color:inherit;letter-spacing:.3px;
+}
+
+
+.cal-note-pill{
+  font-size:11px;font-weight:500;padding:2px 6px;border-radius:6px;
+  background:var(--accent-soft);color:var(--accent);margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
+
+.cal-note-pill:hover{background:var(--accent);color:#fff}
+
+
+.mh-stat-pill{
+  font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:99px;
+  background:var(--accent-soft);color:var(--accent);border:1px solid transparent;
+}
+
+
+
+/* Compact helper beside note attachments: cloud check = stored online. */
+.media-sync-indicator{
+  display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;
+  width:18px;height:18px;margin:0 5px;color:var(--fg-muted);cursor:help;
+  transition:all .2s ease;
+}
+
+
+.media-sync-indicator i{width:14px;height:14px}
+
+
+.media-sync-indicator.is-synced{color:var(--success)}
+
+
+.media-sync-indicator.is-uploading,
+.media-sync-indicator[title*="Waiting"],
+.media-sync-indicator[title*="Syncing"]{
+  color:var(--accent);
+}
+
+
+.media-sync-indicator.is-uploading i,
+.media-sync-indicator[title*="Waiting"] i,
+.media-sync-indicator[title*="Syncing"] i{
+  animation: spinMediaSync 1.1s linear infinite;
+  transform-origin: center;
+}
+
+
+@keyframes spinMediaSync {
+  0% { transform: rotate(0deg); }
+
+
+}
+.media-card>.media-sync-indicator{
+  position:absolute;right:8px;top:8px;margin:0;background:var(--canvas);border:1px solid var(--border);
+  border-radius:999px;width:22px;height:22px;box-shadow:0 2px 6px rgba(0,0,0,.14);
+}
+
+
+
+/* Animated Media Sync Overlay Layer */
+.media-sync-overlay-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+
+.media-sync-overlay {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 25;
+  border-radius: 99px;
+  background: rgba(11, 14, 20, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: #ffffff;
+  padding: 5px 12px;
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  overflow: hidden;
+  transition: opacity 0.32s ease, transform 0.32s ease;
+  pointer-events: none;
+}
+
+
+.media-sync-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  transform: translateX(-100%);
+  animation: syncShimmer 2.2s infinite;
+}
+
+
+@keyframes syncShimmer {
+  100% { transform: translateX(100%); }
+
+
+}
+.media-sync-overlay.synced-fade {
+  opacity: 0;
+  transform: scale(0.9) translateY(-4px);
+  pointer-events: none;
+}
+
+
+
+/* Live upload progress bar inside pill overlay */
+.mso-progress-bar {
+  width: 45px;
+  height: 3px;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.22);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+
+
+/* Permanently failed upload state — red pill */
+.media-sync-overlay.mso-error {
+  background: rgba(185, 28, 28, 0.9);
+  border-color: rgba(252, 165, 165, 0.4);
+  box-shadow: 0 4px 16px rgba(185, 28, 28, 0.4);
+}
+
+
+.media-sync-overlay.mso-error::before { display: none; }
+
+
+.media-sync-overlay.mso-error .mso-spinner {
+  border-top-color: #ffffff;
+  box-shadow: 0 0 6px rgba(255,255,255,0.6);
+  animation-play-state: paused;
+}
+
+
+.media-sync-overlay.mso-error .mso-text { color: #ffffff; }
+
+
+
+
+/* Error badge on compact sync indicator */
+.media-sync-indicator.is-error {
+  color: #ef4444 !important;
+  opacity: 1 !important;
+}
+
+
+
+/* ============ FLOATING VOICE RECORDING DOCK PILL ============ */
+.rec-dock-pill {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 990;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: rgba(18, 24, 38, 0.88);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--accent);
+  border-radius: 99px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 16px var(--accent-ring);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  user-select: none;
+  animation: pillSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+
+@keyframes pillSlideUp {
+  from { transform: translateY(20px); opacity: 0; }
+
+
+
+.leaf-toggle-btn.status-syncing .leaf-icon,
+.leaf-toggle-fab.status-syncing .leaf-icon {
+  stroke: var(--accent, #3b82f6);
+  fill: rgba(59, 130, 246, 0.15);
+  animation: leafPulse 1.2s infinite ease-in-out;
+}
+
+
+
+.leaf-toggle-btn.status-syncing .leaf-status-dot,
+.leaf-toggle-fab.status-syncing .leaf-status-dot {
+  background: var(--accent, #3b82f6);
+  animation: leafDotPulse 1s infinite ease-in-out;
+}
+
+
+
+/* Micro-Pill Segmented Embed Toolbar (Floats Top-Center Above Card with Zero Gap) */
+.embed-editor-toolbar {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%) translateY(-100%);
+  z-index: 10004;
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap; /* Strictly 1 single row regardless of card width */
+  white-space: nowrap;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  max-width: max-content;
+  background: var(--bg-secondary, #1e1e24);
+  color: var(--fg, #ffffff);
+  border: 1px solid var(--border, rgba(128,128,128,0.25));
+  border-radius: 8px; /* Sleek 8px radius - not overly curved pill */
+  box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,0.2));
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+  user-select: none;
+}
+
+
+
+/* Micro-Pill Segmented Embed Toolbar */
+.embed-editor-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 12px !important; /* Smooth 12px rounded rectangle */
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  opacity: 0.25;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  user-select: none;
+}
+
+
+
+/* Bottom Bar Dedicated System Music Player Button */
+.music-hub-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  background: var(--accent-soft, rgba(16, 185, 129, 0.15));
+  border: 1px solid var(--accent-ring, rgba(16, 185, 129, 0.3));
+  border-radius: 99px;
+  color: var(--fg);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+
+.music-hub-pill-btn:hover {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+
+.music-hub-pill-btn:hover .text-emerald-400 {
+  color: #ffffff !important;
+}

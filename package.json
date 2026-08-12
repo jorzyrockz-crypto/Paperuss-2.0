@@ -12,5 +12,8 @@
     "generate-changelog": "node tools/generate-changelog.mjs",
     "release": "node tools/release.mjs",
     "deploy:cloudflare": "node tools/stage-worker-assets.cjs && wrangler deploy"
+  },
+  "dependencies": {
+    "jsdom": "^30.0.1"
   }
 }

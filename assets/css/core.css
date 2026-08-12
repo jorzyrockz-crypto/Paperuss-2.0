@@ -103,6 +103,94 @@
   --hover:var(--sidebar-hover); --selection:rgba(255,107,53,.3); --code-bg:var(--card-selected);
 }
 
+/* Each palette can be rendered in either mode.  The original palette blocks
+   above remain the light/dark defaults; these explicit counterparts make the
+   mode selector predictable instead of letting a palette inherit another
+   theme's contrast assumptions. */
+[data-theme="dark"][data-theme-mode="light"]{
+  color-scheme:light;
+  --canvas:#ffffff; --subtle:#f8fafc; --inset:#f1f5f9; --overlay:#ffffff;
+  --border:#e2e8f0; --border-muted:#f1f5f9;
+  --fg:#0f172a; --fg-secondary:#64748b; --fg-muted:#94a3b8;
+  --accent:#2563eb; --accent-emphasis:#1d4ed8; --accent-fg:#ffffff;
+  --success:#10b981; --success-emphasis:#059669; --danger:#ef4444; --attention:#f59e0b;
+  --header-bg:#ffffff; --hover:#f1f5f9; --selection:rgba(59,130,246,.2); --code-bg:#f1f5f9;
+}
+[data-theme="light"][data-theme-mode="dark"]{
+  color-scheme:dark;
+  --canvas:#0b0e14; --subtle:#131722; --inset:#07090d; --overlay:#1b2130;
+  --border:rgba(255,255,255,.08); --border-muted:rgba(255,255,255,.04);
+  --fg:#f1f5f9; --fg-secondary:#94a3b8; --fg-muted:#64748b;
+  --accent:#3b82f6; --accent-emphasis:#2563eb; --accent-fg:#ffffff;
+  --success:#10b981; --success-emphasis:#059669; --danger:#ef4444; --attention:#f59e0b;
+  --header-bg:#0b0e14; --hover:rgba(255,255,255,.06); --selection:rgba(59,130,246,.35); --code-bg:rgba(255,255,255,.06);
+}
+[data-theme="paper"][data-theme-mode="dark"]{
+  color-scheme:dark;
+  --canvas:#171411; --subtle:#211d18; --inset:#100e0c; --overlay:#2a241d;
+  --border:#4b4338; --border-muted:rgba(245,239,229,.12);
+  --fg:#f5efe5; --fg-secondary:#b8ad9d; --fg-muted:#8f8373;
+  --accent:#7aa2f7; --accent-emphasis:#9ab7ff; --accent-fg:#171411;
+  --success:#8fbc8f; --success-emphasis:#a6d3a6; --danger:#e06c75; --attention:#e5c07b;
+  --header-bg:#211d18; --hover:#302a23; --selection:rgba(122,162,247,.28); --code-bg:#2a241d;
+}
+[data-theme="olive-groove"][data-theme-mode="dark"]{
+  color-scheme:dark;
+  --primary:#8fbf95; --primary-hover:#a5d3aa;
+  --sidebar-bg:#1f2924; --sidebar-hover:#2d3c33; --sidebar-text:#b7c8b5;
+  --header-bg:#1b241f; --canvas-bg:#151b18; --paper-bg:#202a24;
+  --card-bg:#27342d; --card-selected:#32473a; --border:#3b5044;
+  --text-1:#f0f5ed; --text-2:#b7c8b5;
+  --canvas:var(--canvas-bg); --subtle:var(--card-bg); --inset:#111714; --overlay:var(--card-bg);
+  --border-muted:rgba(183,200,181,.16); --fg:var(--text-1); --fg-secondary:var(--text-2); --fg-muted:#829687;
+  --accent:var(--primary); --accent-emphasis:var(--primary-hover); --accent-fg:#1b2b20;
+  --accent-soft:rgba(143,191,149,.2); --accent-ring:rgba(143,191,149,.36);
+  --success:#8fbf95; --success-emphasis:#a5d3aa; --danger:#e17878; --attention:#e3b85f;
+  --hover:var(--sidebar-hover); --selection:rgba(143,191,149,.28); --code-bg:var(--card-selected);
+}
+[data-theme="rose-pine"][data-theme-mode="light"]{
+  color-scheme:light;
+  --primary:#b4637a; --primary-hover:#a34d65;
+  --sidebar-bg:#f2e9e1; --sidebar-hover:#eaddd5; --sidebar-text:#797593;
+  --header-bg:#faf4ed; --canvas-bg:#f2e9e1; --paper-bg:#fffaf3;
+  --card-bg:#fffaf3; --card-selected:#f4e6df; --border:#dfdad9;
+  --text-1:#575279; --text-2:#797593;
+  --canvas:var(--canvas-bg); --subtle:var(--card-bg); --inset:#eee3db; --overlay:var(--card-bg);
+  --border-muted:rgba(87,82,121,.16); --fg:var(--text-1); --fg-secondary:var(--text-2); --fg-muted:#9893a5;
+  --accent:var(--primary); --accent-emphasis:var(--primary-hover); --accent-fg:#fffaf3;
+  --accent-soft:rgba(180,99,122,.16); --accent-ring:rgba(180,99,122,.3);
+  --success:#56949f; --success-emphasis:#3d7f8b; --danger:#b4637a; --attention:#ea9d34;
+  --hover:var(--sidebar-hover); --selection:rgba(180,99,122,.24); --code-bg:var(--card-selected);
+}
+[data-theme="nord"][data-theme-mode="light"]{
+  color-scheme:light;
+  --primary:#5e81ac; --primary-hover:#4c6d95;
+  --sidebar-bg:#e5e9f0; --sidebar-hover:#d8dee9; --sidebar-text:#4c566a;
+  --header-bg:#eceff4; --canvas-bg:#e5e9f0; --paper-bg:#f7f9fb;
+  --card-bg:#eceff4; --card-selected:#d8dee9; --border:#c7d0dc;
+  --text-1:#2e3440; --text-2:#4c566a;
+  --canvas:var(--canvas-bg); --subtle:var(--card-bg); --inset:#d8dee9; --overlay:var(--card-bg);
+  --border-muted:rgba(46,52,64,.16); --fg:var(--text-1); --fg-secondary:var(--text-2); --fg-muted:#7b879a;
+  --accent:var(--primary); --accent-emphasis:var(--primary-hover); --accent-fg:#ffffff;
+  --accent-soft:rgba(94,129,172,.16); --accent-ring:rgba(94,129,172,.3);
+  --success:#6b8e58; --success-emphasis:#557346; --danger:#bf616a; --attention:#d08770;
+  --hover:var(--sidebar-hover); --selection:rgba(94,129,172,.24); --code-bg:var(--card-selected);
+}
+[data-theme="ember"][data-theme-mode="light"]{
+  color-scheme:light;
+  --primary:#c94f2d; --primary-hover:#ad3e21;
+  --sidebar-bg:#f6ebe2; --sidebar-hover:#ead7c8; --sidebar-text:#765d50;
+  --header-bg:#fff8f3; --canvas-bg:#f6ebe2; --paper-bg:#fffaf6;
+  --card-bg:#fffdf9; --card-selected:#fbe1d3; --border:#e4cfc1;
+  --text-1:#3a2821; --text-2:#765d50;
+  --canvas:var(--canvas-bg); --subtle:var(--card-bg); --inset:#ead7c8; --overlay:var(--card-bg);
+  --border-muted:rgba(58,40,33,.16); --fg:var(--text-1); --fg-secondary:var(--text-2); --fg-muted:#a98776;
+  --accent:var(--primary); --accent-emphasis:var(--primary-hover); --accent-fg:#ffffff;
+  --accent-soft:rgba(201,79,45,.16); --accent-ring:rgba(201,79,45,.3);
+  --success:#568f5a; --success-emphasis:#3e7543; --danger:#c24f45; --attention:#b47718;
+  --hover:var(--sidebar-hover); --selection:rgba(201,79,45,.24); --code-bg:var(--card-selected);
+}
+
 /* Apply the named surface variables to the shell surfaces that historically
    used the generic canvas token. */
 [data-theme="olive-groove"] .sidebar,
@@ -290,7 +378,8 @@ a:hover{text-decoration:underline}
   transform: translate(-50%, -100%);
   margin-top: -10px;
 }
-[data-theme="light"] .card-resize-tooltip {
+[data-theme="light"] .card-resize-tooltip,
+[data-theme-mode="light"] .card-resize-tooltip {
   background: rgba(255, 255, 255, 0.94) !important;
   color: #0f172a !important;
   border: 1px solid rgba(0, 0, 0, 0.1) !important;
@@ -743,14 +832,22 @@ svg{display:block;flex-shrink:0}
 [data-theme="light"] .note-editor,
 [data-theme="light"] #noteBody,
 [data-theme="light"] .note-editor *,
-[data-theme="light"] #noteBody * {
+[data-theme="light"] #noteBody *,
+[data-theme-mode="light"] .note-editor,
+[data-theme-mode="light"] #noteBody,
+[data-theme-mode="light"] .note-editor *,
+[data-theme-mode="light"] #noteBody * {
   caret-color: #0f172a !important; /* Dark slate caret in Light Theme - 100% visible on white canvas */
 }
 
 [data-theme="dark"] .note-editor,
 [data-theme="dark"] #noteBody,
 [data-theme="dark"] .note-editor *,
-[data-theme="dark"] #noteBody * {
+[data-theme="dark"] #noteBody *,
+[data-theme-mode="dark"] .note-editor,
+[data-theme-mode="dark"] #noteBody,
+[data-theme-mode="dark"] .note-editor *,
+[data-theme-mode="dark"] #noteBody * {
   caret-color: #3b82f6 !important; /* Vibrant Accent Blue caret in Dark Theme */
 }
 

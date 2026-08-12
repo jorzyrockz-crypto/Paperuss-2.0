@@ -162,9 +162,17 @@ function closeSidebarMobile(){
    ACTIONS
    ============================================================ */
 function showMobileEditor(){
-  document.getElementById('editor').classList.add('mobile-show');
-  document.getElementById('noteList').classList.add('mobile-hide');
-  document.getElementById('noteList').classList.remove('open'); // Close tablet portrait drawer on selection
+  const editor = document.getElementById('editor');
+  const list = document.getElementById('noteList');
+  editor.classList.add('mobile-show');
+  list.classList.add('mobile-hide');
+  list.classList.remove('open'); // Close tablet portrait drawer on selection
+  
+  // Swipe Container logic: scroll to the editor view smoothly
+  const wrapper = document.querySelector('.app-views-wrapper.swipe-container');
+  if (wrapper && window.innerWidth <= 1024) {
+    wrapper.scrollTo({ left: wrapper.offsetWidth, behavior: 'smooth' });
+  }
 }
 
 function showMobileList(){
@@ -173,6 +181,12 @@ function showMobileList(){
   // Clear desktop inline collapse state before the mobile list is shown.
   if(list){ list.style.display=''; list.classList.remove('mobile-hide'); }
   if(editor) editor.classList.remove('mobile-show');
+  
+  // Swipe Container logic: scroll to the list view smoothly
+  const wrapper = document.querySelector('.app-views-wrapper.swipe-container');
+  if (wrapper && window.innerWidth <= 1024) {
+    wrapper.scrollTo({ left: 0, behavior: 'smooth' });
+  }
 }
 
 function contextualNew(){
@@ -1018,6 +1032,9 @@ function selectNote(id, leafId = null){
     document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter===state.filter));
   }
   renderAll();
+  if (window.paperussLeaves && window.paperussLeaves.updateLeaflineForNote) {
+    window.paperussLeaves.updateLeaflineForNote(id);
+  }
   showMobileEditor();
 
   if (leafId && window.paperussLeafManager) {

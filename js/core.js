@@ -1254,14 +1254,18 @@ function renderEditor(){
   (async () => {
     try {
       let leafToRender = null;
+      let activeLeafId = null;
+      let renderSession = null;
+      
       if (window.paperussLeaves) {
+        activeLeafId = window.paperussLeaves.getNoteActiveLeafId(n);
+        renderSession = (typeof currentSession !== 'undefined' && currentSession)
+          || (typeof loadSession === 'function' ? loadSession() : null);
+          
         if (window.paperussLeaves.isNoteMigratedToLeaves(n)) {
           // Real materialized note: load the active leaf from IDB
-          const activeLeafId = window.paperussLeaves.getNoteActiveLeafId(n);
           leafToRender = await window.paperussLeaves.leafGet(activeLeafId);
           if(renderToken!==window.__paperussRenderToken) return;
-          const renderSession = (typeof currentSession !== 'undefined' && currentSession)
-            || (typeof loadSession === 'function' ? loadSession() : null);
           if (renderSession && renderSession.uid && window.paperussLeafManager && typeof window.paperussLeafManager.syncNoteLeavesFromCloud === 'function') {
             window.paperussLeafManager.syncNoteLeavesFromCloud(n.id, renderSession.uid).then(() => {
               if(renderToken!==window.__paperussRenderToken || window.paperussLeaves.getNoteActiveLeafId(n)!==activeLeafId) return;
@@ -2119,8 +2123,98 @@ window.paperussLeafManager = {
   },
 
   async syncLeavesWithCloud(uid, db) {
-    if (typeof window.syncLeavesWithCloud === 'function') return window.syncLeavesWithCloud(uid, db);
-    return { ok: false, status: 'failed', reason: 'engine_missing', stats: { attempted: 0, succeeded: 0, failed: 0, skipped: 0, retryable: 0 }, errors: [] };
+    const res = { ok: true, status: 'success', reason: null, stats: { attempted: 0, succeeded: 0, failed: 0, skipped: 0, retryable: 0 }, errors: [] };
+    if (!uid || !window.paperussLeaves) return { ...res, ok: false, status: 'failed', reason: 'unauthenticated' };
+    const fireDb = db || (typeof fbDb !== 'undefined' ? fbDb : (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null));
+    if (!fireDb) return { ...res, ok: false, status: 'failed', reason: 'network', stats: { ...res.stats, retryable: 1 } };
+
+    try {
+      const queue = await window.paperussLeaves.leafQueueGetAll();
+      if (!queue || queue.length === 0) return { ...res, status: 'skipped', reason: 'nothing_to_do' };
+
+      const coalesced = new Map();
+      for (const item of queue) {
+        const key = (item.data && item.data.id) ? item.data.id : item.id;
+        if (!coalesced.has(key)) coalesced.set(key, []);
+        coalesced.get(key).push(item);
+      }
+
+      for (const [leafId, items] of coalesced.entries()) {
+        items.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        const matItem = items.find(x => x.action === 'materialize');
+        res.stats.attempted++;
+
+        if (matItem) {
+          try {
+            const materializedData = (items[items.length - 1].data && items[items.length - 1].data.id)
+              ? items[items.length - 1].data : matItem.data;
+            const leafRef = fireDb.collection('paperuss_users').doc(uid).collection('notes').doc(matItem.noteId).collection('leaves').doc(materializedData.id);
+            const noteRef = fireDb.collection('paperuss_users').doc(uid).collection('notes').doc(matItem.noteId);
+            const cleanLeaf = {
+              id: materializedData.id, noteId: matItem.noteId, title: materializedData.title || 'Main',
+              content: materializedData.content || '', color: materializedData.color || 'slate',
+              order: typeof materializedData.order === 'number' ? materializedData.order : 0,
+              createdAt: materializedData.createdAt || Date.now(), updatedAt: materializedData.updatedAt || Date.now(), deletedAt: null
+            };
+            await fireDb.runTransaction(async (transaction) => {
+              const noteSnap = await transaction.get(noteRef);
+              const noteData = noteSnap.exists ? noteSnap.data() : {};
+              let leafOrder = noteData.leafOrder || [];
+              if (!Array.isArray(leafOrder)) leafOrder = [];
+              if (!leafOrder.includes(materializedData.id)) leafOrder.unshift(materializedData.id);
+              transaction.set(leafRef, cleanLeaf, { merge: true });
+              transaction.set(noteRef, {
+                defaultLeafId: noteData.defaultLeafId || materializedData.id,
+                leafOrder: leafOrder, leafCount: leafOrder.length, updatedAt: matItem.timestamp || Date.now()
+              }, { merge: true });
+            });
+            for (const i of items) await window.paperussLeaves.leafQueueDel(i.id);
+            res.stats.succeeded++;
+          } catch (e) {
+            console.warn('Transaction materialization failed, leaving local note/leaf intact for retry:', e);
+            res.stats.failed++; res.stats.retryable++; res.errors.push({ id: leafId, code: e.code || 'network', retryable: true });
+          }
+        } else {
+          const latest = items[items.length - 1];
+          const targetLeafId = (latest.data && latest.data.id) ? latest.data.id : leafId;
+          const leafRef = fireDb.collection('paperuss_users').doc(uid).collection('notes').doc(latest.noteId).collection('leaves').doc(targetLeafId);
+
+          if (latest.action === 'delete') {
+            try {
+              await leafRef.set({
+                id: targetLeafId, noteId: latest.noteId, deletedAt: latest.timestamp || Date.now(), updatedAt: latest.timestamp || Date.now()
+              }, { merge: true });
+              for (const i of items) await window.paperussLeaves.leafQueueDel(i.id);
+              res.stats.succeeded++;
+            } catch (e) {
+              console.warn('Leaf tombstone upload failed, keeping queue for retry:', e);
+              res.stats.failed++; res.stats.retryable++; res.errors.push({ id: targetLeafId, code: e.code || 'network', retryable: true });
+            }
+          } else {
+            try {
+              const cleanLeaf = {
+                id: targetLeafId, noteId: latest.noteId, title: (latest.data && latest.data.title) || 'Leaf',
+                content: (latest.data && latest.data.content) || '', color: (latest.data && latest.data.color) || 'slate',
+                order: (latest.data && typeof latest.data.order === 'number') ? latest.data.order : 0,
+                createdAt: (latest.data && latest.data.createdAt) || Date.now(), updatedAt: (latest.data && latest.data.updatedAt) || Date.now(),
+                deletedAt: null
+              };
+              await leafRef.set(cleanLeaf, { merge: true });
+              for (const i of items) await window.paperussLeaves.leafQueueDel(i.id);
+              res.stats.succeeded++;
+            } catch (e) {
+              console.warn('Leaf put upload failed, keeping queue for retry:', e);
+              res.stats.failed++; res.stats.retryable++; res.errors.push({ id: targetLeafId, code: e.code || 'network', retryable: true });
+            }
+          }
+        }
+      }
+      if (res.stats.failed > 0) { res.ok = false; res.status = 'partial'; }
+      return res;
+    } catch (err) {
+      console.error('syncLeavesWithCloud error:', err);
+      return { ...res, ok: false, status: 'partial', reason: 'network', stats: { ...res.stats, retryable: 1 }, errors: [{ code: err.code || 'network', retryable: true }] };
+    }
   },
   async readExactLeafFromCloud(noteId, leafId, uid) {
     if (!noteId || !leafId || !uid) return null;

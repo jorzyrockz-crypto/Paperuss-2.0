@@ -1760,7 +1760,11 @@ function isSingleStandaloneUrl(str) {
   configurePwaInstall();
   bind();
   bindSettings();
-  initAuthAndSync();
+  try {
+    initAuthAndSync();
+  } catch(e) {
+    console.error('Auth initialization failed, but app will continue loading', e);
+  }
   // Schedule event notifications for any existing notes that have them
   if(typeof rescheduleAllEventNotifications==='function') rescheduleAllEventNotifications();
   const urlParams = new URLSearchParams(window.location.search);
