@@ -2424,6 +2424,15 @@ window.paperussLeafManager = {
 
 window.flushActiveLeaf = async function() {
   if (window.currentActiveLeaf && !window.currentActiveLeaf.isVirtual && !window.currentActiveLeaf.isUnavailable && window.paperussLeaves) {
+    // Safety: refuse to flush a leaf belonging to a note the user has already navigated away from.
+    // Without this guard, rapid note switching can write Note A's stale leaf to IDB using Note B's
+    // freshly-painted DOM content — causing cross-note content contamination.
+    if (window.currentActiveLeaf.noteId && typeof state !== 'undefined' && state.currentId &&
+        window.currentActiveLeaf.noteId !== state.currentId) {
+      console.warn('[PapeRuss] flushActiveLeaf: leaf belongs to', window.currentActiveLeaf.noteId,
+        'but state.currentId is', state.currentId, '— skipping stale flush');
+      return;
+    }
     const contentEl = document.getElementById('noteBody') || document.querySelector('[data-paperuss-content-root="true"]');
     // Only read from DOM if the editor is currently rendering this specific leaf
     // (prevents stale DOM from overwriting programmatic in-memory edits done via editField)
