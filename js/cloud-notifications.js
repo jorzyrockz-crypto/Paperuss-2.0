@@ -1072,12 +1072,23 @@ async function _syncNowInner(opts){
     ]);
 
     const docRef=fbDb.collection('paperuss_users').doc(session.uid);
-    const snap=await withSyncTimeout(docRef.get(), 15000, 'docRef.get');
+    let snap, notesSnap, tasksSnap;
+    try {
+      snap      = await withSyncTimeout(docRef.get(), 15000, 'docRef.get');
+      notesSnap = await withSyncTimeout(docRef.collection('notes').get(), 15000, 'notes.get');
+      tasksSnap = await withSyncTimeout(docRef.collection('tasks').get(), 15000, 'tasks.get');
+    } catch (readErr) {
+      console.warn('PapeRuss: Initial Firestore read failed during sync', readErr);
+      const isOffline = !navigator.onLine || String(readErr?.message || '').toLowerCase().includes('offline');
+      if (isOffline) {
+        updateSyncStatusForRun(runId, 'offline', 'Offline · changes saved locally');
+      } else {
+        updateSyncStatusForRun(runId, 'partial', 'Sync incomplete – could not reach cloud');
+      }
+      return;
+    }
     const remote=snap.exists?snap.data():{};
-
-    const notesSnap = await withSyncTimeout(docRef.collection('notes').get(), 15000, 'notes.get');
     const remoteNotes = notesSnap.docs.map(d=>d.data());
-    const tasksSnap = await withSyncTimeout(docRef.collection('tasks').get(), 15000, 'tasks.get');
     const remoteTasks = tasksSnap.docs.map(d=>d.data());
 
     if(remote.notes) remoteNotes.push(...remote.notes);
