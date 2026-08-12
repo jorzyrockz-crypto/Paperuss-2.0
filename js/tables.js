@@ -1626,16 +1626,20 @@ function initTableTools(){
     for(const tbl of Array.from(ed.querySelectorAll('table'))){
       const r=tbl.getBoundingClientRect();
       const gutter=26;
-      if(e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top-gutter&&e.clientY<r.top){
+      if(e.clientX>=r.left&&e.clientX<=r.right&&
+        ((e.clientY>=r.top-gutter&&e.clientY<r.top) || (e.clientY>r.bottom&&e.clientY<=r.bottom+gutter))){
         const target=columnAtPointer(tbl,e.clientX);
         if(target){
           directControlState={kind:'remove-col',tbl,colIndex:target.index,cell:target.cell};
           previewColumn(tbl,target.index);
-          placeDirectControl(removeControl,target.centerX,r.top-11);
+          const yPos = e.clientY < r.top ? r.top-11 : r.bottom+11;
+          placeDirectControl(removeControl,target.centerX,yPos);
           return;
         }
       }
-      if(e.clientY>=r.top&&e.clientY<=r.bottom&&e.clientX>=r.left-gutter&&e.clientX<r.left){
+      
+      if(e.clientY>=r.top&&e.clientY<=r.bottom&&
+        ((e.clientX>=r.left-gutter&&e.clientX<r.left) || (e.clientX>r.right&&e.clientX<=r.right+gutter))){
         const rowIndex=rowAtPointer(tbl,e.clientY);
         if(rowIndex>=0){
           const positions=tableCellLayout(tbl);
@@ -1643,7 +1647,8 @@ function initTableTools(){
           directControlState={kind:'remove-row',tbl,rowIndex,cell};
           previewRow(tbl,rowIndex);
           const rr=tbl.rows[rowIndex].getBoundingClientRect();
-          placeDirectControl(removeControl,r.left-11,(rr.top+rr.bottom)/2);
+          const xPos = e.clientX < r.left ? r.left-11 : r.right+11;
+          placeDirectControl(removeControl,xPos,(rr.top+rr.bottom)/2);
           return;
         }
       }
