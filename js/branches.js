@@ -169,6 +169,13 @@
 
   function asTimestamp(value) {
     if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed !== '') {
+        const numeric = Number(trimmed);
+        if (Number.isFinite(numeric)) return numeric;
+      }
+    }
     if (value && typeof value.toMillis === 'function') return value.toMillis();
     if (value && typeof value.seconds === 'number') return value.seconds * 1000;
     const parsed = Date.parse(value || '');
@@ -192,7 +199,7 @@
     const context = getCloudContext();
     const uid = uidOverride || context.session?.uid;
     const db = dbOverride || context.db;
-    if (!uid || !db || !Array.isArray(branchesCache)) return false;
+    if (!uid || !db || !Array.isArray(branchesCache)) return { ok: false, status: 'failed', reason: 'network' };
     try {
       const updatedAt = asTimestamp(localStorage.getItem(UPDATED_AT_KEY)) || Date.now();
       localStorage.setItem(UPDATED_AT_KEY, String(updatedAt));
@@ -203,10 +210,10 @@
         branchesUpdatedAt: updatedAt
       }, { merge: true });
       localStorage.setItem('paperuss_branches_synced_v1', 'true');
-      return true;
+      return { ok: true, status: 'success', reason: 'uploaded' };
     } catch (e) {
       console.warn('[BranchEngine] Firestore sync suppressed:', e);
-      return false;
+      return { ok: false, status: 'partial', reason: 'network', stats: { retryable: 1 } };
     }
   }
 
@@ -214,7 +221,7 @@
     const context = getCloudContext();
     const uid = uidOverride || context.session?.uid;
     const db = dbOverride || context.db;
-    if (!uid || !db) return false;
+    if (!uid || !db) return { ok: false, status: 'failed', reason: 'unauthenticated' };
     try {
       const snap = await db.collection('paperuss_users').doc(uid).get();
       if (!snap.exists) return syncBranchesToCloud(uid, db);
@@ -223,6 +230,34 @@
 
       const remoteUpdatedAt = asTimestamp(remote.branchesUpdatedAt);
       const localUpdatedAt = asTimestamp(localStorage.getItem(UPDATED_AT_KEY));
+
+      // 1. Equal timestamps: Check if trees match
+      if (remoteUpdatedAt === localUpdatedAt && remoteUpdatedAt > 0) {
+        const localTreeStr = JSON.stringify(serializeBranches(branchesCache));
+        const remoteTreeStr = JSON.stringify(serializeBranches(remote.branches));
+        if (localTreeStr === remoteTreeStr) return { ok: true, status: 'skipped', reason: 'nothing_to_do' }; // Genuine NO-OP
+        // Otherwise, conflict! Fall through to conservative merge.
+      }
+
+      // 2. Conflict or Legacy/Missing local timestamp: Merge to preserve meaningful local branches before accepting cloud.
+      if ((!localUpdatedAt || remoteUpdatedAt === localUpdatedAt) && Array.isArray(branchesCache) && branchesCache.length > 0 && Array.isArray(remote.branches)) {
+        const merged = [...remote.branches];
+        const remoteIds = new Set(remote.branches.map(b => String(b.id)));
+        let orderOffset = merged.length;
+        branchesCache.forEach(lb => {
+          if (!remoteIds.has(String(lb.id))) {
+            merged.push({ ...lb, order: orderOffset++ });
+          }
+        });
+        branchesCache = serializeBranches(merged).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(branchesCache));
+        localStorage.setItem(UPDATED_AT_KEY, String(Date.now()));
+        localStorage.setItem('paperuss_branches_synced_v1', 'true');
+        renderSidebarBranchTree();
+        return syncBranchesToCloud(uid, db);
+      }
+
+      // 3. Cloud is newer: Apply to local and strictly preserve cloud timestamp
       if (remoteUpdatedAt > localUpdatedAt || (!localUpdatedAt && remote.branches.length > 0)) {
         branchesCache = serializeBranches(remote.branches)
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -232,6 +267,8 @@
         renderSidebarBranchTree();
         return true;
       }
+
+      // 4. Local is newer: Upload to cloud. (Merge first if we've never synced)
       if (localUpdatedAt > remoteUpdatedAt) {
         if (!localStorage.getItem('paperuss_branches_synced_v1') && Array.isArray(remote.branches) && remote.branches.length > 0) {
           const merged = [...remote.branches];

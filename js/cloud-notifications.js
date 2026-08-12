@@ -36,10 +36,17 @@ const UPLOAD_RETRY_BASE_MS=30000; // 30s base; doubles each failure: 30s→1m→
 let fbApp=null, fbAuth=null, fbDb=null, fbStorage=null, fbAnalytics=null, firebaseReady=false;
 let currentSession=null; // {mode:'guest'} | {mode:'auth', uid, name, email, photoURL}
 let syncState='offline'; // offline | synced | syncing | error
+let syncGeneration=0;
+let syncInFlight=false;
 let syncDebounceTimer=null;
 let mediaRetryTimer=null;
 let cloudSyncApplyingRemote=false;
 let syncRequestedWhileBusy=false;
+
+function updateSyncStatusForRun(runId, newState, customText) {
+  if (runId !== syncGeneration || !syncInFlight) return;
+  updateSyncStatus(newState, customText);
+}
 
 function firebaseConfigured(){
   return !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId && FIREBASE_CONFIG.appId);
@@ -69,14 +76,16 @@ function initFirebase(){
     }).catch(err=>{
       if(err && err.code) toast(authErrorMessage(err));
     });
-    fbAuth.onAuthStateChanged(user=>{
+      fbAuth.onAuthStateChanged(user=>{
       if(user){
         saveSession({mode:'auth', uid:user.uid, name:user.displayName||user.email||'Account', email:user.email||'', photoURL:user.photoURL||''});
         hideAuthLanding();
         renderProfileMenu();
+        // Queue normal sync immediately so it's not blocked by starter notes
+        syncNow({silent:true});
         ensureStarterNotesForAccount(user.uid)
-          .catch(err=>console.warn('PapeRuss starter notes seed warning:',err))
-          .finally(()=>syncNow({silent:true}));
+          .then(didSeed => { if (didSeed) syncNow({silent:true}); })
+          .catch(err=>console.warn('PapeRuss starter notes seed warning:',err));
       } else {
         // User signed out or Firebase lost the session
         const sess=loadSession();
@@ -678,86 +687,96 @@ function timeoutForSize(bytes){
   return Math.min(Math.max(20000, Math.round(bytes * 1.5)), 15*60*1000);
 }
 
-async function syncMedia(uid,deletions,requiredMediaIds){
-  const localRecords=await mediaAll();
+async function syncMedia(uid, deletions, requiredMediaIds, runId) {
+  const res = { ok: true, status: 'success', reason: null, stats: { attempted: 0, succeeded: 0, failed: 0, skipped: 0, retryable: 0 }, errors: [] };
+  const localUpdateSyncStatus = (state, text) => {
+    if (runId !== undefined) updateSyncStatusForRun(runId, state, text);
+    else updateSyncStatus(state, text);
+  };
+  const localRecords = await mediaAll();
   const storageConsecutiveFailures = window.__fbStorageFailCount || 0;
   const useStorage = !FIRESTORE_ONLY_MEDIA && !!(fbStorage && storageConsecutiveFailures < 3);
 
-  const localMap=new Map(localRecords.map(record=>[record.id,record]));
-  let partialFailure = localRecords.some(record=>
-    record.pendingUpload && (record.uploadFailures||0) >= MAX_UPLOAD_FAILURES
-  );
+  const localMap = new Map(localRecords.map(record => [record.id, record]));
 
-  // Phase 1: Apply deletion markers
-  for(const [id,deletedAt] of Object.entries(deletions||{})){
-    const local=localMap.get(id);
-    if((+deletedAt||0)<(local?.updatedAt||local?.createdAt||0)) continue;
-    
-    // Always attempt cloud deletion to ensure it's gone from remote
-    cloudSyncApplyingRemote=true;
-    try{ await mediaDel(id); }catch(_){}finally{ cloudSyncApplyingRemote=false; }
+  for (const [id, deletedAt] of Object.entries(deletions || {})) {
+    const local = localMap.get(id);
+    if ((+deletedAt || 0) < (local?.updatedAt || local?.createdAt || 0)) continue;
+    cloudSyncApplyingRemote = true;
+    try { await mediaDel(id); } catch (_) {} finally { cloudSyncApplyingRemote = false; }
     localMap.delete(id);
     
-    try{
+    try {
       const metaSnap = await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id).get();
-      if(metaSnap.exists) {
+      if (metaSnap.exists) {
         const remote = metaSnap.data();
-        if(remote.chunked && remote.totalChunks){
-          for(let c=0; c<remote.totalChunks; c++){
-            try{ await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id+"_chunk_"+c).delete(); }catch(_){}
+        if (remote.chunked && remote.totalChunks) {
+          for (let c = 0; c < remote.totalChunks; c++) {
+            try { await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id + "_chunk_" + c).delete(); } catch (_) {}
           }
         }
         await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id).delete();
       }
-    }catch(_){}
-    if(useStorage){
-      try{ await mediaStorageRef(uid,id).delete(); }
-      catch(err){ if(!String(err?.code||'').includes('object-not-found')) console.warn(err); }
+    } catch (_) {}
+    if (useStorage) {
+      try { await mediaStorageRef(uid, id).delete(); }
+      catch (err) { if (!String(err?.code || '').includes('object-not-found')) console.warn(err); }
     }
   }
 
-  // Phase 2: Upload local files missing in cloud
-  const pendingUploads = Array.from(localMap.values()).filter(record=>{
-    if(!record.pendingUpload || (record.uploadFailures||0) >= MAX_UPLOAD_FAILURES) return false;
-    const failures=record.uploadFailures||0;
-    if(!failures) return true;
-    const backoffMs=Math.min(UPLOAD_RETRY_BASE_MS*Math.pow(2,failures-1),8*60*1000);
-    return Date.now()-(record.lastUploadAttempt||0) >= backoffMs;
+  const pendingUploads = Array.from(localMap.values()).filter(record => {
+    if (!record.pendingUpload || (record.uploadFailures || 0) >= MAX_UPLOAD_FAILURES) return false;
+    const failures = record.uploadFailures || 0;
+    if (!failures) return true;
+    const backoffMs = Math.min(UPLOAD_RETRY_BASE_MS * Math.pow(2, failures - 1), 8 * 60 * 1000);
+    const isBackoff = Date.now() - (record.lastUploadAttempt || 0) < backoffMs;
+    if (isBackoff) {
+      res.stats.skipped++;
+      res.errors.push({ id: record.id, code: 'backoff', retryable: true });
+      res.stats.retryable++;
+    }
+    return !isBackoff;
   });
-  if(pendingUploads.length > 0){
-    console.log('PapeRuss: Cloud sync uploading ' + pendingUploads.length + ' media asset(s)...');
-    updateSyncStatus('syncing', 'Uploading ' + pendingUploads.length + ' asset(s)...');
+
+  if (res.stats.skipped > 0) {
+    res.ok = false;
+    res.status = 'partial';
   }
 
-  for(let i=0; i<pendingUploads.length; i++){
+  if (pendingUploads.length > 0) {
+    console.log('PapeRuss: Cloud sync uploading ' + pendingUploads.length + ' media asset(s)...');
+    localUpdateSyncStatus('syncing', 'Uploading ' + pendingUploads.length + ' asset(s)...');
+  }
+
+  for (let i = 0; i < pendingUploads.length; i++) {
     const record = pendingUploads[i];
-    if(!(record.blob instanceof Blob)){
-      partialFailure=true;
-      const failedRecord={...record,
-        pendingUpload:true,
-        uploadFailures:MAX_UPLOAD_FAILURES,
-        lastUploadAttempt:Date.now(),
-        uploadError:'The local media file is missing from this browser.'
+    res.stats.attempted++;
+    if (!(record.blob instanceof Blob)) {
+      res.stats.failed++;
+      res.errors.push({ id: record.id, code: 'missing_blob', retryable: false });
+      const failedRecord = {
+        ...record, pendingUpload: true, uploadFailures: MAX_UPLOAD_FAILURES,
+        lastUploadAttempt: Date.now(), uploadError: 'The local media file is missing from this browser.'
       };
-      try{ await mediaPut(failedRecord); }catch(_){}
-      localMap.set(record.id,failedRecord);
+      try { await mediaPut(failedRecord); } catch (_) {}
+      localMap.set(record.id, failedRecord);
       removeFromOfflineUploadQueue(record.id);
-      console.error('PapeRuss: Media '+record.id+' cannot upload because its local Blob is missing');
-      document.dispatchEvent(new CustomEvent('media-upload-progress',{
-        detail:{id:record.id,percent:0,error:true,failures:MAX_UPLOAD_FAILURES}
+      console.error('PapeRuss: Media ' + record.id + ' cannot upload because its local Blob is missing');
+      document.dispatchEvent(new CustomEvent('media-upload-progress', {
+        detail: { id: record.id, percent: 0, error: true, failures: MAX_UPLOAD_FAILURES }
       }));
       continue;
     }
     const fileBytes = record.blob.size || 0;
     const label = record.name || 'file';
-    updateSyncStatus('syncing', 'Uploading ' + (i+1) + '/' + pendingUploads.length + ': ' + label + ' (' + formatBytes(fileBytes) + ')');
+    localUpdateSyncStatus('syncing', 'Uploading ' + (i + 1) + '/' + pendingUploads.length + ': ' + label + ' (' + formatBytes(fileBytes) + ')');
 
-    try{ await mediaPut({...record, lastUploadAttempt: Date.now()}); }catch(_){}
+    try { await mediaPut({ ...record, lastUploadAttempt: Date.now() }); } catch (_) {}
 
-    try{
+    try {
       let cloudUrl = record.cloudUrl || '';
       let uploadedToStorage = false;
-      if(useStorage){
+      if (useStorage) {
         try {
           const storageRef = mediaStorageRef(uid, record.id);
           const uploadTask = storageRef.put(record.blob, {
@@ -768,10 +787,10 @@ async function syncMedia(uid,deletions,requiredMediaIds){
             const pct = snapshot.totalBytes > 0
               ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100) : 0;
             document.dispatchEvent(new CustomEvent('media-upload-progress', {
-              detail:{ id:record.id, percent:pct, bytesTransferred:snapshot.bytesTransferred, totalBytes:snapshot.totalBytes }
+              detail: { id: record.id, percent: pct, bytesTransferred: snapshot.bytesTransferred, totalBytes: snapshot.totalBytes }
             }));
-            updateSyncStatus('syncing',
-              'Uploading ' + (i+1) + '/' + pendingUploads.length + ': ' + label + ' - ' + pct + '% (' + formatBytes(snapshot.bytesTransferred) + '/' + formatBytes(snapshot.totalBytes) + ')'
+            localUpdateSyncStatus('syncing',
+              'Uploading ' + (i + 1) + '/' + pendingUploads.length + ': ' + label + ' - ' + pct + '% (' + formatBytes(snapshot.bytesTransferred) + '/' + formatBytes(snapshot.totalBytes) + ')'
             );
           });
 
@@ -779,80 +798,60 @@ async function syncMedia(uid,deletions,requiredMediaIds){
           cloudUrl = await storageRef.getDownloadURL();
           uploadedToStorage = true;
           window.__fbStorageFailCount = 0;
-          
-          await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id).set({
-            id: record.id,
-            type: record.type || record.blob?.type || 'application/octet-stream',
-            size: fileBytes,
-            name: label,
-            uploadedToStorage: true,
-            updatedAt: Date.now()
-          }, {merge: true});
 
-        } catch(storageErr) {
-          console.warn('PapeRuss: Cloud Storage upload failed for ' + record.id + ' (' + (storageErr.message||storageErr.code) + '), using Firestore media sync');
+          await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id).set({
+            id: record.id, type: record.type || record.blob?.type || 'application/octet-stream', size: fileBytes,
+            name: label, uploadedToStorage: true, updatedAt: Date.now()
+          }, { merge: true });
+
+        } catch (storageErr) {
+          console.warn('PapeRuss: Cloud Storage upload failed for ' + record.id + ' (' + (storageErr.message || storageErr.code) + '), using Firestore media sync');
           window.__fbStorageFailCount = (window.__fbStorageFailCount || 0) + 1;
-          if(window.__fbStorageFailCount >= 3){
+          if (window.__fbStorageFailCount >= 3) {
             console.warn('PapeRuss: Cloud Storage disabled after 3 consecutive failures');
           }
         }
       }
 
-      if(!uploadedToStorage){
-        if(!fbAuth || !fbAuth.currentUser || fbAuth.currentUser.uid !== uid){
+      if (!uploadedToStorage) {
+        if (!fbAuth || !fbAuth.currentUser || fbAuth.currentUser.uid !== uid) {
           throw new Error('permission-denied: Please sign in to sync media with your account');
         }
         let workingBlob = record.blob;
         let workingBytes = fileBytes;
         const mimeType = record.type || record.blob?.type || 'application/octet-stream';
-        if(mimeType.startsWith('image/') && workingBytes > 600000 && typeof downscaleImageBlob === 'function'){
+        if (mimeType.startsWith('image/') && workingBytes > 600000 && typeof downscaleImageBlob === 'function') {
           try {
             workingBlob = await downscaleImageBlob(workingBlob, 1440, 400 * 1024);
             workingBytes = workingBlob.size || workingBytes;
-          } catch(_) {}
+          } catch (_) {}
         }
         const dataUrl = await blobToDataURL(workingBlob);
         const CHUNK_CHAR_SIZE = 600000;
         let chunked = false;
         let totalChunks = 1;
-        if(dataUrl.length <= 900000){
+        if (dataUrl.length <= 900000) {
           await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id).set({
-            id: record.id,
-            dataUrl: dataUrl,
-            type: mimeType,
-            size: workingBytes,
-            name: label,
-            chunked: false,
-            totalChunks: 1,
-            updatedAt: Date.now()
-          }, {merge: true});
+            id: record.id, dataUrl: dataUrl, type: mimeType, size: workingBytes, name: label, chunked: false, totalChunks: 1, updatedAt: Date.now()
+          }, { merge: true });
         } else {
           chunked = true;
           totalChunks = Math.ceil(dataUrl.length / CHUNK_CHAR_SIZE);
           const chunkPromises = [];
-          for(let c = 0; c < totalChunks; c++){
+          for (let c = 0; c < totalChunks; c++) {
             const sliceData = dataUrl.slice(c * CHUNK_CHAR_SIZE, (c + 1) * CHUNK_CHAR_SIZE);
             chunkPromises.push(
-              fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id+"_chunk_"+c).set({
-                parentId: record.id,
-                chunkIndex: c,
-                data: sliceData,
-                updatedAt: Date.now()
+              fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id + "_chunk_" + c).set({
+                parentId: record.id, chunkIndex: c, data: sliceData, updatedAt: Date.now()
               })
             );
           }
           await Promise.all(chunkPromises);
           await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(record.id).set({
-            id: record.id,
-            type: mimeType,
-            size: workingBytes,
-            name: label,
-            chunked: true,
-            totalChunks: totalChunks,
-            updatedAt: Date.now()
-          }, {merge: true});
+            id: record.id, type: mimeType, size: workingBytes, name: label, chunked: true, totalChunks: totalChunks, updatedAt: Date.now()
+          }, { merge: true });
         }
-        if(workingBlob !== record.blob){
+        if (workingBlob !== record.blob) {
           record.blob = workingBlob;
           record.size = workingBytes;
         }
@@ -860,101 +859,94 @@ async function syncMedia(uid,deletions,requiredMediaIds){
         record.totalChunks = totalChunks;
         cloudUrl = 'firestore:' + record.id;
         document.dispatchEvent(new CustomEvent('media-upload-progress', {
-          detail:{ id:record.id, percent:100, bytesTransferred:workingBytes, totalBytes:workingBytes }
+          detail: { id: record.id, percent: 100, bytesTransferred: workingBytes, totalBytes: workingBytes }
         }));
       }
 
-      // Confirmed upload
       const localUpdated = record.updatedAt || record.createdAt || Date.now();
-      const syncedRecord = {...record,
-        cloudUrl, cloudSyncedAt: localUpdated, pendingUpload: false, uploadFailures: 0, lastUploadAttempt: Date.now()
+      const syncedRecord = {
+        ...record, cloudUrl, cloudSyncedAt: localUpdated, pendingUpload: false, uploadFailures: 0, lastUploadAttempt: Date.now()
       };
-      try{ await mediaPut(syncedRecord); }catch(_){}
+      try { await mediaPut(syncedRecord); } catch (_) {}
       localMap.set(record.id, syncedRecord);
       removeFromOfflineUploadQueue(record.id);
+      res.stats.succeeded++;
 
-    }catch(uploadErr){
-      partialFailure = true;
+    } catch (uploadErr) {
       const errMsg = uploadErr?.message || uploadErr?.code || String(uploadErr);
       console.error('PapeRuss: Media upload failed for ' + record.id + ':', uploadErr);
       const isPermDenied = String(errMsg).includes('permission-denied');
       const isAuthExpired = isPermDenied && (!fbAuth || !fbAuth.currentUser);
-      if(isPermDenied && !isAuthExpired){
+      if (isPermDenied && !isAuthExpired) {
         toast('⚠️ Access denied by Firestore security rules. Please check your sign-in session.');
       }
-      const failures = (record.uploadFailures||0) + 1;
-      const failedRecord = {...record, pendingUpload: true, uploadFailures: failures, lastUploadAttempt: Date.now()};
-      try{ await mediaPut(failedRecord); }catch(_){}
+      const failures = (record.uploadFailures || 0) + 1;
+      const failedRecord = { ...record, pendingUpload: true, uploadFailures: failures, lastUploadAttempt: Date.now() };
+      try { await mediaPut(failedRecord); } catch (_) {}
       localMap.set(record.id, failedRecord);
-      if(failures >= MAX_UPLOAD_FAILURES || (isPermDenied && !isAuthExpired)){
-        removeFromOfflineUploadQueue(record.id);
-      } else {
-        addToOfflineUploadQueue(record.id);
-      }
+      
+      const retryable = failures < MAX_UPLOAD_FAILURES && !(isPermDenied && !isAuthExpired);
+      if (!retryable) removeFromOfflineUploadQueue(record.id);
+      else addToOfflineUploadQueue(record.id);
+      
       document.dispatchEvent(new CustomEvent('media-upload-progress', {
-        detail:{ id:record.id, percent:0, error:true, failures }
+        detail: { id: record.id, percent: 0, error: true, failures }
       }));
-      if(failures === 1){
-        toast('⚠️ Media upload failed: ' + errMsg + ' — will retry automatically');
-      } else if(failures >= MAX_UPLOAD_FAILURES){
-        toast('❌ "' + label + '" could not be uploaded after ' + failures + ' attempts.', () => {
-          if(typeof syncNow === 'function') syncNow();
-        }, 'Retry Now');
-      }
+      if (failures === 1) toast('⚠️ Media upload failed: ' + errMsg + ' — will retry automatically');
+      else if (failures >= MAX_UPLOAD_FAILURES) toast('❌ "' + label + '" could not be uploaded after ' + failures + ' attempts.', () => { if (typeof syncNow === 'function') syncNow(); }, 'Retry Now');
+      
+      res.stats.failed++;
+      res.errors.push({ id: record.id, code: 'network', retryable });
+      if (retryable) res.stats.retryable++;
     }
   }
 
-  // Phase 3: Lazy download — only fetch blobs actually referenced in current notes
-  const needsIds = requiredMediaIds instanceof Set ? requiredMediaIds : new Set(requiredMediaIds||[]);
-  for(const id of needsIds){
-    if(localMap.has(id)) continue;
-    try{
-      let blob = null;
-      let cloudUrl = null;
-      let size = 0, name = 'file', type = 'application/octet-stream';
-      let updatedAt = Date.now();
-
+  const needsIds = requiredMediaIds instanceof Set ? requiredMediaIds : new Set(requiredMediaIds || []);
+  for (const id of needsIds) {
+    if (localMap.has(id)) continue;
+    try {
+      res.stats.attempted++;
+      let blob = null, cloudUrl = null, size = 0, name = 'file', type = 'application/octet-stream', updatedAt = Date.now();
       const metaSnap = await fbDb.collection('paperuss_users').doc(uid).collection('media').doc(id).get();
-      if(!metaSnap.exists) continue; // orphaned or deleted on cloud
-      const meta = metaSnap.data();
-      size = meta.size || 0;
-      name = meta.name || 'file';
-      type = meta.type || 'application/octet-stream';
-      updatedAt = meta.updatedAt || Date.now();
+      if (!metaSnap.exists) { res.stats.failed++; res.errors.push({ id, code: 'not_found', retryable: false }); continue; }
       
-      if(meta.uploadedToStorage){
+      const meta = metaSnap.data();
+      size = meta.size || 0; name = meta.name || 'file'; type = meta.type || 'application/octet-stream'; updatedAt = meta.updatedAt || Date.now();
+
+      if (meta.uploadedToStorage) {
         try {
-          const url = await withTimeout(
-            mediaStorageRef(uid,id).getDownloadURL(), 12000, 'Download URL timeout for ' + id
-          );
+          const url = await withTimeout(mediaStorageRef(uid, id).getDownloadURL(), 12000, 'Download URL timeout for ' + id);
           cloudUrl = url;
-          const response = await withTimeout(fetch(url), timeoutForSize(size||500000), 'Fetch timeout for ' + id);
-          if(response.ok) blob = await response.blob();
-        } catch(storageErr) {
+          const response = await withTimeout(fetch(url), timeoutForSize(size || 500000), 'Fetch timeout for ' + id);
+          if (response.ok) blob = await response.blob();
+        } catch (storageErr) {
           console.warn('PapeRuss: Storage download failed for ' + id, storageErr);
+          res.stats.failed++; res.stats.retryable++; res.errors.push({ id, code: 'network', retryable: true });
           continue;
         }
       } else {
         const dataUrl = await fetchFirestoreMediaDataUrl(uid, id);
-        if(dataUrl) {
-           blob = dataURLToBlob(dataUrl);
-           cloudUrl = 'firestore:'+id;
-        }
+        if (dataUrl) { blob = dataURLToBlob(dataUrl); cloudUrl = 'firestore:' + id; }
       }
-      if(blob){
-        const downloadedRecord = {id, type, size, name, blob, cloudUrl,
-          cloudSyncedAt: updatedAt, pendingUpload: false, uploadFailures: 0
-        };
+      if (blob) {
+        const downloadedRecord = { id, type, size, name, blob, cloudUrl, cloudSyncedAt: updatedAt, pendingUpload: false, uploadFailures: 0 };
         await mediaPut(downloadedRecord);
         localMap.set(id, downloadedRecord);
+        res.stats.succeeded++;
       }
-    }catch(dlErr){
+    } catch (dlErr) {
       console.warn('PapeRuss: Media download warning for ' + id + ':', dlErr);
+      res.stats.failed++; res.stats.retryable++; res.errors.push({ id, code: 'network', retryable: true });
     }
   }
 
-  return { partialFailure };
+  if (res.stats.failed > 0 || res.stats.skipped > 0) {
+     res.ok = false;
+     res.status = 'partial';
+  }
+  return res;
 }
+
 
 
 async function resetCloudWorkspace(){
@@ -1000,7 +992,7 @@ async function resetCloudWorkspace(){
 
 async function syncNow(opts){
   opts=opts||{};
-  if(syncState==='syncing'){ syncRequestedWhileBusy=true; return; }
+  if(syncInFlight){ syncRequestedWhileBusy=true; return; }
   // Multi-tab safety: only one tab syncs at a time
   if(typeof navigator.locks !== 'undefined'){
     try {
@@ -1015,32 +1007,65 @@ async function syncNow(opts){
     await _syncNowInner(opts);
   }
 }
+
+function aggregateSyncResults(results) {
+  let hasOffline = false;
+  let hasFailed = false;
+  let hasPartial = false;
+  let unresolvedSkipped = false;
+  let retryable = 0;
+
+  for (const result of Object.values(results)) {
+    if (!result || typeof result !== 'object') continue;
+    retryable += Number(result.stats?.retryable || 0);
+
+    if (result.status === 'offline') {
+      hasOffline = true;
+    } else if (result.status === 'failed') {
+      hasFailed = true;
+    } else if (result.status === 'partial') {
+      hasPartial = true;
+    } else if (result.status === 'skipped' && result.reason !== 'nothing_to_do') {
+      unresolvedSkipped = true;
+    }
+  }
+
+  if (hasOffline) return { status: 'offline', retryable };
+  if (hasFailed) return { status: 'error', retryable };
+  if (hasPartial || unresolvedSkipped) return { status: 'partial', retryable };
+
+  return { status: 'synced', retryable };
+}
 async function _syncNowInner(opts){
   const session=currentSession||loadSession();
   if(!session || session.mode!=='auth') return;
-  if(syncState==='syncing'){
+  if(syncInFlight){
     syncRequestedWhileBusy=true;
     return;
   }
-  if(!navigator.onLine){
-    updateSyncStatus('offline','Offline · changes saved locally');
-    return;
-  }
-  updateSyncStatus('syncing');
+  
+  syncInFlight = true;
+  const runId = ++syncGeneration;
+  
+  try {
+    if(!navigator.onLine){
+      updateSyncStatusForRun(runId, 'offline','Offline · changes saved locally');
+      return;
+    }
+    updateSyncStatusForRun(runId, 'syncing');
 
-  if(!opts.silent){
-    window.__fbStorageFailCount = 0;
-    try{
-      const allMedia = await mediaAll();
-      const stuck = allMedia.filter(r=>r.pendingUpload && (r.uploadFailures||0) > 0);
-      for(const r of stuck){
-        await mediaPut({...r, uploadFailures: 0, lastUploadAttempt: 0});
-      }
-      if(stuck.length > 0) console.log('PapeRuss: Reset ' + stuck.length + ' stuck media upload(s) for retry');
-    }catch(_){}
-  }
+    if(!opts.silent){
+      window.__fbStorageFailCount = 0;
+      try{
+        const allMedia = await mediaAll();
+        const stuck = allMedia.filter(r=>r.pendingUpload && (r.uploadFailures||0) > 0);
+        for(const r of stuck){
+          await mediaPut({...r, uploadFailures: 0, lastUploadAttempt: 0});
+        }
+        if(stuck.length > 0) console.log('PapeRuss: Reset ' + stuck.length + ' stuck media upload(s) for retry');
+      }catch(_){}
+    }
 
-  try{
     const withSyncTimeout = (promise, ms, name) => Promise.race([
       promise,
       new Promise((_, rej) => setTimeout(() => rej(new Error(name + ' timed out')), ms))
@@ -1192,53 +1217,74 @@ async function _syncNowInner(opts){
       ]);
     }
 
-    const requiredMediaIds=typeof referencedStoredMediaIds==='function'
-      ? referencedStoredMediaIds(mergedNotes)
-      : new Set();
-    let partialFailure = false;
+    const requiredMediaIds=typeof referencedStoredMediaIds==='function' ? referencedStoredMediaIds(mergedNotes) : new Set();
+    const finalResults = {};
+    
     try {
-      const mediaResult=await withSyncTimeout(syncMedia(session.uid, mergedDeletions.media, requiredMediaIds), 25000, 'syncMedia');
-      partialFailure = mediaResult ? mediaResult.partialFailure : false;
+      finalResults.media = await withSyncTimeout(syncMedia(session.uid, mergedDeletions.media, requiredMediaIds, runId), 25000, 'syncMedia');
     } catch(mediaErr) {
-      partialFailure = true;
-      console.warn('PapeRuss media sync non-blocking warning:', mediaErr);
+      finalResults.media = { ok: false, status: 'partial', reason: 'timeout', stats: { retryable: 1 }, errors: [{ code: 'timeout', retryable: true }] };
     }
 
-    try {
-      if (window.BranchEngine && typeof window.BranchEngine.syncBranchesFromCloud === 'function') {
-        await withSyncTimeout(window.BranchEngine.syncBranchesFromCloud(session.uid, fbDb), 25000, 'syncBranches');
-      }
-      if (window.paperussLeafManager && typeof window.paperussLeafManager.syncLeavesWithCloud === 'function') {
-        await withSyncTimeout(window.paperussLeafManager.syncLeavesWithCloud(session.uid), 25000, 'syncLeavesWithCloud');
-      }
-      if (window.paperussLeafManager && typeof window.paperussLeafManager.syncNoteLeavesFromCloud === 'function' && typeof state !== 'undefined' && state && state.currentId) {
-        await withSyncTimeout(window.paperussLeafManager.syncNoteLeavesFromCloud(state.currentId, session.uid), 25000, 'syncNoteLeavesFromCloud');
-      }
-    } catch (leafErr) {
-      console.warn('PapeRuss leaves sync non-blocking warning:', leafErr);
+    if (window.BranchEngine && typeof window.BranchEngine.syncBranchesFromCloud === 'function') {
+      try {
+        finalResults.branches = await withSyncTimeout(window.BranchEngine.syncBranchesFromCloud(session.uid, fbDb), 25000, 'syncBranches');
+      } catch (e) { finalResults.branches = { ok: false, status: 'partial', reason: 'timeout', stats: { retryable: 1 } }; }
+    }
+    
+    if (window.paperussLeafManager && typeof window.paperussLeafManager.syncLeavesWithCloud === 'function') {
+      try {
+        finalResults.leavesUpload = await withSyncTimeout(window.paperussLeafManager.syncLeavesWithCloud(session.uid), 25000, 'syncLeavesWithCloud');
+      } catch (e) { finalResults.leavesUpload = { ok: false, status: 'partial', reason: 'timeout', stats: { retryable: 1 } }; }
+    }
+    
+    if (window.paperussLeafManager && typeof window.paperussLeafManager.hydrateAllNoteLeavesFromCloud === 'function') {
+      try {
+        finalResults.hydration = await withSyncTimeout(window.paperussLeafManager.hydrateAllNoteLeavesFromCloud(session.uid), 45000, 'hydrateAllNoteLeavesFromCloud');
+      } catch (e) { finalResults.hydration = { ok: false, status: 'partial', reason: 'timeout', stats: { retryable: 1 } }; }
+    }
+    
+    if (window.paperussLeafManager && typeof window.paperussLeafManager.syncNoteLeavesFromCloud === 'function' && typeof state !== 'undefined' && state && state.currentId) {
+      try {
+        finalResults.activeNote = await withSyncTimeout(window.paperussLeafManager.syncNoteLeavesFromCloud(state.currentId, session.uid), 25000, 'syncNoteLeavesFromCloud');
+      } catch (e) { finalResults.activeNote = { ok: false, status: 'partial', reason: 'timeout', stats: { retryable: 1 } }; }
     }
 
     localStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
-    if(partialFailure){
-      updateSyncStatus('partial','Media sync incomplete — retry scheduled');
-      schedulePendingMediaRetry();
-    }else{
-      updateSyncStatus('synced');
+    
+    const summary = aggregateSyncResults(finalResults);
+    
+    if(summary.status === 'partial'){
+      updateSyncStatusForRun(runId, 'partial','Sync incomplete - retry scheduled');
+      if (summary.retryable > 0) schedulePendingMediaRetry();
+    } else if (summary.status === 'error') {
+      updateSyncStatusForRun(runId, 'error');
+    } else if (summary.status === 'offline') {
+      updateSyncStatusForRun(runId, 'offline', 'Offline');
+    } else {
+      updateSyncStatusForRun(runId, 'synced');
     }
+    
     if(typeof hydrateMediaInEditor==='function') hydrateMediaInEditor();
-    if(!opts.silent) toast(partialFailure ? 'Notes synced; some media will retry automatically' : 'Synced with cloud');
-    if(syncRequestedWhileBusy){ syncRequestedWhileBusy=false; queueCloudSync(); }
+    if(!opts.silent) toast(summary.status === 'partial' ? 'Notes synced; some items will retry automatically' : 'Synced with cloud');
   }catch(err){
     console.error('PapeRuss cloud sync failed',err);
-    updateSyncStatus('error');
-    if(!opts.silent) toast('Sync failed — changes saved locally');
+    updateSyncStatusForRun(runId, 'error');
+    if(!opts.silent) toast('Sync failed - changes saved locally');
+  } finally {
+
+    syncInFlight = false;
+    if(syncRequestedWhileBusy){ 
+      syncRequestedWhileBusy=false; 
+      queueCloudSync(); 
+    }
   }
 }
 
 function queueCloudSync(){
   const session=currentSession||loadSession();
   if(cloudSyncApplyingRemote || !session || session.mode!=='auth') return;
-  if(syncState==='syncing'){ syncRequestedWhileBusy=true; return; }
+  if(syncInFlight){ syncRequestedWhileBusy=true; return; }
   clearTimeout(syncDebounceTimer);
   syncDebounceTimer=setTimeout(()=>syncNow({silent:true}), 2500);
 }

@@ -1,6 +1,6 @@
 {
   "name": "my-paperuss-database-2",
-  "version": "2.7.0-workflow-audio-suite",
+  "version": "2.8.0-sync-repair",
   "private": true,
   "type": "module",
   "scripts": {
