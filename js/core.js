@@ -2318,7 +2318,7 @@ window.paperussLeafManager = {
         for (let w = 0; w < CONCURRENCY; w++) workers.push(worker());
         await Promise.all(workers);
 
-        if (internalStats.failed > 0 || internalStats.missing > 0 || internalStats.conflicts > 0) {
+        if (internalStats.failed > 0 || internalStats.missing > 0) {
            res.ok = false;
            res.status = 'partial';
         }
@@ -2370,7 +2370,18 @@ window.paperussLeafManager = {
 
         const localLeaf = await window.paperussLeaves.leafGet(remoteLeaf.id);
 
+        const queue = await window.paperussLeaves.leafQueueGetAll();
+        const pendingForLeaf = queue.filter(x => ((x.data && x.data.id === remoteLeaf.id) || x.id === remoteLeaf.id));
+
         if (remoteLeaf.deletedAt && (remoteLeaf.deletedAt > 0)) {
+          const hasPendingPut = pendingForLeaf.some(x => x.action === 'put' || x.action === 'materialize');
+          if (hasPendingPut) {
+            continue; // Local edit pending, do not delete
+          }
+          if (localLeaf && remoteLeaf.deletedAt <= (localLeaf.updatedAt || 0)) {
+            continue; // Local leaf is newer than the deletion tombstone
+          }
+
           // A deleted Leaf must not reappear from older cloud or offline data
           if (localLeaf) {
             await window.paperussLeaves.leafDel(remoteLeaf.id);
@@ -2389,8 +2400,7 @@ window.paperussLeafManager = {
           }
         } else {
           // Normal leaf
-          const queue = await window.paperussLeaves.leafQueueGetAll();
-          const hasPendingDelete = queue.some(x => ((x.data && x.data.id === remoteLeaf.id) || x.id === remoteLeaf.id) && x.action === 'delete');
+          const hasPendingDelete = pendingForLeaf.some(x => x.action === 'delete');
           if (hasPendingDelete) {
             continue; // Don't resurrect a locally deleted leaf
           }
@@ -2424,6 +2434,15 @@ window.paperussLeafManager = {
 
 window.flushActiveLeaf = async function() {
   if (window.currentActiveLeaf && !window.currentActiveLeaf.isVirtual && !window.currentActiveLeaf.isUnavailable && window.paperussLeaves) {
+    // Safety: refuse to flush a leaf belonging to a note the user has already navigated away from.
+    // Without this guard, rapid note switching can write Note A's stale leaf to IDB using Note B's
+    // freshly-painted DOM content — causing cross-note content contamination.
+    if (window.currentActiveLeaf.noteId && typeof state !== 'undefined' && state.currentId &&
+        window.currentActiveLeaf.noteId !== state.currentId) {
+      console.warn('[PapeRuss] flushActiveLeaf: leaf belongs to', window.currentActiveLeaf.noteId,
+        'but state.currentId is', state.currentId, '— skipping stale flush');
+      return;
+    }
     const contentEl = document.getElementById('noteBody') || document.querySelector('[data-paperuss-content-root="true"]');
     // Only read from DOM if the editor is currently rendering this specific leaf
     // (prevents stale DOM from overwriting programmatic in-memory edits done via editField)
