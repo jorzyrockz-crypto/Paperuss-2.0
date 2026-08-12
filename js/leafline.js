@@ -64,15 +64,6 @@
       return { branchName, leafTitle: window.currentActiveLeaf?.title || 'Main' };
     }
 
-    getIconForLevel(level, isTitle) {
-      if (isTitle) return '<i data-lucide="book-open" class="w-3 h-3 text-muted"></i>';
-      switch (level) {
-        case 1: return '<i data-lucide="bookmark" class="w-3 h-3 text-muted"></i>';
-        case 2: return '<i data-lucide="hash" class="w-3 h-3 text-muted"></i>';
-        case 3: return '<i data-lucide="chevron-right" class="w-3 h-3 text-muted"></i>';
-        default: return '<i data-lucide="minus" class="w-3 h-3 text-muted"></i>';
-      }
-    }
 
     itemMeta(h) {
       return h.isTitle ? 'Document title' : ({ 1: 'Primary heading', 2: 'Section', 3: 'Subsection', 4: 'Detail' }[h.level] || `Heading ${h.level}`);
@@ -80,87 +71,39 @@
 
     scopeControls() {
       const scope = window.state.leaflineScope;
-      return `
-        <div class="leafline-scope" role="tablist" aria-label="Leafline scope">
-          <button type="button" role="tab" aria-selected="${scope === 'current'}" class="${scope === 'current' ? 'active' : ''}" onclick="window.setLeaflineScope('current')">
-            <i data-lucide="file-text" class="w-3 h-3 mr-1"></i> Current Leaf
-          </button>
-          <button type="button" role="tab" aria-selected="${scope === 'all'}" class="${scope === 'all' ? 'active' : ''}" onclick="window.setLeaflineScope('all')">
-            <i data-lucide="layers" class="w-3 h-3 mr-1"></i> All Leaflines
-          </button>
-        </div>
-      `;
+      return `<div class="leafline-scope" role="tablist" aria-label="Leafline scope"><button type="button" role="tab" aria-selected="${scope==='current'}" class="${scope==='current'?'active':''}" onclick="window.setLeaflineScope('current')">Current Leaf</button><button type="button" role="tab" aria-selected="${scope==='all'}" class="${scope==='all'?'active':''}" onclick="window.setLeaflineScope('all')">All Leaflines</button></div>`;
     }
 
     updateCurrentDOM(container, headings) {
       const note = this.getCurrentNote();
       const context = this.getContext(note);
-      
-      let html = `
-        <div class="leafline-container" role="region" aria-label="Current Leaf outline">
-          <div class="leafline-heading" style="display:flex; align-items:center; gap:6px;">
-            <i data-lucide="list-tree" class="w-4 h-4"></i>
-            <strong>Leafline</strong>
-          </div>
-          ${this.scopeControls()}
-          <div class="leafline-context" style="display:flex; align-items:center; gap:4px; opacity:0.8;">
-            <i data-lucide="folder" class="w-3 h-3"></i> ${this.escapeHtml(context.branchName)} 
-            <span style="opacity:0.5;">·</span> 
-            <i data-lucide="leaf" class="w-3 h-3"></i> ${this.escapeHtml(context.leafTitle)}
-          </div>
-      `;
-
+      let html = '<div class="leafline-container" role="region" aria-label="Current Leaf outline"><div class="leafline-heading"><strong>Leafline</strong></div>' + this.scopeControls();
+      html += `<div class="leafline-context">${this.escapeHtml(context.branchName)} · ${this.escapeHtml(context.leafTitle)}</div>`;
       if (!headings.length) {
-        container.innerHTML = html + `
-          <div class="list-empty leafline-empty" style="display:flex; flex-direction:column; align-items:center; gap:8px; margin-top:20px;">
-            <i data-lucide="file-question" class="w-8 h-8 text-muted" style="opacity:0.3"></i>
-            <span>Add headings to this Leaf to create its Leafline.</span>
-          </div>
-        </div>`;
-        if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
+        container.innerHTML = html + '<div class="list-empty leafline-empty">Add headings to this Leaf to create its Leafline.</div></div>';
         return;
       }
-
       html += '<div class="leafline-track">';
       headings.forEach((h, index) => {
         const depth = Math.max(0, Math.min(3, h.level - 1));
-        const icon = this.getIconForLevel(h.level, h.isTitle);
-        html += `
-          <button type="button" class="leafline-item" data-index="${index}" style="--leafline-depth:${depth}" aria-label="Jump to ${this.escapeHtml(h.text)}" onclick="window.scrollToLeaflineHeading(${index})">
-            <span class="leafline-dot" aria-hidden="true">${icon}</span>
-            <span class="leafline-item-copy">
-              <span class="leafline-item-title">${this.escapeHtml(h.text)}</span>
-              <span class="leafline-item-meta">${this.itemMeta(h)}</span>
-            </span>
-          </button>
-        `;
+        html += `<button type="button" class="leafline-item" data-index="${index}" style="--leafline-depth:${depth}" aria-label="Jump to ${this.escapeHtml(h.text)}" onclick="window.scrollToLeaflineHeading(${index})"><span class="leafline-dot" aria-hidden="true"></span><span class="leafline-item-copy"><span class="leafline-item-title">${this.escapeHtml(h.text)}</span><span class="leafline-item-meta">${this.itemMeta(h)}</span></span></button>`;
       });
       container.innerHTML = html + '</div></div>';
       this.highlightActiveHeading();
-      if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
     }
 
     async renderAllLeaflines(container) {
       const note = this.getCurrentNote();
       if (!note) {
-        container.innerHTML = `
-          <div class="leafline-container">
-            ${this.scopeControls()}
-            <div class="list-empty leafline-empty">Select a Note to view its Leaflines.</div>
-          </div>
-        `;
-        if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
+        container.innerHTML = '<div class="leafline-container">' + this.scopeControls() + '<div class="list-empty leafline-empty">Select a Note to view its Leaflines.</div></div>';
         return;
       }
-      
       const noteId = note.id;
       const leafApi = window.paperussLeaves;
       const order = leafApi?.getNoteLeafOrder(note) || [note.defaultLeafId || 'virtual_main_' + note.id];
       const activeLeafId = leafApi?.getNoteActiveLeafId(note) || order[0];
       const groups = [];
-      
       this.cachedAllEntries = [];
-      
       for (let leafIndex = 0; leafIndex < order.length; leafIndex++) {
         const leafId = order[leafIndex];
         let leaf = leafId === activeLeafId ? window.currentActiveLeaf : null;
@@ -168,10 +111,8 @@
         if (!leaf && (leafId === 'virtual_main_' + note.id || leafIndex === 0)) {
           leaf = leafApi?.getVirtualMainLeaf(note) || { id: leafId, title: 'Main', content: note.content || '' };
         }
-        
         const headings = leafId === activeLeafId ? this.getHeadings() : this.getHeadingsFromHTML(leaf?.content || '');
         const group = { title: leaf?.title || `Leaf ${leafIndex + 1}`, entries: [] };
-        
         headings.forEach((heading, headingIndex) => {
           const entry = { leafId, headingIndex, heading, index: this.cachedAllEntries.length };
           this.cachedAllEntries.push(entry);
@@ -179,55 +120,26 @@
         });
         groups.push(group);
       }
-      
       if (window.state.currentId !== noteId || window.state.leaflineScope !== 'all') return;
-      
       const context = this.getContext(note);
-      let html = `
-        <div class="leafline-container" role="region" aria-label="All Leaflines in current Note">
-          <div class="leafline-heading" style="display:flex; align-items:center; gap:6px;">
-            <i data-lucide="layers" class="w-4 h-4"></i>
-            <strong>All Leaflines</strong>
-          </div>
-          ${this.scopeControls()}
-          <div class="leafline-context" style="display:flex; align-items:center; gap:4px; opacity:0.8;">
-            <i data-lucide="folder" class="w-3 h-3"></i> ${this.escapeHtml(context.branchName)} 
-            <span style="opacity:0.5;">·</span> 
-            <i data-lucide="file" class="w-3 h-3"></i> ${this.escapeHtml(note.title || 'Untitled Note')}
-          </div>
-      `;
-      
+      let html = '<div class="leafline-container" role="region" aria-label="All Leaflines in current Note"><div class="leafline-heading"><strong>All Leaflines</strong></div>' + this.scopeControls();
+      html += `<div class="leafline-context">${this.escapeHtml(context.branchName)} · ${this.escapeHtml(note.title || 'Untitled Note')}</div>`;
       groups.forEach(group => {
-        html += `
-          <section class="leafline-group">
-            <div class="leafline-group-title" style="display:flex; align-items:center; gap:6px;">
-              <i data-lucide="leaf" class="w-3 h-3"></i> ${this.escapeHtml(group.title)}
-            </div>
-        `;
+        html += `<section class="leafline-group"><div class="leafline-group-title">${this.escapeHtml(group.title)}</div>`;
         if (!group.entries.length) {
-          html += '<div class="leafline-group-empty" style="font-style:italic; opacity:0.6; padding-left:14px; font-size:12px;">No headings</div>';
+          html += '<div class="leafline-group-empty">No headings</div>';
         } else {
           html += '<div class="leafline-track">';
           group.entries.forEach(entry => {
             const h = entry.heading;
             const depth = Math.max(0, Math.min(3, h.level - 1));
-            const icon = this.getIconForLevel(h.level, h.isTitle);
-            html += `
-              <button type="button" class="leafline-item" style="--leafline-depth:${depth}" onclick="window.openLeaflineEntry(${entry.index})">
-                <span class="leafline-dot" aria-hidden="true">${icon}</span>
-                <span class="leafline-item-copy">
-                  <span class="leafline-item-title">${this.escapeHtml(h.text)}</span>
-                  <span class="leafline-item-meta">${this.itemMeta(h)}</span>
-                </span>
-              </button>
-            `;
+            html += `<button type="button" class="leafline-item" style="--leafline-depth:${depth}" onclick="window.openLeaflineEntry(${entry.index})"><span class="leafline-dot" aria-hidden="true"></span><span class="leafline-item-copy"><span class="leafline-item-title">${this.escapeHtml(h.text)}</span><span class="leafline-item-meta">${this.itemMeta(h)}</span></span></button>`;
           });
           html += '</div>';
         }
         html += '</section>';
       });
       container.innerHTML = html + '</div>';
-      if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
     }
 
     scrollHeading(heading) {
