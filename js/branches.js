@@ -202,6 +202,7 @@
         branches: serializeBranches(branchesCache),
         branchesUpdatedAt: updatedAt
       }, { merge: true });
+      localStorage.setItem('paperuss_branches_synced_v1', 'true');
       return true;
     } catch (e) {
       console.warn('[BranchEngine] Firestore sync suppressed:', e);
@@ -227,10 +228,27 @@
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         localStorage.setItem(STORAGE_KEY, JSON.stringify(branchesCache));
         localStorage.setItem(UPDATED_AT_KEY, String(remoteUpdatedAt));
+        localStorage.setItem('paperuss_branches_synced_v1', 'true');
         renderSidebarBranchTree();
         return true;
       }
-      if (localUpdatedAt > remoteUpdatedAt) return syncBranchesToCloud(uid, db);
+      if (localUpdatedAt > remoteUpdatedAt) {
+        if (!localStorage.getItem('paperuss_branches_synced_v1') && Array.isArray(remote.branches) && remote.branches.length > 0) {
+          const merged = [...remote.branches];
+          const remoteIds = new Set(remote.branches.map(b => String(b.id)));
+          let orderOffset = merged.length;
+          (branchesCache || []).forEach(lb => {
+            if (!remoteIds.has(String(lb.id))) {
+              merged.push({ ...lb, order: orderOffset++ });
+            }
+          });
+          branchesCache = serializeBranches(merged).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(branchesCache));
+          localStorage.setItem('paperuss_branches_synced_v1', 'true');
+          renderSidebarBranchTree();
+        }
+        return syncBranchesToCloud(uid, db);
+      }
       return false;
     } catch (e) {
       console.warn('[BranchEngine] Firestore download suppressed:', e);

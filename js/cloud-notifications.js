@@ -1041,13 +1041,18 @@ async function _syncNowInner(opts){
   }
 
   try{
+    const withSyncTimeout = (promise, ms, name) => Promise.race([
+      promise,
+      new Promise((_, rej) => setTimeout(() => rej(new Error(name + ' timed out')), ms))
+    ]);
+
     const docRef=fbDb.collection('paperuss_users').doc(session.uid);
-    const snap=await docRef.get();
+    const snap=await withSyncTimeout(docRef.get(), 15000, 'docRef.get');
     const remote=snap.exists?snap.data():{};
 
-    const notesSnap = await docRef.collection('notes').get();
+    const notesSnap = await withSyncTimeout(docRef.collection('notes').get(), 15000, 'notes.get');
     const remoteNotes = notesSnap.docs.map(d=>d.data());
-    const tasksSnap = await docRef.collection('tasks').get();
+    const tasksSnap = await withSyncTimeout(docRef.collection('tasks').get(), 15000, 'tasks.get');
     const remoteTasks = tasksSnap.docs.map(d=>d.data());
 
     if(remote.notes) remoteNotes.push(...remote.notes);
@@ -1181,7 +1186,10 @@ async function _syncNowInner(opts){
 
     // Chunk promises to prevent "Payload Too Large" or connection drops
     for(let i=0; i<writePromises.length; i+=50){
-      await Promise.all(writePromises.slice(i, i+50));
+      await Promise.race([
+        Promise.all(writePromises.slice(i, i+50)),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Network timeout')), 15000))
+      ]);
     }
 
     const requiredMediaIds=typeof referencedStoredMediaIds==='function'
@@ -1189,7 +1197,7 @@ async function _syncNowInner(opts){
       : new Set();
     let partialFailure = false;
     try {
-      const mediaResult=await syncMedia(session.uid, mergedDeletions.media, requiredMediaIds);
+      const mediaResult=await withSyncTimeout(syncMedia(session.uid, mergedDeletions.media, requiredMediaIds), 25000, 'syncMedia');
       partialFailure = mediaResult ? mediaResult.partialFailure : false;
     } catch(mediaErr) {
       partialFailure = true;
@@ -1198,13 +1206,13 @@ async function _syncNowInner(opts){
 
     try {
       if (window.BranchEngine && typeof window.BranchEngine.syncBranchesFromCloud === 'function') {
-        await window.BranchEngine.syncBranchesFromCloud(session.uid, fbDb);
+        await withSyncTimeout(window.BranchEngine.syncBranchesFromCloud(session.uid, fbDb), 25000, 'syncBranches');
       }
       if (window.paperussLeafManager && typeof window.paperussLeafManager.syncLeavesWithCloud === 'function') {
-        await window.paperussLeafManager.syncLeavesWithCloud(session.uid);
+        await withSyncTimeout(window.paperussLeafManager.syncLeavesWithCloud(session.uid), 25000, 'syncLeavesWithCloud');
       }
       if (window.paperussLeafManager && typeof window.paperussLeafManager.syncNoteLeavesFromCloud === 'function' && typeof state !== 'undefined' && state && state.currentId) {
-        await window.paperussLeafManager.syncNoteLeavesFromCloud(state.currentId, session.uid);
+        await withSyncTimeout(window.paperussLeafManager.syncNoteLeavesFromCloud(state.currentId, session.uid), 25000, 'syncNoteLeavesFromCloud');
       }
     } catch (leafErr) {
       console.warn('PapeRuss leaves sync non-blocking warning:', leafErr);

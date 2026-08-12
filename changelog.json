@@ -1,7 +1,16 @@
 {
-  "generatedAt": "2026-08-10T22:25:00.000Z",
+  "generatedAt": "2026-08-12T09:35:00.000Z",
   "source": "https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases",
   "releases": [
+    {
+      "tagName": "v2.7.1-sync-stabilization",
+      "name": "PapeRuss 2.7.1 Cloud Sync Stabilization",
+      "title": "Systemic Sync Hang Fixes, Safe Branch Merging & Leaf Race Condition Fix",
+      "publishedAt": "2026-08-12T09:35:00.000Z",
+      "body": "### What's New in PapeRuss v2.7.1\n- **Systemic Sync Hang Fixes:** Enforced strict timeout boundaries across all Firebase sync operations (`notes`, `tasks`, `media`, `branches`, `leaves`) to prevent \"lie-fi\" network drops from freezing the app in the \"Syncing...\" state and permanently locking the sync engine.\n- **Safe Branch Merging:** Prevented fresh installs with un-synced offline modifications from blindly overwriting and wiping out cloud branches by introducing a local `paperuss_branches_synced_v1` flag and a safe union-merge fallback.\n- **Leaf Duplication Fix:** Resolved a race condition in the Editor where switching Leaf tabs during a debounced autosave cycle would incorrectly copy the old Leaf's content into the newly opened Leaf.",
+      "url": "https://github.com/jorzyrockz-crypto/Paperuss-2.0/releases",
+      "prerelease": false
+    },
     {
       "tagName": "v2.7.0-workflow-audio-suite",
       "name": "PapeRuss 2.7 Workflow & Audio Suite",

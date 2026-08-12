@@ -1291,12 +1291,6 @@ function renderEditor(){
       window.currentActiveLeaf = leafToRender;
       if (window.updateLeafTitleBar) window.updateLeafTitleBar();
       const ed=bodyEl();
-      // Tag the editor with the active leaf id so flushActiveLeaf can detect DOM ownership
-      if (ed && leafToRender && leafToRender.id) {
-        ed.setAttribute('data-active-leaf-id', leafToRender.id);
-      } else if (ed) {
-        ed.removeAttribute('data-active-leaf-id');
-      }
       // Background sync refreshes the editor after a paste or edit. Keep the live
       // range so replacing innerHTML cannot send the caret back to the first block.
       const savedSelection=!trashMode && document.activeElement===ed ? captureEditorSelection(ed) : null;
@@ -1330,6 +1324,12 @@ function renderEditor(){
         const savedScroll = editorScroll ? editorScroll.scrollTop : 0;
         ed.innerHTML = incomingContent;
         if(editorScroll) editorScroll.scrollTop = savedScroll;
+      }
+      // Tag the editor with the active leaf id so flushActiveLeaf can detect DOM ownership
+      if (ed && leafToRender && leafToRender.id) {
+        ed.setAttribute('data-active-leaf-id', leafToRender.id);
+      } else if (ed) {
+        ed.removeAttribute('data-active-leaf-id');
       }
       if(typeof normalizeEditorTables==='function') normalizeEditorTables();
       if(typeof hydrateCalcuLeafFormulas === 'function') hydrateCalcuLeafFormulas(ed);
