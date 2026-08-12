@@ -2370,7 +2370,18 @@ window.paperussLeafManager = {
 
         const localLeaf = await window.paperussLeaves.leafGet(remoteLeaf.id);
 
+        const queue = await window.paperussLeaves.leafQueueGetAll();
+        const pendingForLeaf = queue.filter(x => ((x.data && x.data.id === remoteLeaf.id) || x.id === remoteLeaf.id));
+
         if (remoteLeaf.deletedAt && (remoteLeaf.deletedAt > 0)) {
+          const hasPendingPut = pendingForLeaf.some(x => x.action === 'put' || x.action === 'materialize');
+          if (hasPendingPut) {
+            continue; // Local edit pending, do not delete
+          }
+          if (localLeaf && remoteLeaf.deletedAt <= (localLeaf.updatedAt || 0)) {
+            continue; // Local leaf is newer than the deletion tombstone
+          }
+
           // A deleted Leaf must not reappear from older cloud or offline data
           if (localLeaf) {
             await window.paperussLeaves.leafDel(remoteLeaf.id);
@@ -2389,8 +2400,7 @@ window.paperussLeafManager = {
           }
         } else {
           // Normal leaf
-          const queue = await window.paperussLeaves.leafQueueGetAll();
-          const hasPendingDelete = queue.some(x => ((x.data && x.data.id === remoteLeaf.id) || x.id === remoteLeaf.id) && x.action === 'delete');
+          const hasPendingDelete = pendingForLeaf.some(x => x.action === 'delete');
           if (hasPendingDelete) {
             continue; // Don't resurrect a locally deleted leaf
           }

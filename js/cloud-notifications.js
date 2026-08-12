@@ -520,14 +520,26 @@ function mergeDeletionSets(localValue,remoteValue){
 /* Merge records by id, then apply deletion markers so removed data stays removed. */
 function mergeById(localArr,remoteArr,tsField,deletions){
   const map=new Map();
-  (remoteArr||[]).forEach(r=>map.set(r.id, r));
+  (remoteArr||[]).forEach(r=>{
+    const existing = map.get(r.id);
+    if (!existing || (r[tsField]||0) >= (existing[tsField]||0)) {
+      map.set(r.id, r);
+    }
+  });
   (localArr||[]).forEach(l=>{
     const r=map.get(l.id);
     if(!r || (l[tsField]||0) >= (r[tsField]||0)) map.set(l.id, l);
   });
-  Object.entries(deletions||{}).forEach(([id,deletedAt])=>{
-    const record=map.get(id);
-    if(record && (+deletedAt||0) > (record[tsField]||record.createdAt||0)) map.delete(id);
+  Object.keys(deletions||{}).forEach(id=>{
+    const deletedAt = deletions[id];
+    const record = map.get(id);
+    if(record) {
+      if ((+deletedAt||0) > (record[tsField]||record.createdAt||0)) {
+        map.delete(id);
+      } else {
+        deletions[id] = 0; // Neutralize stale tombstone
+      }
+    }
   });
   return Array.from(map.values());
 }
@@ -1102,7 +1114,15 @@ async function _syncNowInner(opts){
     if(remoteNotes.length){
       try{
         const seedIds=new Set(JSON.parse(localStorage.getItem('paperuss:seedNoteIds'))||[]);
-        if(seedIds.size) localNotes=notes.filter(note=>!seedIds.has(note.id));
+        if(seedIds.size) {
+          localNotes=notes.filter(note=>{
+            if (seedIds.has(note.id)) {
+              // Only discard if unedited. If updated, keep it.
+              return (note.updatedAt || 0) > (note.createdAt || 0);
+            }
+            return true;
+          });
+        }
       }catch(_){}
     }
     const mergedNotes=sanitizeNoteCollection(mergeById(localNotes,remoteNotes,'updatedAt',mergedDeletions.notes));
