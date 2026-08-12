@@ -8,6 +8,8 @@
 *   **Immersive Music Hub Lightbox**: Replaced the bulky "Music Player" text button with a dynamic, spinning, RGB rainbow-cycling DJ disk `💿` icon. When clicked during active playback, it triggers a stunning full-screen glassmorphic lightbox that centers your playlist while blurring your workspace.
 *   **Canvas Light Mode**: Added a `force-light-canvas` user setting that forces the paper canvas to become white for easier readability, especially useful when working with print-ready tables.
 *   **Table Toolbar Optimization**: Streamlined the table floating toolbar by reducing clutter and consolidating essential controls into a clean 4-button layout.
+*   **Intuitive Row/Column Management**: Added easy-to-use `+` and `-` buttons directly to the table UI for effortlessly inserting and deleting rows and columns on the fly.
+
 
 ### 🐛 Bug Fixes
 *   **Global Viewport Awareness**: Built a robust `MutationObserver` engine that calculates viewport coordinates for fixed/absolute elements like context menus and the Page Setup modal, forcing them to elegantly bump into view instead of clipping off the edges of the screen.
