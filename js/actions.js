@@ -1051,6 +1051,10 @@ function editField(field, value){
   }
   
   if (field === 'content' && window.currentActiveLeaf) {
+    if (window.currentActiveLeaf.noteId && window.currentActiveLeaf.noteId !== n.id) {
+       console.warn('[PapeRuss] editField: leaf belongs to', window.currentActiveLeaf.noteId, 'but current note is', n.id, '— skipping edit');
+       return;
+    }
     const leaf = window.currentActiveLeaf;
     leaf.content = value;
     leaf.updatedAt = Date.now();
@@ -1308,7 +1312,7 @@ async function switchLeafAction(leafId) {
   if (window.paperussLeafManager && typeof window.paperussLeafManager.switchLeaf === 'function') {
     await window.paperussLeafManager.switchLeaf(n.id, leafId);
   } else if (window.paperussLeaves && typeof window.paperussLeaves.setNoteActiveLeafId === 'function') {
-    window.paperussLeaves.setNoteActiveLeafId(n, leafId);
+    window.paperussLeaves.setNoteActiveLeafId(n.id, leafId);
   }
   if (typeof renderEditor === 'function') {
     await renderEditor();
