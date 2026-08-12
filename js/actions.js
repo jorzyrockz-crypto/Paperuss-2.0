@@ -1269,8 +1269,8 @@ function deleteNote(id){
   if(n.deletedAt){ permanentlyDeleteNote(id); return; }
   const previousFilter=state.filter;
   confirmDialog('Move note to Trash?','"'+esc(titleOf(n))+'" can be restored later from Trash.','Move to Trash',()=>{
-    n.deletedAt=Date.now();
     n.updatedAt=Date.now();
+    n.deletedAt=n.updatedAt+1;
     cancelEventTimers(id);
     if(state.currentId===id) state.currentId=filteredNotes()[0]?.id||null;
     save();

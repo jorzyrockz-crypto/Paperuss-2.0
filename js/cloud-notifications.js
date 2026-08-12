@@ -527,7 +527,7 @@ function mergeById(localArr,remoteArr,tsField,deletions){
   });
   Object.entries(deletions||{}).forEach(([id,deletedAt])=>{
     const record=map.get(id);
-    if(record && (+deletedAt||0)>=(record[tsField]||record.createdAt||0)) map.delete(id);
+    if(record && (+deletedAt||0) > (record[tsField]||record.createdAt||0)) map.delete(id);
   });
   return Array.from(map.values());
 }
