@@ -2318,7 +2318,7 @@ window.paperussLeafManager = {
         for (let w = 0; w < CONCURRENCY; w++) workers.push(worker());
         await Promise.all(workers);
 
-        if (internalStats.failed > 0 || internalStats.missing > 0 || internalStats.conflicts > 0) {
+        if (internalStats.failed > 0 || internalStats.missing > 0) {
            res.ok = false;
            res.status = 'partial';
         }

@@ -265,7 +265,7 @@
         localStorage.setItem(UPDATED_AT_KEY, String(remoteUpdatedAt));
         localStorage.setItem('paperuss_branches_synced_v1', 'true');
         renderSidebarBranchTree();
-        return true;
+        return { ok: true, status: 'success', reason: 'downloaded' };
       }
 
       // 4. Local is newer: Upload to cloud. (Merge first if we've never synced)
@@ -286,10 +286,10 @@
         }
         return syncBranchesToCloud(uid, db);
       }
-      return false;
+      return { ok: true, status: 'skipped', reason: 'nothing_to_do' };
     } catch (e) {
       console.warn('[BranchEngine] Firestore download suppressed:', e);
-      return false;
+      return { ok: false, status: 'partial', reason: 'network', stats: { retryable: 1 } };
     }
   }
 
